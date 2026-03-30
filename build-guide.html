@@ -1,0 +1,1195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Complete Build Guide — Observability Platform</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --card: #1a1d27;
+    --card2: #1e2130;
+    --border: #2a2d3a;
+    --text: #e0e0e0;
+    --muted: #8890a0;
+    --accent-blue: #4ea8de;
+    --accent-green: #6bcf7f;
+    --accent-orange: #f0a050;
+    --accent-purple: #b07ee8;
+    --accent-red: #e06070;
+    --accent-cyan: #40d0d0;
+    --accent-yellow: #e0d060;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Inter','Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+
+  /* Top nav */
+  .topnav { display:flex; align-items:center; gap:12px; padding:14px 32px; background:#13151e; border-bottom:1px solid var(--border); flex-wrap:wrap; }
+  .back-link { color:var(--muted); text-decoration:none; font-size:13px; display:flex; align-items:center; gap:6px; transition:color .2s; margin-right:8px; }
+  .back-link:hover { color:var(--text); }
+  .topnav-title { font-size:15px; font-weight:700; color:var(--text); flex:1; }
+  .navlink { display:inline-flex; align-items:center; gap:6px; padding:6px 14px; border-radius:8px; font-size:12px; font-weight:600; text-decoration:none; border:1px solid; transition:background .2s, transform .15s; }
+  .navlink:hover { transform:translateY(-1px); }
+  .navlink-arch { color:var(--accent-blue); border-color:rgba(78,168,222,.4); background:rgba(78,168,222,.08); }
+  .navlink-arch:hover { background:rgba(78,168,222,.18); }
+  .navlink-sprint { color:var(--accent-purple); border-color:rgba(176,126,232,.4); background:rgba(176,126,232,.08); }
+  .navlink-sprint:hover { background:rgba(176,126,232,.18); }
+
+  /* Tabs */
+  .tabs { display:flex; border-bottom:2px solid var(--border); padding:0 32px; background:#13151e; gap:4px; overflow-x:auto; }
+  .tab { padding:13px 20px; cursor:pointer; font-size:13px; font-weight:600; color:var(--muted); border-bottom:3px solid transparent; margin-bottom:-2px; transition:all .2s; letter-spacing:.3px; white-space:nowrap; }
+  .tab:hover { color:var(--text); }
+  .tab.active { color:var(--accent-blue); border-bottom-color:var(--accent-blue); }
+  .tab-content { display:none; }
+  .tab-content.active { display:block; }
+
+  /* Content */
+  .content { padding:32px; max-width:1400px; margin:0 auto; }
+
+  /* Section headers */
+  .section-title { font-size:20px; font-weight:700; margin-bottom:6px; }
+  .section-sub { font-size:14px; color:var(--muted); margin-bottom:28px; line-height:1.6; }
+
+  /* Cards */
+  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:24px; margin-bottom:16px; }
+  .card-title { font-size:15px; font-weight:700; margin-bottom:8px; display:flex; align-items:center; gap:10px; }
+  .card p { font-size:13px; color:var(--muted); line-height:1.7; }
+
+  /* Grids */
+  .grid-2 { display:grid; grid-template-columns:repeat(auto-fill,minmax(420px,1fr)); gap:16px; }
+  .grid-3 { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:16px; }
+
+  /* VM boxes */
+  .vm-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:20px; margin-bottom:28px; }
+  .vm-box { background:var(--card); border:2px solid var(--border); border-radius:12px; overflow:hidden; }
+  .vm-header { padding:14px 18px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; }
+  .vm-header .vm-name { font-weight:700; font-size:14px; }
+  .vm-header .vm-ip { font-size:12px; color:var(--muted); font-family:monospace; }
+  .vm-body { padding:14px; display:flex; flex-wrap:wrap; gap:8px; }
+  .svc-pill { padding:6px 12px; border-radius:6px; font-size:12px; font-weight:600; border:1px solid; }
+  .svc-metrics { background:rgba(78,168,222,.1); border-color:rgba(78,168,222,.3); color:var(--accent-blue); }
+  .svc-logs { background:rgba(107,207,127,.1); border-color:rgba(107,207,127,.3); color:var(--accent-green); }
+  .svc-traces { background:rgba(240,160,80,.1); border-color:rgba(240,160,80,.3); color:var(--accent-orange); }
+  .svc-app { background:rgba(176,126,232,.1); border-color:rgba(176,126,232,.3); color:var(--accent-purple); }
+  .svc-infra { background:rgba(136,144,160,.1); border-color:rgba(136,144,160,.3); color:var(--muted); }
+  .svc-viz { background:rgba(64,208,208,.1); border-color:rgba(64,208,208,.3); color:var(--accent-cyan); }
+
+  /* Tables */
+  .tbl { width:100%; border-collapse:collapse; font-size:13px; }
+  .tbl th { background:var(--card2); padding:10px 14px; text-align:left; font-weight:600; font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; border-bottom:1px solid var(--border); }
+  .tbl td { padding:10px 14px; border-bottom:1px solid var(--border); line-height:1.5; vertical-align:top; }
+  .tbl tr:last-child td { border-bottom:none; }
+  .tbl tr:hover td { background:rgba(255,255,255,.02); }
+  .tbl-wrap { background:var(--card); border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:20px; }
+
+  /* Code */
+  pre { background:#0a0c12; border:1px solid var(--border); border-radius:8px; padding:16px; overflow-x:auto; font-family:'JetBrains Mono','Fira Code',monospace; font-size:12px; line-height:1.7; margin:12px 0; }
+  code { font-family:'JetBrains Mono','Fira Code',monospace; font-size:12px; background:rgba(255,255,255,.07); padding:2px 6px; border-radius:4px; }
+
+  /* Tags */
+  .tag { font-size:11px; padding:2px 8px; border-radius:4px; font-weight:600; display:inline-block; }
+  .tag-blue { background:rgba(78,168,222,.1); color:var(--accent-blue); }
+  .tag-green { background:rgba(107,207,127,.1); color:var(--accent-green); }
+  .tag-orange { background:rgba(240,160,80,.1); color:var(--accent-orange); }
+  .tag-purple { background:rgba(176,126,232,.1); color:var(--accent-purple); }
+  .tag-cyan { background:rgba(64,208,208,.1); color:var(--accent-cyan); }
+  .tag-red { background:rgba(224,96,112,.1); color:var(--accent-red); }
+  .tag-muted { background:rgba(136,144,160,.1); color:var(--muted); }
+
+  /* Role cards */
+  .role-card { background:var(--card); border:1px solid var(--border); border-radius:10px; margin-bottom:12px; overflow:hidden; }
+  .role-header { padding:14px 18px; display:flex; align-items:center; gap:12px; cursor:pointer; }
+  .role-header:hover { background:rgba(255,255,255,.02); }
+  .role-num { font-family:monospace; font-size:11px; color:var(--muted); min-width:28px; }
+  .role-name { font-weight:700; font-size:14px; flex:1; }
+  .role-vm { font-size:11px; padding:2px 8px; border-radius:4px; font-weight:600; margin-right:4px; }
+  .role-chevron { color:var(--muted); font-size:12px; transition:transform .2s; }
+  .role-header.open .role-chevron { transform:rotate(90deg); }
+  .role-body { padding:0 18px 18px; display:none; border-top:1px solid var(--border); }
+  .role-body.open { display:block; }
+  .role-row { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:14px; }
+  .role-section { }
+  .role-section h4 { font-size:11px; text-transform:uppercase; letter-spacing:.6px; color:var(--muted); font-weight:600; margin-bottom:8px; }
+  .role-section p { font-size:12px; color:var(--muted); line-height:1.6; }
+  .role-section ul { font-size:12px; color:var(--muted); line-height:1.8; padding-left:16px; }
+
+  /* Steps */
+  .steps { display:flex; flex-direction:column; gap:0; }
+  .step { display:flex; gap:20px; position:relative; }
+  .step-line { display:flex; flex-direction:column; align-items:center; }
+  .step-num { width:32px; height:32px; border-radius:50%; background:rgba(78,168,222,.15); border:2px solid rgba(78,168,222,.4); display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; color:var(--accent-blue); flex-shrink:0; }
+  .step-connector { width:2px; flex:1; background:var(--border); margin-top:4px; min-height:16px; }
+  .step:last-child .step-connector { display:none; }
+  .step-content { padding-bottom:28px; flex:1; }
+  .step-content h3 { font-size:14px; font-weight:700; margin-bottom:8px; padding-top:4px; }
+  .step-content p, .step-content li { font-size:13px; color:var(--muted); line-height:1.7; }
+  .step-content ul { padding-left:16px; margin-top:6px; }
+
+  /* Alert rules */
+  .alert-card { background:var(--card); border-left:3px solid; border-radius:0 10px 10px 0; padding:16px 18px; margin-bottom:10px; border-top:1px solid var(--border); border-right:1px solid var(--border); border-bottom:1px solid var(--border); }
+  .alert-card.critical { border-left-color:var(--accent-red); }
+  .alert-card.warning { border-left-color:var(--accent-orange); }
+  .alert-name { font-weight:700; font-size:14px; margin-bottom:4px; }
+  .alert-expr { font-family:monospace; font-size:11px; background:rgba(255,255,255,.05); padding:6px 10px; border-radius:4px; margin:8px 0; color:var(--accent-cyan); display:block; }
+  .alert-desc { font-size:12px; color:var(--muted); line-height:1.6; }
+
+  /* Gotcha callout */
+  .callout { border-radius:8px; padding:14px 16px; margin:14px 0; display:flex; gap:12px; }
+  .callout-warn { background:rgba(240,160,80,.08); border:1px solid rgba(240,160,80,.25); }
+  .callout-info { background:rgba(78,168,222,.08); border:1px solid rgba(78,168,222,.25); }
+  .callout-icon { font-size:16px; flex-shrink:0; margin-top:1px; }
+  .callout-body { font-size:12px; line-height:1.7; color:var(--muted); }
+  .callout-body strong { color:var(--text); }
+
+  /* Flow diagram */
+  .flow { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin:16px 0; }
+  .flow-node { padding:8px 14px; border-radius:8px; font-size:12px; font-weight:600; border:1px solid; }
+  .flow-arrow { color:var(--muted); font-size:16px; }
+
+  /* Checklist */
+  .checklist { list-style:none; }
+  .checklist li { padding:8px 0; border-bottom:1px solid var(--border); font-size:13px; display:flex; align-items:center; gap:10px; }
+  .checklist li:last-child { border-bottom:none; }
+  .check-icon { width:18px; height:18px; border-radius:4px; background:rgba(107,207,127,.15); border:1px solid rgba(107,207,127,.3); display:flex; align-items:center; justify-content:center; font-size:10px; color:var(--accent-green); flex-shrink:0; }
+
+  @media(max-width:700px) {
+    .content { padding:20px 16px; }
+    .topnav { padding:12px 16px; }
+    .tabs { padding:0 16px; }
+    .grid-2, .grid-3, .vm-grid { grid-template-columns:1fr; }
+    .role-row { grid-template-columns:1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topnav">
+  <a href="index.html" class="back-link">← Home</a>
+  <span class="topnav-title">📖 Complete Build Guide</span>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;">
+    <a href="sprint2-guide.html" class="navlink navlink-sprint">🛠️ Sprint 2 Guide</a>
+    <a href="architecture.html" class="navlink navlink-arch">🏗️ Architecture</a>
+    <a href="sprint2-backlog.html" class="navlink navlink-sprint">🚀 Backlog</a>
+  </div>
+</div>
+
+<div class="tabs">
+  <div class="tab active" onclick="showTab('overview')">Overview</div>
+  <div class="tab" onclick="showTab('deploy')">Prerequisites &amp; Deploy</div>
+  <div class="tab" onclick="showTab('roles')">Ansible Roles</div>
+  <div class="tab" onclick="showTab('ports')">Services &amp; Ports</div>
+  <div class="tab" onclick="showTab('flows')">Data Flows</div>
+  <div class="tab" onclick="showTab('dashboards')">Dashboards &amp; Alerts</div>
+  <div class="tab" onclick="showTab('ops')">Operations</div>
+</div>
+
+<!-- ═══════════════════════════════════════════ OVERVIEW ═══════════════════════════════════════════ -->
+<div id="tab-overview" class="tab-content active">
+<div class="content">
+  <div class="section-title">Sprint 1 Observability Platform</div>
+  <div class="section-sub">
+    Full-stack observability for <code>mukundmadhav/react-springboot-mysql</code> deployed across three VMs via Ansible + Docker Compose.
+    All instrumentation is injected externally — OTel Java agent on Spring Boot, Kong OTel plugin at the gateway layer.
+    Metrics, structured logs, and distributed traces are collected, correlated, and visualised in Grafana.
+  </div>
+
+  <div class="vm-grid">
+    <div class="vm-box" style="border-color:rgba(78,168,222,.4);">
+      <div class="vm-header" style="background:rgba(78,168,222,.05);">
+        <span class="vm-name">monitoring-vm</span>
+        <span class="vm-ip">192.168.127.10</span>
+      </div>
+      <div class="vm-body">
+        <span class="svc-pill svc-metrics">Prometheus :9090</span>
+        <span class="svc-pill svc-metrics">Alertmanager :9093</span>
+        <span class="svc-pill svc-logs">Loki :3100</span>
+        <span class="svc-pill svc-traces">OTel Collector :4317/:4318</span>
+        <span class="svc-pill svc-traces">Jaeger :16686</span>
+        <span class="svc-pill svc-viz">Grafana :3000</span>
+        <span class="svc-pill svc-infra">node_exporter :9100</span>
+        <span class="svc-pill svc-infra">cAdvisor :8081</span>
+      </div>
+    </div>
+    <div class="vm-box" style="border-color:rgba(176,126,232,.4);">
+      <div class="vm-header" style="background:rgba(176,126,232,.05);">
+        <span class="vm-name">application-vm</span>
+        <span class="vm-ip">192.168.127.30</span>
+      </div>
+      <div class="vm-body">
+        <span class="svc-pill svc-app">Spring Boot :80→:8080</span>
+        <span class="svc-pill svc-app">MySQL :3306</span>
+        <span class="svc-pill svc-metrics">MySQL Exporter :9104</span>
+        <span class="svc-pill svc-infra">node_exporter :9100</span>
+        <span class="svc-pill svc-infra">cAdvisor :8081</span>
+      </div>
+    </div>
+    <div class="vm-box" style="border-color:rgba(107,207,127,.4);">
+      <div class="vm-header" style="background:rgba(107,207,127,.05);">
+        <span class="vm-name">network-vm</span>
+        <span class="vm-ip">192.168.127.15</span>
+      </div>
+      <div class="vm-body">
+        <span class="svc-pill svc-app">Kong :8000 / :8001</span>
+        <span class="svc-pill svc-infra">node_exporter :9100</span>
+        <span class="svc-pill svc-infra">cAdvisor :8081</span>
+      </div>
+    </div>
+  </div>
+
+  <h3 style="font-size:15px;font-weight:700;margin-bottom:16px;">Stack at a Glance</h3>
+  <div class="grid-3">
+    <div class="card">
+      <div class="card-title"><span style="color:var(--accent-blue)">📊</span> Metrics</div>
+      <p>Prometheus scrapes all VMs. node_exporter for host metrics, cAdvisor for container metrics, MySQL Exporter for DB metrics. Spring actuator scraped <em>via Kong</em> at <code>:8000/actuator/prometheus</code>. All alerts managed by Alertmanager with Gmail SMTP.</p>
+    </div>
+    <div class="card">
+      <div class="card-title"><span style="color:var(--accent-green)">📋</span> Logs</div>
+      <p>OTel Collector filelog receiver on application-vm and network-vm reads Docker container logs from <code>/var/lib/docker/containers</code> and ships them to Loki on monitoring-vm. Spring Boot logs include <code>trace_id</code> enabling log↔trace correlation in Grafana.</p>
+    </div>
+    <div class="card">
+      <div class="card-title"><span style="color:var(--accent-orange)">🔍</span> Traces</div>
+      <p>Kong OTel plugin sends gateway-level spans to OTel Collector (:4318 HTTP). Spring Boot OTel Java agent sends app spans to OTel Collector (:4317 gRPC). OTel Collector batches and forwards to Jaeger over the internal Docker network. W3C Trace Context + B3 headers.</p>
+    </div>
+    <div class="card">
+      <div class="card-title"><span style="color:var(--accent-purple)">🔌</span> Kong Gateway</div>
+      <p>Declarative dbless config. Routes <code>/api</code> and <code>/actuator</code> to Spring Boot backend, <code>/</code> to React frontend. OTel plugin propagates W3C + B3 trace context. Prometheus plugin exposes Kong metrics. Single proxy entry point at <code>:8000</code>.</p>
+    </div>
+    <div class="card">
+      <div class="card-title"><span style="color:var(--accent-cyan)">📈</span> Grafana</div>
+      <p>Three dashboards: <strong>unified-overview</strong> (RED metrics + logs + traces), <strong>tracing-overview</strong> (Jaeger explorer, span distribution), <strong>otel-collector-health</strong> (span drop rate, exporter health). Datasources cross-linked via <code>trace_id</code>.</p>
+    </div>
+    <div class="card">
+      <div class="card-title"><span style="color:var(--accent-yellow)">⚙️</span> Ansible</div>
+      <p>15 roles orchestrated by three playbooks (monitoring.yml, application.yml, network.yml) unified under site.yml. Each VM runs one <code>/opt/stack/docker-compose.yml</code> templated by Jinja2. Variables flow from <code>group_vars/</code> down to <code>roles/*/defaults/main.yml</code>.</p>
+    </div>
+  </div>
+
+  <div class="callout callout-info" style="margin-top:8px;">
+    <div class="callout-icon">ℹ️</div>
+    <div class="callout-body">
+      <strong>Ansible control node:</strong> 192.168.127.20 — not managed by Ansible, but added to UFW allowlists on all three VMs. Remote user is <code>deploy</code> with passwordless sudo. SSH key at <code>~/.ssh/ansible_key</code> (pre-configured in ansible.cfg).
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════ DEPLOY ═══════════════════════════════════════════ -->
+<div id="tab-deploy" class="tab-content">
+<div class="content">
+  <div class="section-title">Prerequisites &amp; Deployment</div>
+  <div class="section-sub">Steps to bring up the full stack from scratch. Run from the Ansible control node (192.168.127.20).</div>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-line"><div class="step-num">1</div><div class="step-connector"></div></div>
+      <div class="step-content">
+        <h3>Install Ansible and dependencies</h3>
+        <p>Requires Ansible 2.14+ and Python 3.9+ on the control node.</p>
+        <pre>pip install ansible
+ansible-galaxy install -r requirements.yml</pre>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-line"><div class="step-num">2</div><div class="step-connector"></div></div>
+      <div class="step-content">
+        <h3>Configure SSH key</h3>
+        <p>Generate or copy the deploy key to <code>~/.ssh/ansible_key</code>. The <code>deploy</code> user on each VM must have this public key in <code>~/.ssh/authorized_keys</code>.</p>
+        <pre>ssh-keygen -t ed25519 -f ~/.ssh/ansible_key -N ""
+ssh-copy-id -i ~/.ssh/ansible_key.pub deploy@192.168.127.10
+ssh-copy-id -i ~/.ssh/ansible_key.pub deploy@192.168.127.30
+ssh-copy-id -i ~/.ssh/ansible_key.pub deploy@192.168.127.15</pre>
+        <div class="callout callout-info" style="margin-top:10px;">
+          <div class="callout-icon">ℹ️</div>
+          <div class="callout-body"><code>ansible.cfg</code> already sets <code>private_key_file = ~/.ssh/ansible_key</code> and <code>remote_user = deploy</code> — no per-command flags needed.</div>
+        </div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-line"><div class="step-num">3</div><div class="step-connector"></div></div>
+      <div class="step-content">
+        <h3>Verify connectivity</h3>
+        <pre>ansible all -m ping</pre>
+        <p>All three hosts should return <code>pong</code>. If not, check SSH key, UFW rules, and that the <code>deploy</code> user exists on each VM.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-line"><div class="step-num">4</div><div class="step-connector"></div></div>
+      <div class="step-content">
+        <h3>Review credentials (important before first deploy)</h3>
+        <p>Weak defaults are set in <code>inventory/group_vars/</code>. Change these before deploying to any non-throwaway environment:</p>
+        <ul>
+          <li><code>grafana_admin_password</code> in <code>monitoring.yml</code></li>
+          <li><code>mysql_password</code> and <code>mysql_root_password</code> in <code>application.yml</code></li>
+        </ul>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-line"><div class="step-num">5</div><div class="step-connector"></div></div>
+      <div class="step-content">
+        <h3>Dry-run (check mode)</h3>
+        <pre>ansible-playbook playbooks/site.yml --check</pre>
+        <p>Shows what would change without applying anything. Some tasks (e.g. docker pulls) will still report "changed" because they can't be checked without executing.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-line"><div class="step-num">6</div><div class="step-connector"></div></div>
+      <div class="step-content">
+        <h3>Full deploy</h3>
+        <pre># Full stack (all three VMs)
+ansible-playbook playbooks/site.yml
+
+# Per-VM
+ansible-playbook playbooks/monitoring.yml
+ansible-playbook playbooks/application.yml
+ansible-playbook playbooks/network.yml
+
+# Tagged run — only monitoring-related tasks
+ansible-playbook playbooks/site.yml --tags "monitoring"</pre>
+        <p>Each playbook deploys the docker-compose template then starts the stack with <code>docker compose up -d</code>. Total deploy time: ~8–12 minutes for a cold start.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-line"><div class="step-num">7</div><div class="step-connector"></div></div>
+      <div class="step-content">
+        <h3>Verify services</h3>
+        <pre># Check all containers are running on each VM
+ansible monitoring -m shell -a "docker compose -f /opt/stack/docker-compose.yml ps"
+ansible application -m shell -a "docker compose -f /opt/stack/docker-compose.yml ps"
+ansible network -m shell -a "docker compose -f /opt/stack/docker-compose.yml ps"</pre>
+        <p>Then open in a browser:</p>
+        <ul>
+          <li>Grafana: <code>http://192.168.127.10:3000</code> (admin / your password)</li>
+          <li>Prometheus: <code>http://192.168.127.10:9090</code></li>
+          <li>Jaeger: <code>http://192.168.127.10:16686</code></li>
+          <li>Kong proxy: <code>http://192.168.127.15:8000</code></li>
+          <li>App (via Kong): <code>http://192.168.127.15:8000/</code></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout callout-warn" style="margin-top:8px;">
+    <div class="callout-icon">⚠️</div>
+    <div class="callout-body">
+      <strong>Known bootstrap ordering issue:</strong> Kong must be running before Prometheus can scrape <code>:8000/actuator/prometheus</code>. If you deploy application-vm before network-vm, Spring metrics will be missing until Kong is up. Deploy in order: monitoring → network → application, or run site.yml which handles this automatically.
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════ ROLES ═══════════════════════════════════════════ -->
+<div id="tab-roles" class="tab-content">
+<div class="content">
+  <div class="section-title">Ansible Roles (15)</div>
+  <div class="section-sub">Click a role to expand. All roles live in <code>roles/</code>. Role-specific defaults are in <code>roles/&lt;name&gt;/defaults/main.yml</code>.</div>
+
+  <!-- Role 1 -->
+  <div class="role-card">
+    <div class="role-header" onclick="toggleRole(this)">
+      <span class="role-num">01</span>
+      <span class="role-name">common</span>
+      <span class="role-vm tag tag-muted">all VMs</span>
+      <span class="role-chevron">▶</span>
+    </div>
+    <div class="role-body">
+      <div class="role-row">
+        <div class="role-section">
+          <h4>Purpose</h4>
+          <p>Bootstraps every VM: installs base packages (curl, git, htop, etc.), sets timezone, configures UFW firewall to allow only required ports + Ansible control node (192.168.127.20).</p>
+        </div>
+        <div class="role-section">
+          <h4>Key variables</h4>
+          <ul>
+            <li><code>common_packages</code> — list in <code>all.yml</code></li>
+            <li><code>timezone</code> — default <code>Africa/Casablanca</code></li>
+            <li><code>ufw_allowed_ports</code> — per-group port list</li>
+          </ul>
+        </div>
+      </div>
+      <div class="callout callout-info">
+        <div class="callout-icon">ℹ️</div>
+        <div class="callout-body">UFW rules are additive per group. Ports not explicitly allowed are blocked. The Ansible control node IP (192.168.127.20) is always allowed on all ports.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Role 2 -->
+  <div class="role-card">
+    <div class="role-header" onclick="toggleRole(this)">
+      <span class="role-num">02</span>
+      <span class="role-name">docker</span>
+      <span class="role-vm tag tag-muted">all VMs</span>
+      <span class="role-chevron">▶</span>
+    </div>
+    <div class="role-body">
+      <div class="role-row">
+        <div class="role-section">
+          <h4>Purpose</h4>
+          <p>Installs Docker CE and the Compose plugin using the official Docker apt repository. Adds the <code>deploy</code> user to the <code>docker</code> group.</p>
+        </div>
+        <div class="role-section">
+          <h4>Key variables</h4>
+          <ul>
+            <li><code>docker_version</code> — pinned in <code>all.yml</code></li>
+            <li><code>docker_compose_version</code> — Compose plugin version</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Role 3 -->
+  <div class="role-card">
+    <div class="role-header" onclick="toggleRole(this)">
+      <span class="role-num">03</span>
+      <span class="role-name">node_exporter</span>
+      <span class="role-vm tag tag-muted">all VMs</span>
+      <span class="role-chevron">▶</span>
+    </div>
+    <div class="role-body">
+      <div class="role-row">
+        <div class="role-section">
+          <h4>Purpose</h4>
+          <p>Stub role — node_exporter runs as a Docker container managed by the docker-compose template on each VM. This role exists as a hook for any pre-deploy configuration (e.g. textfile collector directories).</p>
+        </div>
+        <div class="role-section">
+          <h4>Port</h4>
+          <p><code>:9100</code> on all three VMs. Prometheus scrapes all three independently.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Role 4 -->
+  <div class="role-card">
+    <div class="role-header" onclick="toggleRole(this)">
+      <span class="role-num">04</span>
+      <span class="role-name">cadvisor</span>
+      <span class="role-vm tag tag-muted">all VMs</span>
+      <span class="role-chevron">▶</span>
+    </div>
+    <div class="role-body">
+      <div class="role-row">
+        <div class="role-section">
+          <h4>Purpose</h4>
+          <p>Stub role — cAdvisor runs as a Docker container exposing per-container CPU/memory/network metrics. Prometheus scrapes it at <code>:8081/metrics</code>.</p>
+        </div>
+        <div class="role-section">
+          <h4>Port</h4>
+          <p><code>:8081</code> on all three VMs. Requires <code>/var/run/docker.sock</code> and <code>/sys</code> mounts (defined in compose templates).</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Role 5 -->
+  <div class="role-card">
+    <div class="role-header" onclick="toggleRole(this)">
+      <span class="role-num">05</span>
+      <span class="role-name">prometheus</span>
+      <span class="role-vm tag tag-blue">monitoring-vm</span>
+      <span class="role-chevron">▶</span>
+    </div>
+    <div class="role-body">
+      <div class="role-row">
+        <div class="role-section">
+          <h4>Purpose</h4>
+          <p>Writes <code>prometheus.yml</code> (scrape config), <code>alert.rules.yml</code>, and the retention/storage config. Prometheus scrapes all targets including Spring actuator via Kong.</p>
+        </div>
+        <div class="role-section">
+          <h4>Key variables (<code>monitoring.yml</code>)</h4>
+          <ul>
+            <li><code>prometheus_scrape_targets</code> — list of target definitions with <code>job_name</code>, <code>targets</code>, <code>metrics_path</code></li>
+            <li><code>prometheus_retention</code> — default 15d</li>
+            <li><code>prometheus_alert_rules</code> — inlined in <code>monitoring.yml</code></li>
+          </ul>
+        </div>
+      </div>
+      <div class="callout callout-warn">
+        <div class="callout-icon">⚠️</div>
+        <div class="callout-body"><strong>Spring actuator target uses <code>metrics_path: /actuator/prometheus</code></strong> and points to Kong (<code>192.168.127.15:8000</code>), not Spring directly. If Kong is down, these metrics stop arriving and will trigger OTel Collector health alerts after 5 minutes.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Role 6 -->
+  <div class="role-card">
+    <div class="role-header" onclick="toggleRole(this)">
+      <span class="role-num">06</span>
+      <span class="role-name">alertmanager</span>
+      <span class="role-vm tag tag-blue">monitoring-vm</span>
+      <span class="role-chevron">▶</span>
+    </div>
+    <div class="role-body">
+      <div class="role-row">
+        <div class="role-section">
+          <h4>Purpose</h4>
+          <p>Manages alert routing and notifications. Configured with Gmail SMTP. Two routes: <code>warning</code> severity → email, <code>critical</code> severity → email with shorter repeat interval.</p>
+        </div>
+        <div class="role-section">
+          <h4>Key variables (<code>monitoring.yml</code>)</h4>
+          <ul>
+            <li><code>alertmanager_smtp_from</code></li>
+            <li><code>alertmanager_smtp_smarthost</code></li>
+            <li><code>alertmanager_smtp_auth_username</code></li>
+            <li><code>alertmanager_smtp_auth_password</code> — use Ansible vault</li>
+            <li><code>alertmanager_email_to</code></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Role 7 -->
+  <div class="role-card">
+    <div class="role-header" onclick="toggleRole(this)">
+      <span class="role-num">07</span>
+      <span class="role-name">loki</span>
+      <span class="role-vm tag tag-blue">monitoring-vm</span>
+      <span class="role-chevron">▶</span>
+    </div>
+    <div class="role-body">
+      <div class="role-row">
+        <div class="role-section">
+          <h4>Purpose</h4>
+          <p>Grafana Loki for log aggregation. Configured with TSDB storage backend for efficient label indexing. Receives logs from OTel Collector's Loki exporter.</p>
+        </div>
+        <div class="role-section">
+          <h4>Key variables</h4>
+          <ul>
+            <li><code>loki_retention_period</code> — default 744h (31 days)</li>
+            <li><code>loki_storage_path</code> — <code>/opt/stack/loki-data</code></li>
+            <li><code>loki_push_endpoint</code> in <code>all.yml</code> — used by OTel Collector</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Role 8 -->
+  <div class="role-card">
+    <div class="role-header" onclick="toggleRole(this)">
+      <span class="role-num">08</span>
+      <span class="role-name">jaeger</span>
+      <span class="role-vm tag tag-blue">monitoring-vm</span>
+      <span class="role-chevron">▶</span>
+    </div>
+    <div class="role-body">
+      <div class="role-row">
+        <div class="role-section">
+          <h4>Purpose</h4>
+          <p>Jaeger v2 with Badger local storage for distributed tracing. Receives traces from OTel Collector over the internal Docker network.</p>
+        </div>
+        <div class="role-section">
+          <h4>Port remapping</h4>
+          <p>Jaeger v2 uses OTLP ports internally (4317/4318). To avoid conflict with OTel Collector's host ports, Jaeger's host ports are remapped:</p>
+          <ul>
+            <li>gRPC: host <code>4327</code> → container <code>4317</code></li>
+            <li>HTTP: host <code>4328</code> → container <code>4318</code></li>
+            <li>UI: <code>16686</code> (unchanged)</li>
+          </ul>
+        </div>
+      </div>
+      <div class="callout callout-warn">
+        <div class="callout-icon">⚠️</div>
+        <div class="callout-body"><strong>OTel Collector → Jaeger uses the Docker internal network</strong>, not host ports. The exporter in <code>otel-collector-config.yml</code> targets <code>jaeger:4317</code> (Docker service name), not <code>localhost:4327</code>.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Role 9 -->
+  <div class="role-card">
+    <div class="role-header" onclick="toggleRole(this)">
+      <span class="role-num">09</span>
+      <span class="role-name">otel-collector</span>
+      <span class="role-vm tag tag-blue">monitoring-vm</span>
+      <span class="role-chevron">▶</span>
+    </div>
+    <div class="role-body">
+      <div class="role-row">
+        <div class="role-section">
+          <h4>Purpose</h4>
+          <p>Central telemetry hub. Receives traces via OTLP (gRPC :4317, HTTP :4318). Exposes own metrics at :8888. Exports traces to Jaeger and logs to Loki. Also runs filelog receiver on app-vm and network-vm to ship container logs.</p>
+        </div>
+        <div class="role-section">
+          <h4>Pipeline</h4>
+          <p><strong>Traces:</strong> OTLP receiver → batch processor → OTLP exporter (Jaeger)<br>
+          <strong>Logs:</strong> filelog receiver (Docker logs) → Loki exporter<br>
+          <strong>Metrics:</strong> Prometheus exporter → scraped by Prometheus</p>
+        </div>
+      </div>
+      <div class="callout callout-info">
+        <div class="callout-icon">ℹ️</div>
+        <div class="callout-body">The OTel Collector runs on <strong>monitoring-vm</strong> for traces. On <strong>application-vm</strong> and <strong>network-vm</strong>, the same image runs with only the filelog receiver + Loki exporter pipeline enabled for log shipping.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Role 10 -->
+  <div class="role-card">
+    <div class="role-header" onclick="toggleRole(this)">
+      <span class="role-num">10</span>
+      <span class="role-name">grafana</span>
+      <span class="role-vm tag tag-blue">monitoring-vm</span>
+      <span class="role-chevron">▶</span>
+    </div>
+    <div class="role-body">
+      <div class="role-row">
+        <div class="role-section">
+          <h4>Purpose</h4>
+          <p>Grafana with provisioned datasources and three dashboards. Datasource URLs use Docker service names (e.g. <code>http://prometheus:9090</code>) — they never leave the monitoring Docker network.</p>
+        </div>
+        <div class="role-section">
+          <h4>Files generated</h4>
+          <ul>
+            <li><code>provisioning/datasources/datasources.yml</code></li>
+            <li><code>provisioning/dashboards/dashboards.yml</code></li>
+            <li><code>dashboards/unified-overview.json</code></li>
+            <li><code>dashboards/tracing-overview.json</code></li>
+            <li><code>dashboards/otel-collector-health.json</code></li>
+          </ul>
+        </div>
+      </div>
+      <div class="callout callout-warn">
+        <div class="callout-icon">⚠️</div>
+        <div class="callout-body">Grafana datasource URLs use <strong>Docker service names</strong>, not <code>localhost</code>. They must be on the same Docker network. If you add a datasource pointing to <code>localhost:9090</code> it will fail from inside the container.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Role 11 -->
+  <div class="role-card">
+    <div class="role-header" onclick="toggleRole(this)">
+      <span class="role-num">11</span>
+      <span class="role-name">kong</span>
+      <span class="role-vm tag tag-green">network-vm</span>
+      <span class="role-chevron">▶</span>
+    </div>
+    <div class="role-body">
+      <div class="role-row">
+        <div class="role-section">
+          <h4>Purpose</h4>
+          <p>API Gateway in dbless (declarative) mode. Routes all traffic to Spring Boot backend. OTel plugin extracts/propagates W3C Trace Context and B3 headers, and sends spans to OTel Collector. Prometheus plugin exposes Kong's own metrics.</p>
+        </div>
+        <div class="role-section">
+          <h4>Key config (<code>kong.yml</code>)</h4>
+          <ul>
+            <li>Service: <code>spring-backend</code> → <code>http://192.168.127.30:80</code></li>
+            <li>Routes: <code>/api</code>, <code>/actuator</code>, <code>/</code></li>
+            <li>Plugin: <code>opentelemetry</code> → endpoint <code>http://192.168.127.10:4318/v1/traces</code></li>
+            <li>Plugin: <code>prometheus</code> (built-in)</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Role 12 -->
+  <div class="role-card">
+    <div class="role-header" onclick="toggleRole(this)">
+      <span class="role-num">12</span>
+      <span class="role-name">mysql</span>
+      <span class="role-vm tag tag-purple">application-vm</span>
+      <span class="role-chevron">▶</span>
+    </div>
+    <div class="role-body">
+      <div class="role-row">
+        <div class="role-section">
+          <h4>Purpose</h4>
+          <p>MySQL 8 with an init SQL script to create the application database and user. MySQL Exporter runs alongside it to expose metrics at <code>:9104/metrics</code>.</p>
+        </div>
+        <div class="role-section">
+          <h4>Key variables (<code>application.yml</code>)</h4>
+          <ul>
+            <li><code>mysql_database</code></li>
+            <li><code>mysql_user</code></li>
+            <li><code>mysql_password</code> — change from default!</li>
+            <li><code>mysql_root_password</code> — change from default!</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Role 13 -->
+  <div class="role-card">
+    <div class="role-header" onclick="toggleRole(this)">
+      <span class="role-num">13</span>
+      <span class="role-name">spring_backend</span>
+      <span class="role-vm tag tag-purple">application-vm</span>
+      <span class="role-chevron">▶</span>
+    </div>
+    <div class="role-body">
+      <div class="role-row">
+        <div class="role-section">
+          <h4>Purpose</h4>
+          <p>Downloads the OTel Java agent JAR, writes a multi-stage Dockerfile that clones <code>mukundmadhav/react-springboot-mysql</code>, builds the Spring Boot app, and starts it with the OTel agent attached. Spring Boot serves both the React frontend (<code>/</code>) and the API (<code>/api</code>) on port 8080.</p>
+        </div>
+        <div class="role-section">
+          <h4>OTel agent config</h4>
+          <ul>
+            <li><code>OTEL_SERVICE_NAME=spring-backend</code></li>
+            <li><code>OTEL_EXPORTER_OTLP_ENDPOINT=http://192.168.127.10:4317</code></li>
+            <li><code>OTEL_PROPAGATORS=tracecontext,b3multi</code></li>
+            <li><code>OTEL_LOGS_EXPORTER=none</code> (logs shipped separately via filelog)</li>
+          </ul>
+        </div>
+      </div>
+      <div class="callout callout-info">
+        <div class="callout-icon">ℹ️</div>
+        <div class="callout-body">Host port 80 maps to container port 8080. Kong proxies to <code>http://192.168.127.30:80</code> — not directly to the Docker port. Spring Boot auto-includes <code>trace_id</code> and <code>span_id</code> in log output when the OTel agent is attached.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Role 14 -->
+  <div class="role-card">
+    <div class="role-header" onclick="toggleRole(this)">
+      <span class="role-num">14</span>
+      <span class="role-name">react_frontend</span>
+      <span class="role-vm tag tag-purple">application-vm</span>
+      <span class="role-chevron">▶</span>
+    </div>
+    <div class="role-body">
+      <div class="role-row">
+        <div class="role-section">
+          <h4>Purpose</h4>
+          <p>Stub role. The React frontend is bundled into the Spring Boot container during the multi-stage Docker build — there is no separate frontend container. This role exists as a future hook (e.g. if the frontend is ever decoupled).</p>
+        </div>
+        <div class="role-section">
+          <h4>Note</h4>
+          <p>React is served from <code>/</code> by Spring Boot. Kong routes <code>/</code> → Spring Boot backend at <code>192.168.127.30:80</code>.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Role 15 -->
+  <div class="role-card">
+    <div class="role-header" onclick="toggleRole(this)">
+      <span class="role-num">15</span>
+      <span class="role-name">otel-collector (filelog, app/network VMs)</span>
+      <span class="role-vm tag tag-purple">application-vm</span>
+      <span class="role-vm tag tag-green">network-vm</span>
+      <span class="role-chevron">▶</span>
+    </div>
+    <div class="role-body">
+      <div class="role-row">
+        <div class="role-section">
+          <h4>Purpose</h4>
+          <p>On application-vm and network-vm, the OTel Collector runs with only the filelog receiver + Loki exporter pipeline. It reads Docker container log files from <code>/var/lib/docker/containers/*/*-json.log</code>, extracts <code>trace_id</code> via regex, and ships structured logs to Loki on monitoring-vm.</p>
+        </div>
+        <div class="role-section">
+          <h4>trace_id extraction</h4>
+          <p>A regex operator in the filelog receiver pipeline extracts <code>trace_id</code> from Spring Boot log lines (MDC format: <code>trace_id=&lt;hex&gt;</code>). This populates a Loki label enabling log↔trace correlation in Grafana.</p>
+        </div>
+      </div>
+      <div class="callout callout-info">
+        <div class="callout-icon">ℹ️</div>
+        <div class="callout-body">This is the same <code>otel-collector</code> role as role #9, but deployed on application-vm and network-vm with a different config template that enables only the log shipping pipeline.</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════ PORTS ═══════════════════════════════════════════ -->
+<div id="tab-ports" class="tab-content">
+<div class="content">
+  <div class="section-title">Services &amp; Ports</div>
+  <div class="section-sub">Complete port reference for all services across the three VMs.</div>
+
+  <h3 style="font-size:14px;font-weight:700;color:var(--accent-blue);margin-bottom:12px;text-transform:uppercase;letter-spacing:.5px;">monitoring-vm — 192.168.127.10</h3>
+  <div class="tbl-wrap" style="margin-bottom:28px;">
+    <table class="tbl">
+      <thead><tr><th>Service</th><th>Host Port</th><th>Container Port</th><th>Protocol</th><th>Purpose</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Prometheus</strong></td><td><code>9090</code></td><td><code>9090</code></td><td>HTTP</td><td>Metrics query UI + API; scraped by Grafana</td></tr>
+        <tr><td><strong>Alertmanager</strong></td><td><code>9093</code></td><td><code>9093</code></td><td>HTTP</td><td>Alert routing; receives from Prometheus</td></tr>
+        <tr><td><strong>Loki</strong></td><td><code>3100</code></td><td><code>3100</code></td><td>HTTP</td><td>Log ingest + query; receives from OTel Collector on app/network VMs</td></tr>
+        <tr><td><strong>OTel Collector (gRPC)</strong></td><td><code>4317</code></td><td><code>4317</code></td><td>gRPC</td><td>Trace ingest from Spring Boot OTel Java agent</td></tr>
+        <tr><td><strong>OTel Collector (HTTP)</strong></td><td><code>4318</code></td><td><code>4318</code></td><td>HTTP</td><td>Trace ingest from Kong OTel plugin</td></tr>
+        <tr><td><strong>OTel Collector metrics</strong></td><td><code>8888</code></td><td><code>8888</code></td><td>HTTP</td><td>Collector's own Prometheus metrics; scraped by Prometheus</td></tr>
+        <tr><td><strong>Jaeger UI</strong></td><td><code>16686</code></td><td><code>16686</code></td><td>HTTP</td><td>Trace query UI; also queried by Grafana datasource</td></tr>
+        <tr><td><strong>Jaeger OTLP gRPC</strong></td><td><code>4327</code></td><td><code>4317</code></td><td>gRPC</td><td>External OTLP ingestion (remapped to avoid OTel Collector conflict)</td></tr>
+        <tr><td><strong>Jaeger OTLP HTTP</strong></td><td><code>4328</code></td><td><code>4318</code></td><td>HTTP</td><td>External OTLP ingestion (remapped)</td></tr>
+        <tr><td><strong>Grafana</strong></td><td><code>3000</code></td><td><code>3000</code></td><td>HTTP</td><td>Dashboard UI; admin access</td></tr>
+        <tr><td><strong>node_exporter</strong></td><td><code>9100</code></td><td><code>9100</code></td><td>HTTP</td><td>Host metrics (CPU, memory, disk, network)</td></tr>
+        <tr><td><strong>cAdvisor</strong></td><td><code>8081</code></td><td><code>8080</code></td><td>HTTP</td><td>Container metrics</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 style="font-size:14px;font-weight:700;color:var(--accent-purple);margin-bottom:12px;text-transform:uppercase;letter-spacing:.5px;">application-vm — 192.168.127.30</h3>
+  <div class="tbl-wrap" style="margin-bottom:28px;">
+    <table class="tbl">
+      <thead><tr><th>Service</th><th>Host Port</th><th>Container Port</th><th>Protocol</th><th>Purpose</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Spring Boot</strong></td><td><code>80</code></td><td><code>8080</code></td><td>HTTP</td><td>App server: React frontend (/) + API (/api). Kong proxies to this.</td></tr>
+        <tr><td><strong>MySQL</strong></td><td><code>3306</code></td><td><code>3306</code></td><td>TCP</td><td>Database; accessed by Spring Boot on internal Docker network</td></tr>
+        <tr><td><strong>MySQL Exporter</strong></td><td><code>9104</code></td><td><code>9104</code></td><td>HTTP</td><td>MySQL metrics; scraped by Prometheus</td></tr>
+        <tr><td><strong>node_exporter</strong></td><td><code>9100</code></td><td><code>9100</code></td><td>HTTP</td><td>Host metrics</td></tr>
+        <tr><td><strong>cAdvisor</strong></td><td><code>8081</code></td><td><code>8080</code></td><td>HTTP</td><td>Container metrics</td></tr>
+        <tr><td><strong>OTel Collector (log shipper)</strong></td><td>—</td><td>internal</td><td>—</td><td>Reads Docker logs, ships to Loki. No host port exposed.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 style="font-size:14px;font-weight:700;color:var(--accent-green);margin-bottom:12px;text-transform:uppercase;letter-spacing:.5px;">network-vm — 192.168.127.15</h3>
+  <div class="tbl-wrap" style="margin-bottom:28px;">
+    <table class="tbl">
+      <thead><tr><th>Service</th><th>Host Port</th><th>Container Port</th><th>Protocol</th><th>Purpose</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Kong (proxy)</strong></td><td><code>8000</code></td><td><code>8000</code></td><td>HTTP</td><td>Public entry point for all app traffic + Spring actuator metrics</td></tr>
+        <tr><td><strong>Kong (admin API)</strong></td><td><code>8001</code></td><td><code>8001</code></td><td>HTTP</td><td>Kong admin API; do not expose publicly</td></tr>
+        <tr><td><strong>node_exporter</strong></td><td><code>9100</code></td><td><code>9100</code></td><td>HTTP</td><td>Host metrics</td></tr>
+        <tr><td><strong>cAdvisor</strong></td><td><code>8081</code></td><td><code>8080</code></td><td>HTTP</td><td>Container metrics</td></tr>
+        <tr><td><strong>OTel Collector (log shipper)</strong></td><td>—</td><td>internal</td><td>—</td><td>Reads Docker logs, ships to Loki. No host port exposed.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════ FLOWS ═══════════════════════════════════════════ -->
+<div id="tab-flows" class="tab-content">
+<div class="content">
+  <div class="section-title">Data Flows</div>
+  <div class="section-sub">How metrics, logs, and traces move through the system.</div>
+
+  <!-- METRICS -->
+  <div class="card" style="border-color:rgba(78,168,222,.3);margin-bottom:24px;">
+    <div class="card-title" style="color:var(--accent-blue);font-size:16px;">📊 Metrics Pipeline</div>
+    <div class="flow" style="margin-bottom:16px;">
+      <span class="flow-node" style="background:rgba(78,168,222,.1);border-color:rgba(78,168,222,.3);color:var(--accent-blue);">node_exporter :9100</span>
+      <span class="flow-arrow">→</span>
+      <span class="flow-node" style="background:rgba(78,168,222,.1);border-color:rgba(78,168,222,.3);color:var(--accent-blue);">Prometheus :9090</span>
+      <span class="flow-arrow">→</span>
+      <span class="flow-node" style="background:rgba(64,208,208,.1);border-color:rgba(64,208,208,.3);color:var(--accent-cyan);">Grafana :3000</span>
+    </div>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:16px;">Prometheus scrapes on a 15-second interval (default). All scrape targets are defined in <code>inventory/group_vars/monitoring.yml</code> under <code>prometheus_scrape_targets</code>.</p>
+    <div class="tbl-wrap">
+      <table class="tbl">
+        <thead><tr><th>Target</th><th>Endpoint</th><th>Metrics Path</th><th>What it covers</th></tr></thead>
+        <tbody>
+          <tr><td>node_exporter (monitoring-vm)</td><td><code>192.168.127.10:9100</code></td><td><code>/metrics</code></td><td>Host CPU, memory, disk, network</td></tr>
+          <tr><td>node_exporter (application-vm)</td><td><code>192.168.127.30:9100</code></td><td><code>/metrics</code></td><td>Host CPU, memory, disk, network</td></tr>
+          <tr><td>node_exporter (network-vm)</td><td><code>192.168.127.15:9100</code></td><td><code>/metrics</code></td><td>Host CPU, memory, disk, network</td></tr>
+          <tr><td>cAdvisor (all 3 VMs)</td><td><code>&lt;ip&gt;:8081</code></td><td><code>/metrics</code></td><td>Per-container CPU, memory, network I/O</td></tr>
+          <tr><td>OTel Collector</td><td><code>192.168.127.10:8888</code></td><td><code>/metrics</code></td><td>Span drop rate, exporter errors, queue depth</td></tr>
+          <tr><td>MySQL Exporter</td><td><code>192.168.127.30:9104</code></td><td><code>/metrics</code></td><td>Query rate, slow queries, connections, InnoDB</td></tr>
+          <tr><td>Spring actuator (via Kong)</td><td><code>192.168.127.15:8000</code></td><td><code>/actuator/prometheus</code></td><td>JVM heap, HTTP request rate/latency, DB pool</td></tr>
+          <tr><td>Kong (Prometheus plugin)</td><td><code>192.168.127.15:8001</code></td><td><code>/metrics</code></td><td>Kong request rate, latency, upstream health</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="callout callout-warn" style="margin-top:12px;">
+      <div class="callout-icon">⚠️</div>
+      <div class="callout-body"><strong>Spring metrics flow through Kong.</strong> If Kong is down, <code>192.168.127.15:8000/actuator/prometheus</code> is unreachable and Spring metrics disappear from Prometheus. This will trigger the OTel Collector health alert within 5 minutes (the target will show as "down" in Prometheus targets view).</div>
+    </div>
+  </div>
+
+  <!-- LOGS -->
+  <div class="card" style="border-color:rgba(107,207,127,.3);margin-bottom:24px;">
+    <div class="card-title" style="color:var(--accent-green);font-size:16px;">📋 Logs Pipeline</div>
+    <div class="flow" style="margin-bottom:16px;">
+      <span class="flow-node" style="background:rgba(107,207,127,.1);border-color:rgba(107,207,127,.3);color:var(--accent-green);">Docker container logs</span>
+      <span class="flow-arrow">→</span>
+      <span class="flow-node" style="background:rgba(107,207,127,.1);border-color:rgba(107,207,127,.3);color:var(--accent-green);">OTel Collector filelog</span>
+      <span class="flow-arrow">→</span>
+      <span class="flow-node" style="background:rgba(107,207,127,.1);border-color:rgba(107,207,127,.3);color:var(--accent-green);">Loki :3100</span>
+      <span class="flow-arrow">→</span>
+      <span class="flow-node" style="background:rgba(64,208,208,.1);border-color:rgba(64,208,208,.3);color:var(--accent-cyan);">Grafana</span>
+    </div>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:12px;">OTel Collector runs on application-vm and network-vm with a filelog receiver. It reads from Docker's JSON log files at <code>/var/lib/docker/containers/*/*-json.log</code>.</p>
+    <h4 style="font-size:12px;color:var(--muted);font-weight:600;margin-bottom:8px;">trace_id extraction</h4>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:8px;">Spring Boot logs include MDC context when the OTel Java agent is attached. The filelog receiver uses a regex operator to extract <code>trace_id</code> from log lines:</p>
+    <pre>operators:
+  - type: regex_parser
+    regex: 'trace_id=(?P&lt;trace_id&gt;[0-9a-f]{32})'
+    parse_to: attributes</pre>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:12px;">This becomes a Loki label, enabling Grafana's "View in Jaeger" link — click a log line, jump to the exact trace.</p>
+    <div class="callout callout-info">
+      <div class="callout-icon">ℹ️</div>
+      <div class="callout-body"><code>loki_push_endpoint</code> in <code>all.yml</code> = <code>http://192.168.127.10:3100/loki/api/v1/push</code>. This is the Loki exporter endpoint in the OTel Collector config on app/network VMs.</div>
+    </div>
+  </div>
+
+  <!-- TRACES -->
+  <div class="card" style="border-color:rgba(240,160,80,.3);margin-bottom:24px;">
+    <div class="card-title" style="color:var(--accent-orange);font-size:16px;">🔍 Traces Pipeline</div>
+    <div class="flow" style="margin-bottom:8px;">
+      <span class="flow-node" style="background:rgba(240,160,80,.1);border-color:rgba(240,160,80,.3);color:var(--accent-orange);">Kong OTel plugin</span>
+      <span class="flow-arrow">→</span>
+      <span class="flow-node" style="background:rgba(240,160,80,.1);border-color:rgba(240,160,80,.3);color:var(--accent-orange);">OTel Collector :4318 HTTP</span>
+    </div>
+    <div class="flow" style="margin-bottom:16px;">
+      <span class="flow-node" style="background:rgba(240,160,80,.1);border-color:rgba(240,160,80,.3);color:var(--accent-orange);">Spring OTel Java agent</span>
+      <span class="flow-arrow">→</span>
+      <span class="flow-node" style="background:rgba(240,160,80,.1);border-color:rgba(240,160,80,.3);color:var(--accent-orange);">OTel Collector :4317 gRPC</span>
+      <span class="flow-arrow">→</span>
+      <span class="flow-node" style="background:rgba(240,160,80,.1);border-color:rgba(240,160,80,.3);color:var(--accent-orange);">Jaeger (internal :4317)</span>
+      <span class="flow-arrow">→</span>
+      <span class="flow-node" style="background:rgba(64,208,208,.1);border-color:rgba(64,208,208,.3);color:var(--accent-cyan);">Grafana</span>
+    </div>
+    <div class="grid-2">
+      <div>
+        <h4 style="font-size:12px;color:var(--muted);font-weight:600;margin-bottom:8px;">Trace propagation</h4>
+        <p style="font-size:13px;color:var(--muted);">W3C Trace Context (<code>traceparent</code> header) is the primary propagation format. B3 multi-header is also extracted by Kong for compatibility with legacy clients. Both Kong and the Spring OTel agent are configured with <code>tracecontext,b3multi</code>.</p>
+      </div>
+      <div>
+        <h4 style="font-size:12px;color:var(--muted);font-weight:600;margin-bottom:8px;">OTel Collector config (monitoring-vm)</h4>
+        <pre style="margin:0;">receivers:
+  otlp:
+    protocols:
+      grpc: {endpoint: "0.0.0.0:4317"}
+      http: {endpoint: "0.0.0.0:4318"}
+exporters:
+  otlp/jaeger:
+    endpoint: "jaeger:4317"
+    tls: {insecure: true}
+pipelines:
+  traces:
+    receivers: [otlp]
+    processors: [batch]
+    exporters: [otlp/jaeger]</pre>
+      </div>
+    </div>
+    <div class="callout callout-warn" style="margin-top:12px;">
+      <div class="callout-icon">⚠️</div>
+      <div class="callout-body">OTel Collector → Jaeger uses the <strong>Docker service name</strong> <code>jaeger:4317</code> (internal network), not the host port <code>4327</code>. This is intentional — it avoids NAT overhead and keeps trace traffic on the internal Docker network.</div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════ DASHBOARDS ═══════════════════════════════════════════ -->
+<div id="tab-dashboards" class="tab-content">
+<div class="content">
+  <div class="section-title">Dashboards &amp; Alerts</div>
+  <div class="section-sub">Three Grafana dashboards, three Prometheus alert rules, and Alertmanager routing.</div>
+
+  <h3 style="font-size:16px;font-weight:700;margin-bottom:16px;">Grafana Dashboards</h3>
+
+  <div class="grid-3" style="margin-bottom:32px;">
+    <div class="card" style="border-color:rgba(64,208,208,.3);">
+      <div class="card-title" style="color:var(--accent-cyan);">unified-overview</div>
+      <p>Primary operations dashboard. Panels: RED metrics (request rate, error rate, P95 duration) for Spring Boot via Kong. Error log stream from Loki. Recent traces panel (Jaeger). Container CPU/memory from cAdvisor. MySQL query rate and slow queries.</p>
+      <div style="margin-top:12px;display:flex;flex-wrap:wrap;gap:6px;">
+        <span class="tag tag-blue">Prometheus</span><span class="tag tag-green">Loki</span><span class="tag tag-orange">Jaeger</span>
+      </div>
+    </div>
+    <div class="card" style="border-color:rgba(240,160,80,.3);">
+      <div class="card-title" style="color:var(--accent-orange);">tracing-overview</div>
+      <p>Jaeger-focused dashboard. Panels: recent traces table (service, operation, duration, status). Span duration distribution (heatmap). Service dependency map. P50/P95/P99 latency per operation. Error span rate by service.</p>
+      <div style="margin-top:12px;display:flex;flex-wrap:wrap;gap:6px;">
+        <span class="tag tag-orange">Jaeger</span><span class="tag tag-blue">Prometheus</span>
+      </div>
+    </div>
+    <div class="card" style="border-color:rgba(78,168,222,.3);">
+      <div class="card-title" style="color:var(--accent-blue);">otel-collector-health</div>
+      <p>Observability pipeline health. Panels: span ingestion rate (received vs exported). Span drop rate and drop ratio. Exporter send failures. Processor batch queue utilisation. Collector memory and CPU usage.</p>
+      <div style="margin-top:12px;display:flex;flex-wrap:wrap;gap:6px;">
+        <span class="tag tag-blue">Prometheus</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout callout-info" style="margin-bottom:28px;">
+    <div class="callout-icon">ℹ️</div>
+    <div class="callout-body"><strong>Cross-linking:</strong> In <code>unified-overview</code>, clicking a log line with a <code>trace_id</code> label opens the corresponding Jaeger trace. Clicking a trace in <code>tracing-overview</code> opens Loki logs filtered by that <code>trace_id</code>. This is configured via Grafana datasource derived fields and data link settings.</div>
+  </div>
+
+  <h3 style="font-size:16px;font-weight:700;margin-bottom:16px;">Prometheus Alert Rules</h3>
+
+  <div class="alert-card critical">
+    <div class="alert-name">HighRequestLatency <span class="tag tag-red" style="margin-left:8px;">critical</span></div>
+    <code class="alert-expr">histogram_quantile(0.95, rate(http_server_requests_seconds_bucket[5m])) &gt; 2</code>
+    <div class="alert-desc">Fires when P95 HTTP response time exceeds 2 seconds over a 5-minute window on Spring Boot. Measured via the Spring actuator metrics scraped through Kong. Repeat interval: 10 minutes.</div>
+  </div>
+
+  <div class="alert-card warning">
+    <div class="alert-name">HighSpanDropRate <span class="tag tag-orange" style="margin-left:8px;">warning</span></div>
+    <code class="alert-expr">rate(otelcol_processor_dropped_spans_total[5m]) / rate(otelcol_receiver_accepted_spans_total[5m]) &gt; 0.05</code>
+    <div class="alert-desc">Fires when the OTel Collector is dropping more than 5% of incoming spans (e.g. Jaeger is down or the batch queue is full). Indicates trace data loss. Repeat interval: 30 minutes.</div>
+  </div>
+
+  <div class="alert-card warning">
+    <div class="alert-name">OTelCollectorExporterErrors <span class="tag tag-orange" style="margin-left:8px;">warning</span></div>
+    <code class="alert-expr">rate(otelcol_exporter_send_failed_spans_total[5m]) &gt; 0</code>
+    <div class="alert-desc">Fires when the OTel Collector exporter is failing to send spans to Jaeger. Any non-zero rate is alertable. Usually indicates Jaeger is down or the internal Docker network is broken. Repeat interval: 15 minutes.</div>
+  </div>
+
+  <h3 style="font-size:16px;font-weight:700;margin:28px 0 16px;">Alertmanager Routing</h3>
+  <div class="card">
+    <p style="font-size:13px;color:var(--muted);margin-bottom:14px;">Alertmanager routes alerts to email (Gmail SMTP). All alert state transitions (firing + resolved) trigger an email. The routing tree:</p>
+    <pre>route:
+  receiver: 'email-warning'      # default
+  routes:
+    - matchers: [severity="critical"]
+      receiver: 'email-critical'
+      repeat_interval: 10m
+    - matchers: [severity="warning"]
+      receiver: 'email-warning'
+      repeat_interval: 30m
+
+receivers:
+  - name: 'email-warning'
+    email_configs:
+      - to: '{{ alertmanager_email_to }}'
+        send_resolved: true
+
+  - name: 'email-critical'
+    email_configs:
+      - to: '{{ alertmanager_email_to }}'
+        send_resolved: true</pre>
+    <div class="callout callout-warn" style="margin-top:12px;margin-bottom:0;">
+      <div class="callout-icon">⚠️</div>
+      <div class="callout-body"><code>alertmanager_smtp_auth_password</code> should be stored in Ansible Vault, not plaintext in <code>monitoring.yml</code>. Use a Gmail App Password (not your account password) — requires 2FA enabled on the Gmail account.</div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════ OPERATIONS ═══════════════════════════════════════════ -->
+<div id="tab-ops" class="tab-content">
+<div class="content">
+  <div class="section-title">Operations</div>
+  <div class="section-sub">Day-2 operations: health checks, restarts, log tailing, load testing, and security hardening.</div>
+
+  <div class="grid-2">
+    <div>
+      <h3 style="font-size:15px;font-weight:700;margin-bottom:14px;">Health Checks</h3>
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-title">Check all containers</div>
+        <pre style="margin:0;">ansible monitoring -m shell -a \
+  "docker compose -f /opt/stack/docker-compose.yml ps"
+ansible application -m shell -a \
+  "docker compose -f /opt/stack/docker-compose.yml ps"
+ansible network -m shell -a \
+  "docker compose -f /opt/stack/docker-compose.yml ps"</pre>
+      </div>
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-title">Tail container logs</div>
+        <pre style="margin:0;"># On monitoring-vm
+docker compose -f /opt/stack/docker-compose.yml \
+  logs -f prometheus
+
+# On application-vm
+docker compose -f /opt/stack/docker-compose.yml \
+  logs -f spring-boot
+
+# On network-vm
+docker compose -f /opt/stack/docker-compose.yml \
+  logs -f kong</pre>
+      </div>
+      <div class="card">
+        <div class="card-title">Prometheus targets health</div>
+        <p style="margin-bottom:10px;">Open <code>http://192.168.127.10:9090/targets</code> — all targets should show <span style="color:var(--accent-green);font-weight:600;">UP</span>. Any <span style="color:var(--accent-red);font-weight:600;">DOWN</span> targets indicate connectivity or service issues.</p>
+        <pre style="margin:0;"># Quick CLI check
+curl -s http://192.168.127.10:9090/api/v1/targets \
+  | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+for t in d['data']['activeTargets']:
+  print(t['health'], t['scrapeUrl'])"</pre>
+      </div>
+    </div>
+    <div>
+      <h3 style="font-size:15px;font-weight:700;margin-bottom:14px;">Restarts &amp; Redeploy</h3>
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-title">Restart a single service</div>
+        <pre style="margin:0;"># SSH to the VM, then:
+docker compose -f /opt/stack/docker-compose.yml \
+  restart prometheus
+
+# Or via Ansible:
+ansible monitoring -m shell -a \
+  "docker compose -f /opt/stack/docker-compose.yml \
+  restart prometheus"</pre>
+      </div>
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-title">Redeploy config changes</div>
+        <p style="margin-bottom:10px;">After changing any <code>group_vars/</code> or role template, re-run the relevant playbook:</p>
+        <pre style="margin:0;"># Monitoring config changed (e.g. alert rules)
+ansible-playbook playbooks/monitoring.yml
+
+# Only Prometheus role
+ansible-playbook playbooks/monitoring.yml \
+  --tags prometheus
+
+# Full redeploy (takes ~10 min)
+ansible-playbook playbooks/site.yml</pre>
+      </div>
+      <div class="card">
+        <div class="card-title">Stop / Start full stack</div>
+        <pre style="margin:0;">ansible all -m shell -a \
+  "docker compose -f /opt/stack/docker-compose.yml down"
+
+ansible all -m shell -a \
+  "docker compose -f /opt/stack/docker-compose.yml up -d"</pre>
+      </div>
+    </div>
+  </div>
+
+  <h3 style="font-size:15px;font-weight:700;margin:28px 0 14px;">Load Testing</h3>
+  <div class="card" style="margin-bottom:28px;">
+    <div class="card-title">load-test.sh — 9000-request load generator</div>
+    <p style="margin-bottom:12px;">Sends a mix of GET and POST requests to the app via Kong to generate realistic traffic for dashboards and alert testing.</p>
+    <pre>chmod +x load-test.sh
+./load-test.sh</pre>
+    <p style="margin-top:10px;font-size:13px;color:var(--muted);">While the test runs, watch <strong>unified-overview</strong> in Grafana — you should see request rate spike, P95 latency fluctuate, and new traces appear in Jaeger within ~30 seconds.</p>
+  </div>
+
+  <h3 style="font-size:15px;font-weight:700;margin-bottom:14px;">Integration Tests</h3>
+  <div class="card" style="margin-bottom:28px;">
+    <pre>ansible-playbook playbooks/integration.yml</pre>
+    <p style="font-size:13px;color:var(--muted);">Runs end-to-end checks: service reachability, Prometheus scrape health, Loki log ingest, Jaeger trace presence, and Grafana datasource connectivity.</p>
+  </div>
+
+  <h3 style="font-size:15px;font-weight:700;margin-bottom:14px;">Security Hardening Checklist</h3>
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <thead><tr><th>Item</th><th>Where to change</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td>Change <code>grafana_admin_password</code> from default</td><td><code>inventory/group_vars/monitoring.yml</code></td><td><span class="tag tag-red">Required</span></td></tr>
+        <tr><td>Change <code>mysql_password</code> from default</td><td><code>inventory/group_vars/application.yml</code></td><td><span class="tag tag-red">Required</span></td></tr>
+        <tr><td>Change <code>mysql_root_password</code> from default</td><td><code>inventory/group_vars/application.yml</code></td><td><span class="tag tag-red">Required</span></td></tr>
+        <tr><td>Move SMTP password to Ansible Vault</td><td><code>ansible-vault encrypt_string '...'</code></td><td><span class="tag tag-orange">Recommended</span></td></tr>
+        <tr><td>Restrict Kong admin API (:8001) to internal network only</td><td>UFW rule in <code>common</code> role / Kong network binding</td><td><span class="tag tag-orange">Recommended</span></td></tr>
+        <tr><td>Restrict Jaeger UI (:16686) to monitoring-vm only</td><td>UFW rule in <code>common</code> role</td><td><span class="tag tag-orange">Recommended</span></td></tr>
+        <tr><td>Enable Grafana anonymous auth disable (already default)</td><td><code>grafana.ini</code> template</td><td><span class="tag tag-green">Done</span></td></tr>
+        <tr><td>Pin Docker image versions (no <code>latest</code> tags in production)</td><td>All <code>docker-compose.yml.j2</code> templates</td><td><span class="tag tag-orange">Recommended</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+</div>
+
+<script>
+function showTab(name) {
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  event.target.classList.add('active');
+}
+
+function toggleRole(header) {
+  const body = header.nextElementSibling;
+  const isOpen = body.classList.contains('open');
+  // close all
+  document.querySelectorAll('.role-body').forEach(b => b.classList.remove('open'));
+  document.querySelectorAll('.role-header').forEach(h => h.classList.remove('open'));
+  if (!isOpen) {
+    body.classList.add('open');
+    header.classList.add('open');
+  }
+}
+</script>
+
+</body>
+</html>
