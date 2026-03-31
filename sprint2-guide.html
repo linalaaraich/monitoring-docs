@@ -277,7 +277,7 @@
     </div>
     <div class="mini-card" style="border-color:rgba(176,126,232,.3);">
       <h4 style="color:var(--accent-purple);">Epic 2 — AI RCA MVP</h4>
-      <p>Grafana Alerting and Drain3 send webhooks to a FastAPI triage service. The LLM autonomously queries Prometheus, Loki, Jaeger, Drain3, and RCA History via MCP bridges to gather context. Ollama (llama3:8b) generates an RCA report, emailed directly via SMTP.</p>
+      <p>Grafana Alerting and Drain3 send webhooks to a FastAPI triage service. The triage service calls Ollama, which autonomously queries Prometheus, Loki, Jaeger, Drain3, and RCA History via MCP bridges. Ollama returns a verdict + RCA report to the triage service, which then emails it via SMTP (if valid) or logs a dismiss (if not). Ollama only produces analysis — the triage service is the sole action-taker.</p>
       <div class="tags"><span class="tag tag-purple">7–8 days</span><span class="tag tag-must">Top Priority</span></div>
     </div>
   </div>
@@ -329,10 +329,10 @@
       </div>
     </div>
 
-    <div class="arch-arrow-down" style="margin:4px 0 2px">↓</div>
+    <div class="arch-arrow-down" style="margin:4px 0 2px">↓ verdict + RCA report returned to triage service</div>
 
     <div class="arch-row">
-      <div class="arch-box box-output">RCA Report (JSON + email via SMTP)</div>
+      <div class="arch-box box-fastapi">FastAPI Triage<small>sends email via SMTP (valid) · logs dismiss (invalid)</small></div>
     </div>
   </div>
 
@@ -838,7 +838,7 @@ ansible-playbook playbooks/site.yml playbooks/ai.yml</code></pre>
     <span class="var">repeat_interval</span>: <span class="str">4h</span>        <span class="cm"># Re-send if still firing after 4 hours</span></code></pre>
 
       <div class="note-box" style="background:rgba(107,207,127,.06);border-color:rgba(107,207,127,.25);">
-        <strong style="color:var(--accent-green);">Alert flow in Sprint 2:</strong> Grafana evaluates rule -> fires -> sends webhook POST to triage-service:8090/webhook/grafana -> Triage Service queries Prometheus/Loki/Jaeger via MCP servers -> Ollama generates RCA summary -> Triage Service emails the RCA report via SMTP. The gmail-smtp contact point is a backup if the Triage Service is down.
+        <strong style="color:var(--accent-green);">Alert flow in Sprint 2:</strong> Grafana evaluates rule → fires → sends webhook POST to triage-service:8090/webhook/grafana → Triage Service deduplicates and calls Ollama with alert context → Ollama autonomously queries MCP bridges (Prometheus, Loki, Jaeger, Drain3, RCA History) → Ollama returns verdict + RCA report to Triage Service → Triage Service emails the RCA report via SMTP (verdict: valid) or logs dismiss (verdict: invalid). The gmail-smtp contact point is a backup if the Triage Service is down.
       </div>
 
       <p style="margin-top:14px;"><strong style="color:var(--text);">Grafana role tasks/main.yml -- new provisioning tasks added:</strong></p>
