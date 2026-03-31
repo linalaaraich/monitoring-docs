@@ -2137,570 +2137,1116 @@ docker stats ollama --no-stream</code></pre>
 <div class="content">
 
   <div class="note-box purple">
-    <strong>Key design principle:</strong> The triage service (Layer 2) receives webhooks, deduplicates, and decides whether to invoke the LLM. The LLM (Layer 3) autonomously gathers data via MCP bridges — it decides what to query, not us. RCA decisions are stored in SQLite (RCA History). Email is sent directly via SMTP when the LLM confirms a valid alert. Logs RCA output through Python's standard logging so the OTel Collector ships it to Loki automatically.
+    <strong>This tab documents the actual, implemented triage service</strong> at <span class="ic">~/monitoring-triage-service/</span>. Every code block below is copied from the real source files. The service receives Grafana Alerting webhooks, deduplicates alerts, gathers context from all three observability pillars via MCP bridges, annotates logs with Drain3 anomaly detection, asks Ollama (llama3.1:8b) for an ESCALATE/DISMISS verdict with structured JSON output, stores decisions in SQLite, and sends enriched RCA emails via Gmail SMTP. All processing is async (asyncio), and structured JSON logs are shipped to Loki by the OTel Collector automatically.
   </div>
 
-  <div class="section-label">Ansible Role Tasks</div>
+  <!-- ==================== STEP 1 ==================== -->
+  <div class="section-label">Step 1 — Project Structure</div>
 
-  <div class="card">
-    <h3 style="color:var(--accent-purple);">roles/llm_triage/tasks/main.yml</h3>
-<pre><code><span class="cm">---</span>
-<span class="kw">- name</span>: Create triage service directory
-  <span class="fn">ansible.builtin.file</span>:
-    <span class="var">path</span>: <span class="str">"{{ stack_dir }}/llm-triage"</span>
-    <span class="var">state</span>: directory
-    <span class="var">mode</span>: <span class="str">"0755"</span>
+  <div class="step">
+    <div class="step-num"><div class="step-circle" style="background:rgba(176,126,232,.15);color:var(--accent-purple);">1</div></div>
+    <div class="step-body">
+      <h4 style="color:var(--accent-purple);">File Tree and Module Responsibilities</h4>
+      <p>The triage service is a standalone Python project with a clean separation of concerns. Each file owns exactly one responsibility.</p>
 
-<span class="kw">- name</span>: Render FastAPI application files from templates
-  <span class="fn">ansible.builtin.template</span>:
-    <span class="var">src</span>: <span class="str">"{{ item }}.j2"</span>
-    <span class="var">dest</span>: <span class="str">"{{ stack_dir }}/llm-triage/{{ item }}"</span>
-    <span class="var">mode</span>: <span class="str">"0644"</span>
-  <span class="var">loop</span>:
-    - Dockerfile
-    - main.py
-    - context_fetcher.py
-    - drain_analyzer.py
-    - llm_client.py
-    - requirements.txt
+      <div class="filetree">
+<span class="ft-dir">monitoring-triage-service/</span>
+<span class="ft-file">  Dockerfile               </span><span class="ft-comment"># Python 3.12-slim, uvicorn entrypoint</span>
+<span class="ft-file">  requirements.txt          </span><span class="ft-comment"># 10 pinned dependencies</span>
+<span class="ft-file">  drain3.ini                </span><span class="ft-comment"># Drain3 clustering + masking config</span>
+<span class="ft-dir">  app/</span>
+<span class="ft-file">    config.py              </span><span class="ft-comment"># pydantic-settings: all env vars in one place</span>
+<span class="ft-file">    models.py              </span><span class="ft-comment"># Pydantic models: webhook payloads, LLM response, RCA record</span>
+<span class="ft-file">    dedup.py               </span><span class="ft-comment"># In-memory TTL deduplication with asyncio.Lock</span>
+<span class="ft-file">    context.py             </span><span class="ft-comment"># Parallel fan-out to 3 MCP servers (Prom/Loki/Jaeger)</span>
+<span class="ft-file">    drain_analyzer.py      </span><span class="ft-comment"># Drain3 log clustering, [ANOMALY]/[KNOWN] annotation</span>
+<span class="ft-file">    llm_client.py          </span><span class="ft-comment"># Ollama /api/chat caller, system prompt, JSON parse + retry</span>
+<span class="ft-file">    notifier.py            </span><span class="ft-comment"># aiosmtplib email sender (escalation + timeout templates)</span>
+<span class="ft-file">    rca_store.py           </span><span class="ft-comment"># aiosqlite RCA history (save, query, frequency)</span>
+<span class="ft-file">    pipeline.py            </span><span class="ft-comment"># Orchestrator: dedup -> context -> drain3 -> LLM -> act</span>
+<span class="ft-file">    main.py                </span><span class="ft-comment"># FastAPI app, lifespan, webhook routes, /metrics</span>
+<span class="ft-file">    metrics.py             </span><span class="ft-comment"># prometheus-client counters/histograms/gauges</span>
+      </div>
 
-<span class="kw">- name</span>: Build llm-triage Docker image
-  <span class="fn">community.docker.docker_image</span>:
-    <span class="var">name</span>: llm-triage
-    <span class="var">tag</span>: latest
-    <span class="var">source</span>: build
-    <span class="var">build</span>:
-      <span class="var">path</span>: <span class="str">"{{ stack_dir }}/llm-triage"</span>
-    <span class="var">force_source</span>: true</code></pre>
+      <p style="margin-top:14px;">The dependency graph flows strictly downward: <span class="ic">main.py</span> creates the <span class="ic">TriagePipeline</span>, which composes all other modules. No circular imports. <span class="ic">config.py</span> is the only module imported by every other module — it provides the single <span class="ic">settings</span> singleton that reads from environment variables.</p>
+    </div>
   </div>
 
-  <div class="section-label">Dockerfile</div>
+  <div class="step-connector"></div>
 
-  <div class="card">
-    <h3 style="color:var(--accent-purple);">roles/llm_triage/templates/Dockerfile.j2</h3>
-<pre><code><span class="kw">FROM</span> python:3.11-slim
+  <!-- ==================== STEP 2 ==================== -->
+  <div class="section-label">Step 2 — Configuration (config.py)</div>
+
+  <div class="step">
+    <div class="step-num"><div class="step-circle" style="background:rgba(176,126,232,.15);color:var(--accent-purple);">2</div></div>
+    <div class="step-body">
+      <h4 style="color:var(--accent-purple);">app/config.py — Centralized Settings via pydantic-settings</h4>
+      <p>Every tunable parameter is declared as a typed field with a sensible default. At runtime, <span class="ic">pydantic-settings</span> automatically reads matching environment variables (case-insensitive). The <span class="ic">ai-compose.yml.j2</span> Docker Compose template sets these env vars on the container.</p>
+
+<pre><code><span class="kw">from</span> pydantic_settings <span class="kw">import</span> BaseSettings
+
+
+<span class="kw">class</span> <span class="fn">Settings</span>(BaseSettings):
+    <span class="cm"># ── Ollama ──</span>
+    <span class="var">ollama_url</span>: str = <span class="str">"http://ollama:11434"</span>
+    <span class="var">ollama_model</span>: str = <span class="str">"llama3.1:8b"</span>
+    <span class="var">ollama_timeout</span>: int = <span class="num">300</span>
+
+    <span class="cm"># ── MCP server URLs ──</span>
+    <span class="var">prometheus_mcp_url</span>: str = <span class="str">"http://prometheus-mcp:8091"</span>
+    <span class="var">loki_mcp_url</span>: str = <span class="str">"http://loki-mcp:8092"</span>
+    <span class="var">jaeger_mcp_url</span>: str = <span class="str">"http://jaeger-mcp:8093"</span>
+
+    <span class="cm"># ── Loki direct (for Drain3 background ingestion) ──</span>
+    <span class="var">loki_api_url</span>: str = <span class="str">"http://loki:3100"</span>
+
+    <span class="cm"># ── SMTP ──</span>
+    <span class="var">smtp_host</span>: str = <span class="str">"smtp.gmail.com"</span>
+    <span class="var">smtp_port</span>: int = <span class="num">587</span>
+    <span class="var">smtp_user</span>: str = <span class="str">""</span>
+    <span class="var">smtp_password</span>: str = <span class="str">""</span>
+    <span class="var">smtp_from</span>: str = <span class="str">""</span>
+    <span class="var">notification_email</span>: str = <span class="str">""</span>
+
+    <span class="cm"># ── Context gathering ──</span>
+    <span class="var">context_timeout</span>: int = <span class="num">8</span>          <span class="cm"># seconds per MCP source</span>
+    <span class="var">prometheus_range_minutes</span>: int = <span class="num">15</span>
+    <span class="var">loki_log_limit</span>: int = <span class="num">50</span>
+    <span class="var">jaeger_trace_limit</span>: int = <span class="num">20</span>
+
+    <span class="cm"># ── Deduplication ──</span>
+    <span class="var">dedup_window_seconds</span>: int = <span class="num">300</span>  <span class="cm"># 5-minute dedup window</span>
+
+    <span class="cm"># ── Pipeline ──</span>
+    <span class="var">pipeline_timeout</span>: int = <span class="num">300</span>     <span class="cm"># 5-min hard timeout, then raw email</span>
+
+    <span class="cm"># ── RCA history ──</span>
+    <span class="var">rca_db_path</span>: str = <span class="str">"/var/lib/triage-service/rca_history.db"</span>
+
+    <span class="cm"># ── Drain3 ──</span>
+    <span class="var">drain3_state_dir</span>: str = <span class="str">"/var/lib/triage-service/drain3_state"</span>
+    <span class="var">drain3_poll_interval</span>: int = <span class="num">30</span>  <span class="cm"># seconds between Loki polls</span>
+    <span class="var">drain3_anomaly_threshold</span>: int = <span class="num">5</span>
+
+    <span class="cm"># ── Grafana (for dashboard links in emails) ──</span>
+    <span class="var">grafana_url</span>: str = <span class="str">"http://monitoring-vm:3000"</span>
+
+    <span class="var">model_config</span> = {<span class="str">"env_prefix"</span>: <span class="str">""</span>, <span class="str">"case_sensitive"</span>: <span class="kw">False</span>}
+
+
+<span class="var">settings</span> = Settings()</code></pre>
+
+      <div class="note-box">
+        <strong>Design decision — env_prefix="":</strong> No prefix is used, so environment variables map 1:1 to field names (e.g., <span class="ic">OLLAMA_MODEL=llama3.1:8b</span>). This keeps the <span class="ic">ai-compose.yml.j2</span> clean and readable. The <span class="ic">case_sensitive=False</span> flag means both <span class="ic">OLLAMA_URL</span> and <span class="ic">ollama_url</span> work.
+      </div>
+
+      <p>Key setting groups and what they control:</p>
+      <ul>
+        <li><strong>Ollama settings:</strong> Docker service name <span class="ic">ollama:11434</span>, model name <span class="ic">llama3.1:8b</span>, and a 300-second timeout (LLM inference on 8B params can be slow without GPU).</li>
+        <li><strong>MCP URLs:</strong> Each MCP bridge server is a separate Docker service. The triage service calls them via HTTP. Defaults use Docker DNS names.</li>
+        <li><strong>Loki direct URL:</strong> Used only by the Drain3 background ingestion loop, which polls Loki directly (not via the Loki MCP) to continuously build log templates.</li>
+        <li><strong>SMTP:</strong> Gmail App Password authentication. If <span class="ic">smtp_user</span> is empty, the notifier silently skips email sends (graceful degradation during development).</li>
+        <li><strong>Context timeouts:</strong> Each MCP source gets 8 seconds. If Prometheus is down, Loki and Jaeger results are still used. The pipeline continues with partial context.</li>
+        <li><strong>Pipeline timeout (300s):</strong> Hard safety limit. If the entire pipeline (context + Drain3 + LLM + email) exceeds 5 minutes, a raw alert email is sent instead.</li>
+        <li><strong>Drain3 anomaly threshold (5):</strong> A log template is flagged as <span class="ic">[ANOMALY]</span> if fewer than 5 matching lines exist in the Drain3 corpus. This distinguishes "never seen before" from "normal baseline."</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="step-connector"></div>
+
+  <!-- ==================== STEP 3 ==================== -->
+  <div class="section-label">Step 3 — Pydantic Models (models.py)</div>
+
+  <div class="step">
+    <div class="step-num"><div class="step-circle" style="background:rgba(176,126,232,.15);color:var(--accent-purple);">3</div></div>
+    <div class="step-body">
+      <h4 style="color:var(--accent-purple);">app/models.py — Every Data Shape in One File</h4>
+      <p>All Pydantic models live here. There are five distinct model groups: the Grafana webhook payload, the Drain3 webhook payload, the LLM decision, the gathered context, and the RCA history record.</p>
+
+      <p style="margin-top:12px;"><strong>GrafanaWebhook and GrafanaAlert</strong> — What Grafana sends us:</p>
+<pre><code><span class="kw">class</span> <span class="fn">GrafanaAlert</span>(BaseModel):
+    <span class="var">status</span>: str                             <span class="cm"># "firing" or "resolved"</span>
+    <span class="var">labels</span>: dict[str, str] = Field(default_factory=dict)
+    <span class="var">annotations</span>: dict[str, str] = Field(default_factory=dict)
+    <span class="var">startsAt</span>: str = <span class="str">""</span>
+    <span class="var">endsAt</span>: str = <span class="str">""</span>
+    <span class="var">fingerprint</span>: str = <span class="str">""</span>
+    <span class="var">generatorURL</span>: str = <span class="str">""</span>
+    <span class="var">values</span>: dict = Field(default_factory=dict)
+
+    <span class="dec">@property</span>
+    <span class="kw">def</span> <span class="fn">alertname</span>(self) -> str:
+        <span class="kw">return</span> self.labels.get(<span class="str">"alertname"</span>, <span class="str">"unknown"</span>)
+
+    <span class="dec">@property</span>
+    <span class="kw">def</span> <span class="fn">instance</span>(self) -> str:
+        <span class="kw">return</span> self.labels.get(<span class="str">"instance"</span>, <span class="str">"unknown"</span>)
+
+    <span class="dec">@property</span>
+    <span class="kw">def</span> <span class="fn">severity</span>(self) -> str:
+        <span class="kw">return</span> self.labels.get(<span class="str">"severity"</span>, <span class="str">"warning"</span>)
+
+    <span class="dec">@property</span>
+    <span class="kw">def</span> <span class="fn">service</span>(self) -> str:
+        <span class="kw">return</span> (
+            self.labels.get(<span class="str">"service"</span>, <span class="str">""</span>)
+            <span class="kw">or</span> self.labels.get(<span class="str">"job"</span>, <span class="str">""</span>)
+            <span class="kw">or</span> <span class="str">"unknown"</span>
+        )
+
+
+<span class="kw">class</span> <span class="fn">GrafanaWebhook</span>(BaseModel):
+    <span class="var">receiver</span>: str = <span class="str">""</span>
+    <span class="var">status</span>: str = <span class="str">""</span>
+    <span class="var">alerts</span>: list[GrafanaAlert] = Field(default_factory=list)
+    <span class="var">groupLabels</span>: dict[str, str] = Field(default_factory=dict)
+    <span class="var">commonLabels</span>: dict[str, str] = Field(default_factory=dict)
+    <span class="var">commonAnnotations</span>: dict[str, str] = Field(default_factory=dict)
+    <span class="var">externalURL</span>: str = <span class="str">""</span></code></pre>
+
+      <div class="note-box">
+        <strong>Why @property helpers?</strong> Grafana embeds <span class="ic">alertname</span>, <span class="ic">severity</span>, <span class="ic">instance</span>, and <span class="ic">service</span> inside the <span class="ic">labels</span> dict. The <span class="ic">@property</span> accessors provide clean dot-access (<span class="ic">alert.alertname</span>) so the rest of the codebase never needs to do <span class="ic">alert.labels.get("alertname", "unknown")</span>. The <span class="ic">service</span> property falls back from <span class="ic">service</span> to <span class="ic">job</span> label since Grafana and Prometheus use different label names for the same concept.
+      </div>
+
+      <p style="margin-top:12px;"><strong>LLMDecision</strong> — The structured JSON the LLM must return:</p>
+<pre><code><span class="kw">class</span> <span class="fn">Decision</span>(str, Enum):
+    <span class="var">ESCALATE</span> = <span class="str">"ESCALATE"</span>
+    <span class="var">DISMISS</span> = <span class="str">"DISMISS"</span>
+
+
+<span class="kw">class</span> <span class="fn">LLMDecision</span>(BaseModel):
+    <span class="var">decision</span>: Decision                   <span class="cm"># ESCALATE or DISMISS — the binary verdict</span>
+    <span class="var">severity</span>: str = <span class="str">"warning"</span>             <span class="cm"># LLM can upgrade/downgrade severity</span>
+    <span class="var">reason</span>: str = <span class="str">""</span>                      <span class="cm"># one-line summary</span>
+    <span class="var">rca</span>: str = <span class="str">""</span>                         <span class="cm"># detailed root cause analysis (2-5 sentences)</span>
+    <span class="var">anomaly_summary</span>: str = <span class="str">""</span>            <span class="cm"># Drain3 findings summary</span>
+    <span class="var">suggested_actions</span>: list[str] = Field(default_factory=list)
+    <span class="var">evidence</span>: list[str] = Field(default_factory=list)</code></pre>
+
+      <p style="margin-top:12px;"><strong>RCARecord</strong> — What gets persisted to SQLite:</p>
+<pre><code><span class="kw">class</span> <span class="fn">RCARecord</span>(BaseModel):
+    <span class="var">id</span>: str = Field(default_factory=<span class="kw">lambda</span>: str(uuid.uuid4()))
+    <span class="var">timestamp</span>: datetime = Field(default_factory=datetime.utcnow)
+    <span class="var">alert_source</span>: str = <span class="str">"grafana"</span>        <span class="cm"># "grafana" or "drain3"</span>
+    <span class="var">alert_name</span>: str = <span class="str">""</span>
+    <span class="var">alert_fingerprint</span>: str = <span class="str">""</span>
+    <span class="var">affected_service</span>: str = <span class="str">""</span>
+    <span class="var">severity</span>: str = <span class="str">"warning"</span>
+    <span class="var">triage_decision</span>: str = <span class="str">""</span>            <span class="cm"># "investigate" or "timeout_passthrough"</span>
+    <span class="var">llm_verdict</span>: Optional[str] = <span class="kw">None</span>   <span class="cm"># "escalate" or "dismiss"</span>
+    <span class="var">rca_report</span>: Optional[str] = <span class="kw">None</span>    <span class="cm"># full LLM RCA text</span>
+    <span class="var">llm_reasoning</span>: Optional[str] = <span class="kw">None</span>
+    <span class="var">action_taken</span>: str = <span class="str">""</span>               <span class="cm"># "emailed", "suppressed", "emailed_raw"</span>
+    <span class="var">investigation_duration_ms</span>: int = <span class="num">0</span></code></pre>
+
+      <p style="margin-top:12px;"><strong>GatheredContext</strong> — Result of the three-pillar context gathering:</p>
+<pre><code><span class="kw">class</span> <span class="fn">GatheredContext</span>(BaseModel):
+    <span class="var">metrics</span>: Optional[dict] = <span class="kw">None</span>            <span class="cm"># Prometheus range query result</span>
+    <span class="var">logs</span>: Optional[list[str]] = <span class="kw">None</span>          <span class="cm"># raw log lines from Loki</span>
+    <span class="var">traces</span>: Optional[list[dict]] = <span class="kw">None</span>       <span class="cm"># Jaeger trace summaries</span>
+    <span class="var">annotated_logs</span>: Optional[list[str]] = <span class="kw">None</span> <span class="cm"># after Drain3 [ANOMALY]/[KNOWN] prefix</span>
+    <span class="var">anomaly_summary</span>: str = <span class="str">""</span>
+    <span class="var">prometheus_ms</span>: int = <span class="num">0</span>                    <span class="cm"># timing for each source</span>
+    <span class="var">loki_ms</span>: int = <span class="num">0</span>
+    <span class="var">jaeger_ms</span>: int = <span class="num">0</span>
+    <span class="var">total_ms</span>: int = <span class="num">0</span>
+    <span class="var">sources_available</span>: int = <span class="num">0</span>               <span class="cm"># 0-3, how many MCP sources responded</span>
+    <span class="var">errors</span>: list[str] = Field(default_factory=list)</code></pre>
+    </div>
+  </div>
+
+  <div class="step-connector"></div>
+
+  <!-- ==================== STEP 4 ==================== -->
+  <div class="section-label">Step 4 — RCA History Store (rca_store.py)</div>
+
+  <div class="step">
+    <div class="step-num"><div class="step-circle" style="background:rgba(78,168,222,.15);color:var(--accent-blue);">4</div></div>
+    <div class="step-body">
+      <h4 style="color:var(--accent-blue);">app/rca_store.py — SQLite via aiosqlite</h4>
+      <p>Every triage decision (escalate, dismiss, or timeout) is persisted to a local SQLite database. This provides two capabilities: the LLM can query past decisions during investigation (via the RCA History MCP), and the <span class="ic">/decisions</span> REST endpoint provides a full audit trail.</p>
+      <p><strong>Why aiosqlite?</strong> The triage pipeline is fully async. Using synchronous <span class="ic">sqlite3</span> would block the event loop during DB writes, stalling webhook processing. aiosqlite wraps sqlite3 in a background thread with an async interface.</p>
+
+<pre><code><span class="var">CREATE_TABLE</span> = <span class="str">"""
+CREATE TABLE IF NOT EXISTS rca_history (
+    id TEXT PRIMARY KEY,
+    timestamp TEXT NOT NULL,
+    alert_source TEXT NOT NULL,
+    alert_name TEXT NOT NULL,
+    alert_fingerprint TEXT,
+    affected_service TEXT,
+    severity TEXT,
+    triage_decision TEXT NOT NULL,
+    llm_verdict TEXT,
+    llm_confidence TEXT,
+    rca_report TEXT,
+    llm_reasoning TEXT,
+    action_taken TEXT NOT NULL,
+    related_alerts TEXT,
+    investigation_duration_ms INTEGER DEFAULT 0
+)
+"""</span></code></pre>
+
+      <p style="margin-top:12px;">The <span class="ic">RCAStore</span> class provides three key methods:</p>
+<pre><code><span class="kw">class</span> <span class="fn">RCAStore</span>:
+    <span class="kw">async def</span> <span class="fn">init_db</span>(self):
+        <span class="cm"># Connect + create table if not exists (called once at startup)</span>
+        self._db = <span class="kw">await</span> aiosqlite.connect(self.db_path)
+        self._db.row_factory = aiosqlite.Row
+        <span class="kw">await</span> self._db.execute(CREATE_TABLE)
+        <span class="kw">await</span> self._db.commit()
+
+    <span class="kw">async def</span> <span class="fn">save_decision</span>(self, record: RCARecord):
+        <span class="cm"># INSERT all 15 columns from the RCARecord model</span>
+        <span class="kw">await</span> self._db.execute(<span class="str">"INSERT INTO rca_history (...) VALUES (?, ?, ...)"</span>, (...))
+        <span class="kw">await</span> self._db.commit()
+
+    <span class="kw">async def</span> <span class="fn">get_alert_frequency</span>(self, alert_name: str, days: int = <span class="num">7</span>) -> dict:
+        <span class="cm"># Returns {"count": N, "days": 7, "last_seen": "2026-03-30T..."}</span>
+        <span class="cm"># Used by the pipeline to include history context in the LLM prompt</span>
+        <span class="cm"># and by the notifier to show "fired N times in last 7 days"</span>
+        ...</code></pre>
+
+      <div class="note-box">
+        <strong>Storage location:</strong> The database lives at <span class="ic">/var/lib/triage-service/rca_history.db</span> — this path is a Docker volume mount so data persists across container restarts. The same directory holds Drain3 state files.
+      </div>
+    </div>
+  </div>
+
+  <div class="step-connector"></div>
+
+  <!-- ==================== STEP 5 ==================== -->
+  <div class="section-label">Step 5 — Alert Deduplication (dedup.py)</div>
+
+  <div class="step">
+    <div class="step-num"><div class="step-circle" style="background:rgba(240,160,80,.15);color:var(--accent-orange);">5</div></div>
+    <div class="step-body">
+      <h4 style="color:var(--accent-orange);">app/dedup.py — DedupManager with TTL Windows</h4>
+      <p>Grafana Alerting re-sends firing alerts every evaluation interval (typically 1 minute). Without deduplication, the same alert would trigger 5+ LLM investigations in a 5-minute window. The <span class="ic">DedupManager</span> uses a keyed TTL dictionary to suppress duplicate alerts.</p>
+
+<pre><code><span class="dec">@dataclass</span>
+<span class="kw">class</span> <span class="fn">DedupEntry</span>:
+    <span class="var">first_seen</span>: float
+    <span class="var">count</span>: int = <span class="num">1</span>
+    <span class="var">last_status</span>: str = <span class="str">"firing"</span>
+
+
+<span class="kw">class</span> <span class="fn">DedupManager</span>:
+    <span class="kw">def</span> <span class="fn">__init__</span>(self, window_seconds: int = <span class="num">300</span>):
+        self.window = window_seconds
+        self._entries: dict[tuple[str, str], DedupEntry] = {}
+        self._lock = asyncio.Lock()
+
+    <span class="kw">async def</span> <span class="fn">check</span>(self, alertname: str, instance: str, status: str) -> bool:
+        <span class="str">"""Returns True if the alert is a duplicate that should be skipped."""</span>
+        key = (alertname, instance)
+        now = time.monotonic()
+
+        <span class="kw">async with</span> self._lock:
+            self._cleanup(now)
+
+            <span class="kw">if</span> key <span class="kw">not in</span> self._entries:
+                <span class="cm"># First time seeing this alert — process it</span>
+                self._entries[key] = DedupEntry(first_seen=now, last_status=status)
+                <span class="kw">return</span> <span class="kw">False</span>
+
+            entry = self._entries[key]
+
+            <span class="cm"># If alert resolved and re-fired, reset window and re-process</span>
+            <span class="kw">if</span> status == <span class="str">"firing"</span> <span class="kw">and</span> entry.last_status == <span class="str">"resolved"</span>:
+                entry.first_seen = now
+                entry.count = <span class="num">1</span>
+                entry.last_status = status
+                <span class="kw">return</span> <span class="kw">False</span>
+
+            <span class="cm"># Track resolved status but don't process</span>
+            <span class="kw">if</span> status == <span class="str">"resolved"</span>:
+                entry.last_status = <span class="str">"resolved"</span>
+                <span class="kw">return</span> <span class="kw">True</span>
+
+            <span class="cm"># Duplicate within window — skip</span>
+            entry.count += <span class="num">1</span>
+            <span class="kw">return</span> <span class="kw">True</span>
+
+    <span class="kw">def</span> <span class="fn">_cleanup</span>(self, now: float):
+        <span class="cm"># Remove entries older than the dedup window</span>
+        expired = [k <span class="kw">for</span> k, e <span class="kw">in</span> self._entries.items() <span class="kw">if</span> now - e.first_seen > self.window]
+        <span class="kw">for</span> k <span class="kw">in</span> expired:
+            <span class="kw">del</span> self._entries[k]</code></pre>
+
+      <div class="note-box warn">
+        <strong>Why asyncio.Lock?</strong> FastAPI processes multiple webhook POSTs concurrently (async). Without a lock, two simultaneous webhooks for the same alert could both pass the "not in entries" check and both trigger LLM investigations. The lock serializes only the dedup check — the actual pipeline processing runs concurrently after the check.
+      </div>
+
+      <p>Three important behaviors:</p>
+      <ul>
+        <li><strong>Key = (alertname, instance):</strong> The same alert on different instances is NOT deduplicated. A HighLatency alert on <span class="ic">app-vm:8080</span> and <span class="ic">network-vm:8000</span> are treated as separate incidents.</li>
+        <li><strong>Resolved + re-fired:</strong> If an alert resolves within the 5-minute window and then fires again, the dedup window resets and the new firing is processed. This prevents missing a new incident that happens to share the same alert name.</li>
+        <li><strong>Periodic cleanup:</strong> Every call to <span class="ic">check()</span> first removes expired entries. This is O(n) but n is small (typically under 20 active alerts). No background timer thread needed.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="step-connector"></div>
+
+  <!-- ==================== STEP 6 ==================== -->
+  <div class="section-label">Step 6 — Context Gathering (context.py)</div>
+
+  <div class="step">
+    <div class="step-num"><div class="step-circle" style="background:rgba(64,208,208,.15);color:var(--accent-cyan);">6</div></div>
+    <div class="step-body">
+      <h4 style="color:var(--accent-cyan);">app/context.py — Parallel Fan-Out to Three MCP Servers</h4>
+      <p>Context gathering queries Prometheus, Loki, and Jaeger simultaneously using <span class="ic">asyncio.gather()</span>. Each source gets an independent 8-second timeout. If one source is down, the others still return data — the pipeline continues with partial context rather than failing completely.</p>
+
+<pre><code><span class="kw">class</span> <span class="fn">ContextGatherer</span>:
+    <span class="kw">def</span> <span class="fn">__init__</span>(self):
+        self._client = httpx.AsyncClient(timeout=settings.context_timeout)
+
+    <span class="kw">async def</span> <span class="fn">gather</span>(self, alert_name: str, service: str, alert_time: str) -> GatheredContext:
+        <span class="str">"""Gather context from all three pillars in parallel."""</span>
+        start = time.monotonic()
+
+        <span class="cm"># Launch all three queries simultaneously</span>
+        results = <span class="kw">await</span> asyncio.gather(
+            self._fetch_prometheus(service),
+            self._fetch_loki(service),
+            self._fetch_jaeger(service),
+            return_exceptions=<span class="kw">True</span>  <span class="cm"># don't fail-fast if one source errors</span>
+        )
+
+        total_ms = int((time.monotonic() - start) * <span class="num">1000</span>)
+        ctx = GatheredContext(total_ms=total_ms)
+        errors = []
+
+        <span class="cm"># Unpack results — each is either (data, ms) or an Exception</span>
+        <span class="kw">if</span> <span class="fn">isinstance</span>(results[<span class="num">0</span>], Exception):
+            errors.append(f<span class="str">"[Prometheus] unavailable: {results[0]}"</span>)
+        <span class="kw">else</span>:
+            ctx.metrics, ctx.prometheus_ms = results[<span class="num">0</span>]
+            ctx.sources_available += <span class="num">1</span>
+
+        <span class="cm"># ... same pattern for Loki and Jaeger ...</span>
+
+        ctx.errors = errors
+        <span class="kw">return</span> ctx</code></pre>
+
+      <p style="margin-top:12px;">Each <span class="ic">_fetch_*</span> method calls its corresponding MCP bridge server:</p>
+<pre><code>    <span class="kw">async def</span> <span class="fn">_fetch_prometheus</span>(self, service: str) -> tuple[dict, int]:
+        resp = <span class="kw">await</span> self._client.get(
+            f<span class="str">"{settings.prometheus_mcp_url}/tools/query_range"</span>,
+            params={
+                <span class="str">"promql"</span>: f<span class="str">'{{job=~".*{service}.*"}}'</span>,
+                <span class="str">"start"</span>: f<span class="str">"{settings.prometheus_range_minutes}m"</span>,
+                <span class="str">"end"</span>: <span class="str">"now"</span>, <span class="str">"step"</span>: <span class="str">"60s"</span>,
+            },
+        )
+        resp.raise_for_status()
+        <span class="kw">return</span> resp.json(), ms
+
+    <span class="kw">async def</span> <span class="fn">_fetch_loki</span>(self, service: str) -> tuple[list[str], int]:
+        resp = <span class="kw">await</span> self._client.get(
+            f<span class="str">"{settings.loki_mcp_url}/tools/query_logs"</span>,
+            params={
+                <span class="str">"logql"</span>: f<span class="str">'{{service_name="{service}"}}'</span>,
+                <span class="str">"limit"</span>: settings.loki_log_limit,   <span class="cm"># default: 50 lines</span>
+            },
+        )
+        ...
+
+    <span class="kw">async def</span> <span class="fn">_fetch_jaeger</span>(self, service: str) -> tuple[list[dict], int]:
+        resp = <span class="kw">await</span> self._client.get(
+            f<span class="str">"{settings.jaeger_mcp_url}/tools/find_traces"</span>,
+            params={<span class="str">"service"</span>: service, <span class="str">"limit"</span>: settings.jaeger_trace_limit},
+        )
+        ...</code></pre>
+
+      <div class="note-box">
+        <strong>Timing is recorded per-source.</strong> The <span class="ic">GatheredContext</span> includes <span class="ic">prometheus_ms</span>, <span class="ic">loki_ms</span>, <span class="ic">jaeger_ms</span>, and <span class="ic">total_ms</span>. These are included in the LLM prompt under "Context Gathering Stats" and also emitted as structured log fields. Since the queries run in parallel, <span class="ic">total_ms</span> is roughly <span class="ic">max(prom_ms, loki_ms, jaeger_ms)</span>, not their sum.
+      </div>
+    </div>
+  </div>
+
+  <div class="step-connector"></div>
+
+  <!-- ==================== STEP 7 ==================== -->
+  <div class="section-label">Step 7 — Drain3 Analyzer (drain_analyzer.py)</div>
+
+  <div class="step">
+    <div class="step-num"><div class="step-circle" style="background:rgba(224,208,96,.15);color:var(--accent-yellow);">7</div></div>
+    <div class="step-body">
+      <h4 style="color:var(--accent-yellow);">app/drain_analyzer.py — Log Anomaly Detection via Template Mining</h4>
+      <p>Drain3 is a streaming log template miner. It clusters log lines into templates (e.g., <span class="ic">"GET /api/users &lt;NUM&gt; &lt;IP&gt; 200"</span>) and tracks how many times each template has been seen. The <span class="ic">DrainAnalyzer</span> uses this to flag anomalous log lines — lines that match new or rarely-seen templates.</p>
+
+      <p style="margin-top:12px;"><strong>Core method — analyze():</strong></p>
+<pre><code><span class="kw">class</span> <span class="fn">DrainAnalyzer</span>:
+    <span class="kw">def</span> <span class="fn">__init__</span>(self):
+        os.makedirs(settings.drain3_state_dir, exist_ok=<span class="kw">True</span>)
+        persistence = FilePersistence(
+            os.path.join(settings.drain3_state_dir, <span class="str">"drain3_state.bin"</span>)
+        )
+        self._miner = TemplateMiner(persistence, config_filename=<span class="str">"drain3.ini"</span>)
+
+    <span class="kw">def</span> <span class="fn">analyze</span>(self, log_line: str) -> AnalyzeResult:
+        result = self._miner.add_log_message(log_line)
+        cluster = result.get(<span class="str">"cluster_id"</span>)
+        change_type = result.get(<span class="str">"change_type"</span>, <span class="str">"none"</span>)
+        is_new = change_type <span class="kw">in</span> (<span class="str">"cluster_created"</span>, <span class="str">"cluster_template_changed"</span>)
+
+        <span class="cm"># Count how many lines match this cluster</span>
+        match_count = <span class="num">0</span>
+        <span class="kw">if</span> cluster <span class="kw">is not None</span>:
+            <span class="kw">for</span> c <span class="kw">in</span> self._miner.drain.clusters:
+                <span class="kw">if</span> c.cluster_id == cluster:
+                    match_count = c.size
+                    <span class="kw">break</span>
+
+        <span class="cm"># Anomalous = new pattern OR fewer than threshold matches</span>
+        <span class="kw">if</span> is_new <span class="kw">or</span> match_count &lt; settings.drain3_anomaly_threshold:
+            self._total_anomalies += <span class="num">1</span>
+
+        <span class="kw">return</span> AnalyzeResult(cluster_id=cluster, template=template,
+                            is_new_pattern=is_new, match_count=match_count)</code></pre>
+
+      <p style="margin-top:12px;"><strong>annotate_lines() — [ANOMALY]/[KNOWN] prefixes for the LLM:</strong></p>
+<pre><code>    <span class="kw">def</span> <span class="fn">annotate_lines</span>(self, lines: list[str]) -> tuple[list[str], str]:
+        <span class="str">"""Annotate log lines with [ANOMALY] or [KNOWN] prefix."""</span>
+        annotated = []
+        anomaly_count = <span class="num">0</span>
+
+        <span class="kw">for</span> line <span class="kw">in</span> lines:
+            result = self.analyze(line)
+            <span class="kw">if</span> result.is_new_pattern <span class="kw">or</span> result.match_count &lt; settings.drain3_anomaly_threshold:
+                annotated.append(f<span class="str">"[ANOMALY] {line}"</span>)
+                anomaly_count += <span class="num">1</span>
+            <span class="kw">else</span>:
+                annotated.append(f<span class="str">"[KNOWN] {line}"</span>)
+
+        summary = (
+            f<span class="str">"Anomaly Summary: {anomaly_count} of {len(lines)} lines anomalous. "</span>
+            f<span class="str">"{new_patterns} new patterns detected."</span>
+        )
+        <span class="kw">return</span> annotated, summary</code></pre>
+
+      <div class="note-box warn">
+        <strong>Anomaly threshold logic:</strong> A line is flagged <span class="ic">[ANOMALY]</span> if either (a) it creates a brand new cluster (<span class="ic">cluster_created</span>) or (b) its cluster has fewer than <span class="ic">drain3_anomaly_threshold</span> (default: 5) matching lines. This means a log pattern that has appeared only 1-4 times in the entire corpus is considered anomalous. Once a template accumulates 5+ matches from normal operations, it transitions to <span class="ic">[KNOWN]</span>. This helps the LLM focus on genuinely unusual log patterns.
+      </div>
+
+      <p style="margin-top:12px;"><strong>Background ingestion — seed_from_loki() and _ingest_loop():</strong></p>
+<pre><code>    <span class="kw">async def</span> <span class="fn">seed_from_loki</span>(self):
+        <span class="str">"""Fetch recent logs from Loki and feed through Drain3 to build baseline."""</span>
+        <span class="kw">async with</span> httpx.AsyncClient(timeout=<span class="num">30</span>) <span class="kw">as</span> client:
+            resp = <span class="kw">await</span> client.get(
+                f<span class="str">"{settings.loki_api_url}/loki/api/v1/query_range"</span>,
+                params={<span class="str">"query"</span>: <span class="str">'{service_name=~".+"}'</span>, <span class="str">"limit"</span>: <span class="num">1000</span>, <span class="str">"start"</span>: <span class="str">"1h"</span>},
+            )
+            <span class="cm"># Feed each line through the miner to build template clusters</span>
+            <span class="kw">for</span> stream <span class="kw">in</span> data.get(<span class="str">"data"</span>, {}).get(<span class="str">"result"</span>, []):
+                <span class="kw">for</span> _ts, line <span class="kw">in</span> stream.get(<span class="str">"values"</span>, []):
+                    self._miner.add_log_message(line)
+
+    <span class="kw">async def</span> <span class="fn">_ingest_loop</span>(self):
+        <span class="str">"""Continuously poll Loki every drain3_poll_interval seconds."""</span>
+        <span class="kw">while</span> <span class="kw">True</span>:
+            <span class="kw">await</span> asyncio.sleep(settings.drain3_poll_interval)  <span class="cm"># 30s default</span>
+            <span class="cm"># Fetch last 30s of logs, feed through miner</span>
+            <span class="cm"># This keeps templates current as new log patterns appear</span>
+            ...</code></pre>
+
+      <p style="margin-top:12px;">At startup, <span class="ic">seed_from_loki()</span> fetches 1 hour of historical logs (up to 1000 lines) to bootstrap the template corpus. Then <span class="ic">start_background_ingestion()</span> spawns an <span class="ic">asyncio.Task</span> that polls Loki every 30 seconds for new logs. This ensures the Drain3 model stays current — without background ingestion, all alert-time logs would appear "new" because Drain3 would have no baseline.</p>
+
+      <p style="margin-top:12px;"><strong>drain3.ini — Clustering Configuration:</strong></p>
+<pre><code><span class="cm">[DRAIN]</span>
+<span class="var">sim_th</span> = <span class="num">0.4</span>            <span class="cm"># similarity threshold: lower = more clusters (more sensitive)</span>
+<span class="var">depth</span> = <span class="num">4</span>               <span class="cm"># parse tree depth</span>
+<span class="var">max_children</span> = <span class="num">100</span>      <span class="cm"># max children per parse tree node</span>
+<span class="var">max_clusters</span> = <span class="num">1024</span>     <span class="cm"># cap total clusters to bound memory</span>
+<span class="var">extra_delimiters</span> = [<span class="str">"_"</span>] <span class="cm"># treat underscores as word boundaries</span>
+
+<span class="cm">[MASKING]</span>
+masking = [
+    <span class="cm"># Replace IPs with &lt;IP&gt; so "192.168.127.10" and "192.168.127.30" cluster together</span>
+    {<span class="str">"regex_pattern"</span>: <span class="str">"(\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3})"</span>, <span class="str">"mask_with"</span>: <span class="str">"&lt;IP&gt;"</span>},
+    <span class="cm"># Replace UUIDs with &lt;UUID&gt;</span>
+    {<span class="str">"regex_pattern"</span>: <span class="str">"([0-9a-f]{8}-...)"</span>, <span class="str">"mask_with"</span>: <span class="str">"&lt;UUID&gt;"</span>},
+    <span class="cm"># Replace bare numbers with &lt;NUM&gt;</span>
+    {<span class="str">"regex_pattern"</span>: <span class="str">"(\\d+)"</span>, <span class="str">"mask_with"</span>: <span class="str">"&lt;NUM&gt;"</span>}
+]
+
+<span class="cm">[SNAPSHOT]</span>
+<span class="var">snapshot_interval_minutes</span> = <span class="num">10</span>  <span class="cm"># persist state to disk every 10 min</span>
+<span class="var">compress_state</span> = <span class="kw">true</span>           <span class="cm"># gzip the state file</span></code></pre>
+
+      <div class="note-box">
+        <strong>Masking is critical.</strong> Without IP/UUID/number masking, every log line with a different request ID or IP address would create its own cluster, making the template corpus useless. The masking regex normalizes these variable tokens so that <span class="ic">"GET /api/users 42 192.168.127.30 200"</span> and <span class="ic">"GET /api/users 99 192.168.127.10 200"</span> cluster into the same template: <span class="ic">"GET /api/users &lt;NUM&gt; &lt;IP&gt; &lt;NUM&gt;"</span>.
+      </div>
+
+      <p><strong>FilePersistence</strong> saves the Drain3 state (all clusters + parse tree) to <span class="ic">/var/lib/triage-service/drain3_state/drain3_state.bin</span>. This survives container restarts — the miner does not need to re-learn all templates from scratch after a reboot.</p>
+    </div>
+  </div>
+
+  <div class="step-connector"></div>
+
+  <!-- ==================== STEP 8 ==================== -->
+  <div class="section-label">Step 8 — LLM Client (llm_client.py)</div>
+
+  <div class="step">
+    <div class="step-num"><div class="step-circle" style="background:rgba(107,207,127,.15);color:var(--accent-green);">8</div></div>
+    <div class="step-body">
+      <h4 style="color:var(--accent-green);">app/llm_client.py — Ollama /api/chat + Structured JSON Output</h4>
+      <p>The LLM client sends the full alert context to Ollama's chat API and expects a structured JSON response matching the <span class="ic">LLMDecision</span> model. It includes a retry mechanism for JSON parse failures and a safety fallback that ESCALATES if the LLM cannot produce valid output.</p>
+
+      <p style="margin-top:12px;"><strong>SYSTEM_PROMPT — the full SRE instruction:</strong></p>
+<pre><code><span class="var">SYSTEM_PROMPT</span> = <span class="str">"""You are an expert SRE assistant analyzing infrastructure alerts
+for the CIRES Technologies observability platform.
+
+Your job:
+1. Analyze the alert and the pre-gathered context (metrics, logs, traces).
+2. Use the MCP tools available to gather additional data if needed.
+3. Always check all three pillars (metrics, logs, traces) within the alert
+   time window before reaching a verdict.
+4. Determine if the alert represents a real issue (ESCALATE) or noise (DISMISS).
+5. If ESCALATE: provide a root cause analysis, supporting evidence,
+   and suggested remediation.
+6. If DISMISS: explain why this is not actionable.
+
+You MUST respond with ONLY valid JSON in this exact format:
+{
+  "decision": "ESCALATE" or "DISMISS",
+  "severity": "critical" or "warning" or "info",
+  "reason": "one-line summary",
+  "rca": "detailed root cause analysis (2-5 sentences)",
+  "anomaly_summary": "summary of Drain3 anomaly findings",
+  "suggested_actions": ["action 1", "action 2"],
+  "evidence": ["metric/log/trace evidence used"]
+}"""</span></code></pre>
+
+      <p style="margin-top:12px;"><strong>_build_prompt() — what the LLM sees:</strong></p>
+<pre><code>    <span class="kw">def</span> <span class="fn">_build_prompt</span>(self, alert, context, drain_summary, history_context) -> list[dict]:
+        user_content = f<span class="str">"""## Alert Details
+- **Name:** {alert.alertname}
+- **Severity:** {alert.severity}
+- **Service:** {alert.service}
+- **Instance:** {alert.instance}
+- **Status:** {alert.status}
+- **Started:** {alert.startsAt}
+- **Summary:** {alert.annotations.get("summary", "N/A")}
+
+## Pre-Gathered Context
+
+### Metrics (Prometheus, last {settings.prometheus_range_minutes}min)
+{json.dumps(context.metrics) if context.metrics else "[Prometheus] unavailable"}
+
+### Logs (Loki, last {settings.loki_log_limit} lines, Drain3-annotated)
+{chr(10).join(context.annotated_logs) if context.annotated_logs else "[Loki] unavailable"}
+
+### {drain_summary}
+
+### Traces (Jaeger, last {settings.jaeger_trace_limit} traces)
+{json.dumps(context.traces) if context.traces else "[Jaeger] unavailable"}
+
+### Context Gathering Stats
+- Sources available: {context.sources_available}/3
+
+## RCA History
+{history_context if history_context else "No prior RCA records."}
+"""</span>
+        <span class="kw">return</span> [
+            {<span class="str">"role"</span>: <span class="str">"system"</span>, <span class="str">"content"</span>: SYSTEM_PROMPT},
+            {<span class="str">"role"</span>: <span class="str">"user"</span>, <span class="str">"content"</span>: user_content},
+        ]</code></pre>
+
+      <div class="note-box purple">
+        <strong>Key design decisions in the prompt:</strong> (1) All three pillar results are included in the user message so the LLM has immediate context. (2) Drain3 annotations (<span class="ic">[ANOMALY]</span>/<span class="ic">[KNOWN]</span>) are embedded inline with the logs so the LLM can see which lines are unusual. (3) RCA history from the SQLite store is included so the LLM can recognize recurring issues. (4) The context gathering stats (sources available, latency per source) let the LLM know if any pillar data is missing.
+      </div>
+
+      <p style="margin-top:12px;"><strong>_call_ollama() — the actual API call:</strong></p>
+<pre><code>    <span class="kw">async def</span> <span class="fn">_call_ollama</span>(self, messages: list[dict]) -> str:
+        resp = <span class="kw">await</span> self._client.post(
+            f<span class="str">"{settings.ollama_url}/api/chat"</span>,
+            json={
+                <span class="str">"model"</span>: settings.ollama_model,
+                <span class="str">"messages"</span>: messages,
+                <span class="str">"stream"</span>: <span class="kw">False</span>,
+                <span class="str">"format"</span>: <span class="str">"json"</span>,    <span class="cm"># forces Ollama to constrain output to JSON</span>
+            },
+        )
+        resp.raise_for_status()
+        <span class="kw">return</span> resp.json().get(<span class="str">"message"</span>, {}).get(<span class="str">"content"</span>, <span class="str">""</span>)</code></pre>
+
+      <div class="note-box">
+        <strong>format: "json"</strong> is an Ollama-specific feature. It constrains the model's output to valid JSON tokens only. This dramatically reduces parse failures compared to free-text generation. We still validate with Pydantic because the JSON structure (required fields, enum values) may not match even if the syntax is valid.
+      </div>
+
+      <p style="margin-top:12px;"><strong>Retry logic with ESCALATE fallback:</strong></p>
+<pre><code>    <span class="kw">async def</span> <span class="fn">investigate</span>(self, alert, context, drain_summary, history_context) -> tuple:
+        messages = self._build_prompt(alert, context, drain_summary, history_context)
+
+        raw_response = <span class="kw">await</span> self._call_ollama(messages)
+        decision = self._parse_response(raw_response)
+
+        <span class="kw">if</span> decision <span class="kw">is None</span>:
+            <span class="cm"># Retry once: append the failed response + strict instruction</span>
+            messages.append({<span class="str">"role"</span>: <span class="str">"assistant"</span>, <span class="str">"content"</span>: raw_response})
+            messages.append({<span class="str">"role"</span>: <span class="str">"user"</span>, <span class="str">"content"</span>:
+                <span class="str">"Your response was not valid JSON. Respond ONLY with valid JSON."</span>})
+            raw_response = <span class="kw">await</span> self._call_ollama(messages)
+            decision = self._parse_response(raw_response)
+
+        <span class="kw">if</span> decision <span class="kw">is None</span>:
+            <span class="cm"># Safety fallback: ALWAYS ESCALATE if LLM can't produce valid output</span>
+            decision = LLMDecision(
+                decision=Decision.ESCALATE,
+                severity=alert.severity,
+                reason=<span class="str">"LLM response could not be parsed — escalating as safety fallback"</span>,
+                rca=<span class="str">"Automated fallback: the AI triage system could not produce a "</span>
+                    <span class="str">"structured analysis. Escalated for manual review."</span>,
+                suggested_actions=[<span class="str">"Review the alert manually"</span>],
+            )
+
+        <span class="kw">return</span> decision, duration_ms</code></pre>
+
+      <div class="note-box warn">
+        <strong>Why always ESCALATE on failure?</strong> A false negative (dismissing a real alert) is far more dangerous than a false positive (escalating noise). If the LLM cannot produce valid JSON after two attempts, the service falls back to ESCALATE with a clear explanation. The on-call engineer receives the email with "LLM parse failure" evidence and can investigate manually. No alert is ever silently dropped.
+      </div>
+
+      <p>The <span class="ic">_parse_response()</span> method also handles markdown code blocks — some LLMs wrap JSON in <span class="ic">```json ... ```</span> even when told not to. It strips those wrappers before parsing.</p>
+    </div>
+  </div>
+
+  <div class="step-connector"></div>
+
+  <!-- ==================== STEP 9 ==================== -->
+  <div class="section-label">Step 9 — Email Notifier (notifier.py)</div>
+
+  <div class="step">
+    <div class="step-num"><div class="step-circle" style="background:rgba(224,96,112,.15);color:var(--accent-red);">9</div></div>
+    <div class="step-body">
+      <h4 style="color:var(--accent-red);">app/notifier.py — Async SMTP Email with Two Templates</h4>
+      <p>The notifier sends HTML emails via Gmail SMTP using <span class="ic">aiosmtplib</span> for non-blocking I/O. Two email templates exist: a rich <strong>escalation email</strong> with full RCA details, and a simpler <strong>timeout alert</strong> that forwards the raw alert when the pipeline exceeds 5 minutes.</p>
+
+      <p style="margin-top:12px;"><strong>Escalation email template (HTML):</strong></p>
+<pre><code><span class="kw">async def</span> <span class="fn">send_escalation</span>(self, alert, decision, record, history_count):
+    subject = f<span class="str">"[ALERT] {decision.severity}: {alert.alertname} — {alert.service}"</span>
+
+    body = f<span class="str">"""&lt;html&gt;&lt;body&gt;
+&lt;h2 style="color: #d32f2f;"&gt;Alert Escalated: {alert.alertname}&lt;/h2&gt;
+
+&lt;table&gt;
+  &lt;tr&gt;&lt;td&gt;Alert&lt;/td&gt;&lt;td&gt;{alert.alertname}&lt;/td&gt;&lt;/tr&gt;
+  &lt;tr&gt;&lt;td&gt;Service&lt;/td&gt;&lt;td&gt;{alert.service}&lt;/td&gt;&lt;/tr&gt;
+  &lt;tr&gt;&lt;td&gt;Severity&lt;/td&gt;&lt;td&gt;{decision.severity}&lt;/td&gt;&lt;/tr&gt;
+  &lt;tr&gt;&lt;td&gt;Fired At&lt;/td&gt;&lt;td&gt;{alert.startsAt}&lt;/td&gt;&lt;/tr&gt;
+&lt;/table&gt;
+
+&lt;h3&gt;Root Cause Analysis&lt;/h3&gt;
+&lt;p&gt;{decision.rca}&lt;/p&gt;
+
+&lt;h3&gt;Suggested Actions&lt;/h3&gt;
+&lt;ul&gt;{actions_html}&lt;/ul&gt;
+
+&lt;h3&gt;Evidence&lt;/h3&gt;
+&lt;ul&gt;{evidence_html}&lt;/ul&gt;
+
+&lt;h3&gt;History&lt;/h3&gt;
+&lt;p&gt;This alert has fired {history_count} time(s) in the last 7 days.&lt;/p&gt;
+
+&lt;p&gt;Investigation took {record.investigation_duration_ms}ms.
+   &lt;a href="{settings.grafana_url}/d/unified-overview"&gt;Dashboard&lt;/a&gt; |
+   RCA ID: {record.id}&lt;/p&gt;
+&lt;/body&gt;&lt;/html&gt;"""</span></code></pre>
+
+      <p style="margin-top:12px;"><strong>Timeout alert — safety fallback email:</strong></p>
+<pre><code><span class="kw">async def</span> <span class="fn">send_timeout_alert</span>(self, alert):
+    subject = f<span class="str">"[ALERT] TIMEOUT: {alert.alertname} — AI triage timed out"</span>
+
+    body = f<span class="str">"""&lt;h2 style="color: #ff9800;"&gt;AI Triage Timeout — Raw Alert Forwarded&lt;/h2&gt;
+&lt;p&gt;The AI triage pipeline did not complete within {settings.pipeline_timeout} seconds.
+This raw alert is forwarded without AI analysis as a safety measure.&lt;/p&gt;
+...
+&lt;p&gt;Timeout after {settings.pipeline_timeout}s.
+   AI triage service may be overloaded or Ollama unresponsive.&lt;/p&gt;"""</span></code></pre>
+
+      <p style="margin-top:12px;"><strong>SMTP send with graceful failure:</strong></p>
+<pre><code>    <span class="kw">async def</span> <span class="fn">_send</span>(self, subject: str, html_body: str):
+        <span class="kw">if not</span> settings.smtp_user <span class="kw">or not</span> settings.smtp_password:
+            logger.warning(<span class="str">"SMTP credentials not configured — skipping"</span>)
+            <span class="kw">return</span>
+
+        msg = MIMEMultipart(<span class="str">"alternative"</span>)
+        msg[<span class="str">"Subject"</span>] = subject
+        msg[<span class="str">"From"</span>] = settings.smtp_from
+        msg[<span class="str">"To"</span>] = settings.notification_email
+        msg.attach(MIMEText(html_body, <span class="str">"html"</span>))
+
+        <span class="kw">try</span>:
+            <span class="kw">await</span> aiosmtplib.send(msg,
+                hostname=settings.smtp_host, port=settings.smtp_port,
+                username=settings.smtp_user, password=settings.smtp_password,
+                start_tls=<span class="kw">True</span>)
+        <span class="kw">except</span> Exception <span class="kw">as</span> e:
+            logger.error(<span class="str">"SMTP send failed (non-fatal): %s"</span>, e)</code></pre>
+
+      <div class="note-box">
+        <strong>Non-fatal SMTP errors:</strong> If Gmail is unreachable, the email send fails silently (logged as error, not raised). The RCA decision is still saved to SQLite and the Prometheus metrics are still updated. The pipeline does not crash because email is down. This is intentional — losing the notification is less critical than losing the decision record.
+      </div>
+    </div>
+  </div>
+
+  <div class="step-connector"></div>
+
+  <!-- ==================== STEP 10 ==================== -->
+  <div class="section-label">Step 10 — Pipeline Orchestrator (pipeline.py)</div>
+
+  <div class="step">
+    <div class="step-num"><div class="step-circle" style="background:rgba(176,126,232,.15);color:var(--accent-purple);">10</div></div>
+    <div class="step-body">
+      <h4 style="color:var(--accent-purple);">app/pipeline.py — TriagePipeline: The Full Alert Processing Flow</h4>
+      <p>The pipeline orchestrator composes all other modules into a single processing flow. It is the only module that knows about the full sequence of operations. Here is the complete <span class="ic">_process_alert()</span> method with all 9 steps:</p>
+
+<pre><code><span class="kw">class</span> <span class="fn">TriagePipeline</span>:
+    <span class="kw">def</span> <span class="fn">__init__</span>(self, rca_store, drain, context_gatherer,
+                 llm_client, notifier, dedup):
+        self.store = rca_store
+        self.drain = drain
+        self.context = context_gatherer
+        self.llm = llm_client
+        self.notifier = notifier
+        self.dedup = dedup
+
+    <span class="kw">async def</span> <span class="fn">_process_alert</span>(self, alert: GrafanaAlert, source: str):
+        pipeline_start = time.monotonic()
+
+        <span class="cm"># Step 1: Deduplication check</span>
+        is_dup = <span class="kw">await</span> self.dedup.check(alert.alertname, alert.instance, alert.status)
+        <span class="kw">if</span> is_dup:
+            alerts_deduplicated.inc()
+            <span class="kw">return</span>
+
+        <span class="cm"># Step 2: Wrap everything in a timeout</span>
+        <span class="kw">try</span>:
+            <span class="kw">await</span> asyncio.wait_for(
+                self._investigate_and_act(alert, source, pipeline_start),
+                timeout=settings.pipeline_timeout,   <span class="cm"># 300 seconds</span>
+            )
+        <span class="kw">except</span> asyncio.TimeoutError:
+            <span class="cm"># Safety fallback: send raw alert email</span>
+            pipeline_timeouts.inc()
+            <span class="kw">await</span> self.notifier.send_timeout_alert(alert)
+            emails_sent.labels(type=<span class="str">"timeout"</span>).inc()
+            <span class="cm"># Record timeout in RCA history</span>
+            record = RCARecord(
+                alert_source=source, alert_name=alert.alertname,
+                triage_decision=<span class="str">"timeout_passthrough"</span>,
+                action_taken=<span class="str">"emailed_raw"</span>, ...)
+            <span class="kw">await</span> self.store.save_decision(record)</code></pre>
+
+      <p style="margin-top:12px;">The inner <span class="ic">_investigate_and_act()</span> runs the full investigation pipeline:</p>
+<pre><code>    <span class="kw">async def</span> <span class="fn">_investigate_and_act</span>(self, alert, source, pipeline_start):
+        <span class="cm"># Step 3: Gather context from all three pillars (parallel)</span>
+        ctx = <span class="kw">await</span> self.context.gather(alert.alertname, alert.service, alert.startsAt)
+
+        <span class="cm"># Step 4: Annotate logs with Drain3</span>
+        <span class="kw">if</span> ctx.logs:
+            annotated_logs, anomaly_summary = self.drain.annotate_lines(ctx.logs)
+            ctx.annotated_logs = annotated_logs
+            ctx.anomaly_summary = anomaly_summary
+            <span class="cm"># Update Prometheus metrics</span>
+            drain3_lines_processed.inc(len(ctx.logs))
+            drain3_anomalies.inc(sum(<span class="num">1</span> <span class="kw">for</span> l <span class="kw">in</span> annotated_logs <span class="kw">if</span> l.startswith(<span class="str">"[ANOMALY]"</span>)))
+            drain3_clusters.set(self.drain.get_stats()[<span class="str">"total_clusters"</span>])
+
+        <span class="cm"># Step 5: Check RCA history for prior occurrences</span>
+        history = <span class="kw">await</span> self.store.get_alert_frequency(alert.alertname)
+        history_context = <span class="str">""</span>
+        <span class="kw">if</span> history[<span class="str">"count"</span>] > <span class="num">0</span>:
+            history_context = f<span class="str">"This alert has fired {history['count']} time(s) ..."</span>
+
+        <span class="cm"># Step 6: Call LLM for investigation</span>
+        decision, llm_ms = <span class="kw">await</span> self.llm.investigate(
+            alert, ctx, anomaly_summary, history_context)
+        llm_duration.observe(llm_ms / <span class="num">1000</span>)
+
+        elapsed_ms = int((time.monotonic() - pipeline_start) * <span class="num">1000</span>)
+        pipeline_duration.observe(elapsed_ms / <span class="num">1000</span>)
+
+        <span class="cm"># Step 7: Build RCA record</span>
+        record = RCARecord(
+            alert_source=source, alert_name=alert.alertname,
+            llm_verdict=decision.decision.value.lower(),
+            rca_report=decision.rca,
+            action_taken=<span class="str">"emailed"</span> <span class="kw">if</span> decision.decision == Decision.ESCALATE <span class="kw">else</span> <span class="str">"suppressed"</span>,
+            investigation_duration_ms=elapsed_ms, ...)
+
+        <span class="cm"># Step 8: Act on decision</span>
+        <span class="kw">if</span> decision.decision == Decision.ESCALATE:
+            <span class="kw">await</span> self.notifier.send_escalation(alert, decision, record, history[<span class="str">"count"</span>])
+            emails_sent.labels(type=<span class="str">"escalation"</span>).inc()
+            alerts_processed.labels(decision=<span class="str">"escalate"</span>).inc()
+        <span class="kw">else</span>:
+            alerts_processed.labels(decision=<span class="str">"dismiss"</span>).inc()
+
+        <span class="cm"># Step 9: Save to RCA history</span>
+        <span class="kw">await</span> self.store.save_decision(record)</code></pre>
+
+      <div class="note-box warn">
+        <strong>The timeout fallback (Step 2) is the most important safety mechanism.</strong> If Ollama is unresponsive or the T4 GPU is saturated, the entire pipeline could hang. <span class="ic">asyncio.wait_for(..., timeout=300)</span> ensures that after 5 minutes, the on-call engineer still receives an email with the raw alert data. The timeout is recorded in SQLite as <span class="ic">triage_decision="timeout_passthrough"</span> and the <span class="ic">triage_pipeline_timeouts_total</span> Prometheus counter is incremented — you can alert on this metric to detect when Ollama needs more resources.
+      </div>
+
+      <p>The pipeline also handles <strong>Drain3 webhook payloads</strong> by converting them into synthetic <span class="ic">GrafanaAlert</span> objects:</p>
+<pre><code>    <span class="kw">async def</span> <span class="fn">process_drain3_webhook</span>(self, webhook: Drain3Webhook):
+        <span class="cm"># Create a synthetic alert from Drain3 anomaly data</span>
+        alert = GrafanaAlert(
+            status=<span class="str">"firing"</span>,
+            labels={
+                <span class="str">"alertname"</span>: <span class="str">"Drain3AnomalyDetected"</span>,
+                <span class="str">"service"</span>: webhook.service,
+                <span class="str">"severity"</span>: <span class="str">"warning"</span>,
+            },
+            annotations={
+                <span class="str">"summary"</span>: f<span class="str">"Drain3 detected {len(webhook.anomalous_lines)} anomalous lines"</span>,
+            },
+            fingerprint=f<span class="str">"drain3-{webhook.service}"</span>,
+        )
+        <span class="kw">await</span> self._process_alert(alert, source=<span class="str">"drain3"</span>)</code></pre>
+    </div>
+  </div>
+
+  <div class="step-connector"></div>
+
+  <!-- ==================== STEP 11 ==================== -->
+  <div class="section-label">Step 11 — FastAPI Application (main.py)</div>
+
+  <div class="step">
+    <div class="step-num"><div class="step-circle" style="background:rgba(78,168,222,.15);color:var(--accent-blue);">11</div></div>
+    <div class="step-body">
+      <h4 style="color:var(--accent-blue);">app/main.py — Lifespan, Routes, Structured Logging</h4>
+      <p>The FastAPI application is the entry point. It uses the modern <span class="ic">lifespan</span> context manager pattern (not the deprecated <span class="ic">@app.on_event</span>) for startup/shutdown lifecycle management.</p>
+
+      <p style="margin-top:12px;"><strong>Lifespan handler — startup and shutdown:</strong></p>
+<pre><code><span class="dec">@asynccontextmanager</span>
+<span class="kw">async def</span> <span class="fn">lifespan</span>(app: FastAPI):
+    <span class="cm"># ── STARTUP ──</span>
+    _store = RCAStore(settings.rca_db_path)
+    <span class="kw">await</span> _store.init_db()                         <span class="cm"># Create SQLite table</span>
+
+    _drain = DrainAnalyzer()
+    <span class="kw">await</span> _drain.seed_from_loki()                   <span class="cm"># Bootstrap Drain3 from Loki</span>
+    <span class="kw">await</span> _drain.start_background_ingestion()        <span class="cm"># Start 30s polling loop</span>
+
+    _context_gatherer = ContextGatherer()
+    _llm_client = LLMClient()
+    notifier = EmailNotifier()
+    dedup = DedupManager(window_seconds=settings.dedup_window_seconds)
+
+    _pipeline = TriagePipeline(
+        rca_store=_store, drain=_drain, context_gatherer=_context_gatherer,
+        llm_client=_llm_client, notifier=notifier, dedup=dedup,
+    )
+
+    logger.info(<span class="str">"Triage service started — listening on :8090"</span>)
+    <span class="kw">yield</span>
+
+    <span class="cm"># ── SHUTDOWN ──</span>
+    <span class="kw">await</span> _drain.stop_background_ingestion()
+    <span class="kw">await</span> _context_gatherer.close()
+    <span class="kw">await</span> _llm_client.close()
+    <span class="kw">await</span> _store.close()
+
+app = FastAPI(title=<span class="str">"CIRES Triage Service"</span>, version=<span class="str">"0.1.0"</span>, lifespan=lifespan)</code></pre>
+
+      <p style="margin-top:12px;"><strong>Route definitions:</strong></p>
+<pre><code><span class="cm"># ── Webhook endpoints (the two entry points) ──</span>
+
+<span class="dec">@app.post</span>(<span class="str">"/webhook/grafana"</span>, status_code=<span class="num">202</span>)
+<span class="kw">async def</span> <span class="fn">webhook_grafana</span>(payload: GrafanaWebhook, background_tasks: BackgroundTasks):
+    webhooks_received.labels(source=<span class="str">"grafana"</span>).inc()
+    background_tasks.add_task(_pipeline.process_grafana_webhook, payload)
+    <span class="kw">return</span> {<span class="str">"status"</span>: <span class="str">"accepted"</span>}
+
+<span class="dec">@app.post</span>(<span class="str">"/webhook/drain3"</span>, status_code=<span class="num">202</span>)
+<span class="kw">async def</span> <span class="fn">webhook_drain3</span>(payload: Drain3Webhook, background_tasks: BackgroundTasks):
+    webhooks_received.labels(source=<span class="str">"drain3"</span>).inc()
+    background_tasks.add_task(_pipeline.process_drain3_webhook, payload)
+    <span class="kw">return</span> {<span class="str">"status"</span>: <span class="str">"accepted"</span>}
+
+<span class="cm"># ── Query endpoints ──</span>
+
+<span class="dec">@app.get</span>(<span class="str">"/health"</span>)         <span class="cm"># Docker health check + uptime</span>
+<span class="dec">@app.get</span>(<span class="str">"/decisions"</span>)      <span class="cm"># Query RCA history (with ?alert_name= filter)</span>
+<span class="dec">@app.get</span>(<span class="str">"/drain3/stats"</span>)   <span class="cm"># Drain3 cluster count + anomaly rate</span>
+<span class="dec">@app.get</span>(<span class="str">"/metrics"</span>)        <span class="cm"># Prometheus scrape endpoint</span></code></pre>
+
+      <div class="note-box">
+        <strong>Why 202 Accepted + BackgroundTasks?</strong> LLM inference can take 30-120 seconds. If the webhook handler waited for the full pipeline to complete, Grafana's webhook sender would time out and retry, creating duplicate processing. By returning <span class="ic">202 Accepted</span> immediately and processing in the background, the webhook is acknowledged in milliseconds. The <span class="ic">BackgroundTasks</span> mechanism runs the pipeline in the same event loop (no separate worker needed) after the response is sent.
+      </div>
+
+      <p style="margin-top:12px;"><strong>Structured JSON logging format:</strong></p>
+<pre><code>logging.basicConfig(
+    level=logging.INFO,
+    format=<span class="str">'{"time":"%(asctime)s","level":"%(levelname)s","logger":"%(name)s","msg":"%(message)s"}'</span>,
+)</code></pre>
+
+      <p>This JSON format is picked up by the OTel Collector's filelog receiver and shipped to Loki. You can query triage service logs in Grafana with <span class="ic">{service_name="triage-service"} | json</span>.</p>
+    </div>
+  </div>
+
+  <div class="step-connector"></div>
+
+  <!-- ==================== STEP 12 ==================== -->
+  <div class="section-label">Step 12 — Docker and Deployment</div>
+
+  <div class="step">
+    <div class="step-num"><div class="step-circle" style="background:rgba(240,160,80,.15);color:var(--accent-orange);">12</div></div>
+    <div class="step-body">
+      <h4 style="color:var(--accent-orange);">Dockerfile and ai-compose.yml.j2 Integration</h4>
+      <p>The Dockerfile is minimal — Python 3.12-slim with <span class="ic">curl</span> for health checks.</p>
+
+<pre><code><span class="kw">FROM</span> python:3.12-slim
 
 <span class="kw">WORKDIR</span> /app
+
+<span class="kw">RUN</span> apt-get update && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
 
 <span class="kw">COPY</span> requirements.txt .
 <span class="kw">RUN</span> pip install --no-cache-dir -r requirements.txt
 
-<span class="kw">COPY</span> *.py .
+<span class="kw">COPY</span> drain3.ini .
+<span class="kw">COPY</span> app/ app/
 
 <span class="kw">EXPOSE</span> <span class="num">8090</span>
 
-<span class="kw">CMD</span> [<span class="str">"uvicorn"</span>, <span class="str">"main:app"</span>, <span class="str">"--host"</span>, <span class="str">"0.0.0.0"</span>, <span class="str">"--port"</span>, <span class="str">"8090"</span>]</code></pre>
-  </div>
+<span class="kw">CMD</span> [<span class="str">"uvicorn"</span>, <span class="str">"app.main:app"</span>, <span class="str">"--host"</span>, <span class="str">"0.0.0.0"</span>, <span class="str">"--port"</span>, <span class="str">"8090"</span>, <span class="str">"--log-level"</span>, <span class="str">"info"</span>]</code></pre>
 
-  <div class="section-label">requirements.txt</div>
+      <p style="margin-top:12px;"><strong>requirements.txt — 10 pinned dependencies:</strong></p>
+<pre><code>fastapi==<span class="num">0.115.12</span>
+uvicorn[standard]==<span class="num">0.34.2</span>
+pydantic==<span class="num">2.11.3</span>
+pydantic-settings==<span class="num">2.9.1</span>
+httpx==<span class="num">0.28.1</span>
+aiosqlite==<span class="num">0.21.0</span>
+aiosmtplib==<span class="num">3.0.2</span>
+drain3==<span class="num">0.9.11</span>
+prometheus-client==<span class="num">0.22.1</span>
+python-multipart==<span class="num">0.0.20</span></code></pre>
 
-  <div class="card">
-    <h3 style="color:var(--accent-purple);">roles/llm_triage/templates/requirements.txt.j2</h3>
-<pre><code>fastapi==0.111.0
-uvicorn[standard]==0.30.1
-httpx==0.27.0
-drain3==0.9.11
-pydantic==2.7.1</code></pre>
-  </div>
+      <div class="note-box">
+        <strong>How it connects to ai-compose.yml.j2:</strong> The Docker Compose template on the AI/LLM VM defines the <span class="ic">triage-service</span> container with environment variables that map to every <span class="ic">Settings</span> field in <span class="ic">config.py</span>. Key entries: <span class="ic">OLLAMA_URL</span>, <span class="ic">OLLAMA_MODEL</span>, <span class="ic">SMTP_USER</span>, <span class="ic">SMTP_PASSWORD</span>, <span class="ic">NOTIFICATION_EMAIL</span>, <span class="ic">PROMETHEUS_MCP_URL</span>, <span class="ic">LOKI_MCP_URL</span>, <span class="ic">JAEGER_MCP_URL</span>. Volumes mount <span class="ic">/var/lib/triage-service</span> for persistent SQLite + Drain3 state. The container depends on <span class="ic">ollama</span> (condition: service_healthy) to ensure the LLM is ready before the triage service starts accepting webhooks. A Docker health check runs <span class="ic">curl -f http://localhost:8090/health</span>.
+      </div>
 
-  <div class="section-label">main.py — Webhook Endpoint</div>
-
-  <div class="card">
-    <h3 style="color:var(--accent-purple);">roles/llm_triage/templates/main.py.j2</h3>
-<pre><code><span class="kw">import</span> logging, asyncio, json
-<span class="kw">from</span> datetime <span class="kw">import</span> datetime, timezone
-<span class="kw">from</span> fastapi <span class="kw">import</span> FastAPI, BackgroundTasks
-<span class="kw">from</span> pydantic <span class="kw">import</span> BaseModel
-<span class="kw">from</span> typing <span class="kw">import</span> List, Dict, Any
-
-<span class="kw">from</span> context_fetcher <span class="kw">import</span> ContextFetcher
-<span class="kw">from</span> drain_analyzer <span class="kw">import</span> DrainAnalyzer
-<span class="kw">from</span> llm_client <span class="kw">import</span> LLMClient
-
-<span class="cm"># Structured logging — OTel Collector ships this to Loki</span>
-logging.basicConfig(
-    level=logging.INFO,
-    format=<span class="str">'{"time":"%(asctime)s","level":"%(levelname)s","service":"llm-triage","msg":%(message)s}'</span>
-)
-log = logging.getLogger(<span class="str">"llm-triage"</span>)
-
-app = FastAPI(title=<span class="str">"LLM Triage Service"</span>, version=<span class="str">"1.0.0"</span>)
-fetcher = ContextFetcher()
-analyzer = DrainAnalyzer()
-llm = LLMClient()
-
-
-<span class="kw">class</span> <span class="fn">AlertPayload</span>(BaseModel):
-    receiver: str
-    status: str
-    alerts: List[Dict[str, Any]]
-    groupLabels: Dict[str, str] = {}
-    commonLabels: Dict[str, str] = {}
-    commonAnnotations: Dict[str, str] = {}
-
-
-<span class="dec">@app.get</span>(<span class="str">"/health"</span>)
-<span class="kw">async def</span> <span class="fn">health</span>():
-    <span class="kw">return</span> {<span class="str">"status"</span>: <span class="str">"ok"</span>, <span class="str">"time"</span>: datetime.now(timezone.utc).isoformat()}
-
-
-<span class="dec">@app.post</span>(<span class="str">"/webhook"</span>)
-<span class="kw">async def</span> <span class="fn">webhook</span>(payload: AlertPayload, background_tasks: BackgroundTasks):
-    <span class="str">"""Receive Grafana Alerting webhook, run RCA in background."""</span>
-    firing = [a <span class="kw">for</span> a <span class="kw">in</span> payload.alerts <span class="kw">if</span> a.get(<span class="str">"status"</span>) == <span class="str">"firing"</span>]
-    <span class="kw">if not</span> firing:
-        <span class="kw">return</span> {<span class="str">"status"</span>: <span class="str">"skipped"</span>, <span class="str">"reason"</span>: <span class="str">"no firing alerts"</span>}
-
-    background_tasks.add_task(run_rca, firing[<span class="num">0</span>])
-    <span class="kw">return</span> {<span class="str">"status"</span>: <span class="str">"accepted"</span>, <span class="str">"alert"</span>: firing[<span class="num">0</span>].get(<span class="str">"labels"</span>, {}).get(<span class="str">"alertname"</span>)}
-
-
-<span class="kw">async def</span> <span class="fn">run_rca</span>(alert: Dict[str, Any]):
-    alertname = alert.get(<span class="str">"labels"</span>, {}).get(<span class="str">"alertname"</span>, <span class="str">"unknown"</span>)
-    service   = alert.get(<span class="str">"labels"</span>, {}).get(<span class="str">"job"</span>, <span class="str">"spring"</span>)
-    log.info(<span class="fn">json.dumps</span>({<span class="str">"event"</span>: <span class="str">"rca_start"</span>, <span class="str">"alert"</span>: alertname, <span class="str">"service"</span>: service}))
-
-    <span class="kw">try</span>:
-        context = <span class="kw">await</span> fetcher.gather(alert)
-        anomalies = analyzer.find_anomalies(context[<span class="str">"log_lines"</span>])
-        rca = <span class="kw">await</span> llm.generate_rca(alert, context, anomalies)
-
-        result = {
-            <span class="str">"alert"</span>: alertname, <span class="str">"service"</span>: service,
-            <span class="str">"anomalous_templates"</span>: anomalies,
-            <span class="str">"rca"</span>: rca,
-            <span class="str">"generated_at"</span>: datetime.now(timezone.utc).isoformat(),
-        }
-        log.info(<span class="fn">json.dumps</span>({<span class="str">"event"</span>: <span class="str">"rca_complete"</span>, <span class="str">"result"</span>: result}))
-    <span class="kw">except Exception as</span> exc:
-        log.error(<span class="fn">json.dumps</span>({<span class="str">"event"</span>: <span class="str">"rca_error"</span>, <span class="str">"error"</span>: str(exc)}))</code></pre>
-  </div>
-
-  <div class="section-label">context_fetcher.py — Initial Alert Context (pre-LLM)</div>
-
-  <div class="card">
-    <h3 style="color:var(--accent-purple);">roles/llm_triage/templates/context_fetcher.py.j2</h3>
-    <p style="margin-bottom:12px;"><strong>Note:</strong> This module gathers a minimal initial context snapshot to include in the LLM prompt. The LLM then uses MCP bridges to autonomously gather additional data during its investigation — querying Prometheus, Loki, Jaeger, Drain3, and RCA History as needed. The context_fetcher provides a starting point, not the full picture.</p>
-<pre><code><span class="kw">import</span> os, time, httpx
-<span class="kw">from</span> typing <span class="kw">import</span> Dict, Any, List
-
-PROMETHEUS_URL = os.getenv(<span class="str">"PROMETHEUS_URL"</span>, <span class="str">"http://prometheus:9090"</span>)
-LOKI_URL       = os.getenv(<span class="str">"LOKI_URL"</span>, <span class="str">"http://loki:3100"</span>)
-JAEGER_URL     = os.getenv(<span class="str">"JAEGER_URL"</span>, <span class="str">"http://jaeger:16686"</span>)
-WINDOW_MINUTES = int(os.getenv(<span class="str">"CONTEXT_WINDOW_MINUTES"</span>, <span class="str">"15"</span>))
-LOKI_LIMIT     = int(os.getenv(<span class="str">"LOKI_LIMIT"</span>, <span class="str">"200"</span>))
-
-
-<span class="kw">class</span> <span class="fn">ContextFetcher</span>:
-    <span class="kw">async def</span> <span class="fn">gather</span>(self, alert: Dict[str, Any]) -> Dict[str, Any]:
-        service    = alert.get(<span class="str">"labels"</span>, {}).get(<span class="str">"job"</span>, <span class="str">"spring"</span>)
-        expr       = alert.get(<span class="str">"labels"</span>, {}).get(<span class="str">"prometheus_expr"</span>, <span class="str">""</span>)
-        end_ns     = int(time.time() * <span class="num">1e9</span>)
-        start_ns   = end_ns - WINDOW_MINUTES * <span class="num">60</span> * <span class="num">int</span>(<span class="num">1e9</span>)
-        end_s      = int(time.time())
-        start_s    = end_s - WINDOW_MINUTES * <span class="num">60</span>
-
-        <span class="kw">async with</span> httpx.AsyncClient(timeout=<span class="num">20</span>) <span class="kw">as</span> client:
-            metrics, logs, traces = <span class="kw">await</span> asyncio.gather(
-                self._fetch_metrics(client, expr, end_s),
-                self._fetch_logs(client, service, start_ns, end_ns),
-                self._fetch_traces(client, service, start_s, end_s),
-                return_exceptions=True
-            )
-
-        <span class="kw">return</span> {
-            <span class="str">"metrics_summary"</span>: metrics <span class="kw">if not isinstance</span>(metrics, Exception) <span class="kw">else</span> <span class="str">"unavailable"</span>,
-            <span class="str">"log_lines"</span>:       logs    <span class="kw">if not isinstance</span>(logs,    Exception) <span class="kw">else</span> [],
-            <span class="str">"traces_summary"</span>:  traces  <span class="kw">if not isinstance</span>(traces,  Exception) <span class="kw">else</span> <span class="str">"unavailable"</span>,
-        }
-
-    <span class="kw">async def</span> <span class="fn">_fetch_metrics</span>(self, client, expr, end_s) -> str:
-        <span class="kw">if not</span> expr:
-            <span class="kw">return</span> <span class="str">"no expression provided"</span>
-        r = <span class="kw">await</span> client.get(
-            f<span class="str">"{PROMETHEUS_URL}/api/v1/query"</span>,
-            params={<span class="str">"query"</span>: expr, <span class="str">"time"</span>: end_s}
-        )
-        r.raise_for_status()
-        data = r.json().get(<span class="str">"data"</span>, {}).get(<span class="str">"result"</span>, [])
-        <span class="kw">return</span> <span class="fn">str</span>(data[:<span class="num">5</span>]) <span class="kw">if</span> data <span class="kw">else</span> <span class="str">"no data"</span>
-
-    <span class="kw">async def</span> <span class="fn">_fetch_logs</span>(self, client, service, start_ns, end_ns) -> List[str]:
-        r = <span class="kw">await</span> client.get(
-            f<span class="str">"{LOKI_URL}/loki/api/v1/query_range"</span>,
-            params={
-                <span class="str">"query"</span>: f<span class="str">'{{job="{service}"}}'</span>,
-                <span class="str">"start"</span>: start_ns, <span class="str">"end"</span>: end_ns,
-                <span class="str">"limit"</span>: LOKI_LIMIT, <span class="str">"direction"</span>: <span class="str">"backward"</span>
-            }
-        )
-        r.raise_for_status()
-        streams = r.json().get(<span class="str">"data"</span>, {}).get(<span class="str">"result"</span>, [])
-        lines = []
-        <span class="kw">for</span> stream <span class="kw">in</span> streams:
-            <span class="kw">for</span> ts, line <span class="kw">in</span> stream.get(<span class="str">"values"</span>, []):
-                lines.append(line)
-        <span class="kw">return</span> lines
-
-    <span class="kw">async def</span> <span class="fn">_fetch_traces</span>(self, client, service, start_s, end_s) -> str:
-        r = <span class="kw">await</span> client.get(
-            f<span class="str">"{JAEGER_URL}/api/traces"</span>,
-            params={
-                <span class="str">"service"</span>: service,
-                <span class="str">"start"</span>: start_s * <span class="num">1_000_000</span>,
-                <span class="str">"end"</span>: end_s * <span class="num">1_000_000</span>,
-                <span class="str">"limit"</span>: <span class="num">10</span>
-            }
-        )
-        r.raise_for_status()
-        traces = r.json().get(<span class="str">"data"</span>, [])
-        <span class="kw">if not</span> traces:
-            <span class="kw">return</span> <span class="str">"no recent traces"</span>
-        summary = []
-        <span class="kw">for</span> t <span class="kw">in</span> traces[:<span class="num">5</span>]:
-            spans = t.get(<span class="str">"spans"</span>, [])
-            root  = spans[<span class="num">0</span>] <span class="kw">if</span> spans <span class="kw">else</span> {}
-            dur_ms = root.get(<span class="str">"duration"</span>, <span class="num">0</span>) / <span class="num">1000</span>
-            summary.append(f<span class="str">"{root.get('operationName','?')} — {dur_ms:.1f}ms — {len(spans)} spans"</span>)
-        <span class="kw">return</span> <span class="str">"\n"</span>.join(summary)</code></pre>
-  </div>
-
-  <div class="section-label">drain_analyzer.py — Drain3 Log Clustering</div>
-
-  <div class="card">
-    <h3 style="color:var(--accent-purple);">roles/llm_triage/templates/drain_analyzer.py.j2</h3>
-<pre><code><span class="kw">from</span> drain3 <span class="kw">import</span> TemplateMiner
-<span class="kw">from</span> drain3.template_miner_config <span class="kw">import</span> TemplateMinerConfig
-<span class="kw">from</span> typing <span class="kw">import</span> List, Dict
-<span class="kw">from</span> collections <span class="kw">import</span> Counter
-
-
-<span class="kw">class</span> <span class="fn">DrainAnalyzer</span>:
-    <span class="str">"""
-    Uses Drain3 online log template mining to cluster raw log lines.
-    Anomalous templates = new/rare clusters not seen before (count == 1).
-    """</span>
-
-    <span class="kw">def</span> <span class="fn">find_anomalies</span>(self, log_lines: List[str]) -> List[Dict]:
-        <span class="kw">if not</span> log_lines:
-            <span class="kw">return</span> []
-
-        cfg = TemplateMinerConfig()
-        cfg.load_defaults()
-        cfg.parametrize_numeric_tokens = True   <span class="cm"># replace numbers with &lt;NUM&gt;</span>
-
-        <span class="cm"># Fresh miner per invocation — stateless by design</span>
-        miner = TemplateMiner(config=cfg)
-        cluster_counts: Counter = Counter()
-
-        <span class="kw">for</span> line <span class="kw">in</span> log_lines:
-            result = miner.add_log_message(line.strip())
-            <span class="kw">if</span> result <span class="kw">and</span> result.get(<span class="str">"cluster_id"</span>):
-                cluster_counts[result[<span class="str">"cluster_id"</span>]] += <span class="num">1</span>
-
-        <span class="cm"># Anomalous: templates with very low frequency (count &lt;= 2)</span>
-        anomalous = []
-        <span class="kw">for</span> cluster <span class="kw">in</span> miner.drain.clusters:
-            count = cluster_counts.get(cluster.cluster_id, <span class="num">0</span>)
-            <span class="kw">if</span> count <= <span class="num">2</span> <span class="kw">and</span> cluster.get_template():
-                <span class="cm"># Also flag ERROR/WARN templates regardless of frequency</span>
-                template = cluster.get_template()
-                is_error = <span class="kw">any</span>(kw <span class="kw">in</span> template.upper() <span class="kw">for</span> kw <span class="kw">in</span> [<span class="str">"ERROR"</span>, <span class="str">"EXCEPTION"</span>, <span class="str">"FAIL"</span>, <span class="str">"WARN"</span>])
-                anomalous.append({
-                    <span class="str">"template"</span>: template,
-                    <span class="str">"count"</span>: count,
-                    <span class="str">"is_error_pattern"</span>: is_error,
-                })
-
-        <span class="cm"># Also include high-frequency ERROR templates (known but frequent = escalating)</span>
-        <span class="kw">for</span> cluster <span class="kw">in</span> miner.drain.clusters:
-            template = cluster.get_template()
-            count = cluster_counts.get(cluster.cluster_id, <span class="num">0</span>)
-            <span class="kw">if</span> count > <span class="num">10</span> <span class="kw">and any</span>(kw <span class="kw">in</span> template.upper() <span class="kw">for</span> kw <span class="kw">in</span> [<span class="str">"ERROR"</span>, <span class="str">"EXCEPTION"</span>]):
-                anomalous.append({
-                    <span class="str">"template"</span>: template,
-                    <span class="str">"count"</span>: count,
-                    <span class="str">"is_error_pattern"</span>: True,
-                    <span class="str">"note"</span>: <span class="str">"high-frequency error"</span>,
-                })
-
-        <span class="kw">return</span> anomalous[:<span class="num">10</span>]  <span class="cm"># cap at 10 templates to keep prompt size manageable</span></code></pre>
-  </div>
-
-  <div class="section-label">MCP Bridge Servers — LLM Data Access</div>
-
-  <div class="note-box purple">
-    <strong>Architecture:</strong> Five read-only MCP bridge servers run on the AI/LLM VM. The LLM calls these autonomously during investigation to gather evidence from all three observability pillars plus anomaly detection and historical context. Each MCP server is a lightweight FastAPI app (~80-100 lines) wrapping an existing HTTP API.
-  </div>
-
-  <div class="card" style="border-color:rgba(240,160,80,.25);">
-    <h3 style="color:var(--accent-orange);">Prometheus MCP (:8091) — roles/llm_triage/templates/mcp_servers/prometheus_mcp.py</h3>
-    <p style="margin-bottom:12px;">Wraps Prometheus HTTP API. Exposes instant queries, range queries, active alerts, and scrape target health. The LLM uses this to check metric values within the alert time window.</p>
-<pre><code><span class="kw">import</span> os, httpx
-<span class="kw">from</span> fastapi <span class="kw">import</span> FastAPI
-
-app = FastAPI(title=<span class="str">"Prometheus MCP"</span>, version=<span class="str">"1.0.0"</span>)
-PROMETHEUS_URL = os.getenv(<span class="str">"PROMETHEUS_URL"</span>, <span class="str">"http://prometheus:9090"</span>)
-
-<span class="dec">@app.get</span>(<span class="str">"/tools/query_instant"</span>)
-<span class="kw">async def</span> <span class="fn">query_instant</span>(promql: str):
-    <span class="kw">async with</span> httpx.AsyncClient(timeout=<span class="num">10</span>) <span class="kw">as</span> c:
-        r = <span class="kw">await</span> c.get(f<span class="str">"{PROMETHEUS_URL}/api/v1/query"</span>, params={<span class="str">"query"</span>: promql})
-        <span class="kw">return</span> r.json()
-
-<span class="dec">@app.get</span>(<span class="str">"/tools/query_range"</span>)
-<span class="kw">async def</span> <span class="fn">query_range</span>(promql: str, start: str, end: str, step: str = <span class="str">"60s"</span>):
-    <span class="kw">async with</span> httpx.AsyncClient(timeout=<span class="num">10</span>) <span class="kw">as</span> c:
-        r = <span class="kw">await</span> c.get(f<span class="str">"{PROMETHEUS_URL}/api/v1/query_range"</span>,
-                        params={<span class="str">"query"</span>: promql, <span class="str">"start"</span>: start, <span class="str">"end"</span>: end, <span class="str">"step"</span>: step})
-        <span class="kw">return</span> r.json()
-
-<span class="dec">@app.get</span>(<span class="str">"/tools/get_alerts"</span>)
-<span class="kw">async def</span> <span class="fn">get_alerts</span>():
-    <span class="kw">async with</span> httpx.AsyncClient(timeout=<span class="num">10</span>) <span class="kw">as</span> c:
-        r = <span class="kw">await</span> c.get(f<span class="str">"{PROMETHEUS_URL}/api/v1/alerts"</span>)
-        <span class="kw">return</span> r.json()
-
-<span class="dec">@app.get</span>(<span class="str">"/tools/get_targets"</span>)
-<span class="kw">async def</span> <span class="fn">get_targets</span>():
-    <span class="kw">async with</span> httpx.AsyncClient(timeout=<span class="num">10</span>) <span class="kw">as</span> c:
-        r = <span class="kw">await</span> c.get(f<span class="str">"{PROMETHEUS_URL}/api/v1/targets"</span>)
-        <span class="kw">return</span> r.json()</code></pre>
-    <div class="tags" style="margin-top:12px;">
-      <span class="tag tag-orange">:8091</span>
-      <span class="tag tag-muted">4 tools</span>
-      <span class="tag tag-green">Read-only</span>
+      <p style="margin-top:12px;">The <span class="ic">triage-service</span> is scraped by Prometheus as job <span class="ic">ai-triage-service</span> on port <span class="ic">8090</span> (defined in <span class="ic">inventory/group_vars/monitoring.yml</span>). The scrape target hits the <span class="ic">/metrics</span> endpoint, which returns <span class="ic">prometheus-client</span> output.</p>
     </div>
   </div>
 
-  <div class="card" style="border-color:rgba(78,168,222,.25);">
-    <h3 style="color:var(--accent-blue);">Loki MCP (:8092) — roles/llm_triage/templates/mcp_servers/loki_mcp.py</h3>
-    <p style="margin-bottom:12px;">Wraps Loki HTTP API. Exposes log queries, label value discovery, and log volume aggregation. The LLM uses this to search for error patterns and correlate log entries with trace IDs.</p>
-<pre><code><span class="kw">import</span> os, httpx
-<span class="kw">from</span> fastapi <span class="kw">import</span> FastAPI
+  <div class="step-connector"></div>
 
-app = FastAPI(title=<span class="str">"Loki MCP"</span>, version=<span class="str">"1.0.0"</span>)
-LOKI_URL = os.getenv(<span class="str">"LOKI_URL"</span>, <span class="str">"http://loki:3100"</span>)
+  <!-- ==================== STEP 13 ==================== -->
+  <div class="section-label">Step 13 — Prometheus Metrics (metrics.py)</div>
 
-<span class="dec">@app.get</span>(<span class="str">"/tools/query_logs"</span>)
-<span class="kw">async def</span> <span class="fn">query_logs</span>(logql: str, start: str, end: str, limit: int = <span class="num">50</span>):
-    <span class="kw">async with</span> httpx.AsyncClient(timeout=<span class="num">10</span>) <span class="kw">as</span> c:
-        r = <span class="kw">await</span> c.get(f<span class="str">"{LOKI_URL}/loki/api/v1/query_range"</span>,
-                        params={<span class="str">"query"</span>: logql, <span class="str">"start"</span>: start, <span class="str">"end"</span>: end,
-                                <span class="str">"limit"</span>: limit, <span class="str">"direction"</span>: <span class="str">"backward"</span>})
-        <span class="kw">return</span> r.json()
+  <div class="step">
+    <div class="step-num"><div class="step-circle" style="background:rgba(240,160,80,.15);color:var(--accent-orange);">13</div></div>
+    <div class="step-body">
+      <h4 style="color:var(--accent-orange);">app/metrics.py — All Exported Prometheus Metrics</h4>
+      <p>The triage service exports 9 Prometheus metrics that provide full observability into its own behavior. These are scraped by Prometheus and can be used to build dashboards and alerts about the AI triage system itself.</p>
 
-<span class="dec">@app.get</span>(<span class="str">"/tools/get_label_values"</span>)
-<span class="kw">async def</span> <span class="fn">get_label_values</span>(label: str):
-    <span class="kw">async with</span> httpx.AsyncClient(timeout=<span class="num">10</span>) <span class="kw">as</span> c:
-        r = <span class="kw">await</span> c.get(f<span class="str">"{LOKI_URL}/loki/api/v1/label/{label}/values"</span>)
-        <span class="kw">return</span> r.json()
+      <table>
+        <tr>
+          <th>Metric Name</th>
+          <th>Type</th>
+          <th>Labels</th>
+          <th>Description</th>
+        </tr>
+        <tr>
+          <td><span class="ic">triage_webhooks_received_total</span></td>
+          <td>Counter</td>
+          <td><span class="ic">source</span></td>
+          <td>Total webhook requests received (source: "grafana" or "drain3")</td>
+        </tr>
+        <tr>
+          <td><span class="ic">triage_alerts_deduplicated_total</span></td>
+          <td>Counter</td>
+          <td>-</td>
+          <td>Alerts skipped by the dedup manager</td>
+        </tr>
+        <tr>
+          <td><span class="ic">triage_alerts_processed_total</span></td>
+          <td>Counter</td>
+          <td><span class="ic">decision</span></td>
+          <td>Alerts fully processed (decision: "escalate" or "dismiss")</td>
+        </tr>
+        <tr>
+          <td><span class="ic">triage_pipeline_duration_seconds</span></td>
+          <td>Histogram</td>
+          <td>-</td>
+          <td>Full pipeline duration, buckets: 1s, 5s, 10s, 30s, 60s, 120s, 300s</td>
+        </tr>
+        <tr>
+          <td><span class="ic">triage_pipeline_timeouts_total</span></td>
+          <td>Counter</td>
+          <td>-</td>
+          <td>Pipeline timeouts (5-min fallback triggered)</td>
+        </tr>
+        <tr>
+          <td><span class="ic">triage_context_gathering_seconds</span></td>
+          <td>Histogram</td>
+          <td><span class="ic">source</span></td>
+          <td>Context gathering duration per source, buckets: 0.5s, 1s, 2s, 4s, 8s</td>
+        </tr>
+        <tr>
+          <td><span class="ic">triage_llm_investigation_seconds</span></td>
+          <td>Histogram</td>
+          <td>-</td>
+          <td>LLM inference duration, buckets: 5s, 10s, 30s, 60s, 120s, 300s</td>
+        </tr>
+        <tr>
+          <td><span class="ic">triage_emails_sent_total</span></td>
+          <td>Counter</td>
+          <td><span class="ic">type</span></td>
+          <td>Emails sent (type: "escalation" or "timeout")</td>
+        </tr>
+        <tr>
+          <td><span class="ic">drain3_clusters_total</span></td>
+          <td>Gauge</td>
+          <td>-</td>
+          <td>Current number of Drain3 log template clusters</td>
+        </tr>
+        <tr>
+          <td><span class="ic">drain3_anomalies_total</span></td>
+          <td>Counter</td>
+          <td>-</td>
+          <td>Log lines flagged as anomalous by Drain3</td>
+        </tr>
+        <tr>
+          <td><span class="ic">drain3_log_lines_processed_total</span></td>
+          <td>Counter</td>
+          <td>-</td>
+          <td>Total log lines processed through Drain3</td>
+        </tr>
+      </table>
 
-<span class="dec">@app.get</span>(<span class="str">"/tools/get_log_volume"</span>)
-<span class="kw">async def</span> <span class="fn">get_log_volume</span>(logql: str, start: str, end: str):
-    <span class="kw">async with</span> httpx.AsyncClient(timeout=<span class="num">10</span>) <span class="kw">as</span> c:
-        r = <span class="kw">await</span> c.get(f<span class="str">"{LOKI_URL}/loki/api/v1/query_range"</span>,
-                        params={<span class="str">"query"</span>: f<span class="str">"count_over_time({logql} [5m])"</span>,
-                                <span class="str">"start"</span>: start, <span class="str">"end"</span>: end, <span class="str">"step"</span>: <span class="str">"300"</span>})
-        <span class="kw">return</span> r.json()</code></pre>
-    <div class="tags" style="margin-top:12px;">
-      <span class="tag tag-blue">:8092</span>
-      <span class="tag tag-muted">3 tools</span>
-      <span class="tag tag-green">Read-only</span>
-    </div>
-  </div>
+<pre><code><span class="kw">from</span> prometheus_client <span class="kw">import</span> Counter, Gauge, Histogram, generate_latest
 
-  <div class="card" style="border-color:rgba(64,208,208,.25);">
-    <h3 style="color:var(--accent-cyan);">Jaeger MCP (:8093) — roles/llm_triage/templates/mcp_servers/jaeger_mcp.py</h3>
-    <p style="margin-bottom:12px;">Wraps Jaeger HTTP API. Exposes trace search (with tag filtering), full trace detail retrieval, service listing, and operation discovery. The LLM uses this to find error traces, inspect span-level failures, and correlate trace_id from logs to the full request path.</p>
-<pre><code><span class="kw">import</span> os, httpx
-<span class="kw">from</span> fastapi <span class="kw">import</span> FastAPI
-<span class="kw">from</span> typing <span class="kw">import</span> Optional
+<span class="var">webhooks_received</span> = Counter(
+    <span class="str">"triage_webhooks_received_total"</span>,
+    <span class="str">"Total webhook requests received"</span>, [<span class="str">"source"</span>])
 
-app = FastAPI(title=<span class="str">"Jaeger MCP"</span>, version=<span class="str">"1.0.0"</span>)
-JAEGER_URL = os.getenv(<span class="str">"JAEGER_URL"</span>, <span class="str">"http://jaeger:16686"</span>)
+<span class="var">pipeline_duration</span> = Histogram(
+    <span class="str">"triage_pipeline_duration_seconds"</span>,
+    <span class="str">"Full pipeline duration from webhook to decision"</span>,
+    buckets=[<span class="num">1</span>, <span class="num">5</span>, <span class="num">10</span>, <span class="num">30</span>, <span class="num">60</span>, <span class="num">120</span>, <span class="num">300</span>])
 
-<span class="dec">@app.get</span>(<span class="str">"/tools/find_traces"</span>)
-<span class="kw">async def</span> <span class="fn">find_traces</span>(service: str, start: str, end: str,
-                      operation: Optional[str] = <span class="kw">None</span>, limit: int = <span class="num">20</span>,
-                      tags: Optional[str] = <span class="kw">None</span>):
-    <span class="str">"""Search traces by service, time window, and optional tags (e.g. 'error=true')."""</span>
-    params = {<span class="str">"service"</span>: service, <span class="str">"start"</span>: start, <span class="str">"end"</span>: end, <span class="str">"limit"</span>: limit}
-    <span class="kw">if</span> operation:
-        params[<span class="str">"operation"</span>] = operation
-    <span class="kw">if</span> tags:
-        params[<span class="str">"tags"</span>] = tags  <span class="cm"># e.g. '{"error":"true","http.status_code":"500"}'</span>
-    <span class="kw">async with</span> httpx.AsyncClient(timeout=<span class="num">10</span>) <span class="kw">as</span> c:
-        r = <span class="kw">await</span> c.get(f<span class="str">"{JAEGER_URL}/api/traces"</span>, params=params)
-        data = r.json().get(<span class="str">"data"</span>, [])
-        <span class="cm"># Summarize: trace_id, root operation, duration, span count, error flag</span>
-        <span class="kw">return</span> [_summarize_trace(t) <span class="kw">for</span> t <span class="kw">in</span> data]
+<span class="var">drain3_clusters</span> = Gauge(
+    <span class="str">"drain3_clusters_total"</span>,
+    <span class="str">"Total Drain3 log template clusters"</span>)
 
-<span class="dec">@app.get</span>(<span class="str">"/tools/get_trace"</span>)
-<span class="kw">async def</span> <span class="fn">get_trace</span>(trace_id: str):
-    <span class="str">"""Get full trace detail — all spans with durations, status, and tags."""</span>
-    <span class="kw">async with</span> httpx.AsyncClient(timeout=<span class="num">10</span>) <span class="kw">as</span> c:
-        r = <span class="kw">await</span> c.get(f<span class="str">"{JAEGER_URL}/api/traces/{trace_id}"</span>)
-        <span class="kw">return</span> r.json()
+<span class="kw">def</span> <span class="fn">get_metrics</span>() -> bytes:
+    <span class="kw">return</span> generate_latest()</code></pre>
 
-<span class="dec">@app.get</span>(<span class="str">"/tools/get_services"</span>)
-<span class="kw">async def</span> <span class="fn">get_services</span>():
-    <span class="str">"""List all traced services."""</span>
-    <span class="kw">async with</span> httpx.AsyncClient(timeout=<span class="num">10</span>) <span class="kw">as</span> c:
-        r = <span class="kw">await</span> c.get(f<span class="str">"{JAEGER_URL}/api/services"</span>)
-        <span class="kw">return</span> r.json()
-
-<span class="dec">@app.get</span>(<span class="str">"/tools/get_operations"</span>)
-<span class="kw">async def</span> <span class="fn">get_operations</span>(service: str):
-    <span class="str">"""List operations for a service."""</span>
-    <span class="kw">async with</span> httpx.AsyncClient(timeout=<span class="num">10</span>) <span class="kw">as</span> c:
-        r = <span class="kw">await</span> c.get(f<span class="str">"{JAEGER_URL}/api/operations"</span>, params={<span class="str">"service"</span>: service})
-        <span class="kw">return</span> r.json()
-
-<span class="kw">def</span> <span class="fn">_summarize_trace</span>(trace: dict) -> dict:
-    spans = trace.get(<span class="str">"spans"</span>, [])
-    root = spans[<span class="num">0</span>] <span class="kw">if</span> spans <span class="kw">else</span> {}
-    has_error = <span class="kw">any</span>(
-        tag.get(<span class="str">"key"</span>) == <span class="str">"error"</span> <span class="kw">and</span> tag.get(<span class="str">"value"</span>) == True
-        <span class="kw">for</span> s <span class="kw">in</span> spans <span class="kw">for</span> tag <span class="kw">in</span> s.get(<span class="str">"tags"</span>, [])
-    )
-    <span class="kw">return</span> {
-        <span class="str">"traceID"</span>: trace.get(<span class="str">"traceID"</span>),
-        <span class="str">"rootOperation"</span>: root.get(<span class="str">"operationName"</span>, <span class="str">"?"</span>),
-        <span class="str">"duration_ms"</span>: root.get(<span class="str">"duration"</span>, <span class="num">0</span>) / <span class="num">1000</span>,
-        <span class="str">"spanCount"</span>: <span class="fn">len</span>(spans),
-        <span class="str">"hasError"</span>: has_error,
-    }</code></pre>
-    <div class="tags" style="margin-top:12px;">
-      <span class="tag tag-cyan">:8093</span>
-      <span class="tag tag-muted">4 tools + summarizer</span>
-      <span class="tag tag-green">Read-only</span>
-    </div>
-  </div>
-
-  <div class="card-grid">
-    <div class="mini-card" style="border-color:rgba(224,208,96,.25);">
-      <h4 style="color:var(--accent-yellow);">Drain3 MCP (:8094)</h4>
-      <p>Wraps the in-memory Drain3 state maintained by the triage service. Exposes two tools:</p>
-      <ul>
-        <li><strong>/tools/get_clusters</strong> — Return all current log template clusters with counts and anomaly flags</li>
-        <li><strong>/tools/get_anomalies</strong> — Return only anomalous (rare/new/error) templates from the latest analysis window</li>
-      </ul>
-      <div class="tags" style="margin-top:10px;">
-        <span class="tag tag-yellow">:8094</span>
-        <span class="tag tag-muted">2 tools</span>
-        <span class="tag tag-green">Read-only</span>
+      <div class="note-box">
+        <strong>Prometheus scrape target:</strong> The metric endpoint is registered in <span class="ic">inventory/group_vars/monitoring.yml</span> as job <span class="ic">ai-triage-service</span> on <span class="ic">{{ ai_vm_ip }}:8090</span>. Prometheus scrapes <span class="ic">/metrics</span> every 15 seconds. You can build Grafana panels with queries like <span class="ic">rate(triage_alerts_processed_total[5m])</span> or <span class="ic">histogram_quantile(0.95, triage_pipeline_duration_seconds_bucket)</span> for P95 pipeline latency.
       </div>
     </div>
-    <div class="mini-card" style="border-color:rgba(78,168,222,.25);">
-      <h4 style="color:var(--accent-blue);">RCA History MCP (:8095)</h4>
-      <p>Wraps the SQLite RCA history database. Lets the LLM check past incidents for recurring patterns:</p>
-      <ul>
-        <li><strong>/tools/search_history</strong> — Search past RCA reports by alert name, service, or time range</li>
-        <li><strong>/tools/get_rca</strong> — Get full detail of a specific past RCA report by ID</li>
-        <li><strong>/tools/get_stats</strong> — Aggregate stats: most common alerts, mean time to resolve, recurrence rate</li>
-      </ul>
-      <div class="tags" style="margin-top:10px;">
-        <span class="tag tag-blue">:8095</span>
-        <span class="tag tag-muted">3 tools</span>
-        <span class="tag tag-green">Read-only</span>
-      </div>
-    </div>
-  </div>
-
-  <div class="section-label">Cross-Pillar Correlation Strategy</div>
-
-  <div class="card" style="border-color:rgba(176,126,232,.25);">
-    <h3 style="color:var(--accent-purple);">Four Correlation Patterns</h3>
-    <p style="margin-bottom:12px;">The LLM uses MCP bridges to cross-reference evidence across all three observability pillars. These are the four correlation patterns encoded in the prompt and tool definitions:</p>
-    <ul>
-      <li><strong>Time-based:</strong> All three pillars (Prometheus, Loki, Jaeger) are queried within the same alert time window (T-15m to T). This ensures metrics, logs, and traces are from the same incident period.</li>
-      <li><strong>Trace-log (trace_id):</strong> Extract <span class="ic">trace_id</span> from a Loki log entry (via Promtail's trace_id extraction pipeline) then call Jaeger MCP <span class="ic">get_trace(trace_id)</span> to see the full request path and pinpoint where the failure occurred at the span level.</li>
-      <li><strong>Trace-metric:</strong> Identify the failing service from Jaeger error spans (e.g., <span class="ic">hasError: true</span> on <span class="ic">spring-backend</span>), then query Prometheus MCP for that service's resource metrics (CPU saturation, memory pressure, error rate, connection pool usage).</li>
-      <li><strong>Log-metric (Drain3):</strong> Drain3 MCP flags anomalous log templates (new/rare patterns or high-frequency errors). The LLM cross-references these with Prometheus metrics to check whether the log anomaly corresponds to a metric anomaly (e.g., new "connection pool exhausted" log template + rising <span class="ic">hikaricp_connections_pending</span> metric).</li>
-    </ul>
-  </div>
-
-  <div class="note-box purple">
-    <strong>Prompt instruction:</strong> The LLM prompt explicitly instructs: "Always check all three pillars (metrics, logs, traces) within the alert time window before reaching a verdict." This ensures the RCA never relies on a single data source and always cross-validates findings.
-  </div>
-
-  <div class="section-label">llm_client.py — Ollama API + Prompt Template</div>
-
-  <div class="card">
-    <h3 style="color:var(--accent-purple);">roles/llm_triage/templates/llm_client.py.j2</h3>
-<pre><code><span class="kw">import</span> os, json, httpx
-<span class="kw">from</span> typing <span class="kw">import</span> Dict, Any, List
-
-OLLAMA_URL   = os.getenv(<span class="str">"OLLAMA_URL"</span>, <span class="str">"http://ollama:11434"</span>)
-OLLAMA_MODEL = os.getenv(<span class="str">"OLLAMA_MODEL"</span>, <span class="str">"llama3:8b"</span>)
-LLM_TIMEOUT  = int(os.getenv(<span class="str">"LLM_TIMEOUT"</span>, <span class="str">"300"</span>))
-
-
-<span class="kw">class</span> <span class="fn">LLMClient</span>:
-    <span class="kw">async def</span> <span class="fn">generate_rca</span>(
-        self,
-        alert:     Dict[str, Any],
-        context:   Dict[str, Any],
-        anomalies: List[Dict]
-    ) -> str:
-        prompt = self.<span class="fn">_build_prompt</span>(alert, context, anomalies)
-        <span class="kw">async with</span> httpx.AsyncClient(timeout=LLM_TIMEOUT) <span class="kw">as</span> client:
-            r = <span class="kw">await</span> client.post(
-                f<span class="str">"{OLLAMA_URL}/api/generate"</span>,
-                json={<span class="str">"model"</span>: OLLAMA_MODEL, <span class="str">"prompt"</span>: prompt, <span class="str">"stream"</span>: False}
-            )
-            r.raise_for_status()
-        <span class="kw">return</span> r.json().get(<span class="str">"response"</span>, <span class="str">"(empty response)"</span>).strip()
-
-    <span class="kw">def</span> <span class="fn">_build_prompt</span>(
-        self,
-        alert:     Dict[str, Any],
-        context:   Dict[str, Any],
-        anomalies: List[Dict]
-    ) -> str:
-        alertname = alert.get(<span class="str">"labels"</span>, {}).get(<span class="str">"alertname"</span>, <span class="str">"unknown"</span>)
-        severity  = alert.get(<span class="str">"labels"</span>, {}).get(<span class="str">"severity"</span>, <span class="str">"unknown"</span>)
-        summary   = alert.get(<span class="str">"annotations"</span>, {}).get(<span class="str">"summary"</span>, <span class="str">"no summary"</span>)
-        service   = alert.get(<span class="str">"labels"</span>, {}).get(<span class="str">"job"</span>, <span class="str">"unknown"</span>)
-
-        anomaly_block = <span class="str">"None detected."</span>
-        <span class="kw">if</span> anomalies:
-            lines = []
-            <span class="kw">for</span> a <span class="kw">in</span> anomalies:
-                flag = <span class="str">"[ERROR]"</span> <span class="kw">if</span> a.get(<span class="str">"is_error_pattern"</span>) <span class="kw">else</span> <span class="str">"[RARE]"</span>
-                lines.append(f<span class="str">"  {flag} {a['template']}  (seen {a['count']}x)"</span>)
-            anomaly_block = <span class="str">"\n"</span>.join(lines)
-
-        <span class="kw">return</span> f<span class="str">"""You are an expert site reliability engineer performing root cause analysis.
-
-## ALERT
-- Name: {alertname}
-- Severity: {severity}
-- Summary: {summary}
-- Affected service: {service}
-
-## METRICS CONTEXT (last 15 min)
-{context.get("metrics_summary", "unavailable")}
-
-## ANOMALOUS LOG PATTERNS (Drain3 analysis)
-{anomaly_block}
-
-## RECENT TRACES SUMMARY
-{context.get("traces_summary", "unavailable")}
-
-## TASK
-Correlate evidence across all three observability pillars (metrics, logs, traces) within the alert time window. Use trace_id to link specific log entries to request traces. Use MCP bridges to gather additional data as needed.
-
-Provide:
-
-1. **Root Cause** (2–3 sentences): What is most likely causing this alert?
-2. **Evidence**: Which specific log patterns or metrics support your diagnosis?
-3. **Immediate Action** (bullet list): What should the on-call engineer do right now?
-4. **Prevention**: One recommendation to prevent this class of incident.
-
-Keep the response concise and actionable. Do not speculate beyond the evidence provided.
-"""</span></code></pre>
   </div>
 
 </div>
