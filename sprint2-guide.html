@@ -632,68 +632,1339 @@ ansible-playbook playbooks/site.yml playbooks/ai.yml</code></pre>
     </div>
   </div>
 
-  <div class="section-label">Ansible Migration (Completed)</div>
+  <div class="section-label">Ansible Migration -- What Changed and Why</div>
 
-  <div class="card">
-    <h3 style="color:var(--accent-orange);">What Changed in the Ansible Repo for Sprint 2</h3>
-    <p>The Sprint 1 Ansible codebase was refactored to support the AWS layout and the new AI RCA pipeline. Key changes:</p>
+  <!-- ======================== STEP 6 ======================== -->
+  <div class="step">
+    <div class="step-num"><div class="step-circle" style="background:rgba(240,160,80,.15);border:1.5px solid rgba(240,160,80,.4);color:var(--accent-orange);">6</div></div>
+    <div class="step-body">
+      <h4>Alertmanager Removal</h4>
+      <p><strong style="color:var(--text);">WHY it was removed:</strong> In Sprint 1, Alertmanager received firing alerts from Prometheus and routed them to Gmail. In Sprint 2, we need alerts to reach the <em>AI Triage Service</em> as a webhook so the LLM can perform root-cause analysis. Grafana Alerting can do everything Alertmanager did (SMTP, webhooks, grouping, silencing) <em>plus</em> it can evaluate queries against both Prometheus AND Loki from a single UI. Keeping Alertmanager alongside Grafana Alerting would create duplicate notifications and confusing ownership of alert routing. Removing it eliminates that confusion.</p>
 
-    <h4 style="margin-top:16px;">Removed Components</h4>
-    <ul class="checklist">
-      <li><div class="chk"></div><strong>Alertmanager removed</strong> — role, compose service, Prometheus scrape target, Grafana datasource, and dashboard panel all deleted. Replaced by Grafana provisioned alerting.</li>
-      <li><div class="chk"></div><strong>MySQL container removed</strong> from <span class="ic">application-compose.yml.j2</span>. Spring Boot now connects to the RDS endpoint via <span class="ic">mysql_host</span> variable.</li>
-    </ul>
+      <p style="margin-top:14px;"><strong style="color:var(--text);">What was deleted:</strong></p>
+      <ul>
+        <li><strong>roles/alertmanager/</strong> -- entire directory removed (tasks, templates, defaults, handlers)</li>
+        <li><strong>alertmanager service</strong> from <span class="ic">monitoring-compose.yml.j2</span> (container, ports :9093, volumes, health check)</li>
+        <li><strong>alertmanager scrape target</strong> from <span class="ic">monitoring.yml</span> group_vars (<span class="ic">prometheus_targets</span> list)</li>
+        <li><strong>alertmanager Grafana datasource</strong> from <span class="ic">datasources.yml.j2</span></li>
+        <li><strong>alertmanager status panel</strong> from the unified-overview dashboard JSON</li>
+      </ul>
 
-    <h4 style="margin-top:16px;">Migrated Components</h4>
-    <ul class="checklist">
-      <li><div class="chk"></div><strong>Alert rules migrated</strong> from Prometheus <span class="ic">alert.rules.yml</span> to Grafana provisioned alerting — 17 rules across 3 groups (infrastructure, application, AI). Contact point sends webhook to triage service on <span class="ic">ai-vm:8090</span>.</li>
-      <li><div class="chk"></div><strong>Kong frontend route</strong> changed to proxy to CloudFront (<span class="ic">cloudfront_domain</span> variable) instead of directly to Spring Boot.</li>
-      <li><div class="chk"></div><strong>All hardcoded IPs</strong> replaced with variables (<span class="ic">monitoring_vm_ip</span>, <span class="ic">application_vm_ip</span>, etc.) in <span class="ic">group_vars/all.yml</span>.</li>
-    </ul>
+      <p style="margin-top:14px;"><strong style="color:var(--text);">What was modified:</strong></p>
+      <ul>
+        <li><strong>monitoring.yml playbook</strong> -- removed <span class="ic">- alertmanager</span> from the roles list and removed the "Wait for Alertmanager" health check task</li>
+        <li><strong>prometheus.yml.j2</strong> -- removed the <span class="ic">alerting:</span> block (which pointed to alertmanager:9093) and removed <span class="ic">rule_files:</span> (which loaded alert-rules.yml)</li>
+        <li><strong>monitoring-compose.yml.j2</strong> -- removed the alert-rules.yml volume mount from the prometheus service</li>
+      </ul>
 
-    <h4 style="margin-top:16px;">New Components</h4>
-    <ul class="checklist">
-      <li><div class="chk"></div><strong>4 new roles:</strong> <span class="ic">nvidia_docker</span>, <span class="ic">ollama</span>, <span class="ic">triage_service</span>, <span class="ic">mcp_servers</span></li>
-      <li><div class="chk"></div><strong>New compose template:</strong> <span class="ic">ai-compose.yml.j2</span> with 10 Docker services (Ollama, triage-service, 3 MCP servers, Grafana, OTel Collector relay, node_exporter, cAdvisor, etc.)</li>
-      <li><div class="chk"></div><strong>New playbook:</strong> <span class="ic">playbooks/ai.yml</span> — deploys the AI stack to <span class="ic">ai-vm</span></li>
-      <li><div class="chk"></div><strong>New group_vars:</strong> <span class="ic">inventory/group_vars/ai.yml</span> — Triage service config, Ollama model selection, MCP server endpoints, SMTP relay settings</li>
-    </ul>
+      <p style="margin-top:14px;"><strong style="color:var(--text);">prometheus.yml.j2 -- BEFORE (Sprint 1):</strong></p>
+<pre><code><span class="kw">global</span>:
+  <span class="var">scrape_interval</span>: <span class="str">{{ prometheus_scrape_interval }}</span>
+  <span class="var">evaluation_interval</span>: <span class="str">{{ prometheus_scrape_interval }}</span>
+
+<span class="cm"># These two blocks were REMOVED in Sprint 2:</span>
+<span class="kw">alerting</span>:
+  <span class="var">alertmanagers</span>:
+    - <span class="var">static_configs</span>:
+        - <span class="var">targets</span>: [<span class="str">'alertmanager:9093'</span>]
+
+<span class="kw">rule_files</span>:
+  - <span class="str">'/etc/prometheus/alert-rules.yml'</span>
+
+<span class="kw">scrape_configs</span>:
+  <span class="cm"># ... targets ...</span></code></pre>
+
+      <p><strong style="color:var(--text);">prometheus.yml.j2 -- AFTER (Sprint 2):</strong></p>
+<pre><code><span class="kw">global</span>:
+  <span class="var">scrape_interval</span>: <span class="str">{{ prometheus_scrape_interval }}</span>
+  <span class="var">evaluation_interval</span>: <span class="str">{{ prometheus_scrape_interval }}</span>
+
+<span class="cm"># No alerting block — Grafana Alerting handles all rules + routing</span>
+<span class="cm"># No rule_files — rules are provisioned into Grafana, not Prometheus</span>
+
+<span class="kw">scrape_configs</span>:
+<span class="var">{%</span> <span class="kw">for</span> target <span class="kw">in</span> prometheus_targets <span class="var">%}</span>
+  - <span class="var">job_name</span>: <span class="str">'{{ target.job }}'</span>
+<span class="var">{%</span> <span class="kw">if</span> target.metrics_path <span class="kw">is</span> defined <span class="var">%}</span>
+    <span class="var">metrics_path</span>: <span class="str">'{{ target.metrics_path }}'</span>
+<span class="var">{%</span> <span class="kw">endif</span> <span class="var">%}</span>
+    <span class="var">static_configs</span>:
+      - <span class="var">targets</span>: [<span class="str">'{{ target.host }}:{{ target.port }}'</span>]
+<span class="var">{%</span> <span class="kw">endfor</span> <span class="var">%}</span></code></pre>
+
+      <div class="note-box warn">
+        <strong>Key insight:</strong> Prometheus still <em>scrapes</em> all metrics. It just no longer <em>evaluates</em> alert rules or <em>routes</em> notifications. Grafana queries Prometheus as a datasource and evaluates the rules itself on a 60-second interval.
+      </div>
+    </div>
   </div>
+  <div class="step-connector"></div>
 
-  <div class="section-label">Terraform Repository</div>
+  <!-- ======================== STEP 7 ======================== -->
+  <div class="step">
+    <div class="step-num"><div class="step-circle" style="background:rgba(240,160,80,.15);border:1.5px solid rgba(240,160,80,.4);color:var(--accent-orange);">7</div></div>
+    <div class="step-body">
+      <h4>Alert Rules Migration to Grafana</h4>
+      <p><strong style="color:var(--text);">WHY:</strong> Grafana Alerting can evaluate queries against <em>both</em> Prometheus and Loki from a single rule engine. This means we can have Loki-based log alerts (like ingestion rate dropping) alongside Prometheus metric alerts, all managed in one place with one notification pipeline. The Triage Service webhook receives a unified JSON payload regardless of which datasource triggered the alert.</p>
 
-  <div class="card">
-    <h3 style="color:var(--accent-orange);">provisioning-monitoring-infra</h3>
-    <p>All AWS infrastructure is defined in a separate GitHub repo: <span class="ic">provisioning-monitoring-infra</span>. This keeps Terraform state and cloud-specific config separate from the Ansible automation.</p>
+      <p style="margin-top:14px;"><strong style="color:var(--text);">OLD format (Prometheus alert-rules.yml.j2 -- Sprint 1):</strong></p>
+<pre><code><span class="cm"># This file was mounted into Prometheus as /etc/prometheus/alert-rules.yml</span>
+<span class="kw">groups</span>:
+  - <span class="var">name</span>: <span class="str">application_alerts</span>
+    <span class="var">rules</span>:
+      - <span class="var">alert</span>: <span class="str">HighP95Latency</span>
+        <span class="var">expr</span>: <span class="str">histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{job="app-spring-actuator"}[5m])) by (le)) * 1000 > 1000</span>
+        <span class="var">for</span>: <span class="str">2m</span>
+        <span class="var">labels</span>:
+          <span class="var">severity</span>: <span class="str">warning</span>
+        <span class="var">annotations</span>:
+          <span class="var">summary</span>: <span class="str">"P95 request latency exceeds 1s"</span></code></pre>
 
-    <table>
-      <thead><tr><th>File</th><th>Purpose</th></tr></thead>
-      <tbody>
-        <tr><td><span class="ic">providers.tf</span></td><td>AWS provider, region <span class="ic">us-east-1</span></td></tr>
-        <tr><td><span class="ic">vpc.tf</span></td><td>VPC <span class="ic">10.0.0.0/16</span>, public + private subnets, Internet Gateway, NAT Gateway</td></tr>
-        <tr><td><span class="ic">security-groups.tf</span></td><td>5 security groups (sg-monitoring, sg-backend, sg-network, sg-ai, sg-rds) matching the architecture</td></tr>
-        <tr><td><span class="ic">ec2.tf</span></td><td>4 EC2 instances with <span class="ic">user_data</span> that creates the <span class="ic">deploy</span> user and installs Python3</td></tr>
-        <tr><td><span class="ic">rds.tf</span></td><td><span class="ic">db.t3.micro</span> MySQL, single-AZ, private subnet only</td></tr>
-        <tr><td><span class="ic">s3-cloudfront.tf</span></td><td>S3 bucket + CloudFront distribution with OAC (Origin Access Control)</td></tr>
-        <tr><td><span class="ic">outputs.tf</span></td><td>All public/private IPs, RDS endpoint, CloudFront domain name</td></tr>
-        <tr><td><span class="ic">generate-inventory.sh</span></td><td>Reads <span class="ic">terraform output</span> and populates the Ansible inventory automatically</td></tr>
-      </tbody>
-    </table>
+      <p><strong style="color:var(--text);">NEW format (Grafana alertrules.yml.j2 -- Sprint 2):</strong></p>
+<pre><code><span class="kw">apiVersion</span>: <span class="num">1</span>
 
-    <h4 style="margin-top:16px;">End-to-end workflow</h4>
-<pre><code><span class="cm"># 1. Provision all AWS resources</span>
+<span class="kw">groups</span>:
+  - <span class="var">orgId</span>: <span class="num">1</span>
+    <span class="var">name</span>: <span class="str">tracing_alerts</span>
+    <span class="var">folder</span>: <span class="str">Provisioned Alerts</span>
+    <span class="var">interval</span>: <span class="str">60s</span>         <span class="cm"># Grafana evaluates every 60s</span>
+    <span class="var">rules</span>:
+      - <span class="var">uid</span>: <span class="str">high-p95-latency</span>
+        <span class="var">title</span>: <span class="str">HighP95Latency</span>
+        <span class="var">condition</span>: <span class="str">C</span>       <span class="cm"># Which refId decides firing</span>
+        <span class="var">data</span>:
+          <span class="cm"># Step A: Run the PromQL query (range query over last 10 min)</span>
+          - <span class="var">refId</span>: <span class="str">A</span>
+            <span class="var">datasourceUid</span>: <span class="str">prometheus</span>
+            <span class="var">model</span>:
+              <span class="var">expr</span>: <span class="str">'histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{job="app-spring-actuator"}[5m])) by (le)) * 1000'</span>
+              <span class="var">instant</span>: <span class="kw">false</span>
+              <span class="var">range</span>: <span class="kw">true</span>
+              <span class="var">intervalMs</span>: <span class="num">15000</span>
+            <span class="var">relativeTimeRange</span>:
+              <span class="var">from</span>: <span class="num">600</span>        <span class="cm"># 600 seconds = 10 minutes ago</span>
+              <span class="var">to</span>: <span class="num">0</span>            <span class="cm"># now</span>
+          <span class="cm"># Step B: Reduce the time series to a single number (last value)</span>
+          - <span class="var">refId</span>: <span class="str">B</span>
+            <span class="var">datasourceUid</span>: <span class="str">__expr__</span>   <span class="cm"># Special: server-side expression</span>
+            <span class="var">model</span>:
+              <span class="var">type</span>: <span class="str">reduce</span>
+              <span class="var">expression</span>: <span class="str">A</span>             <span class="cm"># Takes output of refId A</span>
+              <span class="var">reducer</span>: <span class="str">last</span>             <span class="cm"># Gets the last data point</span>
+          <span class="cm"># Step C: Compare against threshold (fires if > 1000ms)</span>
+          - <span class="var">refId</span>: <span class="str">C</span>
+            <span class="var">datasourceUid</span>: <span class="str">__expr__</span>
+            <span class="var">model</span>:
+              <span class="var">type</span>: <span class="str">threshold</span>
+              <span class="var">expression</span>: <span class="str">B</span>             <span class="cm"># Takes output of refId B</span>
+              <span class="var">conditions</span>:
+                - <span class="var">evaluator</span>:
+                    <span class="var">type</span>: <span class="str">gt</span>              <span class="cm"># Greater than</span>
+                    <span class="var">params</span>: [<span class="num">1000</span>]       <span class="cm"># 1000ms threshold</span>
+        <span class="var">for</span>: <span class="str">2m</span>             <span class="cm"># Must fire continuously for 2 min</span>
+        <span class="var">labels</span>:
+          <span class="var">severity</span>: <span class="str">warning</span>
+        <span class="var">annotations</span>:
+          <span class="var">summary</span>: <span class="str">"P95 request latency exceeds 1s"</span>
+          <span class="var">description</span>: <span class="str">"The 95th percentile latency has been above 1000ms for 2 minutes."</span></code></pre>
+
+      <div class="note-box">
+        <strong>The 3-step pipeline pattern (A -> B -> C):</strong> Every Grafana alert rule follows the same structure: <strong>refId A</strong> runs the datasource query (PromQL/LogQL), <strong>refId B</strong> reduces the time series to a single value (last, mean, max, etc.), and <strong>refId C</strong> applies a threshold comparison (gt, lt). The <span class="ic">condition: C</span> field tells Grafana that refId C is the one that determines firing state.
+      </div>
+
+      <p style="margin-top:14px;"><strong style="color:var(--text);">All 17 alert rules across 3 groups:</strong></p>
+      <table>
+        <thead><tr><th>Group</th><th>Rule UID</th><th>Severity</th><th>What it detects</th></tr></thead>
+        <tbody>
+          <tr><td rowspan="4"><span class="ic">tracing_alerts</span></td><td>high-p95-latency</td><td>warning</td><td>Spring Boot P95 latency > 1s for 2m</td></tr>
+          <tr><td>high-kong-p95-latency</td><td>warning</td><td>Kong end-to-end P95 latency > 1s for 2m</td></tr>
+          <tr><td>otel-collector-high-span-drop-rate</td><td>critical</td><td>OTel Collector dropping > 5% of spans for 2m</td></tr>
+          <tr><td>otel-collector-down</td><td>critical</td><td>OTel Collector unreachable for 1m</td></tr>
+          <tr><td rowspan="9"><span class="ic">infrastructure_alerts</span></td><td>high-disk-usage</td><td>warning</td><td>Root filesystem > 85% for 5m</td></tr>
+          <tr><td>critical-disk-usage</td><td>critical</td><td>Root filesystem > 95% for 2m</td></tr>
+          <tr><td>high-cpu-usage</td><td>warning</td><td>CPU usage > 85% for 5m</td></tr>
+          <tr><td>critical-cpu-usage</td><td>critical</td><td>CPU usage > 95% for 2m</td></tr>
+          <tr><td>high-memory-usage</td><td>warning</td><td>Memory > 85% for 5m</td></tr>
+          <tr><td>critical-memory-usage</td><td>critical</td><td>Memory > 95% for 2m (OOM risk)</td></tr>
+          <tr><td>medium-cpu-usage</td><td>warning</td><td>CPU > 80% for 1m (early warning)</td></tr>
+          <tr><td>medium-memory-usage</td><td>warning</td><td>Memory > 80% for 1m (early warning)</td></tr>
+          <tr><td>target-down</td><td>critical</td><td>Any Prometheus scrape target unreachable for 2m</td></tr>
+          <tr><td rowspan="4"><span class="ic">log_alerts</span></td><td>loki-high-disk-usage</td><td>warning</td><td>Monitoring VM disk > 85% (Loki storage at risk)</td></tr>
+          <tr><td>loki-critical-disk-usage</td><td>critical</td><td>Monitoring VM disk > 95%</td></tr>
+          <tr><td>loki-ingestion-rate-low</td><td>warning</td><td>Log ingestion < 1 KB/s for 10m (broken pipeline)</td></tr>
+          <tr><td>loki-disk-filling-up</td><td>warning</td><td>Predicted to fill within 24h (6h linear regression)</td></tr>
+        </tbody>
+      </table>
+      <div class="note-box" style="margin-top:12px;">
+        <strong>Missing rule:</strong> <span class="ic">disk-filling-up</span> also exists in <span class="ic">infrastructure_alerts</span> (predicts root filesystem fill within 24h using <span class="ic">predict_linear</span> over 6h of data). That makes 17 total rules + this additional predictive rule.
+      </div>
+
+      <p style="margin-top:14px;"><strong style="color:var(--text);">New contact points (contactpoints.yml.j2):</strong></p>
+<pre><code><span class="kw">apiVersion</span>: <span class="num">1</span>
+
+<span class="kw">contactPoints</span>:
+  <span class="cm"># PRIMARY: AI Triage Service webhook — receives all alerts first</span>
+  - <span class="var">orgId</span>: <span class="num">1</span>
+    <span class="var">name</span>: <span class="str">triage-webhook</span>
+    <span class="var">receivers</span>:
+      - <span class="var">uid</span>: <span class="str">triage-service-webhook</span>
+        <span class="var">type</span>: <span class="str">webhook</span>
+        <span class="var">settings</span>:
+          <span class="var">url</span>: <span class="str">"{{ triage_service_webhook_url }}"</span>  <span class="cm"># http://AI_VM_IP:8090/webhook/grafana</span>
+          <span class="var">httpMethod</span>: <span class="str">POST</span>
+          <span class="var">maxAlerts</span>: <span class="num">0</span>                              <span class="cm"># 0 = no limit on alerts per request</span>
+        <span class="var">disableResolveMessage</span>: <span class="kw">false</span>              <span class="cm"># Also notify when alert resolves</span>
+  <span class="cm"># SECONDARY: Gmail email — used for escalation from triage service</span>
+  - <span class="var">orgId</span>: <span class="num">1</span>
+    <span class="var">name</span>: <span class="str">gmail-smtp</span>
+    <span class="var">receivers</span>:
+      - <span class="var">uid</span>: <span class="str">gmail-email</span>
+        <span class="var">type</span>: <span class="str">email</span>
+        <span class="var">settings</span>:
+          <span class="var">addresses</span>: <span class="str">"{{ grafana_contact_email }}"</span>
+          <span class="var">singleEmail</span>: <span class="kw">false</span>
+        <span class="var">disableResolveMessage</span>: <span class="kw">false</span></code></pre>
+
+      <p style="margin-top:14px;"><strong style="color:var(--text);">New notification policies (policies.yml.j2):</strong></p>
+<pre><code><span class="kw">apiVersion</span>: <span class="num">1</span>
+
+<span class="kw">policies</span>:
+  - <span class="var">orgId</span>: <span class="num">1</span>
+    <span class="var">receiver</span>: <span class="str">triage-webhook</span>     <span class="cm"># DEFAULT receiver — ALL alerts go here</span>
+    <span class="var">group_by</span>:
+      - <span class="str">grafana_folder</span>           <span class="cm"># Group alerts by folder (e.g., "Provisioned Alerts")</span>
+      - <span class="str">alertname</span>                <span class="cm"># And by rule name within folder</span>
+    <span class="var">group_wait</span>: <span class="str">30s</span>             <span class="cm"># Wait 30s for more alerts before sending first notification</span>
+    <span class="var">group_interval</span>: <span class="str">5m</span>         <span class="cm"># After first notification, batch new alerts every 5m</span>
+    <span class="var">repeat_interval</span>: <span class="str">4h</span>        <span class="cm"># Re-send if still firing after 4 hours</span></code></pre>
+
+      <div class="note-box" style="background:rgba(107,207,127,.06);border-color:rgba(107,207,127,.25);">
+        <strong style="color:var(--accent-green);">Alert flow in Sprint 2:</strong> Grafana evaluates rule -> fires -> sends webhook POST to triage-service:8090/webhook/grafana -> Triage Service queries Prometheus/Loki/Jaeger via MCP servers -> Ollama generates RCA summary -> Triage Service emails the RCA report via SMTP. The gmail-smtp contact point is a backup if the Triage Service is down.
+      </div>
+
+      <p style="margin-top:14px;"><strong style="color:var(--text);">Grafana role tasks/main.yml -- new provisioning tasks added:</strong></p>
+<pre><code><span class="cm"># These 3 tasks were added to roles/grafana/tasks/main.yml</span>
+
+- <span class="var">name</span>: <span class="str">Deploy Grafana alerting contact points provisioning</span>
+  <span class="fn">template</span>:
+    <span class="var">src</span>: <span class="str">contactpoints.yml.j2</span>
+    <span class="var">dest</span>: <span class="str">"{{ grafana_provisioning_dir }}/alerting/contactpoints.yml"</span>
+    <span class="var">owner</span>: <span class="str">"472"</span>    <span class="cm"># Grafana container user UID</span>
+    <span class="var">group</span>: <span class="str">"472"</span>
+    <span class="var">mode</span>: <span class="str">"0644"</span>
+  <span class="fn">notify</span>: <span class="str">restart stack</span>
+
+- <span class="var">name</span>: <span class="str">Deploy Grafana notification policies provisioning</span>
+  <span class="fn">template</span>:
+    <span class="var">src</span>: <span class="str">policies.yml.j2</span>
+    <span class="var">dest</span>: <span class="str">"{{ grafana_provisioning_dir }}/alerting/policies.yml"</span>
+    <span class="var">owner</span>: <span class="str">"472"</span>
+    <span class="var">group</span>: <span class="str">"472"</span>
+    <span class="var">mode</span>: <span class="str">"0644"</span>
+  <span class="fn">notify</span>: <span class="str">restart stack</span>
+
+- <span class="var">name</span>: <span class="str">Deploy Grafana provisioned alert rules</span>
+  <span class="fn">template</span>:
+    <span class="var">src</span>: <span class="str">alertrules.yml.j2</span>
+    <span class="var">dest</span>: <span class="str">"{{ grafana_provisioning_dir }}/alerting/alertrules.yml"</span>
+    <span class="var">owner</span>: <span class="str">"472"</span>
+    <span class="var">group</span>: <span class="str">"472"</span>
+    <span class="var">mode</span>: <span class="str">"0644"</span>
+  <span class="fn">notify</span>: <span class="str">restart stack</span></code></pre>
+      <div class="note-box">
+        <strong>Why UID 472?</strong> The official Grafana Docker image runs as user <span class="ic">grafana</span> with UID 472. All provisioning files must be owned by this UID or Grafana cannot read them. The <span class="ic">alerting/</span> subdirectory under provisioning was also added to the directory creation loop in the same task file.
+      </div>
+    </div>
+  </div>
+  <div class="step-connector"></div>
+
+  <!-- ======================== STEP 8 ======================== -->
+  <div class="step">
+    <div class="step-num"><div class="step-circle" style="background:rgba(240,160,80,.15);border:1.5px solid rgba(240,160,80,.4);color:var(--accent-orange);">8</div></div>
+    <div class="step-body">
+      <h4>MySQL to RDS Migration</h4>
+      <p><strong style="color:var(--text);">WHY:</strong> Running MySQL in a Docker container on the application VM is fine for a lab, but AWS best practice is to use a managed database service (RDS). RDS handles automated backups, patching, failover, and monitoring. This also simplifies the application VM -- it only runs Spring Boot, OTel Collector, node-exporter, and cAdvisor.</p>
+
+      <p style="margin-top:14px;"><strong style="color:var(--text);">What was removed from application-compose.yml.j2:</strong></p>
+      <ul>
+        <li><strong>mysql service</strong> -- the entire container block (image, env vars, volumes, health check)</li>
+        <li><strong>mysql-exporter service</strong> -- no longer needed since RDS provides its own CloudWatch metrics</li>
+        <li><strong>mysql_data volume</strong> -- no local data volume needed</li>
+        <li><strong>depends_on: mysql</strong> -- Spring Boot no longer waits for a local MySQL container</li>
+      </ul>
+
+      <p style="margin-top:14px;"><strong style="color:var(--text);">SPRING_DATASOURCE_URL -- BEFORE (Sprint 1):</strong></p>
+<pre><code><span class="cm"># Spring Boot connected to local MySQL container via Docker network</span>
+<span class="var">SPRING_DATASOURCE_URL</span>: <span class="str">"jdbc:mysql://mysql:3306/app-db?useSSL=false&amp;allowPublicKeyRetrieval=true&amp;serverTimezone=UTC"</span></code></pre>
+
+      <p><strong style="color:var(--text);">SPRING_DATASOURCE_URL -- AFTER (Sprint 2):</strong></p>
+<pre><code><span class="cm"># Spring Boot connects to AWS RDS via private subnet DNS</span>
+<span class="var">SPRING_DATASOURCE_URL</span>: <span class="str">"{{ spring_datasource_url }}"</span>
+
+<span class="cm"># Where spring_datasource_url is defined in group_vars/application.yml:</span>
+<span class="var">spring_datasource_url</span>: <span class="str">"jdbc:mysql://{{ rds_endpoint }}:{{ rds_port }}/{{ mysql_database }}?useSSL=false&amp;allowPublicKeyRetrieval=true&amp;serverTimezone=UTC"</span></code></pre>
+      <div class="note-box">
+        <strong>Variable chain:</strong> <span class="ic">rds_endpoint</span> and <span class="ic">rds_port</span> are defined in <span class="ic">group_vars/all.yml</span> with placeholder values. The <span class="ic">generate-inventory.sh</span> script reads them from <span class="ic">terraform output</span> and injects the real RDS hostname (like <span class="ic">observability-rca-mysql.c1234.us-east-1.rds.amazonaws.com</span>) automatically.
+      </div>
+
+      <p style="margin-top:14px;"><strong style="color:var(--text);">Stubbed mysql role (roles/mysql/tasks/main.yml):</strong></p>
+<pre><code><span class="cm"># MySQL is now managed by AWS RDS (Terraform-provisioned).</span>
+<span class="cm"># Connection info is configured via spring_datasource_url in group_vars/application.yml.</span>
+- <span class="var">name</span>: <span class="str">Ensure MySQL role is included (RDS mode)</span>
+  <span class="fn">debug</span>:
+    <span class="var">msg</span>: <span class="str">"MySQL is provided by AWS RDS at {{ rds_endpoint }}:{{ rds_port }}. No local container."</span></code></pre>
+      <div class="note-box warn">
+        <strong>Why stub the role instead of removing it?</strong> The <span class="ic">application.yml</span> playbook still includes <span class="ic">- mysql</span> in its roles list. Removing the role directory would cause an Ansible error. Stubbing it with a debug message keeps the playbook intact and provides a clear log message during deployment confirming RDS mode is active.
+      </div>
+    </div>
+  </div>
+  <div class="step-connector"></div>
+
+  <!-- ======================== STEP 9 ======================== -->
+  <div class="step">
+    <div class="step-num"><div class="step-circle" style="background:rgba(240,160,80,.15);border:1.5px solid rgba(240,160,80,.4);color:var(--accent-orange);">9</div></div>
+    <div class="step-body">
+      <h4>Kong Frontend Route to CloudFront</h4>
+      <p><strong style="color:var(--text);">WHY:</strong> In Sprint 1, the React frontend was served by the same Spring Boot container (bundled in the JAR). Kong proxied <span class="ic">/</span> to Spring Boot. In Sprint 2, the React build artifacts are deployed to S3 and served via CloudFront CDN. This is AWS best practice for static frontends -- lower latency, HTTPS by default, no load on the backend for static files.</p>
+
+      <p style="margin-top:14px;"><strong style="color:var(--text);">kong.yml.j2 -- BEFORE (Sprint 1):</strong></p>
+<pre><code><span class="kw">services</span>:
+  - <span class="var">name</span>: <span class="str">app-frontend</span>
+    <span class="var">url</span>: <span class="str">http://{{ app_backend_host }}:{{ app_frontend_port }}</span>  <span class="cm"># Pointed to Spring Boot</span>
+    <span class="var">plugins</span>:
+      - <span class="var">name</span>: <span class="str">opentelemetry</span>   <span class="cm"># OTel tracing on frontend route</span>
+        <span class="var">config</span>:
+          <span class="var">traces_endpoint</span>: <span class="str">"http://otel-collector:4318/v1/traces"</span>
+    <span class="var">routes</span>:
+      - <span class="var">name</span>: <span class="str">frontend-route</span>
+        <span class="var">paths</span>: [<span class="str">/</span>]</code></pre>
+
+      <p><strong style="color:var(--text);">kong.yml.j2 -- AFTER (Sprint 2):</strong></p>
+<pre><code><span class="kw">services</span>:
+  <span class="cm"># Backend service — unchanged, still has OTel plugin for tracing</span>
+  - <span class="var">name</span>: <span class="str">app-backend</span>
+    <span class="var">url</span>: <span class="str">http://{{ app_backend_host }}:{{ app_frontend_port }}</span>
+    <span class="var">plugins</span>:
+      - <span class="var">name</span>: <span class="str">opentelemetry</span>
+        <span class="var">config</span>:
+          <span class="var">traces_endpoint</span>: <span class="str">"http://otel-collector:4318/v1/traces"</span>
+          <span class="var">header_type</span>: <span class="str">w3c</span>
+          <span class="var">resource_attributes</span>:
+            <span class="var">service.name</span>: <span class="str">"kong-gateway"</span>
+          <span class="var">propagation</span>:
+            <span class="var">extract</span>: [<span class="str">w3c</span>, <span class="str">b3</span>]
+            <span class="var">inject</span>: [<span class="str">w3c</span>]
+            <span class="var">default_format</span>: <span class="str">w3c</span>
+    <span class="var">routes</span>:
+      - <span class="var">name</span>: <span class="str">api-route</span>
+        <span class="var">paths</span>: [<span class="str">/api</span>]
+        <span class="var">strip_path</span>: <span class="kw">false</span>
+      - <span class="var">name</span>: <span class="str">actuator-route</span>
+        <span class="var">paths</span>: [<span class="str">/actuator</span>]
+        <span class="var">strip_path</span>: <span class="kw">false</span>
+
+  <span class="cm"># Frontend service — NOW proxies to CloudFront (S3 static site)</span>
+  - <span class="var">name</span>: <span class="str">app-frontend</span>
+    <span class="var">url</span>: <span class="str">https://{{ cloudfront_domain }}</span>   <span class="cm"># CloudFront URL from Terraform output</span>
+    <span class="var">routes</span>:                                 <span class="cm"># NO OTel plugin — static assets don't need tracing</span>
+      - <span class="var">name</span>: <span class="str">frontend-route</span>
+        <span class="var">paths</span>: [<span class="str">/</span>]
+        <span class="var">strip_path</span>: <span class="kw">false</span></code></pre>
+
+      <div class="note-box">
+        <strong>Two key changes:</strong> (1) The frontend service URL changed from <span class="ic">http://backend:80</span> to <span class="ic">https://CLOUDFRONT_DOMAIN</span>. (2) The OTel plugin was removed from the frontend service -- static HTML/CSS/JS files served from S3 don't produce meaningful trace data. The OTel plugin remains on the backend service where <span class="ic">/api</span> and <span class="ic">/actuator</span> routes generate actual distributed traces.
+      </div>
+    </div>
+  </div>
+  <div class="step-connector"></div>
+
+  <!-- ======================== STEP 10 ======================== -->
+  <div class="step">
+    <div class="step-num"><div class="step-circle" style="background:rgba(176,126,232,.15);border:1.5px solid rgba(176,126,232,.4);color:var(--accent-purple);">10</div></div>
+    <div class="step-body">
+      <h4>New AI/LLM VM Setup</h4>
+      <p><strong style="color:var(--text);">This is the biggest addition in Sprint 2.</strong> A fourth VM runs the AI RCA pipeline: Ollama for LLM inference, Triage Service for alert processing, and MCP bridge servers for data access. Here is every file involved, explained in detail.</p>
+
+      <p style="margin-top:18px;"><strong style="color:var(--accent-purple);">inventory/production.yml -- new ai group:</strong></p>
+<pre><code><span class="kw">all</span>:
+  <span class="var">children</span>:
+    <span class="kw">monitoring</span>:
+      <span class="var">hosts</span>:
+        <span class="str">monitoring-vm</span>:
+          <span class="var">ansible_host</span>: <span class="str">192.168.127.10</span>     <span class="cm"># Replaced by generate-inventory.sh</span>
+          <span class="var">ansible_user</span>: <span class="str">deploy</span>
+    <span class="kw">application</span>:
+      <span class="var">hosts</span>:
+        <span class="str">application-vm</span>:
+          <span class="var">ansible_host</span>: <span class="str">192.168.127.30</span>
+          <span class="var">ansible_user</span>: <span class="str">deploy</span>
+          <span class="var">app_port</span>: <span class="num">8080</span>
+    <span class="kw">network</span>:
+      <span class="var">hosts</span>:
+        <span class="str">network-vm</span>:
+          <span class="var">ansible_host</span>: <span class="str">192.168.127.15</span>
+          <span class="var">ansible_user</span>: <span class="str">deploy</span>
+    <span class="kw">ai</span>:                                    <span class="cm"># NEW group for Sprint 2</span>
+      <span class="var">hosts</span>:
+        <span class="str">ai-vm</span>:
+          <span class="var">ansible_host</span>: <span class="str">&lt;AI_VM_IP&gt;</span>          <span class="cm"># Replaced by generate-inventory.sh</span>
+          <span class="var">ansible_user</span>: <span class="str">deploy</span>
+  <span class="var">vars</span>:
+    <span class="var">ansible_python_interpreter</span>: <span class="str">/usr/bin/python3</span>
+    <span class="var">ansible_ssh_private_key_file</span>: <span class="str">~/.ssh/ansible_key</span>
+    <span class="var">timezone</span>: <span class="str">"Africa/Casablanca"</span>
+    <span class="var">ntp_servers</span>:
+      - <span class="str">0.ma.pool.ntp.org</span>
+      - <span class="str">1.ma.pool.ntp.org</span></code></pre>
+
+      <p style="margin-top:18px;"><strong style="color:var(--accent-purple);">group_vars/ai.yml -- full content with explanations:</strong></p>
+<pre><code><span class="cm"># ---- Triage Service (FastAPI + Drain3) ----</span>
+<span class="var">triage_service_port</span>: <span class="num">8090</span>                    <span class="cm"># Webhook endpoint for Grafana Alerting</span>
+<span class="var">triage_service_image</span>: <span class="str">"cires/triage-service:latest"</span>  <span class="cm"># Custom-built Docker image</span>
+<span class="var">triage_service_config_dir</span>: <span class="str">/etc/triage-service</span>
+<span class="var">triage_service_data_dir</span>: <span class="str">/var/lib/triage-service</span>     <span class="cm"># Persists RCA history SQLite DB</span>
+
+<span class="cm"># ---- Ollama (self-hosted LLM runtime) ----</span>
+<span class="var">ollama_port</span>: <span class="num">11434</span>                          <span class="cm"># REST API port</span>
+<span class="var">ollama_model</span>: <span class="str">"llama3.1:8b"</span>                 <span class="cm"># 8B parameter model fits in T4 16GB VRAM</span>
+<span class="var">ollama_data_dir</span>: <span class="str">/var/lib/ollama</span>             <span class="cm"># Model weights persist here</span>
+
+<span class="cm"># ---- MCP Bridge Servers (5 microservices) ----</span>
+<span class="var">mcp_prometheus_port</span>: <span class="num">8091</span>       <span class="cm"># Queries Prometheus API on monitoring VM</span>
+<span class="var">mcp_loki_port</span>: <span class="num">8092</span>             <span class="cm"># Queries Loki API on monitoring VM</span>
+<span class="var">mcp_jaeger_port</span>: <span class="num">8093</span>           <span class="cm"># Queries Jaeger API on monitoring VM</span>
+<span class="var">mcp_drain3_port</span>: <span class="num">8094</span>           <span class="cm"># Queries Drain3 log clustering engine</span>
+<span class="var">mcp_rca_history_port</span>: <span class="num">8095</span>      <span class="cm"># Queries past RCA reports from SQLite</span>
+<span class="var">mcp_servers_config_dir</span>: <span class="str">/etc/mcp-servers</span>
+
+<span class="cm"># ---- MCP server endpoints — they query monitoring VM services ----</span>
+<span class="var">prometheus_api_url</span>: <span class="str">"http://{{ monitoring_vm_ip }}:{{ prometheus_port }}"</span>
+<span class="var">loki_api_url</span>: <span class="str">"http://{{ monitoring_vm_ip }}:{{ loki_port }}"</span>
+<span class="var">jaeger_api_url</span>: <span class="str">"http://{{ monitoring_vm_ip }}:{{ jaeger_port_ui }}"</span>
+
+<span class="cm"># ---- SMTP for RCA escalation emails ----</span>
+<span class="var">triage_smtp_host</span>: <span class="str">"smtp.gmail.com"</span>
+<span class="var">triage_smtp_port</span>: <span class="num">587</span>
+<span class="var">triage_smtp_user</span>: <span class="str">"laaraichlina@gmail.com"</span>
+<span class="var">triage_smtp_password</span>: <span class="str">"{{ lookup('env', 'GRAFANA_SMTP_PASSWORD') }}"</span>  <span class="cm"># Gmail App Password from env</span>
+<span class="var">triage_smtp_from</span>: <span class="str">"laaraichlina@gmail.com"</span>
+<span class="var">triage_notification_email</span>: <span class="str">"laaraichlina@gmail.com"</span>
+
+<span class="cm"># ---- NVIDIA GPU runtime ----</span>
+<span class="var">nvidia_runtime_enabled</span>: <span class="kw">true</span>   <span class="cm"># Enables nvidia-container-toolkit installation</span></code></pre>
+      <div class="note-box">
+        <strong>Cross-VM references:</strong> The MCP servers run on the AI VM but query services on the monitoring VM. The variables <span class="ic">monitoring_vm_ip</span>, <span class="ic">prometheus_port</span>, <span class="ic">loki_port</span>, and <span class="ic">jaeger_port_ui</span> are defined in <span class="ic">group_vars/all.yml</span> and <span class="ic">group_vars/monitoring.yml</span>, available to all hosts via Ansible's variable inheritance.
+      </div>
+
+      <p style="margin-top:18px;"><strong style="color:var(--accent-purple);">group_vars/all.yml -- new variables added for Sprint 2:</strong></p>
+<pre><code><span class="cm"># VM IPs — update from Terraform outputs for AWS deployment</span>
+<span class="var">monitoring_vm_ip</span>: <span class="str">"192.168.127.10"</span>   <span class="cm"># Overwritten by generate-inventory.sh</span>
+<span class="var">application_vm_ip</span>: <span class="str">"192.168.127.30"</span>
+<span class="var">network_vm_ip</span>: <span class="str">"192.168.127.15"</span>
+<span class="var">ai_vm_ip</span>: <span class="str">"&lt;AI_VM_IP&gt;"</span>              <span class="cm"># Placeholder until Terraform runs</span>
+
+<span class="cm"># AWS managed services — update from Terraform outputs</span>
+<span class="var">rds_endpoint</span>: <span class="str">"&lt;RDS_ENDPOINT&gt;"</span>      <span class="cm"># e.g., observability-rca-mysql.c1234.us-east-1.rds.amazonaws.com</span>
+<span class="var">rds_port</span>: <span class="num">3306</span>
+<span class="var">cloudfront_domain</span>: <span class="str">"&lt;CLOUDFRONT_DOMAIN&gt;"</span>  <span class="cm"># e.g., d1234abcd.cloudfront.net</span></code></pre>
+
+      <p style="margin-top:18px;"><strong style="color:var(--accent-purple);">nvidia_docker role (roles/nvidia_docker/tasks/main.yml):</strong></p>
+<pre><code><span class="cm"># Step 1: Add NVIDIA Container Toolkit GPG key to trusted keyring</span>
+<span class="cm"># The 'creates' argument makes this idempotent — skips if key file exists</span>
+- <span class="var">name</span>: <span class="str">Add NVIDIA Container Toolkit GPG key</span>
+  <span class="fn">shell</span>: |
+    curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | \
+      gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+  <span class="var">args</span>:
+    <span class="var">creates</span>: <span class="str">/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg</span>
+  <span class="kw">when</span>: <span class="str">nvidia_runtime_enabled | default(false)</span>
+
+<span class="cm"># Step 2: Add the NVIDIA apt repository (signed with the GPG key from step 1)</span>
+- <span class="var">name</span>: <span class="str">Add NVIDIA Container Toolkit repository</span>
+  <span class="fn">shell</span>: |
+    curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
+      sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
+      tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+  <span class="var">args</span>:
+    <span class="var">creates</span>: <span class="str">/etc/apt/sources.list.d/nvidia-container-toolkit.list</span>
+  <span class="kw">when</span>: <span class="str">nvidia_runtime_enabled | default(false)</span>
+
+<span class="cm"># Step 3: Install the toolkit package (apt-get install nvidia-container-toolkit)</span>
+- <span class="var">name</span>: <span class="str">Install NVIDIA Container Toolkit</span>
+  <span class="fn">apt</span>:
+    <span class="var">name</span>: <span class="str">nvidia-container-toolkit</span>
+    <span class="var">state</span>: <span class="str">present</span>
+    <span class="var">update_cache</span>: <span class="kw">yes</span>
+  <span class="kw">when</span>: <span class="str">nvidia_runtime_enabled | default(false)</span>
+
+<span class="cm"># Step 4: Tell Docker to use the nvidia runtime (modifies /etc/docker/daemon.json)</span>
+<span class="cm"># This enables 'runtime: nvidia' in docker-compose files</span>
+- <span class="var">name</span>: <span class="str">Configure Docker to use NVIDIA runtime</span>
+  <span class="fn">command</span>: <span class="str">nvidia-ctk runtime configure --runtime=docker</span>
+  <span class="fn">notify</span>: <span class="str">restart docker</span>                  <span class="cm"># Docker daemon must restart to load new runtime</span>
+  <span class="kw">when</span>: <span class="str">nvidia_runtime_enabled | default(false)</span></code></pre>
+      <div class="note-box warn">
+        <strong>GPU prerequisite:</strong> The <span class="ic">nvidia_docker</span> role assumes the host already has NVIDIA GPU drivers installed. On AWS <span class="ic">g4dn.xlarge</span> instances with Ubuntu 22.04 AMI, the drivers come pre-installed. If using a different AMI, you would need to install drivers first (e.g., via <span class="ic">ubuntu-drivers autoinstall</span>).
+      </div>
+
+      <p style="margin-top:18px;"><strong style="color:var(--accent-purple);">Triage Service config (triage-config.yml.j2):</strong></p>
+<pre><code><span class="cm"># Triage Service Configuration</span>
+<span class="cm"># Deployed by Ansible — do not edit manually on the host</span>
+
+<span class="kw">ollama</span>:
+  <span class="var">url</span>: <span class="str">"http://ollama:{{ ollama_port }}"</span>    <span class="cm"># Docker service name (same compose network)</span>
+  <span class="var">model</span>: <span class="str">"{{ ollama_model }}"</span>               <span class="cm"># llama3.1:8b</span>
+  <span class="var">timeout_seconds</span>: <span class="num">300</span>                     <span class="cm"># 5 min timeout for LLM inference</span>
+
+<span class="kw">mcp_servers</span>:                               <span class="cm"># URLs for all 5 MCP bridge servers</span>
+  <span class="var">prometheus</span>:
+    <span class="var">url</span>: <span class="str">"http://prometheus-mcp:{{ mcp_prometheus_port }}"</span>
+  <span class="var">loki</span>:
+    <span class="var">url</span>: <span class="str">"http://loki-mcp:{{ mcp_loki_port }}"</span>
+  <span class="var">jaeger</span>:
+    <span class="var">url</span>: <span class="str">"http://jaeger-mcp:{{ mcp_jaeger_port }}"</span>
+  <span class="var">drain3</span>:
+    <span class="var">url</span>: <span class="str">"http://drain3-mcp:{{ mcp_drain3_port }}"</span>
+  <span class="var">rca_history</span>:
+    <span class="var">url</span>: <span class="str">"http://rca-history-mcp:{{ mcp_rca_history_port }}"</span>
+
+<span class="kw">smtp</span>:                                      <span class="cm"># For sending RCA reports via email</span>
+  <span class="var">host</span>: <span class="str">"{{ triage_smtp_host }}"</span>
+  <span class="var">port</span>: <span class="num">{{ triage_smtp_port }}</span>
+  <span class="var">user</span>: <span class="str">"{{ triage_smtp_user }}"</span>
+  <span class="var">password</span>: <span class="str">"{{ triage_smtp_password }}"</span>
+  <span class="var">from</span>: <span class="str">"{{ triage_smtp_from }}"</span>
+  <span class="var">to</span>: <span class="str">"{{ triage_notification_email }}"</span>
+
+<span class="kw">deduplication</span>:
+  <span class="var">window_minutes</span>: <span class="num">5</span>                        <span class="cm"># Ignore duplicate alerts within 5 min</span>
+
+<span class="kw">context_gathering</span>:                         <span class="cm"># Timeouts for MCP server queries</span>
+  <span class="var">timeout_seconds</span>: <span class="num">8</span>                      <span class="cm"># Max 8s per MCP query</span>
+  <span class="var">prometheus_range_minutes</span>: <span class="num">15</span>             <span class="cm"># Pull last 15 min of metrics</span>
+  <span class="var">loki_log_limit</span>: <span class="num">50</span>                      <span class="cm"># Fetch up to 50 log lines</span>
+  <span class="var">jaeger_trace_limit</span>: <span class="num">20</span>                  <span class="cm"># Fetch up to 20 recent traces</span>
+
+<span class="kw">rca_history</span>:
+  <span class="var">db_path</span>: <span class="str">"/var/lib/triage-service/rca_history.db"</span>  <span class="cm"># SQLite DB for past RCAs</span>
+
+<span class="kw">loki</span>:
+  <span class="var">api_url</span>: <span class="str">"{{ loki_api_url }}"</span>            <span class="cm"># Direct Loki access for log correlation</span></code></pre>
+
+      <p style="margin-top:18px;"><strong style="color:var(--accent-purple);">ai.yml playbook -- full content with explanations:</strong></p>
+<pre><code><span class="cm"># PLAY 1: Install base packages, Docker, NVIDIA runtime, exporters</span>
+- <span class="var">name</span>: <span class="str">Common setup for AI/LLM hosts</span>
+  <span class="var">hosts</span>: <span class="str">ai</span>                     <span class="cm"># Targets the ai group in inventory</span>
+  <span class="var">roles</span>:
+    - <span class="str">common</span>                    <span class="cm"># apt packages, timezone, UFW firewall</span>
+    - <span class="str">docker</span>                    <span class="cm"># Docker CE + compose plugin</span>
+    - <span class="str">nvidia_docker</span>             <span class="cm"># NVIDIA Container Toolkit (GPU passthrough)</span>
+    - <span class="str">node_exporter</span>             <span class="cm"># Stub — managed by docker-compose</span>
+    - <span class="str">cadvisor</span>                  <span class="cm"># Stub — managed by docker-compose</span>
+  <span class="var">tags</span>: [<span class="str">common</span>, <span class="str">docker</span>, <span class="str">nvidia</span>]
+
+<span class="cm"># PLAY 2: Deploy application roles + docker-compose stack</span>
+- <span class="var">name</span>: <span class="str">Deploy AI/LLM stack</span>
+  <span class="var">hosts</span>: <span class="str">ai</span>
+  <span class="var">roles</span>:
+    - <span class="str">ollama</span>                    <span class="cm"># Creates data directory, pulls config</span>
+    - <span class="str">triage_service</span>            <span class="cm"># Templates triage-config.yml to host</span>
+    - <span class="str">mcp_servers</span>               <span class="cm"># Creates config directories for MCP servers</span>
+    - <span class="str">otel-collector</span>            <span class="cm"># Templates OTel Collector config for log shipping</span>
+  <span class="var">tags</span>: [<span class="str">ai</span>]
+  <span class="var">tasks</span>:
+    <span class="cm"># Create the /opt/stack directory where docker-compose.yml lives</span>
+    - <span class="var">name</span>: <span class="str">Create stack directory</span>
+      <span class="fn">file</span>: { <span class="var">path</span>: <span class="str">"{{ stack_dir }}"</span>, <span class="var">state</span>: <span class="str">directory</span>, <span class="var">mode</span>: <span class="str">"0755"</span> }
+
+    <span class="cm"># Render ai-compose.yml.j2 -> /opt/stack/docker-compose.yml</span>
+    - <span class="var">name</span>: <span class="str">Deploy unified AI docker-compose</span>
+      <span class="fn">template</span>:
+        <span class="var">src</span>: <span class="str">"{{ playbook_dir }}/templates/ai-compose.yml.j2"</span>
+        <span class="var">dest</span>: <span class="str">"{{ stack_dir }}/docker-compose.yml"</span>
+
+    <span class="cm"># Start all containers with docker compose up -d</span>
+    - <span class="var">name</span>: <span class="str">Start AI stack</span>
+      <span class="fn">community.docker.docker_compose_v2</span>:
+        <span class="var">project_src</span>: <span class="str">"{{ stack_dir }}"</span>
+        <span class="var">state</span>: <span class="str">present</span>
+        <span class="var">recreate</span>: <span class="str">always</span>
+
+    <span class="cm"># Ollama can take 30-60s to load model weights into GPU memory</span>
+    - <span class="var">name</span>: <span class="str">Wait for Ollama</span>
+      <span class="fn">uri</span>: { <span class="var">url</span>: <span class="str">"http://localhost:{{ ollama_port }}/api/tags"</span>, <span class="var">status_code</span>: <span class="num">200</span> }
+      <span class="var">retries</span>: <span class="num">24</span>               <span class="cm"># 24 * 10s = 4 min max wait</span>
+      <span class="var">delay</span>: <span class="num">10</span>
+
+    <span class="cm"># Download the LLM model (llama3.1:8b is ~4.7 GB)</span>
+    - <span class="var">name</span>: <span class="str">Pull Ollama model</span>
+      <span class="fn">command</span>: <span class="str">"docker exec ollama ollama pull {{ ollama_model }}"</span>
+      <span class="var">retries</span>: <span class="num">3</span>
+      <span class="var">delay</span>: <span class="num">10</span>
+
+    <span class="cm"># Triage Service must be healthy before Grafana can send webhooks</span>
+    - <span class="var">name</span>: <span class="str">Wait for Triage Service</span>
+      <span class="fn">uri</span>: { <span class="var">url</span>: <span class="str">"http://localhost:{{ triage_service_port }}/health"</span>, <span class="var">status_code</span>: <span class="num">200</span> }
+      <span class="var">retries</span>: <span class="num">12</span>
+      <span class="var">delay</span>: <span class="num">5</span>
+
+    <span class="cm"># OTel Collector ships logs from AI VM to Loki</span>
+    - <span class="var">name</span>: <span class="str">Wait for OTel Collector</span>
+      <span class="fn">uri</span>: { <span class="var">url</span>: <span class="str">"http://localhost:{{ otel_collector_health_port }}/"</span>, <span class="var">status_code</span>: <span class="num">200</span> }
+      <span class="var">retries</span>: <span class="num">12</span>
+      <span class="var">delay</span>: <span class="num">5</span></code></pre>
+
+      <p style="margin-top:18px;"><strong style="color:var(--accent-purple);">ai-compose.yml.j2 -- key services explained:</strong></p>
+<pre><code><span class="kw">services</span>:
+  <span class="cm"># ---- Triage Service: receives Grafana webhooks, orchestrates RCA ----</span>
+  <span class="var">triage-service</span>:
+    <span class="var">image</span>: <span class="str">{{ triage_service_image }}</span>
+    <span class="var">container_name</span>: <span class="str">triage-service</span>
+    <span class="var">restart</span>: <span class="str">unless-stopped</span>
+    <span class="var">ports</span>:
+      - <span class="str">"{{ triage_service_port }}:8090"</span>    <span class="cm"># Exposed to monitoring VM for Grafana webhook</span>
+    <span class="var">environment</span>:
+      <span class="var">CONFIG_PATH</span>: <span class="str">"/etc/triage-service/config.yml"</span>
+      <span class="var">OLLAMA_URL</span>: <span class="str">"http://ollama:{{ ollama_port }}"</span>       <span class="cm"># Docker service name, not localhost</span>
+      <span class="var">OLLAMA_MODEL</span>: <span class="str">"{{ ollama_model }}"</span>
+      <span class="var">PROMETHEUS_MCP_URL</span>: <span class="str">"http://prometheus-mcp:{{ mcp_prometheus_port }}"</span>
+      <span class="var">LOKI_MCP_URL</span>: <span class="str">"http://loki-mcp:{{ mcp_loki_port }}"</span>
+      <span class="var">JAEGER_MCP_URL</span>: <span class="str">"http://jaeger-mcp:{{ mcp_jaeger_port }}"</span>
+      <span class="var">DRAIN3_MCP_URL</span>: <span class="str">"http://drain3-mcp:{{ mcp_drain3_port }}"</span>
+      <span class="var">RCA_HISTORY_MCP_URL</span>: <span class="str">"http://rca-history-mcp:{{ mcp_rca_history_port }}"</span>
+      <span class="var">LOKI_API_URL</span>: <span class="str">"{{ loki_api_url }}"</span>               <span class="cm"># Direct Loki access for correlation</span>
+      <span class="var">SMTP_HOST</span>: <span class="str">"{{ triage_smtp_host }}"</span>
+      <span class="var">SMTP_PORT</span>: <span class="str">"{{ triage_smtp_port }}"</span>
+      <span class="var">SMTP_USER</span>: <span class="str">"{{ triage_smtp_user }}"</span>
+      <span class="var">SMTP_PASSWORD</span>: <span class="str">"{{ triage_smtp_password }}"</span>
+      <span class="var">SMTP_FROM</span>: <span class="str">"{{ triage_smtp_from }}"</span>
+      <span class="var">NOTIFICATION_EMAIL</span>: <span class="str">"{{ triage_notification_email }}"</span>
+      <span class="var">RCA_DB_PATH</span>: <span class="str">"/var/lib/triage-service/rca_history.db"</span>
+    <span class="var">volumes</span>:
+      - <span class="str">{{ triage_service_config_dir }}/config.yml:/etc/triage-service/config.yml:ro</span>
+      - <span class="str">{{ triage_service_data_dir }}:/var/lib/triage-service</span>       <span class="cm"># Persistent RCA DB</span>
+    <span class="var">depends_on</span>:
+      <span class="var">ollama</span>:
+        <span class="var">condition</span>: <span class="str">service_started</span>               <span class="cm"># Wait for Ollama container (not model load)</span>
+    <span class="var">healthcheck</span>:
+      <span class="var">test</span>: [<span class="str">"CMD"</span>, <span class="str">"curl"</span>, <span class="str">"-f"</span>, <span class="str">"http://localhost:8090/health"</span>]
+      <span class="var">interval</span>: <span class="str">15s</span>
+      <span class="var">timeout</span>: <span class="str">5s</span>
+      <span class="var">retries</span>: <span class="num">5</span>
+
+  <span class="cm"># ---- Ollama: LLM inference engine with GPU access ----</span>
+  <span class="var">ollama</span>:
+    <span class="var">image</span>: <span class="str">ollama/ollama:latest</span>
+    <span class="var">container_name</span>: <span class="str">ollama</span>
+    <span class="var">restart</span>: <span class="str">unless-stopped</span>
+    <span class="var">ports</span>:
+      - <span class="str">"{{ ollama_port }}:11434"</span>
+    <span class="var">volumes</span>:
+      - <span class="str">{{ ollama_data_dir }}:/root/.ollama</span>   <span class="cm"># Model weights persist across restarts</span>
+    <span class="var">runtime</span>: <span class="str">nvidia</span>                          <span class="cm"># Requires nvidia-container-toolkit</span>
+    <span class="var">environment</span>:
+      <span class="var">NVIDIA_VISIBLE_DEVICES</span>: <span class="str">all</span>            <span class="cm"># Expose all GPUs to container</span>
+    <span class="var">healthcheck</span>:
+      <span class="var">test</span>: [<span class="str">"CMD"</span>, <span class="str">"curl"</span>, <span class="str">"-f"</span>, <span class="str">"http://localhost:11434/api/tags"</span>]
+      <span class="var">interval</span>: <span class="str">15s</span>
+      <span class="var">timeout</span>: <span class="str">5s</span>
+      <span class="var">retries</span>: <span class="num">5</span></code></pre>
+
+      <div class="note-box" style="background:rgba(176,126,232,.06);border-color:rgba(176,126,232,.25);">
+        <strong style="color:var(--accent-purple);">The ai-compose.yml.j2 contains 10 services total:</strong> triage-service, ollama, prometheus-mcp, loki-mcp, jaeger-mcp, drain3-mcp, rca-history-mcp, otel-collector, node-exporter, cadvisor. All 5 MCP servers are lightweight FastAPI containers that act as bridge adapters between the Triage Service and the monitoring tools. They share a single Docker network so inter-container communication uses service names, not IPs.
+      </div>
+    </div>
+  </div>
+  <div class="step-connector"></div>
+
+  <!-- ======================== STEP 11 ======================== -->
+  <div class="step">
+    <div class="step-num"><div class="step-circle" style="background:rgba(240,160,80,.15);border:1.5px solid rgba(240,160,80,.4);color:var(--accent-orange);">11</div></div>
+    <div class="step-body">
+      <h4>IP Parameterization</h4>
+      <p><strong style="color:var(--text);">WHY:</strong> In Sprint 1, all IPs were hardcoded (192.168.127.10, .15, .30) because the integration lab used static IPs. On AWS, Terraform assigns new private IPs every time you run <span class="ic">terraform apply</span> (unless you use Elastic IPs for public access). Every template that references a VM IP must use a variable instead of a hardcoded value.</p>
+
+      <p style="margin-top:14px;"><strong style="color:var(--text);">monitoring.yml group_vars -- uses {{ monitoring_vm_ip }} everywhere:</strong></p>
+<pre><code><span class="cm"># Every scrape target now uses variables instead of hardcoded IPs</span>
+<span class="var">prometheus_targets</span>:
+  <span class="cm"># Application VM targets</span>
+  - <span class="var">job</span>: <span class="str">"app-spring-actuator"</span>
+    <span class="var">host</span>: <span class="str">"{{ network_vm_ip }}"</span>         <span class="cm"># Was: "192.168.127.15"</span>
+    <span class="var">port</span>: <span class="str">"8000"</span>
+    <span class="var">metrics_path</span>: <span class="str">"/actuator/prometheus"</span>
+  - <span class="var">job</span>: <span class="str">"app-node-exporter"</span>
+    <span class="var">host</span>: <span class="str">"{{ application_vm_ip }}"</span>     <span class="cm"># Was: "192.168.127.30"</span>
+    <span class="var">port</span>: <span class="str">"{{ node_port }}"</span>
+
+  <span class="cm"># Monitoring VM targets</span>
+  - <span class="var">job</span>: <span class="str">"prometheus"</span>
+    <span class="var">host</span>: <span class="str">"{{ monitoring_vm_ip }}"</span>      <span class="cm"># Was: "192.168.127.10"</span>
+    <span class="var">port</span>: <span class="str">"{{ prometheus_port }}"</span>
+
+  <span class="cm"># NEW: AI/LLM VM targets (added in Sprint 2)</span>
+  - <span class="var">job</span>: <span class="str">"ai-triage-service"</span>
+    <span class="var">host</span>: <span class="str">"{{ ai_vm_ip }}"</span>
+    <span class="var">port</span>: <span class="str">"8090"</span>
+  - <span class="var">job</span>: <span class="str">"ai-node-exporter"</span>
+    <span class="var">host</span>: <span class="str">"{{ ai_vm_ip }}"</span>
+    <span class="var">port</span>: <span class="str">"{{ node_port }}"</span>
+  - <span class="var">job</span>: <span class="str">"ai-cadvisor"</span>
+    <span class="var">host</span>: <span class="str">"{{ ai_vm_ip }}"</span>
+    <span class="var">port</span>: <span class="str">"{{ cadvisor_port }}"</span></code></pre>
+
+      <p style="margin-top:14px;"><strong style="color:var(--text);">datasources.yml.j2 -- Jaeger URL parameterized:</strong></p>
+<pre><code><span class="cm"># The Loki -> Jaeger trace link must use the monitoring VM's public/private IP</span>
+<span class="cm"># because the user's browser needs to reach Jaeger UI directly</span>
+  - <span class="var">name</span>: <span class="str">Loki</span>
+    <span class="var">type</span>: <span class="str">loki</span>
+    <span class="var">url</span>: <span class="str">http://loki:{{ loki_port }}</span>          <span class="cm"># Docker service name (server-side proxy)</span>
+    <span class="var">uid</span>: <span class="str">loki</span>
+    <span class="var">jsonData</span>:
+      <span class="var">derivedFields</span>:
+        - <span class="var">matcherType</span>: <span class="str">label</span>
+          <span class="var">matcherRegex</span>: <span class="str">traceid</span>
+          <span class="var">name</span>: <span class="str">TraceID</span>
+          <span class="var">url</span>: <span class="str">'http://{{ monitoring_vm_ip }}:16686/trace/$${__value.raw}'</span>  <span class="cm"># Uses variable!</span>
+          <span class="var">urlDisplayLabel</span>: <span class="str">View in Jaeger</span>
+          <span class="var">openInNewTab</span>: <span class="kw">true</span></code></pre>
+
+      <p style="margin-top:14px;"><strong style="color:var(--text);">Grafana Alerting webhook URL in monitoring.yml:</strong></p>
+<pre><code><span class="cm"># The Grafana contact point URL for the triage webhook also uses a variable</span>
+<span class="var">triage_service_webhook_url</span>: <span class="str">"http://{{ ai_vm_ip }}:8090/webhook/grafana"</span></code></pre>
+
+      <div class="note-box" style="background:rgba(107,207,127,.06);border-color:rgba(107,207,127,.25);">
+        <strong style="color:var(--accent-green);">Total parameterized references:</strong> 16+ IP references across <span class="ic">monitoring.yml</span>, <span class="ic">all.yml</span>, <span class="ic">ai.yml</span>, <span class="ic">datasources.yml.j2</span>, <span class="ic">contactpoints.yml.j2</span>, and <span class="ic">kong.yml.j2</span>. All resolved from 4 source variables: <span class="ic">monitoring_vm_ip</span>, <span class="ic">application_vm_ip</span>, <span class="ic">network_vm_ip</span>, <span class="ic">ai_vm_ip</span>. The <span class="ic">generate-inventory.sh</span> script updates all 4 in one pass from Terraform outputs.
+      </div>
+    </div>
+  </div>
+  <div class="step-connector"></div>
+
+  <div class="section-label">Terraform -- File-by-File Deep Dive</div>
+
+  <!-- ======================== STEP 12 ======================== -->
+  <div class="step">
+    <div class="step-num"><div class="step-circle" style="background:rgba(240,160,80,.15);border:1.5px solid rgba(240,160,80,.4);color:var(--accent-orange);">12</div></div>
+    <div class="step-body">
+      <h4>providers.tf + variables.tf</h4>
+      <p>All Terraform code lives in a separate repo: <span class="ic">provisioning-monitoring-infra</span>. This keeps cloud infrastructure config separate from Ansible application automation.</p>
+
+      <p style="margin-top:14px;"><strong style="color:var(--text);">providers.tf -- AWS provider configuration:</strong></p>
+<pre><code><span class="kw">terraform</span> {
+  <span class="var">required_version</span> = <span class="str">"&gt;= 1.5.0"</span>        <span class="cm"># Minimum Terraform CLI version</span>
+
+  <span class="var">required_providers</span> {
+    <span class="var">aws</span> = {
+      <span class="var">source</span>  = <span class="str">"hashicorp/aws"</span>
+      <span class="var">version</span> = <span class="str">"~&gt; 5.0"</span>             <span class="cm"># Any 5.x version (not 6.x)</span>
+    }
+  }
+}
+
+<span class="kw">provider</span> <span class="str">"aws"</span> {
+  <span class="var">region</span> = <span class="var">var</span>.aws_region             <span class="cm"># Default: us-east-1</span>
+
+  <span class="var">default_tags</span> {                        <span class="cm"># Applied to EVERY resource automatically</span>
+    <span class="var">tags</span> = {
+      <span class="var">Project</span>     = <span class="var">var</span>.project_name    <span class="cm"># "observability-rca"</span>
+      <span class="var">Environment</span> = <span class="var">var</span>.environment      <span class="cm"># "demo"</span>
+      <span class="var">ManagedBy</span>   = <span class="str">"terraform"</span>         <span class="cm"># Identify infra-as-code resources</span>
+    }
+  }
+}</code></pre>
+      <div class="note-box">
+        <strong>default_tags:</strong> Every AWS resource created by this Terraform config automatically gets these 3 tags. This makes it easy to find all resources in the AWS console (filter by <span class="ic">ManagedBy = terraform</span>) and calculate costs per project.
+      </div>
+
+      <p style="margin-top:14px;"><strong style="color:var(--text);">variables.tf -- key variable groups:</strong></p>
+      <table>
+        <thead><tr><th>Group</th><th>Variable</th><th>Default</th><th>Purpose</th></tr></thead>
+        <tbody>
+          <tr><td rowspan="3">General</td><td><span class="ic">aws_region</span></td><td>us-east-1</td><td>AWS region for all resources</td></tr>
+          <tr><td><span class="ic">project_name</span></td><td>observability-rca</td><td>Tag prefix for naming</td></tr>
+          <tr><td><span class="ic">environment</span></td><td>demo</td><td>Environment tag</td></tr>
+          <tr><td rowspan="3">Networking</td><td><span class="ic">vpc_cidr</span></td><td>10.0.0.0/16</td><td>VPC address space (65,536 IPs)</td></tr>
+          <tr><td><span class="ic">public_subnet_cidr</span></td><td>10.0.1.0/24</td><td>256 IPs for NAT Gateway</td></tr>
+          <tr><td><span class="ic">private_subnet_cidr</span></td><td>10.0.2.0/24</td><td>256 IPs for EC2 + RDS</td></tr>
+          <tr><td rowspan="4">EC2 Instances</td><td><span class="ic">monitoring_instance_type</span></td><td>t3.large</td><td>2 vCPU, 8 GB RAM (Prometheus+Loki+Grafana)</td></tr>
+          <tr><td><span class="ic">backend_instance_type</span></td><td>t3.small</td><td>2 vCPU, 2 GB RAM (Spring Boot)</td></tr>
+          <tr><td><span class="ic">network_instance_type</span></td><td>t3.small</td><td>2 vCPU, 2 GB RAM (Kong)</td></tr>
+          <tr><td><span class="ic">ai_instance_type</span></td><td>g4dn.xlarge</td><td>4 vCPU, 16 GB RAM, T4 GPU</td></tr>
+          <tr><td rowspan="3">RDS</td><td><span class="ic">db_instance_class</span></td><td>db.t3.micro</td><td>Smallest RDS instance</td></tr>
+          <tr><td><span class="ic">db_password</span></td><td>(none)</td><td>Sensitive -- must set in tfvars</td></tr>
+          <tr><td><span class="ic">db_name</span></td><td>app-db</td><td>Hyphens replaced with underscores</td></tr>
+          <tr><td>S3</td><td><span class="ic">s3_bucket_name</span></td><td>cires-observability-demo</td><td>Must be globally unique</td></tr>
+        </tbody>
+      </table>
+
+      <p style="margin-top:14px;"><strong style="color:var(--text);">terraform.tfvars.example -- what you copy and customize:</strong></p>
+<pre><code><span class="cm"># Copy this file to terraform.tfvars and fill in your values</span>
+<span class="cm"># terraform.tfvars is gitignored — never commit secrets</span>
+
+<span class="var">aws_region</span>  = <span class="str">"us-east-1"</span>
+<span class="var">environment</span> = <span class="str">"demo"</span>
+
+<span class="cm"># Restrict SSH to your IP (replace with CIRES office CIDR)</span>
+<span class="var">allowed_ssh_cidrs</span> = [<span class="str">"YOUR_IP/32"</span>]
+
+<span class="cm"># Path to your SSH public key</span>
+<span class="var">ssh_public_key_path</span> = <span class="str">"~/.ssh/ansible_key.pub"</span>
+<span class="var">ssh_key_name</span>        = <span class="str">"ansible-key"</span>
+
+<span class="cm"># RDS credentials</span>
+<span class="var">db_username</span> = <span class="str">"appuser"</span>
+<span class="var">db_password</span> = <span class="str">"CHANGE_ME_strong_password_here"</span>
+
+<span class="cm"># S3 bucket (must be globally unique)</span>
+<span class="var">s3_bucket_name</span> = <span class="str">"cires-observability-demo-UNIQUE_SUFFIX"</span></code></pre>
+      <div class="note-box warn">
+        <strong>Security:</strong> <span class="ic">terraform.tfvars</span> is in <span class="ic">.gitignore</span>. It contains the RDS password and your SSH public key path. Never commit this file. The <span class="ic">db_password</span> variable is marked <span class="ic">sensitive = true</span> in variables.tf, so Terraform will mask it in plan output.
+      </div>
+    </div>
+  </div>
+  <div class="step-connector"></div>
+
+  <!-- ======================== STEP 13 ======================== -->
+  <div class="step">
+    <div class="step-num"><div class="step-circle" style="background:rgba(240,160,80,.15);border:1.5px solid rgba(240,160,80,.4);color:var(--accent-orange);">13</div></div>
+    <div class="step-body">
+      <h4>VPC + Networking (vpc.tf)</h4>
+      <p>This file creates the entire network foundation: VPC, subnets, gateways, and route tables.</p>
+<pre><code><span class="cm"># ---- VPC: The virtual network that contains everything ----</span>
+<span class="kw">resource</span> <span class="str">"aws_vpc"</span> <span class="str">"main"</span> {
+  <span class="var">cidr_block</span>           = <span class="var">var</span>.vpc_cidr     <span class="cm"># 10.0.0.0/16 = 65,536 IPs</span>
+  <span class="var">enable_dns_support</span>   = <span class="kw">true</span>            <span class="cm"># Allow DNS resolution inside VPC</span>
+  <span class="var">enable_dns_hostnames</span> = <span class="kw">true</span>            <span class="cm"># EC2 instances get DNS hostnames</span>
+
+  <span class="var">tags</span> = { <span class="var">Name</span> = <span class="str">"${var.project_name}-vpc"</span> }
+}
+
+<span class="cm"># ---- PUBLIC SUBNET: Where the NAT Gateway lives ----</span>
+<span class="cm"># Only the NAT Gateway sits here. No EC2 instances are in the public subnet.</span>
+<span class="kw">resource</span> <span class="str">"aws_subnet"</span> <span class="str">"public"</span> {
+  <span class="var">vpc_id</span>                  = <span class="var">aws_vpc</span>.main.id
+  <span class="var">cidr_block</span>              = <span class="var">var</span>.public_subnet_cidr   <span class="cm"># 10.0.1.0/24</span>
+  <span class="var">availability_zone</span>       = <span class="var">var</span>.availability_zone    <span class="cm"># us-east-1a</span>
+  <span class="var">map_public_ip_on_launch</span> = <span class="kw">true</span>
+
+  <span class="var">tags</span> = { <span class="var">Name</span> = <span class="str">"${var.project_name}-public"</span> }
+}
+
+<span class="cm"># ---- PRIVATE SUBNET A: Where all EC2 instances and RDS live ----</span>
+<span class="kw">resource</span> <span class="str">"aws_subnet"</span> <span class="str">"private"</span> {
+  <span class="var">vpc_id</span>            = <span class="var">aws_vpc</span>.main.id
+  <span class="var">cidr_block</span>        = <span class="var">var</span>.private_subnet_cidr    <span class="cm"># 10.0.2.0/24</span>
+  <span class="var">availability_zone</span> = <span class="var">var</span>.availability_zone     <span class="cm"># us-east-1a</span>
+
+  <span class="var">tags</span> = { <span class="var">Name</span> = <span class="str">"${var.project_name}-private"</span> }
+}
+
+<span class="cm"># ---- PRIVATE SUBNET B: Required by RDS subnet group (AWS mandates 2 AZs) ----</span>
+<span class="cm"># AWS RDS requires a DB Subnet Group with subnets in at least 2 Availability Zones.</span>
+<span class="cm"># This subnet exists ONLY to satisfy that requirement. No instances are placed here.</span>
+<span class="kw">resource</span> <span class="str">"aws_subnet"</span> <span class="str">"private_b"</span> {
+  <span class="var">vpc_id</span>            = <span class="var">aws_vpc</span>.main.id
+  <span class="var">cidr_block</span>        = <span class="str">"10.0.3.0/24"</span>              <span class="cm"># Hardcoded (not in variables)</span>
+  <span class="var">availability_zone</span> = <span class="str">"${var.aws_region}b"</span>       <span class="cm"># us-east-1b (different AZ)</span>
+
+  <span class="var">tags</span> = { <span class="var">Name</span> = <span class="str">"${var.project_name}-private-b"</span> }
+}</code></pre>
+
+      <p style="margin-top:14px;"><strong style="color:var(--text);">Internet Gateway + NAT Gateway:</strong></p>
+<pre><code><span class="cm"># ---- INTERNET GATEWAY: Gives the public subnet internet access ----</span>
+<span class="kw">resource</span> <span class="str">"aws_internet_gateway"</span> <span class="str">"main"</span> {
+  <span class="var">vpc_id</span> = <span class="var">aws_vpc</span>.main.id
+  <span class="var">tags</span> = { <span class="var">Name</span> = <span class="str">"${var.project_name}-igw"</span> }
+}
+
+<span class="cm"># ---- NAT GATEWAY: Allows private subnet instances to reach the internet ----</span>
+<span class="cm"># Private instances need outbound for: apt-get, Docker Hub pulls, pip installs,</span>
+<span class="cm"># Ollama model downloads, Gmail SMTP, etc.</span>
+<span class="cm"># NAT Gateway sits in the PUBLIC subnet but routes traffic FROM the private subnet.</span>
+<span class="kw">resource</span> <span class="str">"aws_eip"</span> <span class="str">"nat"</span> {
+  <span class="var">domain</span> = <span class="str">"vpc"</span>                          <span class="cm"># Elastic IP for NAT Gateway</span>
+  <span class="var">tags</span> = { <span class="var">Name</span> = <span class="str">"${var.project_name}-nat-eip"</span> }
+}
+
+<span class="kw">resource</span> <span class="str">"aws_nat_gateway"</span> <span class="str">"main"</span> {
+  <span class="var">allocation_id</span> = <span class="var">aws_eip</span>.nat.id
+  <span class="var">subnet_id</span>     = <span class="var">aws_subnet</span>.public.id    <span class="cm"># NAT lives in PUBLIC subnet</span>
+  <span class="var">depends_on</span>    = [<span class="var">aws_internet_gateway</span>.main]
+  <span class="var">tags</span> = { <span class="var">Name</span> = <span class="str">"${var.project_name}-nat"</span> }
+}</code></pre>
+
+      <p style="margin-top:14px;"><strong style="color:var(--text);">Route Tables:</strong></p>
+<pre><code><span class="cm"># ---- PUBLIC ROUTE TABLE: 0.0.0.0/0 -> Internet Gateway ----</span>
+<span class="kw">resource</span> <span class="str">"aws_route_table"</span> <span class="str">"public"</span> {
+  <span class="var">vpc_id</span> = <span class="var">aws_vpc</span>.main.id
+  <span class="var">route</span> {
+    <span class="var">cidr_block</span> = <span class="str">"0.0.0.0/0"</span>
+    <span class="var">gateway_id</span> = <span class="var">aws_internet_gateway</span>.main.id   <span class="cm"># Direct internet</span>
+  }
+}
+
+<span class="cm"># ---- PRIVATE ROUTE TABLE: 0.0.0.0/0 -> NAT Gateway ----</span>
+<span class="kw">resource</span> <span class="str">"aws_route_table"</span> <span class="str">"private"</span> {
+  <span class="var">vpc_id</span> = <span class="var">aws_vpc</span>.main.id
+  <span class="var">route</span> {
+    <span class="var">cidr_block</span>     = <span class="str">"0.0.0.0/0"</span>
+    <span class="var">nat_gateway_id</span> = <span class="var">aws_nat_gateway</span>.main.id   <span class="cm"># Through NAT (no inbound)</span>
+  }
+}
+
+<span class="cm"># ---- Associate subnets with their route tables ----</span>
+<span class="kw">resource</span> <span class="str">"aws_route_table_association"</span> <span class="str">"public"</span> {
+  <span class="var">subnet_id</span>      = <span class="var">aws_subnet</span>.public.id
+  <span class="var">route_table_id</span> = <span class="var">aws_route_table</span>.public.id
+}
+<span class="kw">resource</span> <span class="str">"aws_route_table_association"</span> <span class="str">"private"</span> {
+  <span class="var">subnet_id</span>      = <span class="var">aws_subnet</span>.private.id
+  <span class="var">route_table_id</span> = <span class="var">aws_route_table</span>.private.id
+}
+<span class="kw">resource</span> <span class="str">"aws_route_table_association"</span> <span class="str">"private_b"</span> {
+  <span class="var">subnet_id</span>      = <span class="var">aws_subnet</span>.private_b.id
+  <span class="var">route_table_id</span> = <span class="var">aws_route_table</span>.private.id   <span class="cm"># Same route table as private</span>
+}</code></pre>
+
+      <div class="note-box">
+        <strong>Traffic flow summary:</strong> EC2 instances in the <em>private</em> subnet can reach the internet (for apt, Docker Hub, etc.) via the NAT Gateway, but nothing from the internet can reach them directly. SSH access uses Elastic IPs associated with each instance. The public subnet exists <em>only</em> for the NAT Gateway -- no EC2 instances are placed there.
+      </div>
+    </div>
+  </div>
+  <div class="step-connector"></div>
+
+  <!-- ======================== STEP 14 ======================== -->
+  <div class="step">
+    <div class="step-num"><div class="step-circle" style="background:rgba(240,160,80,.15);border:1.5px solid rgba(240,160,80,.4);color:var(--accent-orange);">14</div></div>
+    <div class="step-body">
+      <h4>Security Groups (security-groups.tf)</h4>
+      <p>Five security groups control which ports are open and who can talk to whom. Think of them as per-VM firewalls.</p>
+
+      <table>
+        <thead><tr><th>Security Group</th><th>Attached To</th><th>Key Ingress Rules</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><span class="ic">sg-monitoring</span></td>
+            <td>monitoring-vm</td>
+            <td>SSH (allowed_ssh_cidrs), Prometheus :9090, Grafana :3000, Loki :3100, Jaeger UI :16686, Jaeger OTLP :4327/:4328, OTel Collector :4317/:4318/:8888, node-exporter :9100, cAdvisor :8081 -- all from private subnet CIDR</td>
+          </tr>
+          <tr>
+            <td><span class="ic">sg-backend</span></td>
+            <td>backend-vm</td>
+            <td>SSH, HTTP :80 <strong>from sg-network only</strong>, Spring Boot :8080 from private subnet, node-exporter :9100 <strong>from sg-monitoring only</strong>, cAdvisor :8081 from sg-monitoring, OTel :4317/:4318 from private subnet</td>
+          </tr>
+          <tr>
+            <td><span class="ic">sg-network</span></td>
+            <td>network-vm</td>
+            <td>SSH, Kong Proxy :8000 from private subnet, Kong Admin :8001 from private subnet, node-exporter :9100 from sg-monitoring, cAdvisor :8081 from sg-monitoring, OTel :4317/:4318 from private subnet</td>
+          </tr>
+          <tr>
+            <td><span class="ic">sg-ai</span></td>
+            <td>ai-vm</td>
+            <td>SSH, Triage webhook :8090 <strong>from sg-monitoring only</strong>, Ollama :11434 from private subnet, node-exporter :9100 from sg-monitoring, cAdvisor :8081 from sg-monitoring, OTel :4317/:4318 from private subnet</td>
+          </tr>
+          <tr>
+            <td><span class="ic">sg-rds</span></td>
+            <td>RDS MySQL</td>
+            <td>MySQL :3306 <strong>from sg-backend only</strong> -- most restrictive SG</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p style="margin-top:14px;"><strong style="color:var(--text);">sg-to-sg references (principle of least privilege):</strong></p>
+<pre><code><span class="cm"># sg-backend: HTTP only from Kong (sg-network), not from the whole subnet</span>
+<span class="kw">ingress</span> {
+  <span class="var">description</span>     = <span class="str">"HTTP from Kong"</span>
+  <span class="var">from_port</span>       = <span class="num">80</span>
+  <span class="var">to_port</span>         = <span class="num">80</span>
+  <span class="var">protocol</span>        = <span class="str">"tcp"</span>
+  <span class="var">security_groups</span> = [<span class="var">aws_security_group</span>.network.id]   <span class="cm"># Only sg-network!</span>
+}
+
+<span class="cm"># sg-rds: MySQL only from Spring Boot (sg-backend)</span>
+<span class="kw">ingress</span> {
+  <span class="var">description</span>     = <span class="str">"MySQL from backend"</span>
+  <span class="var">from_port</span>       = <span class="num">3306</span>
+  <span class="var">to_port</span>         = <span class="num">3306</span>
+  <span class="var">protocol</span>        = <span class="str">"tcp"</span>
+  <span class="var">security_groups</span> = [<span class="var">aws_security_group</span>.backend.id]   <span class="cm"># Only sg-backend!</span>
+}
+
+<span class="cm"># sg-ai: Triage webhook only from Grafana (sg-monitoring)</span>
+<span class="kw">ingress</span> {
+  <span class="var">description</span>     = <span class="str">"Triage Service webhook"</span>
+  <span class="var">from_port</span>       = <span class="num">8090</span>
+  <span class="var">to_port</span>         = <span class="num">8090</span>
+  <span class="var">protocol</span>        = <span class="str">"tcp"</span>
+  <span class="var">security_groups</span> = [<span class="var">aws_security_group</span>.monitoring.id]  <span class="cm"># Only sg-monitoring!</span>
+}</code></pre>
+      <div class="note-box">
+        <strong>lifecycle { create_before_destroy = true }:</strong> Every security group uses this lifecycle rule. Without it, Terraform would try to delete the old SG before creating the new one during updates. Since SGs are referenced by EC2 instances, deleting them first would fail. <span class="ic">create_before_destroy</span> creates the replacement SG first, updates references, then deletes the old one.
+      </div>
+
+      <div class="note-box warn" style="margin-top:8px;">
+        <strong>All egress is open:</strong> Every SG has <span class="ic">egress 0.0.0.0/0 all ports</span>. This is intentional for a demo -- instances need to reach Docker Hub, apt repos, Gmail SMTP, etc. In production, you would restrict egress to specific endpoints.
+      </div>
+    </div>
+  </div>
+  <div class="step-connector"></div>
+
+  <!-- ======================== STEP 15 ======================== -->
+  <div class="step">
+    <div class="step-num"><div class="step-circle" style="background:rgba(240,160,80,.15);border:1.5px solid rgba(240,160,80,.4);color:var(--accent-orange);">15</div></div>
+    <div class="step-body">
+      <h4>EC2 Instances (ec2.tf)</h4>
+
+      <p><strong style="color:var(--text);">Ubuntu AMI data source -- always gets the latest 22.04 image:</strong></p>
+<pre><code><span class="kw">data</span> <span class="str">"aws_ami"</span> <span class="str">"ubuntu"</span> {
+  <span class="var">most_recent</span> = <span class="kw">true</span>
+  <span class="var">owners</span>      = [<span class="str">"099720109477"</span>]   <span class="cm"># Canonical (Ubuntu publisher)</span>
+
+  <span class="kw">filter</span> {
+    <span class="var">name</span>   = <span class="str">"name"</span>
+    <span class="var">values</span> = [<span class="str">"ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"</span>]
+  }
+  <span class="kw">filter</span> {
+    <span class="var">name</span>   = <span class="str">"virtualization-type"</span>
+    <span class="var">values</span> = [<span class="str">"hvm"</span>]              <span class="cm"># Hardware Virtual Machine (not paravirtual)</span>
+  }
+}</code></pre>
+      <div class="note-box">
+        <strong>Why a data source?</strong> AMI IDs change every time Canonical releases an update. Using a <span class="ic">data</span> block with filters means Terraform always finds the latest Ubuntu 22.04 AMI automatically, without hardcoding an ID that would go stale.
+      </div>
+
+      <p style="margin-top:14px;"><strong style="color:var(--text);">user_data script -- runs once on first boot:</strong></p>
+<pre><code><span class="kw">locals</span> {
+  <span class="var">user_data</span> = <span class="str">&lt;&lt;-EOF
+    #!/bin/bash
+    set -e
+
+    # Create deploy user with passwordless sudo (matches Ansible config)
+    useradd -m -s /bin/bash -G sudo deploy
+    echo "deploy ALL=(ALL) NOPASSWD:ALL" &gt; /etc/sudoers.d/deploy
+    chmod 0440 /etc/sudoers.d/deploy
+
+    # Copy SSH authorized_keys from default ubuntu user to deploy user
+    mkdir -p /home/deploy/.ssh
+    cp /home/ubuntu/.ssh/authorized_keys /home/deploy/.ssh/authorized_keys
+    chown -R deploy:deploy /home/deploy/.ssh
+    chmod 700 /home/deploy/.ssh
+    chmod 600 /home/deploy/.ssh/authorized_keys
+
+    # Install Python3 (required by Ansible — it runs modules via Python)
+    apt-get update -y
+    apt-get install -y python3 python3-apt
+  EOF</span>
+}</code></pre>
+      <div class="note-box">
+        <strong>Why this matters:</strong> Ansible connects as the <span class="ic">deploy</span> user with SSH key auth and passwordless sudo. AWS EC2 instances boot with an <span class="ic">ubuntu</span> user by default. This user_data script bridges the gap by creating the deploy user and copying the SSH key (which was uploaded via <span class="ic">aws_key_pair</span>) before Ansible ever connects.
+      </div>
+
+      <p style="margin-top:14px;"><strong style="color:var(--text);">EC2 instance example (monitoring VM):</strong></p>
+<pre><code><span class="cm"># ---- Elastic IP: Stable public IP for SSH access ----</span>
+<span class="kw">resource</span> <span class="str">"aws_eip"</span> <span class="str">"monitoring"</span> {
+  <span class="var">domain</span> = <span class="str">"vpc"</span>
+  <span class="var">tags</span>   = { <span class="var">Name</span> = <span class="str">"${var.project_name}-monitoring-eip"</span> }
+}
+
+<span class="cm"># ---- EC2 Instance ----</span>
+<span class="kw">resource</span> <span class="str">"aws_instance"</span> <span class="str">"monitoring"</span> {
+  <span class="var">ami</span>                    = <span class="var">data</span>.aws_ami.ubuntu.id
+  <span class="var">instance_type</span>          = <span class="var">var</span>.monitoring_instance_type   <span class="cm"># t3.large (8 GB RAM)</span>
+  <span class="var">key_name</span>               = <span class="var">aws_key_pair</span>.ansible.key_name
+  <span class="var">subnet_id</span>              = <span class="var">aws_subnet</span>.private.id         <span class="cm"># PRIVATE subnet</span>
+  <span class="var">vpc_security_group_ids</span> = [<span class="var">aws_security_group</span>.monitoring.id]
+  <span class="var">user_data</span>              = <span class="var">local</span>.user_data               <span class="cm"># deploy user script</span>
+
+  <span class="var">root_block_device</span> {
+    <span class="var">volume_size</span> = <span class="var">var</span>.monitoring_volume_size           <span class="cm"># 50 GB (Prometheus+Loki data)</span>
+    <span class="var">volume_type</span> = <span class="str">"gp3"</span>                              <span class="cm"># General purpose SSD v3</span>
+  }
+
+  <span class="var">tags</span> = { <span class="var">Name</span> = <span class="str">"${var.project_name}-monitoring"</span> }
+}
+
+<span class="cm"># ---- Associate EIP with instance for stable SSH ----</span>
+<span class="kw">resource</span> <span class="str">"aws_eip_association"</span> <span class="str">"monitoring"</span> {
+  <span class="var">instance_id</span>   = <span class="var">aws_instance</span>.monitoring.id
+  <span class="var">allocation_id</span> = <span class="var">aws_eip</span>.monitoring.id
+}</code></pre>
+
+      <p style="margin-top:14px;"><strong style="color:var(--text);">All 4 EC2 instances follow this same pattern:</strong></p>
+      <table>
+        <thead><tr><th>Instance</th><th>Type</th><th>Volume</th><th>Why this size</th></tr></thead>
+        <tbody>
+          <tr><td>monitoring</td><td>t3.large</td><td>50 GB gp3</td><td>Prometheus TSDB + Loki chunks + Jaeger Badger DB need RAM and disk</td></tr>
+          <tr><td>backend</td><td>t3.small</td><td>20 GB gp3</td><td>Spring Boot JAR + OTel agent, minimal resource needs</td></tr>
+          <tr><td>network</td><td>t3.small</td><td>20 GB gp3</td><td>Kong is lightweight (dbless mode, no database)</td></tr>
+          <tr><td>ai</td><td>g4dn.xlarge</td><td>50 GB gp3</td><td>NVIDIA T4 GPU (16 GB VRAM) for Ollama LLM inference; 50 GB for model weights</td></tr>
+        </tbody>
+      </table>
+
+      <div class="note-box warn">
+        <strong>Why g4dn.xlarge for the AI VM?</strong> The llama3.1:8b model requires ~4.7 GB VRAM for weights plus additional memory for KV cache during inference. The T4 GPU has 16 GB VRAM, giving comfortable headroom. CPU-only inference on a t3.large would take 30-60 seconds per response vs 2-5 seconds on GPU. For real-time alert triage, GPU speed is essential.
+      </div>
+    </div>
+  </div>
+  <div class="step-connector"></div>
+
+  <!-- ======================== STEP 16 ======================== -->
+  <div class="step">
+    <div class="step-num"><div class="step-circle" style="background:rgba(240,160,80,.15);border:1.5px solid rgba(240,160,80,.4);color:var(--accent-orange);">16</div></div>
+    <div class="step-body">
+      <h4>RDS MySQL (rds.tf)</h4>
+<pre><code><span class="cm"># ---- DB Subnet Group: RDS requires subnets in at least 2 AZs ----</span>
+<span class="kw">resource</span> <span class="str">"aws_db_subnet_group"</span> <span class="str">"main"</span> {
+  <span class="var">name</span>       = <span class="str">"${var.project_name}-db-subnet"</span>
+  <span class="var">subnet_ids</span> = [<span class="var">aws_subnet</span>.private.id, <span class="var">aws_subnet</span>.private_b.id]
+  <span class="cm"># ^^ This is WHY private_b subnet exists in vpc.tf ^^</span>
+
+  <span class="var">tags</span> = { <span class="var">Name</span> = <span class="str">"${var.project_name}-db-subnet-group"</span> }
+}
+
+<span class="cm"># ---- RDS MySQL Instance ----</span>
+<span class="kw">resource</span> <span class="str">"aws_db_instance"</span> <span class="str">"mysql"</span> {
+  <span class="var">identifier</span>     = <span class="str">"${var.project_name}-mysql"</span>     <span class="cm"># AWS resource identifier</span>
+  <span class="var">engine</span>         = <span class="str">"mysql"</span>
+  <span class="var">engine_version</span> = <span class="str">"8.0"</span>
+  <span class="var">instance_class</span> = <span class="var">var</span>.db_instance_class           <span class="cm"># db.t3.micro (1 vCPU, 1 GB RAM)</span>
+
+  <span class="var">allocated_storage</span> = <span class="var">var</span>.db_storage_gb             <span class="cm"># 20 GB gp3</span>
+  <span class="var">storage_type</span>      = <span class="str">"gp3"</span>
+
+  <span class="var">db_name</span>  = <span class="fn">replace</span>(<span class="var">var</span>.db_name, <span class="str">"-"</span>, <span class="str">"_"</span>)       <span class="cm"># "app-db" -> "app_db"</span>
+  <span class="var">username</span> = <span class="var">var</span>.db_username                      <span class="cm"># "appuser"</span>
+  <span class="var">password</span> = <span class="var">var</span>.db_password                      <span class="cm"># From terraform.tfvars (sensitive)</span>
+
+  <span class="var">db_subnet_group_name</span>   = <span class="var">aws_db_subnet_group</span>.main.name
+  <span class="var">vpc_security_group_ids</span> = [<span class="var">aws_security_group</span>.rds.id]   <span class="cm"># Only sg-backend can connect</span>
+
+  <span class="var">multi_az</span>            = <span class="kw">false</span>      <span class="cm"># Single AZ (demo — no failover replica)</span>
+  <span class="var">publicly_accessible</span> = <span class="kw">false</span>      <span class="cm"># No public IP — private subnet only</span>
+  <span class="var">skip_final_snapshot</span> = <span class="kw">true</span>       <span class="cm"># Demo only — skip snapshot on destroy</span>
+
+  <span class="var">tags</span> = { <span class="var">Name</span> = <span class="str">"${var.project_name}-mysql"</span> }
+}</code></pre>
+
+      <div class="note-box">
+        <strong>replace(var.db_name, "-", "_"):</strong> RDS MySQL does not allow hyphens in database names. The variable default is <span class="ic">"app-db"</span> (matching Sprint 1), but <span class="ic">replace()</span> converts it to <span class="ic">"app_db"</span> at plan time. This avoids a cryptic AWS API error.
+      </div>
+      <div class="note-box warn" style="margin-top:8px;">
+        <strong>skip_final_snapshot = true:</strong> In production, set this to <span class="ic">false</span> and provide a <span class="ic">final_snapshot_identifier</span>. Without this, <span class="ic">terraform destroy</span> would refuse to delete the RDS instance (AWS requires a final snapshot by default). For demo purposes, we skip it to allow clean teardown.
+      </div>
+    </div>
+  </div>
+  <div class="step-connector"></div>
+
+  <!-- ======================== STEP 17 ======================== -->
+  <div class="step">
+    <div class="step-num"><div class="step-circle" style="background:rgba(240,160,80,.15);border:1.5px solid rgba(240,160,80,.4);color:var(--accent-orange);">17</div></div>
+    <div class="step-body">
+      <h4>S3 + CloudFront (s3-cloudfront.tf)</h4>
+<pre><code><span class="cm"># ---- S3 Bucket: Stores React frontend build + Drain3 snapshots ----</span>
+<span class="kw">resource</span> <span class="str">"aws_s3_bucket"</span> <span class="str">"frontend"</span> {
+  <span class="var">bucket</span> = <span class="var">var</span>.s3_bucket_name   <span class="cm"># Must be globally unique across all AWS accounts</span>
+  <span class="var">tags</span> = { <span class="var">Name</span> = <span class="str">"${var.project_name}-frontend"</span> }
+}
+
+<span class="cm"># ---- Block ALL public access to S3 bucket ----</span>
+<span class="cm"># Only CloudFront can read objects (via OAC). No direct S3 URL access.</span>
+<span class="kw">resource</span> <span class="str">"aws_s3_bucket_public_access_block"</span> <span class="str">"frontend"</span> {
+  <span class="var">bucket</span> = <span class="var">aws_s3_bucket</span>.frontend.id
+  <span class="var">block_public_acls</span>       = <span class="kw">true</span>
+  <span class="var">block_public_policy</span>     = <span class="kw">true</span>
+  <span class="var">ignore_public_acls</span>      = <span class="kw">true</span>
+  <span class="var">restrict_public_buckets</span> = <span class="kw">true</span>
+}</code></pre>
+
+      <p style="margin-top:14px;"><strong style="color:var(--text);">Origin Access Control (OAC) -- the modern way to secure S3+CloudFront:</strong></p>
+<pre><code><span class="cm"># ---- OAC replaces the deprecated OAI (Origin Access Identity) ----</span>
+<span class="cm"># OAC uses SigV4 signing to authenticate CloudFront -> S3 requests</span>
+<span class="kw">resource</span> <span class="str">"aws_cloudfront_origin_access_control"</span> <span class="str">"frontend"</span> {
+  <span class="var">name</span>                              = <span class="str">"${var.project_name}-oac"</span>
+  <span class="var">description</span>                       = <span class="str">"OAC for S3 React frontend"</span>
+  <span class="var">origin_access_control_origin_type</span> = <span class="str">"s3"</span>
+  <span class="var">signing_behavior</span>                  = <span class="str">"always"</span>   <span class="cm"># Always sign requests to S3</span>
+  <span class="var">signing_protocol</span>                  = <span class="str">"sigv4"</span>    <span class="cm"># AWS Signature Version 4</span>
+}</code></pre>
+
+      <p style="margin-top:14px;"><strong style="color:var(--text);">CloudFront Distribution:</strong></p>
+<pre><code><span class="kw">resource</span> <span class="str">"aws_cloudfront_distribution"</span> <span class="str">"frontend"</span> {
+  <span class="kw">origin</span> {
+    <span class="var">domain_name</span>              = <span class="var">aws_s3_bucket</span>.frontend.bucket_regional_domain_name
+    <span class="var">origin_id</span>                = <span class="str">"s3-frontend"</span>
+    <span class="var">origin_access_control_id</span> = <span class="var">aws_cloudfront_origin_access_control</span>.frontend.id
+  }
+
+  <span class="var">enabled</span>             = <span class="kw">true</span>
+  <span class="var">default_root_object</span> = <span class="str">"index.html"</span>    <span class="cm"># Serve index.html for / requests</span>
+
+  <span class="kw">default_cache_behavior</span> {
+    <span class="var">allowed_methods</span>        = [<span class="str">"GET"</span>, <span class="str">"HEAD"</span>]
+    <span class="var">cached_methods</span>         = [<span class="str">"GET"</span>, <span class="str">"HEAD"</span>]
+    <span class="var">target_origin_id</span>       = <span class="str">"s3-frontend"</span>
+    <span class="var">viewer_protocol_policy</span> = <span class="str">"redirect-to-https"</span>   <span class="cm"># Force HTTPS</span>
+    <span class="var">min_ttl</span>     = <span class="num">0</span>
+    <span class="var">default_ttl</span> = <span class="num">3600</span>      <span class="cm"># 1 hour cache</span>
+    <span class="var">max_ttl</span>     = <span class="num">86400</span>     <span class="cm"># 24 hour max cache</span>
+  }
+
+  <span class="cm"># ---- SPA fallback: React Router uses client-side routing ----</span>
+  <span class="cm"># When user navigates to /products or /dashboard, CloudFront gets a 403/404</span>
+  <span class="cm"># from S3 (no such key). This rule returns index.html instead, letting</span>
+  <span class="cm"># React Router handle the route on the client side.</span>
+  <span class="kw">custom_error_response</span> {
+    <span class="var">error_code</span>         = <span class="num">403</span>
+    <span class="var">response_code</span>      = <span class="num">200</span>
+    <span class="var">response_page_path</span> = <span class="str">"/index.html"</span>
+  }
+  <span class="kw">custom_error_response</span> {
+    <span class="var">error_code</span>         = <span class="num">404</span>
+    <span class="var">response_code</span>      = <span class="num">200</span>
+    <span class="var">response_page_path</span> = <span class="str">"/index.html"</span>
+  }
+
+  <span class="var">viewer_certificate</span> {
+    <span class="var">cloudfront_default_certificate</span> = <span class="kw">true</span>   <span class="cm"># Uses *.cloudfront.net SSL cert</span>
+  }
+}</code></pre>
+
+      <p style="margin-top:14px;"><strong style="color:var(--text);">S3 Bucket Policy -- only CloudFront can read objects:</strong></p>
+<pre><code><span class="kw">resource</span> <span class="str">"aws_s3_bucket_policy"</span> <span class="str">"frontend"</span> {
+  <span class="var">bucket</span> = <span class="var">aws_s3_bucket</span>.frontend.id
+  <span class="var">policy</span> = <span class="fn">jsonencode</span>({
+    <span class="var">Version</span> = <span class="str">"2012-10-17"</span>
+    <span class="var">Statement</span> = [{
+      <span class="var">Sid</span>       = <span class="str">"AllowCloudFrontOAC"</span>
+      <span class="var">Effect</span>    = <span class="str">"Allow"</span>
+      <span class="var">Principal</span> = { <span class="var">Service</span> = <span class="str">"cloudfront.amazonaws.com"</span> }
+      <span class="var">Action</span>    = <span class="str">"s3:GetObject"</span>
+      <span class="var">Resource</span>  = <span class="str">"${aws_s3_bucket.frontend.arn}/*"</span>
+      <span class="var">Condition</span> = {
+        <span class="var">StringEquals</span> = {
+          <span class="str">"AWS:SourceArn"</span> = <span class="var">aws_cloudfront_distribution</span>.frontend.arn
+        }
+      }
+    }]
+  })
+}</code></pre>
+      <div class="note-box">
+        <strong>Defense in depth:</strong> The S3 bucket has <em>both</em> a public access block (prevents any public ACLs/policies) <em>and</em> a bucket policy that only allows reads from this specific CloudFront distribution. Even if someone guesses the S3 URL, they cannot access objects directly.
+      </div>
+    </div>
+  </div>
+  <div class="step-connector"></div>
+
+  <!-- ======================== STEP 18 ======================== -->
+  <div class="step">
+    <div class="step-num"><div class="step-circle" style="background:rgba(240,160,80,.15);border:1.5px solid rgba(240,160,80,.4);color:var(--accent-orange);">18</div></div>
+    <div class="step-body">
+      <h4>Outputs + Inventory Generator</h4>
+
+      <p><strong style="color:var(--text);">outputs.tf -- grouped by category:</strong></p>
+<pre><code><span class="cm"># ---- EC2 Private IPs (used by Ansible inventory for inter-VM communication) ----</span>
+<span class="kw">output</span> <span class="str">"monitoring_private_ip"</span> { <span class="var">value</span> = <span class="var">aws_instance</span>.monitoring.private_ip }
+<span class="kw">output</span> <span class="str">"backend_private_ip"</span>    { <span class="var">value</span> = <span class="var">aws_instance</span>.backend.private_ip }
+<span class="kw">output</span> <span class="str">"network_private_ip"</span>    { <span class="var">value</span> = <span class="var">aws_instance</span>.network.private_ip }
+<span class="kw">output</span> <span class="str">"ai_private_ip"</span>         { <span class="var">value</span> = <span class="var">aws_instance</span>.ai.private_ip }
+
+<span class="cm"># ---- Elastic IPs (for SSH access from outside VPC) ----</span>
+<span class="kw">output</span> <span class="str">"monitoring_public_ip"</span>  { <span class="var">value</span> = <span class="var">aws_eip</span>.monitoring.public_ip }
+<span class="kw">output</span> <span class="str">"backend_public_ip"</span>     { <span class="var">value</span> = <span class="var">aws_eip</span>.backend.public_ip }
+<span class="kw">output</span> <span class="str">"network_public_ip"</span>     { <span class="var">value</span> = <span class="var">aws_eip</span>.network.public_ip }
+<span class="kw">output</span> <span class="str">"ai_public_ip"</span>          { <span class="var">value</span> = <span class="var">aws_eip</span>.ai.public_ip }
+
+<span class="cm"># ---- RDS ----</span>
+<span class="kw">output</span> <span class="str">"rds_endpoint"</span>  { <span class="var">value</span> = <span class="var">aws_db_instance</span>.mysql.endpoint }  <span class="cm"># hostname:port</span>
+<span class="kw">output</span> <span class="str">"rds_hostname"</span>  { <span class="var">value</span> = <span class="var">aws_db_instance</span>.mysql.address }   <span class="cm"># hostname only</span>
+<span class="kw">output</span> <span class="str">"rds_port"</span>      { <span class="var">value</span> = <span class="var">aws_db_instance</span>.mysql.port }
+
+<span class="cm"># ---- S3 / CloudFront ----</span>
+<span class="kw">output</span> <span class="str">"s3_bucket_name"</span>             { <span class="var">value</span> = <span class="var">aws_s3_bucket</span>.frontend.id }
+<span class="kw">output</span> <span class="str">"cloudfront_domain"</span>           { <span class="var">value</span> = <span class="var">aws_cloudfront_distribution</span>.frontend.domain_name }
+<span class="kw">output</span> <span class="str">"cloudfront_distribution_id"</span>  { <span class="var">value</span> = <span class="var">aws_cloudfront_distribution</span>.frontend.id }
+
+<span class="cm"># ---- Network IDs (for reference/debugging) ----</span>
+<span class="kw">output</span> <span class="str">"vpc_id"</span>            { <span class="var">value</span> = <span class="var">aws_vpc</span>.main.id }
+<span class="kw">output</span> <span class="str">"private_subnet_id"</span> { <span class="var">value</span> = <span class="var">aws_subnet</span>.private.id }
+<span class="kw">output</span> <span class="str">"public_subnet_id"</span>  { <span class="var">value</span> = <span class="var">aws_subnet</span>.public.id }</code></pre>
+
+      <p style="margin-top:14px;"><strong style="color:var(--text);">generate-inventory.sh -- the bridge between Terraform and Ansible:</strong></p>
+<pre><code><span class="cm">#!/usr/bin/env bash</span>
+<span class="cm"># Generate Ansible inventory and group_vars from Terraform outputs</span>
+<span class="cm"># Usage: ./generate-inventory.sh [ANSIBLE_PROJECT_DIR]</span>
+
+<span class="kw">set</span> -euo pipefail     <span class="cm"># Exit on error, undefined var, pipe failure</span>
+
+<span class="var">ANSIBLE_DIR</span>=<span class="str">"${1:-../monitoring-project}"</span>  <span class="cm"># Default: sibling directory</span>
+
+<span class="cm"># Step 1: Read all Terraform outputs into shell variables</span>
+<span class="fn">echo</span> <span class="str">"Reading Terraform outputs..."</span>
+<span class="var">MONITORING_IP</span>=$(<span class="fn">terraform output</span> -raw monitoring_private_ip)
+<span class="var">BACKEND_IP</span>=$(<span class="fn">terraform output</span> -raw backend_private_ip)
+<span class="var">NETWORK_IP</span>=$(<span class="fn">terraform output</span> -raw network_private_ip)
+<span class="var">AI_IP</span>=$(<span class="fn">terraform output</span> -raw ai_private_ip)
+<span class="var">RDS_ENDPOINT</span>=$(<span class="fn">terraform output</span> -raw rds_hostname)
+<span class="var">RDS_PORT</span>=$(<span class="fn">terraform output</span> -raw rds_port)
+<span class="var">CLOUDFRONT_DOMAIN</span>=$(<span class="fn">terraform output</span> -raw cloudfront_domain)
+
+<span class="cm"># Step 2: Update group_vars/all.yml with sed (find-and-replace each variable)</span>
+<span class="var">ALL_VARS</span>=<span class="str">"$ANSIBLE_DIR/inventory/group_vars/all.yml"</span>
+<span class="fn">sed</span> -i <span class="str">"s|^monitoring_vm_ip:.*|monitoring_vm_ip: \"$MONITORING_IP\"|"</span> <span class="str">"$ALL_VARS"</span>
+<span class="fn">sed</span> -i <span class="str">"s|^application_vm_ip:.*|application_vm_ip: \"$BACKEND_IP\"|"</span> <span class="str">"$ALL_VARS"</span>
+<span class="fn">sed</span> -i <span class="str">"s|^network_vm_ip:.*|network_vm_ip: \"$NETWORK_IP\"|"</span> <span class="str">"$ALL_VARS"</span>
+<span class="fn">sed</span> -i <span class="str">"s|^ai_vm_ip:.*|ai_vm_ip: \"$AI_IP\"|"</span> <span class="str">"$ALL_VARS"</span>
+<span class="fn">sed</span> -i <span class="str">"s|^rds_endpoint:.*|rds_endpoint: \"$RDS_ENDPOINT\"|"</span> <span class="str">"$ALL_VARS"</span>
+<span class="fn">sed</span> -i <span class="str">"s|^rds_port:.*|rds_port: $RDS_PORT|"</span> <span class="str">"$ALL_VARS"</span>
+<span class="fn">sed</span> -i <span class="str">"s|^cloudfront_domain:.*|cloudfront_domain: \"$CLOUDFRONT_DOMAIN\"|"</span> <span class="str">"$ALL_VARS"</span>
+
+<span class="cm"># Step 3: Update inventory/production.yml host IPs using Python (more reliable for YAML)</span>
+<span class="var">INVENTORY</span>=<span class="str">"$ANSIBLE_DIR/inventory/production.yml"</span>
+<span class="fn">python3</span> - <span class="str">"$INVENTORY"</span> <span class="str">"$MONITORING_IP"</span> <span class="str">"$BACKEND_IP"</span> <span class="str">"$NETWORK_IP"</span> <span class="str">"$AI_IP"</span> <span class="str">&lt;&lt;'PYEOF'</span>
+<span class="kw">import</span> sys, re
+path, mon, back, net, ai = sys.argv[<span class="num">1</span>:<span class="num">6</span>]
+<span class="kw">with</span> <span class="fn">open</span>(path) <span class="kw">as</span> f:
+    content = f.read()
+<span class="cm"># Regex: match hostname line + ansible_host line, replace IP</span>
+<span class="kw">for</span> host, ip <span class="kw">in</span> {<span class="str">'monitoring-vm'</span>: mon, <span class="str">'application-vm'</span>: back,
+                  <span class="str">'network-vm'</span>: net, <span class="str">'ai-vm'</span>: ai}.items():
+    pattern = rf<span class="str">'({host}:\s*\n\s*ansible_host:\s*)(\S+)'</span>
+    content = re.sub(pattern, rf<span class="str">'\g&lt;1&gt;{ip}'</span>, content)
+<span class="kw">with</span> <span class="fn">open</span>(path, <span class="str">'w'</span>) <span class="kw">as</span> f:
+    f.write(content)
+<span class="str">PYEOF</span>
+
+<span class="fn">echo</span> <span class="str">"Inventory updated. Run: ansible-playbook playbooks/site.yml"</span></code></pre>
+      <div class="note-box" style="background:rgba(107,207,127,.06);border-color:rgba(107,207,127,.25);">
+        <strong style="color:var(--accent-green);">The complete end-to-end workflow:</strong>
+      </div>
+<pre><code><span class="cm"># 1. Provision all AWS resources (~5 min for CloudFront, ~10 min for RDS)</span>
 <span class="kw">cd</span> provisioning-monitoring-infra
-terraform init
-terraform apply
+terraform init         <span class="cm"># Download AWS provider plugin</span>
+terraform plan         <span class="cm"># Preview what will be created</span>
+terraform apply        <span class="cm"># Create everything (type 'yes' to confirm)</span>
 
 <span class="cm"># 2. Auto-populate Ansible inventory from Terraform outputs</span>
 <span class="fn">./generate-inventory.sh</span> <span class="str">../monitoring-project</span>
+<span class="cm"># This updates: inventory/production.yml (host IPs)</span>
+<span class="cm">#               inventory/group_vars/all.yml (VM IPs, RDS, CloudFront)</span>
 
-<span class="cm"># 3. Deploy the full stack</span>
+<span class="cm"># 3. Deploy the full stack to all 4 VMs</span>
 <span class="kw">cd</span> <span class="str">../monitoring-project</span>
-ansible-playbook playbooks/site.yml playbooks/ai.yml</code></pre>
-    <div class="note-box" style="background:rgba(107,207,127,.06);border-color:rgba(107,207,127,.25);margin-top:12px;margin-bottom:0;">
-      <strong style="color:var(--accent-green);">Three commands</strong> — <span class="ic">terraform apply</span>, <span class="ic">./generate-inventory.sh</span>, <span class="ic">ansible-playbook</span> — take you from zero infrastructure to a fully deployed observability + AI RCA stack.
+ansible-playbook playbooks/site.yml playbooks/ai.yml
+<span class="cm"># site.yml deploys: monitoring + application + network VMs</span>
+<span class="cm"># ai.yml deploys: AI/LLM VM (Ollama, Triage Service, MCP servers)</span>
+
+<span class="cm"># 4. Upload React frontend to S3 (one-time, after build)</span>
+<span class="kw">cd</span> <span class="str">../react-frontend</span>
+npm run build
+aws s3 sync build/ s3://<span class="var">$(terraform -chdir=../provisioning-monitoring-infra output -raw s3_bucket_name)</span>/
+
+<span class="cm"># 5. (Optional) Invalidate CloudFront cache after deploy</span>
+aws cloudfront create-invalidation \
+  --distribution-id <span class="var">$(terraform -chdir=../provisioning-monitoring-infra output -raw cloudfront_distribution_id)</span> \
+  --paths <span class="str">"/*"</span></code></pre>
+      <div class="note-box" style="background:rgba(107,207,127,.06);border-color:rgba(107,207,127,.25);margin-top:12px;margin-bottom:0;">
+        <strong style="color:var(--accent-green);">Three commands</strong> -- <span class="ic">terraform apply</span>, <span class="ic">./generate-inventory.sh</span>, <span class="ic">ansible-playbook</span> -- take you from zero infrastructure to a fully deployed observability + AI RCA stack. The generate-inventory.sh script is the glue that connects Terraform outputs to Ansible variables, making the entire pipeline reproducible.
+      </div>
     </div>
   </div>
 
