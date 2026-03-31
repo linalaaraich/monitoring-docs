@@ -3768,6 +3768,545 @@ count_over_time({job="llm-triage"} | json | event = "rca_complete" [24h])</code>
     <span class="var">type</span>: local</code></pre>
   </div>
 
+  <!-- =========================================================== MCP BRIDGE SERVERS -->
+  <div class="section-label">MCP Bridge Servers — LLM Data Access Layer</div>
+
+  <div class="note-box purple">
+    <strong>What are MCP servers?</strong> MCP (Model Context Protocol) bridge servers are thin, read-only FastAPI wrappers that give the LLM autonomous access to query the observability stack. Each server proxies requests to a single upstream data source (Prometheus, Loki, Jaeger, Drain3, or the RCA history database) and exposes a small set of "tools" the LLM can call. The LLM decides which tools to invoke, in what order, and with what parameters during its investigation — the triage service does not hard-code the query sequence. All 5 servers run as lightweight containers on the AI/LLM VM, sharing the Docker network with the triage service and Ollama.
+  </div>
+
+  <!-- ==================== MCP STEP 1 — Architecture Overview ==================== -->
+  <div class="section-label">Step 1 — Architecture Overview</div>
+
+  <div class="step">
+    <div class="step-num"><div class="step-circle" style="background:rgba(176,126,232,.15);color:var(--accent-purple);">1</div></div>
+    <div class="step-body">
+      <h4 style="color:var(--accent-purple);">Five MCP Servers — Port Map and Tool Summary</h4>
+      <p>Each MCP server is a single-file FastAPI application running on its own port. The triage service's <span class="ic">context.py</span> fans out requests to all servers in parallel during context gathering, and the LLM can call any tool endpoint directly during its autonomous investigation phase.</p>
+
+      <table>
+        <thead><tr><th>MCP Server</th><th>Port</th><th>Upstream</th><th>Tools</th><th>Purpose</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><span class="tag tag-orange">prometheus-mcp</span></td>
+            <td>:8091</td>
+            <td>Prometheus :9090</td>
+            <td>query_instant, query_range, get_alerts, get_targets</td>
+            <td>Metrics queries and system health</td>
+          </tr>
+          <tr>
+            <td><span class="tag tag-blue">loki-mcp</span></td>
+            <td>:8092</td>
+            <td>Loki :3100</td>
+            <td>query_logs, get_label_values, get_log_volume</td>
+            <td>Log search and volume analysis</td>
+          </tr>
+          <tr>
+            <td><span class="tag tag-cyan">jaeger-mcp</span></td>
+            <td>:8093</td>
+            <td>Jaeger :16686</td>
+            <td>find_traces, get_trace, get_services, get_operations</td>
+            <td>Distributed trace analysis</td>
+          </tr>
+          <tr>
+            <td><span class="tag tag-yellow">drain3-mcp</span></td>
+            <td>:8094</td>
+            <td>Triage Service :8090</td>
+            <td>get_clusters, get_anomaly_rate, match_log, get_baseline_info</td>
+            <td>Log anomaly detection state</td>
+          </tr>
+          <tr>
+            <td><span class="tag tag-purple">rca-history-mcp</span></td>
+            <td>:8095</td>
+            <td>SQLite (shared volume)</td>
+            <td>get_recent_rcas, search_rcas, get_rca_detail, get_alert_frequency</td>
+            <td>Institutional memory of past RCA decisions</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="note-box purple" style="margin-top:14px;margin-bottom:0;">
+        <strong>Read-only by design:</strong> Every MCP server exposes only GET endpoints. No tool can modify upstream data. This ensures the LLM cannot accidentally mutate Prometheus rules, delete logs, or corrupt the RCA history during an investigation. Each server also exposes a <span class="ic">/health</span> endpoint that checks upstream reachability, returning <span class="ic">"healthy"</span> or <span class="ic">"degraded"</span>.
+      </div>
+    </div>
+  </div>
+
+  <div class="step-connector"></div>
+
+  <!-- ==================== MCP STEP 2 — Prometheus MCP ==================== -->
+  <div class="section-label">Step 2 — Prometheus MCP (:8091)</div>
+
+  <div class="step">
+    <div class="step-num"><div class="step-circle" style="background:rgba(176,126,232,.15);color:var(--accent-purple);">2</div></div>
+    <div class="step-body">
+      <h4 style="color:var(--accent-purple);">prometheus_mcp/main.py — 4 Tools for Metrics Access</h4>
+      <p>Proxies PromQL queries to the Prometheus HTTP API on the monitoring VM. The LLM uses this server to check metric values, spot trends, and understand which services are up or down. Source: <span class="ic">~/monitoring-mcp-servers/prometheus_mcp/main.py</span></p>
+
+      <table>
+        <thead><tr><th>Tool Endpoint</th><th>Parameters</th><th>Why the LLM Uses It</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><span class="ic">/tools/query_instant</span></td>
+            <td><span class="ic">promql</span> (required) — PromQL expression</td>
+            <td>Point-in-time checks: "is this target up right now?", "what is the current CPU usage?"</td>
+          </tr>
+          <tr>
+            <td><span class="ic">/tools/query_range</span></td>
+            <td><span class="ic">promql</span> (required), <span class="ic">start</span> (default: "15m"), <span class="ic">end</span> (default: "now"), <span class="ic">step</span> (default: "60s")</td>
+            <td>See how a metric changed over a time window — essential for spotting trends, spikes, or correlating with alert firing times</td>
+          </tr>
+          <tr>
+            <td><span class="ic">/tools/get_alerts</span></td>
+            <td>None</td>
+            <td>Shows which alert rules are active right now — are multiple alerts firing simultaneously? Helps assess severity</td>
+          </tr>
+          <tr>
+            <td><span class="ic">/tools/get_targets</span></td>
+            <td>None</td>
+            <td>Identifies which scrape targets are UP or DOWN — a DOWN target correlates strongly with service-affecting alerts</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p style="margin-top:16px;"><strong style="color:var(--accent-purple);">query_range — Relative Time Handling:</strong></p>
+      <p>The <span class="ic">start</span> parameter accepts relative strings like <span class="ic">"15m"</span> (15 minutes ago), which the server converts to epoch timestamps before forwarding to Prometheus. This lets the LLM say "show me the last 30 minutes" without computing timestamps.</p>
+
+<pre><code><span class="dec">@app.get</span>(<span class="str">"/tools/query_range"</span>)
+<span class="kw">async def</span> <span class="fn">query_range</span>(
+    <span class="var">promql</span>: str = Query(..., description=<span class="str">"PromQL expression"</span>),
+    <span class="var">start</span>: str = Query(<span class="str">"15m"</span>, description=<span class="str">"Start time (e.g. '15m' for 15 minutes ago, or ISO timestamp)"</span>),
+    <span class="var">end</span>: str = Query(<span class="str">"now"</span>, description=<span class="str">"End time (e.g. 'now' or ISO timestamp)"</span>),
+    <span class="var">step</span>: str = Query(<span class="str">"60s"</span>, description=<span class="str">"Query resolution step"</span>),
+):
+    params = {<span class="str">"query"</span>: promql, <span class="str">"step"</span>: step}
+
+    <span class="cm"># Handle relative time strings like "15m" → epoch seconds</span>
+    <span class="kw">if</span> start.endswith(<span class="str">"m"</span>):
+        <span class="kw">import</span> time
+        minutes = int(start.rstrip(<span class="str">"m"</span>))
+        params[<span class="str">"start"</span>] = str(time.time() - minutes * <span class="num">60</span>)
+    <span class="kw">else</span>:
+        params[<span class="str">"start"</span>] = start
+
+    <span class="kw">if</span> end == <span class="str">"now"</span>:
+        <span class="kw">import</span> time
+        params[<span class="str">"end"</span>] = str(time.time())
+    <span class="kw">else</span>:
+        params[<span class="str">"end"</span>] = end
+
+    resp = <span class="kw">await</span> client.get(f<span class="str">"{PROMETHEUS_URL}/api/v1/query_range"</span>, params=params)
+    resp.raise_for_status()
+    data = resp.json()
+    <span class="kw">return</span> {
+        <span class="str">"status"</span>: data.get(<span class="str">"status"</span>),
+        <span class="str">"result_type"</span>: data.get(<span class="str">"data"</span>, {}).get(<span class="str">"resultType"</span>),
+        <span class="str">"result"</span>: data.get(<span class="str">"data"</span>, {}).get(<span class="str">"result"</span>, []),
+    }</code></pre>
+
+      <p style="margin-top:14px;"><strong style="color:var(--accent-purple);">get_alerts — Response Structure:</strong></p>
+      <p>Returns a <span class="ic">firing_count</span> integer and an <span class="ic">alerts</span> array. Each alert includes <span class="ic">alertname</span>, <span class="ic">state</span>, <span class="ic">severity</span>, <span class="ic">instance</span>, <span class="ic">summary</span>, and <span class="ic">activeAt</span>. The LLM uses this to understand whether the current alert is isolated or part of a broader incident involving multiple firing rules.</p>
+
+      <p style="margin-top:14px;"><strong style="color:var(--accent-purple);">get_targets — Response Structure:</strong></p>
+      <p>Returns <span class="ic">total</span>, <span class="ic">up</span>, <span class="ic">down</span> counts plus a <span class="ic">targets</span> array with <span class="ic">job</span>, <span class="ic">instance</span>, <span class="ic">health</span>, <span class="ic">lastScrape</span>, and <span class="ic">lastError</span> per target. A DOWN target is a strong signal — if <span class="ic">spring-boot-actuator</span> shows <span class="ic">health: "down"</span>, the application is likely unreachable.</p>
+    </div>
+  </div>
+
+  <div class="step-connector"></div>
+
+  <!-- ==================== MCP STEP 3 — Loki MCP ==================== -->
+  <div class="section-label">Step 3 — Loki MCP (:8092)</div>
+
+  <div class="step">
+    <div class="step-num"><div class="step-circle" style="background:rgba(176,126,232,.15);color:var(--accent-purple);">3</div></div>
+    <div class="step-body">
+      <h4 style="color:var(--accent-purple);">loki_mcp/main.py — 3 Tools for Log Access</h4>
+      <p>Proxies LogQL queries to the Loki HTTP API. All responses are capped at <strong>50 log lines</strong> (<span class="ic">MAX_LINES = 50</span>) to prevent context window overflow — the LLM has a finite token budget and should get representative samples, not thousands of lines. Source: <span class="ic">~/monitoring-mcp-servers/loki_mcp/main.py</span></p>
+
+      <table>
+        <thead><tr><th>Tool Endpoint</th><th>Parameters</th><th>Why the LLM Uses It</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><span class="ic">/tools/query_logs</span></td>
+            <td><span class="ic">logql</span> (required), <span class="ic">start</span> (default: "15m"), <span class="ic">end</span> (default: "now"), <span class="ic">limit</span> (1-50, default: 50)</td>
+            <td>Search logs matching a LogQL query within a time range. Use label matchers to narrow by service and pipe expressions to filter (e.g. <span class="ic">|= "error"</span> or <span class="ic">|~ "trace_id=.*"</span>)</td>
+          </tr>
+          <tr>
+            <td><span class="ic">/tools/get_label_values</span></td>
+            <td><span class="ic">label</span> (required) — e.g. "service_name" or "host_name"</td>
+            <td>Discovers which services, hosts, or namespaces are producing logs — helps the LLM narrow its search before querying</td>
+          </tr>
+          <tr>
+            <td><span class="ic">/tools/get_log_volume</span></td>
+            <td><span class="ic">logql</span> (required), <span class="ic">start</span> (default: "15m"), <span class="ic">end</span> (default: "now")</td>
+            <td>Shows whether log volume spiked or dropped — a sudden increase in error logs correlates with incidents; a drop may indicate a service crash</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p style="margin-top:16px;"><strong style="color:var(--accent-purple);">query_logs — Core Implementation:</strong></p>
+      <p>The 50-line cap is enforced both via the <span class="ic">limit</span> parameter (clamped with <span class="ic">min(limit, MAX_LINES)</span>) and by early-breaking the response parsing loop. Loki timestamps are in nanoseconds, so the relative time conversion multiplies by <span class="ic">1e9</span>.</p>
+
+<pre><code><span class="var">MAX_LINES</span> = <span class="num">50</span>
+
+<span class="dec">@app.get</span>(<span class="str">"/tools/query_logs"</span>)
+<span class="kw">async def</span> <span class="fn">query_logs</span>(
+    <span class="var">logql</span>: str = Query(..., description=<span class="str">'LogQL expression, e.g. {service_name="spring-boot"}'</span>),
+    <span class="var">start</span>: str = Query(<span class="str">"15m"</span>, description=<span class="str">"Start time (e.g. '15m' ago or ISO timestamp)"</span>),
+    <span class="var">end</span>: str = Query(<span class="str">"now"</span>, description=<span class="str">"End time"</span>),
+    <span class="var">limit</span>: int = Query(<span class="num">50</span>, ge=<span class="num">1</span>, le=<span class="num">50</span>, description=<span class="str">"Max log lines (capped at 50)"</span>),
+):
+    effective_limit = min(limit, MAX_LINES)
+    params = {<span class="str">"query"</span>: logql, <span class="str">"limit"</span>: effective_limit, <span class="str">"direction"</span>: <span class="str">"backward"</span>}
+
+    now = time.time()
+    <span class="kw">if</span> start.endswith(<span class="str">"m"</span>):
+        minutes = int(start.rstrip(<span class="str">"m"</span>))
+        params[<span class="str">"start"</span>] = str(int((now - minutes * <span class="num">60</span>) * <span class="num">1e9</span>))  <span class="cm"># Loki uses nanoseconds</span>
+    <span class="kw">else</span>:
+        params[<span class="str">"start"</span>] = start
+
+    <span class="kw">if</span> end == <span class="str">"now"</span>:
+        params[<span class="str">"end"</span>] = str(int(now * <span class="num">1e9</span>))
+    <span class="kw">else</span>:
+        params[<span class="str">"end"</span>] = end
+
+    resp = <span class="kw">await</span> client.get(f<span class="str">"{LOKI_URL}/loki/api/v1/query_range"</span>, params=params)
+    resp.raise_for_status()
+    data = resp.json()
+
+    lines = []
+    <span class="kw">for</span> stream <span class="kw">in</span> data.get(<span class="str">"data"</span>, {}).get(<span class="str">"result"</span>, []):
+        <span class="kw">for</span> ts, line <span class="kw">in</span> stream.get(<span class="str">"values"</span>, []):
+            lines.append(line)
+            <span class="kw">if</span> len(lines) >= effective_limit:
+                <span class="kw">break</span>
+        <span class="kw">if</span> len(lines) >= effective_limit:
+            <span class="kw">break</span>
+
+    <span class="kw">return</span> {<span class="str">"lines"</span>: lines, <span class="str">"count"</span>: len(lines), <span class="str">"limit_applied"</span>: effective_limit}</code></pre>
+
+      <p style="margin-top:14px;"><strong style="color:var(--accent-purple);">get_log_volume — Detecting Spikes and Drops:</strong></p>
+      <p>Wraps the LogQL selector in <span class="ic">count_over_time(selector[1m])</span> and queries Loki's range API with 60-second steps. The response includes <span class="ic">total_lines</span> per label set and a <span class="ic">datapoints</span> count. The LLM compares adjacent datapoints to spot volume anomalies: a spike from 10 to 500 lines/minute suggests an error storm; a drop to 0 may mean the service stopped logging (crashed or stuck).</p>
+    </div>
+  </div>
+
+  <div class="step-connector"></div>
+
+  <!-- ==================== MCP STEP 4 — Jaeger MCP ==================== -->
+  <div class="section-label">Step 4 — Jaeger MCP (:8093)</div>
+
+  <div class="step">
+    <div class="step-num"><div class="step-circle" style="background:rgba(176,126,232,.15);color:var(--accent-purple);">4</div></div>
+    <div class="step-body">
+      <h4 style="color:var(--accent-purple);">jaeger_mcp/main.py — 4 Tools for Distributed Trace Analysis</h4>
+      <p>Proxies queries to the Jaeger HTTP API. Enables the LLM to find error spans, analyze latency, and cross-reference <span class="ic">trace_id</span> values with Loki log lines for trace-log correlation. Source: <span class="ic">~/monitoring-mcp-servers/jaeger_mcp/main.py</span></p>
+
+      <table>
+        <thead><tr><th>Tool Endpoint</th><th>Parameters</th><th>Why the LLM Uses It</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><span class="ic">/tools/find_traces</span></td>
+            <td><span class="ic">service</span> (required), <span class="ic">operation</span> (optional), <span class="ic">start</span> (default: "15m"), <span class="ic">end</span> (default: "now"), <span class="ic">limit</span> (1-100, default: 20), <span class="ic">tags</span> (optional JSON, e.g. <span class="ic">{"error":"true"}</span>)</td>
+            <td>Find traces during the alert window — especially error traces or high-latency traces. The <span class="ic">trace_id</span> in results can be used with get_trace() or cross-referenced with Loki logs</td>
+          </tr>
+          <tr>
+            <td><span class="ic">/tools/get_trace</span></td>
+            <td><span class="ic">trace_id</span> (required) — full hex trace ID</td>
+            <td>Get the complete span tree for a specific trace: each span's name, duration, status code, tags, and parent-child relationships. Use after find_traces() to drill into a problematic trace</td>
+          </tr>
+          <tr>
+            <td><span class="ic">/tools/get_services</span></td>
+            <td>None</td>
+            <td>Lists all services that have produced traces — confirms which instrumented services are active (should include at least <span class="ic">react-springboot-app</span> and <span class="ic">kong-gateway</span>)</td>
+          </tr>
+          <tr>
+            <td><span class="ic">/tools/get_operations</span></td>
+            <td><span class="ic">service</span> (required)</td>
+            <td>Lists all operations (endpoints/methods) for a service — helps narrow the search to specific operations like <span class="ic">GET /api/employees</span></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p style="margin-top:16px;"><strong style="color:var(--accent-purple);">find_traces — Response Structure:</strong></p>
+      <p>Each trace in the response is summarized with fields the LLM can reason about directly, including error detection derived from span tags:</p>
+
+<pre><code><span class="cm"># find_traces response structure per trace</span>
+{
+    <span class="str">"trace_id"</span>: <span class="str">"abc123def456..."</span>,        <span class="cm"># Use with get_trace() or Loki query</span>
+    <span class="str">"span_count"</span>: <span class="num">8</span>,                      <span class="cm"># Total spans in the trace</span>
+    <span class="str">"duration_ms"</span>: <span class="num">245.3</span>,                 <span class="cm"># End-to-end latency (root span)</span>
+    <span class="str">"operation"</span>: <span class="str">"GET /api/employees"</span>,    <span class="cm"># Root span operation name</span>
+    <span class="str">"error_span_count"</span>: <span class="num">2</span>,                <span class="cm"># Spans with error=true tag</span>
+    <span class="str">"has_errors"</span>: <span class="kw">true</span>                    <span class="cm"># Quick boolean for filtering</span>
+}</code></pre>
+
+      <p style="margin-top:14px;"><strong style="color:var(--accent-purple);">get_trace — Span Detail Structure:</strong></p>
+      <p>Returns the full span tree with parent-child relationships for root cause localization. Each span includes its service name, operation, duration, HTTP status code, error flag, all tags, and a <span class="ic">parent_span_id</span> reference. The LLM follows the span tree from root to leaf to find where latency accumulated or where errors originated.</p>
+
+<pre><code><span class="cm"># get_trace span detail structure</span>
+{
+    <span class="str">"span_id"</span>: <span class="str">"1a2b3c4d"</span>,
+    <span class="str">"operation"</span>: <span class="str">"GET /api/employees"</span>,
+    <span class="str">"service"</span>: <span class="str">"react-springboot-app"</span>,
+    <span class="str">"duration_ms"</span>: <span class="num">245.3</span>,
+    <span class="str">"status_code"</span>: <span class="str">"500"</span>,
+    <span class="str">"error"</span>: <span class="kw">true</span>,
+    <span class="str">"tags"</span>: {<span class="str">"http.method"</span>: <span class="str">"GET"</span>, <span class="str">"http.status_code"</span>: <span class="str">"500"</span>, ...},
+    <span class="str">"parent_span_id"</span>: <span class="str">"5e6f7a8b"</span>       <span class="cm"># null for root span</span>
+}</code></pre>
+
+      <div class="note-box" style="margin-top:14px;margin-bottom:0;">
+        <strong>Trace-log correlation:</strong> The <span class="ic">trace_id</span> from find_traces or get_trace can be searched in Loki using <span class="ic">{service_name="spring-boot"} |= "trace_id=&lt;value&gt;"</span>. This cross-pillar correlation is one of the most powerful investigation patterns — the LLM can find the exact log lines produced during a slow or errored request.
+      </div>
+    </div>
+  </div>
+
+  <div class="step-connector"></div>
+
+  <!-- ==================== MCP STEP 5 — Drain3 MCP ==================== -->
+  <div class="section-label">Step 5 — Drain3 MCP (:8094)</div>
+
+  <div class="step">
+    <div class="step-num"><div class="step-circle" style="background:rgba(176,126,232,.15);color:var(--accent-purple);">5</div></div>
+    <div class="step-body">
+      <h4 style="color:var(--accent-purple);">drain3_mcp/main.py — 4 Tools for Log Anomaly Detection</h4>
+      <p>Exposes the triage service's internal Drain3 state to the LLM. Unlike the other MCP servers which proxy to dedicated data stores, this server queries the triage service's own <span class="ic">/drain3/stats</span> endpoint — Drain3 runs embedded inside the triage service, not as a separate container. Source: <span class="ic">~/monitoring-mcp-servers/drain3_mcp/main.py</span></p>
+
+      <table>
+        <thead><tr><th>Tool Endpoint</th><th>Parameters</th><th>Why the LLM Uses It</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><span class="ic">/tools/get_clusters</span></td>
+            <td>None</td>
+            <td>Returns all known log template clusters with match counts. High-count templates are routine; low-count or newly created templates may indicate emerging issues</td>
+          </tr>
+          <tr>
+            <td><span class="ic">/tools/get_anomaly_rate</span></td>
+            <td>None</td>
+            <td>Returns the ratio of anomalous to total log lines. Near 0.0 = healthy, above 0.1 = investigate. Also detects baseline drift after deploys</td>
+          </tr>
+          <tr>
+            <td><span class="ic">/tools/match_log</span></td>
+            <td><span class="ic">log_line</span> (required) — a log line to classify</td>
+            <td>Checks if a specific log line matches a known template or is anomalous. The LLM uses this to drill into error messages found in Loki — "is this a known pattern or something never seen before?"</td>
+          </tr>
+          <tr>
+            <td><span class="ic">/tools/get_baseline_info</span></td>
+            <td>None</td>
+            <td>Reports how mature the Drain3 baseline is — a freshly seeded baseline with few clusters may produce false positives, while a well-trained one is more reliable</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p style="margin-top:16px;"><strong style="color:var(--accent-purple);">get_baseline_info — Maturity Assessment Logic:</strong></p>
+      <p>The server interprets the cluster count to tell the LLM how much to trust anomaly signals:</p>
+
+<pre><code><span class="dec">@app.get</span>(<span class="str">"/tools/get_baseline_info"</span>)
+<span class="kw">async def</span> <span class="fn">get_baseline_info</span>():
+    resp = <span class="kw">await</span> client.get(f<span class="str">"{TRIAGE_URL}/drain3/stats"</span>)
+    resp.raise_for_status()
+    stats = resp.json()
+
+    total = stats.get(<span class="str">"total_clusters"</span>, <span class="num">0</span>)
+    lines = stats.get(<span class="str">"total_lines_processed"</span>, <span class="num">0</span>)
+
+    <span class="kw">if</span> total < <span class="num">50</span>:
+        maturity = <span class="str">"immature — baseline still learning, expect false positives"</span>
+    <span class="kw">elif</span> total < <span class="num">200</span>:
+        maturity = <span class="str">"developing — baseline has reasonable coverage"</span>
+    <span class="kw">else</span>:
+        maturity = <span class="str">"mature — baseline well-trained with broad template coverage"</span>
+
+    <span class="kw">return</span> {
+        <span class="str">"total_clusters"</span>: total,
+        <span class="str">"total_lines_processed"</span>: lines,
+        <span class="str">"anomaly_rate"</span>: stats.get(<span class="str">"recent_anomaly_rate"</span>, <span class="num">0.0</span>),
+        <span class="str">"maturity"</span>: maturity,
+    }</code></pre>
+
+      <p style="margin-top:14px;"><strong style="color:var(--accent-purple);">get_anomaly_rate — Interpretation Thresholds:</strong></p>
+      <p>The response includes a human-readable <span class="ic">interpretation</span> field computed from the rate value:</p>
+
+<pre><code><span class="kw">def</span> <span class="fn">_interpret_rate</span>(rate: float) -> str:
+    <span class="kw">if</span> rate < <span class="num">0.01</span>:
+        <span class="kw">return</span> <span class="str">"very low — almost all logs match known templates"</span>
+    <span class="kw">elif</span> rate < <span class="num">0.05</span>:
+        <span class="kw">return</span> <span class="str">"low — most logs are routine, a few novel patterns"</span>
+    <span class="kw">elif</span> rate < <span class="num">0.15</span>:
+        <span class="kw">return</span> <span class="str">"moderate — notable number of novel log patterns"</span>
+    <span class="kw">else</span>:
+        <span class="kw">return</span> <span class="str">"high — many logs are anomalous, possible incident or baseline drift"</span></code></pre>
+
+      <div class="note-box warn" style="margin-top:14px;margin-bottom:0;">
+        <strong>Interpretation guidance for the LLM:</strong> A rate near 0.0 for extended periods after a deploy could mean Drain3 needs reseeding (baseline drift) — not that everything is healthy. The LLM should cross-reference the anomaly rate with the <span class="ic">get_baseline_info</span> maturity field and the time since last deploy to make this judgment.
+      </div>
+    </div>
+  </div>
+
+  <div class="step-connector"></div>
+
+  <!-- ==================== MCP STEP 6 — RCA History MCP ==================== -->
+  <div class="section-label">Step 6 — RCA History MCP (:8095)</div>
+
+  <div class="step">
+    <div class="step-num"><div class="step-circle" style="background:rgba(176,126,232,.15);color:var(--accent-purple);">6</div></div>
+    <div class="step-body">
+      <h4 style="color:var(--accent-purple);">rca_history_mcp/main.py — 4 Tools for Institutional Memory</h4>
+      <p>Gives the LLM access to a SQLite database of past RCA decisions (shared volume from the triage service). This is the "institutional memory" layer — it enables the LLM to learn from previous incidents instead of starting each investigation from scratch. Source: <span class="ic">~/monitoring-mcp-servers/rca_history_mcp/main.py</span></p>
+
+      <p style="margin-bottom:6px;">Unlike the other MCP servers which use <span class="ic">httpx</span> to proxy HTTP APIs, this server connects directly to the SQLite file at <span class="ic">/var/lib/triage-service/rca_history.db</span> using <span class="ic">aiosqlite</span>. The database connection is managed via FastAPI's lifespan context manager.</p>
+
+      <table>
+        <thead><tr><th>Tool Endpoint</th><th>Parameters</th><th>Why the LLM Uses It</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><span class="ic">/tools/get_recent_rcas</span></td>
+            <td><span class="ic">hours</span> (1-168, default: 24)</td>
+            <td>View recent alert activity — are alerts clustering? Is the system in a degraded state with multiple firing alerts?</td>
+          </tr>
+          <tr>
+            <td><span class="ic">/tools/search_rcas</span></td>
+            <td><span class="ic">alert_name</span> (required), <span class="ic">days</span> (1-30, default: 7)</td>
+            <td>"Has HighP95Latency fired before? What was the root cause last time? Was it a real issue or noise?" Prevents starting from scratch each time</td>
+          </tr>
+          <tr>
+            <td><span class="ic">/tools/get_rca_detail</span></td>
+            <td><span class="ic">rca_id</span> (required) — UUID of the RCA record</td>
+            <td>Full detail of a past investigation: the LLM's reasoning, root cause analysis, evidence used, and actions taken. Reference to avoid repeating work or compare symptoms</td>
+          </tr>
+          <tr>
+            <td><span class="ic">/tools/get_alert_frequency</span></td>
+            <td><span class="ic">alert_name</span> (required), <span class="ic">days</span> (1-30, default: 7)</td>
+            <td>Is this a one-off alert or a recurring problem? Frequent firing suggests a persistent underlying issue rather than a transient spike</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p style="margin-top:16px;"><strong style="color:var(--accent-purple);">get_alert_frequency — Pattern Description Logic:</strong></p>
+      <p>Computes the average firings per day and classifies the alert into a human-readable pattern that guides the LLM's severity assessment:</p>
+
+<pre><code><span class="kw">def</span> <span class="fn">_describe_pattern</span>(count: int, days: int) -> str:
+    <span class="kw">if</span> count == <span class="num">0</span>:
+        <span class="kw">return</span> <span class="str">"never fired in this period"</span>
+    avg_per_day = count / days
+    <span class="kw">if</span> avg_per_day < <span class="num">0.2</span>:
+        <span class="kw">return</span> <span class="str">"rare — fires occasionally"</span>
+    <span class="kw">elif</span> avg_per_day < <span class="num">1</span>:
+        <span class="kw">return</span> <span class="str">"intermittent — fires a few times per week"</span>
+    <span class="kw">elif</span> avg_per_day < <span class="num">5</span>:
+        <span class="kw">return</span> <span class="str">"frequent — fires daily"</span>
+    <span class="kw">else</span>:
+        <span class="kw">return</span> <span class="str">"chronic — fires multiple times per day, likely a persistent issue"</span></code></pre>
+
+      <p style="margin-top:14px;"><strong style="color:var(--accent-purple);">search_rcas — Verdict Distribution:</strong></p>
+      <p>Beyond returning matching records, <span class="ic">search_rcas</span> computes an <span class="ic">escalated</span> vs <span class="ic">dismissed</span> breakdown by counting <span class="ic">action_taken</span> values of <span class="ic">"emailed"</span> and <span class="ic">"suppressed"</span>. This tells the LLM the historical hit rate: if an alert was dismissed 19 out of 20 times, the current firing is likely noise too. If it was escalated every time, the LLM should take it seriously.</p>
+
+<pre><code><span class="dec">@app.get</span>(<span class="str">"/tools/search_rcas"</span>)
+<span class="kw">async def</span> <span class="fn">search_rcas</span>(
+    <span class="var">alert_name</span>: str = Query(..., description=<span class="str">"Alert name to search for"</span>),
+    <span class="var">days</span>: int = Query(<span class="num">7</span>, ge=<span class="num">1</span>, le=<span class="num">30</span>, description=<span class="str">"Days to look back"</span>),
+):
+    since = (datetime.utcnow() - timedelta(days=days)).isoformat()
+    cursor = <span class="kw">await</span> db.execute(
+        <span class="str">"SELECT * FROM rca_history WHERE alert_name = ? AND timestamp > ? ORDER BY timestamp DESC"</span>,
+        (alert_name, since),
+    )
+    rows = <span class="kw">await</span> cursor.fetchall()
+    records = [dict(row) <span class="kw">for</span> row <span class="kw">in</span> rows]
+
+    <span class="cm"># Compute verdict distribution for historical pattern analysis</span>
+    escalated = sum(<span class="num">1</span> <span class="kw">for</span> r <span class="kw">in</span> records <span class="kw">if</span> r.get(<span class="str">"action_taken"</span>) == <span class="str">"emailed"</span>)
+    dismissed = sum(<span class="num">1</span> <span class="kw">for</span> r <span class="kw">in</span> records <span class="kw">if</span> r.get(<span class="str">"action_taken"</span>) == <span class="str">"suppressed"</span>)
+
+    <span class="kw">return</span> {
+        <span class="str">"alert_name"</span>: alert_name, <span class="str">"days"</span>: days,
+        <span class="str">"total_occurrences"</span>: len(records),
+        <span class="str">"escalated"</span>: escalated, <span class="str">"dismissed"</span>: dismissed,
+        <span class="str">"records"</span>: records,
+    }</code></pre>
+
+      <div class="note-box purple" style="margin-top:14px;margin-bottom:0;">
+        <strong>Why institutional memory matters:</strong> Without history, the LLM treats every alert as a novel event. With it, the LLM can say "HighP95Latency has fired 12 times in the last 7 days and was dismissed 11 times — the root cause was transient GC pressure on the Spring Boot JVM, pattern is chronic." This context dramatically improves the ESCALATE/DISMISS decision quality.
+      </div>
+    </div>
+  </div>
+
+  <div class="step-connector"></div>
+
+  <!-- ==================== MCP STEP 7 — How It All Connects ==================== -->
+  <div class="section-label">Step 7 — How It All Connects</div>
+
+  <div class="step">
+    <div class="step-num"><div class="step-circle" style="background:rgba(176,126,232,.15);color:var(--accent-purple);">7</div></div>
+    <div class="step-body">
+      <h4 style="color:var(--accent-purple);">End-to-End Data Flow — From Alert to Verdict</h4>
+      <p>The MCP servers sit between the triage service and the observability stack, forming a clean abstraction layer. Here is the complete flow from Grafana alert to LLM verdict:</p>
+
+      <div class="arch-diagram">
+        <div class="arch-row">
+          <div class="arch-box box-alert" style="min-width:100px;">Grafana Alerting<small>fires webhook</small></div>
+          <div class="arch-arrow">→</div>
+          <div class="arch-box box-fastapi" style="min-width:100px;">Triage Service<small>:8090 /webhook/grafana</small></div>
+        </div>
+        <div class="arch-arrow-down">↓</div>
+        <p style="text-align:center;color:var(--muted);font-size:11px;margin:4px 0;">context.py fans out in parallel to all MCP servers</p>
+        <div class="arch-row">
+          <div class="arch-box box-prom" style="min-width:80px;">Prometheus MCP<small>:8091</small></div>
+          <div class="arch-box box-loki" style="min-width:80px;">Loki MCP<small>:8092</small></div>
+          <div class="arch-box box-jaeger" style="min-width:80px;">Jaeger MCP<small>:8093</small></div>
+          <div class="arch-box box-drain" style="min-width:80px;">Drain3 MCP<small>:8094</small></div>
+          <div class="arch-box box-fastapi" style="min-width:80px;">RCA History MCP<small>:8095</small></div>
+        </div>
+        <div class="arch-arrow-down">↓</div>
+        <p style="text-align:center;color:var(--muted);font-size:11px;margin:4px 0;">each MCP server queries its upstream data source</p>
+        <div class="arch-row">
+          <div class="arch-box box-prom" style="min-width:80px;">Prometheus<small>:9090</small></div>
+          <div class="arch-box box-loki" style="min-width:80px;">Loki<small>:3100</small></div>
+          <div class="arch-box box-jaeger" style="min-width:80px;">Jaeger<small>:16686</small></div>
+          <div class="arch-box box-drain" style="min-width:80px;">Triage /drain3<small>:8090</small></div>
+          <div class="arch-box box-fastapi" style="min-width:80px;">SQLite<small>rca_history.db</small></div>
+        </div>
+        <div class="arch-arrow-down">↓</div>
+        <p style="text-align:center;color:var(--muted);font-size:11px;margin:4px 0;">triage service annotates logs with Drain3, builds LLM prompt</p>
+        <div class="arch-row">
+          <div class="arch-box box-fastapi" style="min-width:120px;">Triage Service<small>drain_analyzer.py + llm_client.py</small></div>
+          <div class="arch-arrow">→</div>
+          <div class="arch-box box-ollama" style="min-width:120px;">Ollama (llama3.1:8b)<small>:11434 /api/chat</small></div>
+        </div>
+        <div class="arch-arrow-down">↓</div>
+        <p style="text-align:center;color:var(--muted);font-size:11px;margin:4px 0;">LLM autonomously calls MCP tools during investigation, then returns structured verdict</p>
+        <div class="arch-row">
+          <div class="arch-box box-ollama" style="min-width:140px;">LLM Verdict<small>ESCALATE or DISMISS + reasoning</small></div>
+          <div class="arch-arrow">→</div>
+          <div class="arch-box box-fastapi" style="min-width:100px;">Pipeline<small>pipeline.py</small></div>
+          <div class="arch-arrow">→</div>
+          <div class="arch-branch-col">
+            <div class="arch-box box-alert" style="min-width:100px;">Email (ESCALATE)<small>notifier.py → Gmail SMTP</small></div>
+            <div class="arch-box box-drain" style="min-width:100px;">Suppress (DISMISS)<small>log only, no email</small></div>
+          </div>
+        </div>
+      </div>
+
+      <p style="margin-top:14px;"><strong style="color:var(--accent-purple);">Key Design Decisions:</strong></p>
+
+      <p><strong>1. Why separate MCP servers instead of direct API calls?</strong> Isolation and LLM autonomy. The triage service's <span class="ic">context.py</span> does an initial parallel fan-out to gather baseline context. But during the LLM's autonomous investigation phase, the LLM itself can call any MCP tool endpoint to dig deeper — e.g., finding a suspicious <span class="ic">trace_id</span> in Jaeger and then querying Loki for matching logs. The MCP abstraction gives the LLM a stable, documented interface regardless of upstream API changes.</p>
+
+      <p><strong>2. Why read-only?</strong> Safety. The LLM should observe but never modify the system under investigation. All MCP endpoints are GET requests by design. The only write paths are the triage service's own RCA history store and email notifier — these are controlled by <span class="ic">pipeline.py</span>, not by the LLM directly.</p>
+
+      <p><strong>3. Why cap response sizes?</strong> Token budget management. Loki caps at 50 lines, Jaeger at 100 traces, Prometheus returns only essential fields. Large responses would consume the LLM's context window, leaving no room for reasoning. The caps are intentionally conservative.</p>
+
+      <div class="note-box success" style="margin-top:14px;margin-bottom:0;">
+        <strong>Verification:</strong> After deploying all 5 MCP servers, check health endpoints to confirm upstream connectivity:
+        <span class="ic">curl http://localhost:8091/health</span> (Prometheus),
+        <span class="ic">curl http://localhost:8092/health</span> (Loki),
+        <span class="ic">curl http://localhost:8093/health</span> (Jaeger),
+        <span class="ic">curl http://localhost:8094/health</span> (Drain3),
+        <span class="ic">curl http://localhost:8095/health</span> (RCA History).
+        All should return <span class="ic">{"status": "healthy"}</span> with upstream reachability confirmed.
+      </div>
+    </div>
+  </div>
+
 </div>
 </div><!-- /tab-grafana -->
 
