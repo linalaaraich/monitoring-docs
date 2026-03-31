@@ -3645,6 +3645,237 @@ docker exec llm-triage python3 -c "import drain3; print(drain3.__version__)"
     </div>
   </details>
 
+  <!-- ===== NEW FEATURE: Test Suite ===== -->
+
+  <div class="section-label">Test Suite (34 Tests Passing)</div>
+
+  <div class="note-box success">
+    <strong>All 34 tests pass.</strong> The triage service has full pytest coverage across deduplication, validation, persistence, LLM parsing, Drain3 analysis, and API endpoints. Run the suite before every deployment.
+  </div>
+
+  <div class="step">
+    <div class="step-num"><div class="step-circle" style="background:rgba(107,207,127,.15);border:1.5px solid rgba(107,207,127,.4);color:var(--accent-green);">T</div></div>
+    <div class="step-body">
+      <h4>Run the full test suite</h4>
+<pre><code><span class="cm"># From the triage service directory (or inside the container)</span>
+python -m pytest tests/ -v
+
+<span class="cm"># Expected: 34 passed in ~3 seconds</span>
+<span class="cm"># All tests run without network access — no live Prometheus/Loki/Jaeger needed</span></code></pre>
+    </div>
+  </div>
+  <div class="step-connector"></div>
+
+  <div class="step">
+    <div class="step-num"><div class="step-circle" style="background:rgba(107,207,127,.15);border:1.5px solid rgba(107,207,127,.4);color:var(--accent-green);">1</div></div>
+    <div class="step-body">
+      <h4>test_dedup.py &mdash; 7 tests</h4>
+      <p>Covers the alert deduplication layer that prevents duplicate RCA runs for the same alert.</p>
+      <ul>
+        <li><strong>TTL expiration:</strong> Verifies that dedup keys expire after the configured TTL window, allowing re-processing</li>
+        <li><strong>Concurrent safety:</strong> Tests <span class="ic">asyncio.Lock</span> prevents race conditions when multiple webhooks arrive simultaneously</li>
+        <li><strong>Resolve + re-fire edge case:</strong> Confirms that a resolved alert clears the dedup key, so a subsequent firing of the same alert is processed again</li>
+      </ul>
+    </div>
+  </div>
+  <div class="step-connector"></div>
+
+  <div class="step">
+    <div class="step-num"><div class="step-circle" style="background:rgba(107,207,127,.15);border:1.5px solid rgba(107,207,127,.4);color:var(--accent-green);">2</div></div>
+    <div class="step-body">
+      <h4>test_models.py &mdash; 7 tests</h4>
+      <p>Validates Pydantic models that parse incoming Grafana webhook payloads and internal data structures. Ensures required fields are enforced, optional fields have correct defaults, and invalid payloads are rejected with clear errors.</p>
+    </div>
+  </div>
+  <div class="step-connector"></div>
+
+  <div class="step">
+    <div class="step-num"><div class="step-circle" style="background:rgba(107,207,127,.15);border:1.5px solid rgba(107,207,127,.4);color:var(--accent-green);">3</div></div>
+    <div class="step-body">
+      <h4>test_rca_store.py &mdash; 4 tests</h4>
+      <p>Tests SQLite persistence for RCA decision history. Covers insert, retrieval, ordering, and schema integrity of the <span class="ic">rca_decisions</span> table.</p>
+    </div>
+  </div>
+  <div class="step-connector"></div>
+
+  <div class="step">
+    <div class="step-num"><div class="step-circle" style="background:rgba(107,207,127,.15);border:1.5px solid rgba(107,207,127,.4);color:var(--accent-green);">4</div></div>
+    <div class="step-body">
+      <h4>test_llm_parsing.py &mdash; 7 tests</h4>
+      <p>Validates the parsing logic that extracts structured JSON from raw LLM output.</p>
+      <ul>
+        <li><strong>JSON parsing:</strong> Handles valid JSON, JSON embedded in markdown fences, and malformed responses</li>
+        <li><strong>Markdown wrapping:</strong> Strips <span class="ic">```json</span> wrappers that Ollama sometimes adds around responses</li>
+        <li><strong>ESCALATE fallback:</strong> When the LLM cannot determine root cause, verifies the parser correctly identifies the ESCALATE verdict and flags the alert for human review</li>
+      </ul>
+    </div>
+  </div>
+  <div class="step-connector"></div>
+
+  <div class="step">
+    <div class="step-num"><div class="step-circle" style="background:rgba(107,207,127,.15);border:1.5px solid rgba(107,207,127,.4);color:var(--accent-green);">5</div></div>
+    <div class="step-body">
+      <h4>test_drain_analyzer.py &mdash; 5 tests</h4>
+      <p>Tests Drain3 log template extraction and anomaly annotation. Verifies that common log patterns are clustered into templates, rare patterns are flagged as anomalous, and the analyzer output is correctly structured for the LLM context window.</p>
+    </div>
+  </div>
+  <div class="step-connector"></div>
+
+  <div class="step">
+    <div class="step-num"><div class="step-circle" style="background:rgba(107,207,127,.15);border:1.5px solid rgba(107,207,127,.4);color:var(--accent-green);">6</div></div>
+    <div class="step-body">
+      <h4>test_api.py &mdash; 4 tests</h4>
+      <p>Tests FastAPI endpoints using the test client. Covers <span class="ic">/health</span>, <span class="ic">/webhook/grafana</span> (valid and invalid payloads), and response status codes.</p>
+    </div>
+  </div>
+
+  <!-- ===== NEW FEATURE: Decision Dashboard ===== -->
+
+  <div class="section-label">Decision Dashboard</div>
+
+  <div class="note-box purple">
+    <strong>New in Sprint 2:</strong> The triage service now includes a built-in HTML dashboard for reviewing RCA decisions during the demo. No additional setup needed &mdash; it is served directly by the FastAPI application.
+  </div>
+
+  <div class="step">
+    <div class="step-num"><div class="step-circle" style="background:rgba(176,126,232,.15);border:1.5px solid rgba(176,126,232,.4);color:var(--accent-purple);">D</div></div>
+    <div class="step-body">
+      <h4>Access the dashboard</h4>
+      <p>Open the dashboard in your browser during the demo to show live triage activity:</p>
+<pre><code><span class="cm"># Accessible from any machine that can reach the AI VM</span>
+http://ai-vm:8090/dashboard
+
+<span class="cm"># Or use the direct IP</span>
+http://AI_VM_IP:8090/dashboard</code></pre>
+    </div>
+  </div>
+  <div class="step-connector"></div>
+
+  <div class="step">
+    <div class="step-num"><div class="step-circle" style="background:rgba(176,126,232,.15);border:1.5px solid rgba(176,126,232,.4);color:var(--accent-purple);">1</div></div>
+    <div class="step-body">
+      <h4>Stats cards</h4>
+      <p>The top of the dashboard displays summary cards with real-time counters:</p>
+      <ul>
+        <li><strong>Total Decisions:</strong> Count of all RCA decisions processed since the service started</li>
+        <li><strong>Escalated:</strong> Alerts where the LLM could not determine root cause and flagged for human review</li>
+        <li><strong>Dismissed:</strong> Alerts the LLM classified as non-actionable (e.g., transient spikes, expected behavior)</li>
+        <li><strong>Timeouts:</strong> Cases where Ollama did not respond within the configured timeout window</li>
+      </ul>
+    </div>
+  </div>
+  <div class="step-connector"></div>
+
+  <div class="step">
+    <div class="step-num"><div class="step-circle" style="background:rgba(176,126,232,.15);border:1.5px solid rgba(176,126,232,.4);color:var(--accent-purple);">2</div></div>
+    <div class="step-body">
+      <h4>Decision history table</h4>
+      <p>Below the stats cards, a table lists every RCA decision with color-coded verdicts:</p>
+      <ul>
+        <li><strong>Green rows:</strong> Resolved &mdash; root cause identified and RCA report emailed</li>
+        <li><strong>Orange rows:</strong> Escalated &mdash; flagged for human review</li>
+        <li><strong>Red rows:</strong> Timeout &mdash; Ollama did not respond in time</li>
+        <li><strong>Gray rows:</strong> Dismissed &mdash; alert classified as non-actionable</li>
+      </ul>
+      <p>Each row shows the alert name, severity, timestamp, verdict, and a truncated summary of the LLM response.</p>
+    </div>
+  </div>
+  <div class="step-connector"></div>
+
+  <div class="step">
+    <div class="step-num"><div class="step-circle" style="background:rgba(176,126,232,.15);border:1.5px solid rgba(176,126,232,.4);color:var(--accent-purple);">3</div></div>
+    <div class="step-body">
+      <h4>Dark theme</h4>
+      <p>The dashboard uses a dark color scheme consistent with the monitoring-docs style (<span class="ic">#0f1117</span> background, <span class="ic">#1a1d27</span> cards). It is designed for screen-share visibility during the April 9 demo presentation.</p>
+      <div class="note-box warn" style="margin-top:10px;margin-bottom:0;">
+        <strong>Demo tip:</strong> Open the dashboard in a second browser tab alongside Grafana. When you trigger a load test, stakeholders can watch alerts fire in Grafana and see the triage decision appear on the dashboard within 1&ndash;2 minutes.
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== NEW FEATURE: Local Development Setup ===== -->
+
+  <div class="section-label">Local Development Setup</div>
+
+  <div class="note-box">
+    <strong>For local development only.</strong> The <span class="ic">docker-compose.dev.yml</span> file lets you run the full AI triage stack on your workstation without Ansible or access to the production VMs. Useful for testing code changes before deploying.
+  </div>
+
+  <div class="step">
+    <div class="step-num"><div class="step-circle" style="background:rgba(78,168,222,.15);border:1.5px solid rgba(78,168,222,.4);color:var(--accent-blue);">1</div></div>
+    <div class="step-body">
+      <h4>Start the local AI stack</h4>
+<pre><code><span class="cm"># Clone the repo and navigate to the AI triage service directory</span>
+<span class="cm"># Then start all services with build</span>
+docker compose -f docker-compose.dev.yml up --build
+
+<span class="cm"># Starts: llm-triage (:8090), ollama (:11434)</span>
+<span class="cm"># First run pulls the Ollama image and llama3:8b model (~4.7 GB download)</span></code></pre>
+    </div>
+  </div>
+  <div class="step-connector"></div>
+
+  <div class="step">
+    <div class="step-num"><div class="step-circle" style="background:rgba(78,168,222,.15);border:1.5px solid rgba(78,168,222,.4);color:var(--accent-blue);">2</div></div>
+    <div class="step-body">
+      <h4>Verify services are running</h4>
+<pre><code><span class="cm"># Health check — should return {"status":"ok", ...}</span>
+curl -s http://localhost:8090/health | python3 -m json.tool
+
+<span class="cm"># Ollama check</span>
+curl -s http://localhost:11434
+
+<span class="cm"># Open the decision dashboard</span>
+<span class="cm"># http://localhost:8090/dashboard</span></code></pre>
+    </div>
+  </div>
+  <div class="step-connector"></div>
+
+  <div class="step">
+    <div class="step-num"><div class="step-circle" style="background:rgba(78,168,222,.15);border:1.5px solid rgba(78,168,222,.4);color:var(--accent-blue);">3</div></div>
+    <div class="step-body">
+      <h4>Expected behavior in local mode</h4>
+      <div class="note-box warn" style="margin-top:0;margin-bottom:10px;">
+        <strong>MCP servers will show degraded health.</strong> Without live Prometheus, Loki, and Jaeger instances, the MCP bridges cannot fetch real telemetry data. The <span class="ic">/health</span> endpoint will report these data sources as <span class="ic">"unavailable"</span>. This is expected and does not prevent testing.
+      </div>
+      <ul>
+        <li><strong>Webhook ingestion works fully:</strong> The triage service accepts <span class="ic">POST /webhook/grafana</span> payloads regardless of MCP server health</li>
+        <li><strong>Dedup, validation, and parsing:</strong> All local logic (Pydantic models, dedup cache, LLM response parsing) works without external dependencies</li>
+        <li><strong>Ollama responds:</strong> LLM inference runs locally &mdash; RCA reports will be generated but based on limited context</li>
+        <li><strong>Dashboard works:</strong> The <span class="ic">/dashboard</span> page renders and displays decisions from the local SQLite store</li>
+      </ul>
+    </div>
+  </div>
+  <div class="step-connector"></div>
+
+  <div class="step">
+    <div class="step-num"><div class="step-circle" style="background:rgba(78,168,222,.15);border:1.5px solid rgba(78,168,222,.4);color:var(--accent-blue);">4</div></div>
+    <div class="step-body">
+      <h4>Send a test webhook locally</h4>
+<pre><code><span class="cm"># Simulate a Grafana alert webhook to test the full pipeline</span>
+curl -XPOST http://localhost:8090/webhook/grafana \
+  -H "Content-Type: application/json" \
+  -d '{
+    "receiver": "ai-rca-triage",
+    "status": "firing",
+    "alerts": [{
+      "status": "firing",
+      "labels": {
+        "alertname": "HighLatency",
+        "severity": "critical",
+        "job": "spring"
+      },
+      "annotations": {
+        "summary": "p99 latency above 2s for 5 minutes"
+      }
+    }]
+  }'
+
+<span class="cm"># Then check the dashboard to see the decision appear</span>
+<span class="cm"># http://localhost:8090/dashboard</span></code></pre>
+    </div>
+  </div>
+
 </div>
 </div><!-- /tab-e2e -->
 
