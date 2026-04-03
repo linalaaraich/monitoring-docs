@@ -2192,6 +2192,49 @@ ansible-playbook playbooks/site.yml playbooks/ai.yml</code></pre>
         <strong>All egress is open:</strong> Every SG has <span class="ic">egress 0.0.0.0/0 all ports</span>. This is intentional for a demo — instances need to reach Docker Hub, apt repos, Gmail SMTP, etc. In production on the private cloud, the AI VM's egress will be <strong>completely locked down</strong> after initial setup (see the <strong>Production Migration</strong> tab for the air-gap procedure and UFW rules). Other VMs will have egress restricted to specific internal IPs + essential external services.
       </div>
 
+      <div class="note-box" style="margin-top:8px;">
+        <strong style="color:var(--accent-cyan);"><span class="ic">for_each</span> with a map — eliminating identical egress rules</strong>
+        <p style="margin-top:8px;">All 5 egress rules are identical except for the security group ID. Instead of repeating the same block 5 times, we use <span class="ic">for_each</span> with a <strong>map</strong> — where the key is a friendly name and the value is the SG ID:</p>
+<pre style="margin-top:6px;"><code><span class="kw">resource</span> <span class="str">"aws_vpc_security_group_egress_rule"</span> <span class="str">"all_outbound"</span> {
+  <span class="var">for_each</span> = {
+    <span class="var">monitoring</span> = <span class="var">aws_security_group</span>.monitoring.id
+    <span class="var">backend</span>    = <span class="var">aws_security_group</span>.backend.id
+    <span class="var">network</span>    = <span class="var">aws_security_group</span>.network.id
+    <span class="var">ai</span>         = <span class="var">aws_security_group</span>.ai.id
+    <span class="var">rds</span>        = <span class="var">aws_security_group</span>.rds.id
+  }
+
+  <span class="var">security_group_id</span> = <span class="var">each</span>.value           <span class="cm"># The SG ID (map value)</span>
+  <span class="var">description</span>       = <span class="str">"All outbound"</span>
+  <span class="var">ip_protocol</span>       = <span class="str">"-1"</span>
+  <span class="var">cidr_ipv4</span>         = <span class="str">"0.0.0.0/0"</span>
+
+  <span class="var">tags</span> = { Name = <span class="str">"${var.project_name}-${each.key}-egress-all"</span> }
+}</code></pre>
+
+        <p style="margin-top:10px;"><strong style="color:var(--text);">How a map differs from a set in <span class="ic">for_each</span>:</strong></p>
+        <p>With the SSH rules we used <span class="ic">toset()</span> — a set of strings where <span class="ic">each.key</span> and <span class="ic">each.value</span> are the same (the CIDR). Here we use a <strong>map</strong>, so they differ:</p>
+        <ul style="margin-top:6px;">
+          <li><span class="ic">each.key</span> = the map key (<span class="ic">"monitoring"</span>, <span class="ic">"backend"</span>, ...) — used in the tag name</li>
+          <li><span class="ic">each.value</span> = the map value (the actual SG ID like <span class="ic">"sg-0abc123..."</span>) — used as the <span class="ic">security_group_id</span></li>
+        </ul>
+
+        <p style="margin-top:10px;"><strong style="color:var(--text);">What Terraform creates:</strong></p>
+<pre style="margin-top:6px;"><code><span class="var">aws_vpc_security_group_egress_rule</span>.all_outbound[<span class="str">"monitoring"</span>]  <span class="cm"># → security_group_id = sg-monitoring's ID</span>
+<span class="var">aws_vpc_security_group_egress_rule</span>.all_outbound[<span class="str">"backend"</span>]     <span class="cm"># → security_group_id = sg-backend's ID</span>
+<span class="var">aws_vpc_security_group_egress_rule</span>.all_outbound[<span class="str">"network"</span>]     <span class="cm"># → security_group_id = sg-network's ID</span>
+<span class="var">aws_vpc_security_group_egress_rule</span>.all_outbound[<span class="str">"ai"</span>]          <span class="cm"># → security_group_id = sg-ai's ID</span>
+<span class="var">aws_vpc_security_group_egress_rule</span>.all_outbound[<span class="str">"rds"</span>]         <span class="cm"># → security_group_id = sg-rds's ID</span>
+
+<span class="cm"># 5 resources from 1 block. Add a 6th SG? Add one line to the map.</span></code></pre>
+
+        <p style="margin-top:10px;"><strong style="color:var(--text);">When to use a set vs a map:</strong></p>
+        <ul style="margin-top:6px;">
+          <li><strong>Set</strong> (<span class="ic">toset()</span>) — when the value itself is a good key (like CIDRs: <span class="ic">"41.137.0.0/16"</span>). Simple, no naming needed.</li>
+          <li><strong>Map</strong> — when you need a friendly key that differs from the value (like <span class="ic">"monitoring" → sg-id</span>). The key appears in resource addresses and tags, so it should be human-readable.</li>
+        </ul>
+      </div>
+
       <div class="note-box purple" style="margin-top:8px;">
         <strong>Connecting the layers — from Step 13 to Step 14:</strong> Step 13 (vpc.tf) built the network topology that makes certain traffic <em>physically impossible</em> (no route from internet to private subnet). Step 14 (security-groups.tf) adds fine-grained filtering for traffic that <em>is</em> routable (which ports, which sources). Together they form two independent security layers — even if one is misconfigured, the other still protects you. This is defense in depth.
       </div>
