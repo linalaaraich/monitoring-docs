@@ -228,6 +228,7 @@
   <div class="tab"           onclick="switchTab('alertmanager')">Grafana Alerting Integration</div>
   <div class="tab"           onclick="switchTab('e2e')">End-to-End Test</div>
   <div class="tab"           onclick="switchTab('grafana')">Grafana Dashboard</div>
+  <div class="tab"           onclick="switchTab('production')">Production Migration</div>
 </div>
 
 
@@ -5250,6 +5251,390 @@ count_over_time({job="llm-triage"} | json | event = "rca_complete" [24h])</code>
 
 </div>
 </div><!-- /tab-grafana -->
+
+
+<!-- =========================================================== PRODUCTION MIGRATION -->
+<div id="tab-production" class="tab-content">
+<div class="content">
+
+  <div class="note-box warn">
+    <strong>Context:</strong> The AWS demo is temporary (terminated after April 9). Production runs on <strong>CIRES private cloud</strong> (Tanger Med on-premise infrastructure). This tab documents exactly what changes, what stays the same, and the work required to migrate -- with security as the top priority.
+  </div>
+
+  <div class="section-label">What Changes vs What Stays the Same</div>
+
+  <div class="card" style="border-color:rgba(107,207,127,.25);">
+    <h3 style="color:var(--accent-green);">What Stays Exactly the Same (zero changes)</h3>
+    <ul>
+      <li><strong>All Ansible roles and playbooks</strong> -- the entire <span class="ic">monitoring-project/</span> repo works identically. Roles deploy the same Docker containers, same configs, same services. Only the variables change.</li>
+      <li><strong>Docker Compose templates</strong> -- same containers, same images, same networking between services on each VM.</li>
+      <li><strong>Grafana dashboards, alert rules, contact points</strong> -- all provisioned via Ansible. Same 17 alert rules, same webhook to triage service.</li>
+      <li><strong>Triage service code</strong> -- same Python, same pipeline, same Drain3, same Ollama integration. Zero code changes.</li>
+      <li><strong>MCP bridge servers</strong> -- same 5 servers, same APIs. They query by hostname, which is a variable.</li>
+      <li><strong>OTel Collector configs</strong> -- same trace/log pipelines, just different target IPs.</li>
+    </ul>
+    <div class="note-box" style="margin-top:12px;margin-bottom:0;">
+      <strong>This is exactly why we parameterized everything.</strong> The only thing that changes between AWS and private cloud is <span class="ic">group_vars/all.yml</span> (VM IPs) and infrastructure-level config (networking, firewall). The application layer is identical.
+    </div>
+  </div>
+
+  <div class="card" style="border-color:rgba(240,160,80,.25);margin-top:16px;">
+    <h3 style="color:var(--accent-orange);">What Changes (infrastructure layer)</h3>
+    <table>
+      <thead><tr><th>AWS Component</th><th>Private Cloud Replacement</th><th>Work Required</th></tr></thead>
+      <tbody>
+        <tr><td>Terraform (VPC, subnets, SGs, EC2, RDS, S3, CloudFront)</td><td>VMs provisioned by hypervisor (VMware/Proxmox/KVM), networking by physical switch + firewall</td><td>No Terraform at all. VMs created manually or via hypervisor API. Networking configured by CIRES network team.</td></tr>
+        <tr><td>VPC + private subnet</td><td>Dedicated VLAN for the observability stack</td><td>Request a VLAN from network team. All 4 VMs + MySQL on this VLAN.</td></tr>
+        <tr><td>Security Groups</td><td>UFW on each VM (already done in Sprint 1) + VLAN firewall rules</td><td>Re-enable Sprint 1 UFW rules. Add AI VM rules. Configure edge firewall.</td></tr>
+        <tr><td>NAT Gateway</td><td>Firewall NAT rule for outbound internet (or no internet at all for AI VM)</td><td>Configure on edge firewall. AI VM gets internet temporarily, then revoked.</td></tr>
+        <tr><td>Internet Gateway</td><td>Firewall WAN interface</td><td>Already exists in CIRES network infrastructure.</td></tr>
+        <tr><td>Elastic IPs</td><td>Static IPs assigned by DHCP reservation or manually</td><td>Reserve 4 static IPs on the VLAN.</td></tr>
+        <tr><td>RDS MySQL</td><td>Self-hosted MySQL (Docker container or bare install on backend VM)</td><td>Revert to Sprint 1 MySQL role OR install MySQL on a dedicated VM. Add backup cron jobs.</td></tr>
+        <tr><td>S3 + CloudFront</td><td>React served by Nginx on the network VM, or Kong serves static files</td><td>Add Nginx container to network-compose.yml.j2 with React build files. Or serve from backend.</td></tr>
+        <tr><td>AWS key pair</td><td>SSH keys deployed manually or via CIRES provisioning</td><td>Copy <span class="ic">ansible_key.pub</span> to each VM's <span class="ic">authorized_keys</span>.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="section-label">Security Architecture — Private Cloud (Security First)</div>
+
+  <div class="card" style="border-color:rgba(224,96,112,.25);">
+    <h3 style="color:var(--accent-red);">Network Segmentation — VLAN Isolation</h3>
+    <p><strong style="color:var(--text);">Principle:</strong> The observability stack must be on its own VLAN, isolated from the general CIRES corporate network. No machine outside the VLAN should reach Prometheus, Grafana, Loki, Jaeger, or Ollama unless explicitly allowed through the firewall.</p>
+
+    <div class="arch-diagram" style="font-family:'JetBrains Mono','Fira Code',monospace;font-size:12px;line-height:1.6;">
+<pre style="background:transparent;border:none;padding:0;margin:0;"><code style="color:var(--muted);">  <span style="color:var(--accent-orange);">CIRES Corporate Network</span>
+         |
+  ┌──────┴──────┐
+  │  <span style="color:var(--accent-red);">Edge       </span>│  &larr; Central firewall (pfSense / OPNsense / hardware appliance)
+  │  <span style="color:var(--accent-red);">Firewall   </span>│     Controls ALL traffic between VLANs and to/from internet
+  └──────┬──────┘
+         |
+  ┌──────┴────────────────────────────────────────┐
+  │  <span style="color:var(--accent-purple);">VLAN 100: Observability Stack</span>                  │  (example VLAN ID)
+  │  Subnet: 192.168.100.0/24                     │
+  │                                                │
+  │  <span style="color:var(--accent-cyan);">monitoring</span>  <span style="color:var(--accent-cyan);">backend</span>  <span style="color:var(--accent-cyan);">network</span>  <span style="color:var(--accent-cyan);">ai</span>  <span style="color:var(--accent-cyan);">[mysql]</span>  │
+  │  .10          .30      .15      .40   .50     │
+  │                                                │
+  │  Firewall rules:                               │
+  │  ├── <span style="color:var(--accent-green);">ALLOW</span> inter-VM traffic (within VLAN)       │
+  │  ├── <span style="color:var(--accent-green);">ALLOW</span> SSH from admin VLAN only             │
+  │  ├── <span style="color:var(--accent-green);">ALLOW</span> Grafana :3000 from admin VLAN        │
+  │  ├── <span style="color:var(--accent-green);">ALLOW</span> Kong :8000 from app consumers         │
+  │  ├── <span style="color:var(--accent-red);">DENY</span> all other inbound from corporate net  │
+  │  └── <span style="color:var(--accent-orange);">NAT</span> outbound for monitoring/backend/network│
+  └───────────────────────────────────────────────┘
+
+  <span style="color:var(--accent-red);">AI VM — special handling:</span>
+  ├── <span style="color:var(--accent-green);">ALLOW</span> outbound internet TEMPORARILY (Docker pull, Ollama model download)
+  ├── <span style="color:var(--accent-red);">REVOKE</span> outbound internet after setup is complete
+  ├── <span style="color:var(--accent-green);">ALLOW</span> inbound from monitoring VM :8090 only (Grafana webhook)
+  ├── <span style="color:var(--accent-green);">ALLOW</span> outbound to monitoring VM (MCP queries to Prom/Loki/Jaeger)
+  ├── <span style="color:var(--accent-green);">ALLOW</span> outbound to SMTP relay (port 587) — if email required
+  └── <span style="color:var(--accent-red);">DENY</span> everything else — fully air-gapped from internet</code></pre>
+    </div>
+
+    <div class="note-box" style="margin-top:12px;">
+      <strong>Why air-gap the AI VM?</strong> The AI VM runs Ollama with a local LLM that processes sensitive production data (logs, metrics, error messages, trace details). If the AI VM has internet access, a compromised container could exfiltrate this data. Once the LLM model is downloaded and Docker images are pulled, the AI VM has <strong>no legitimate reason to reach the internet</strong>. Cut it off.
+    </div>
+  </div>
+
+  <div class="card" style="border-color:rgba(224,96,112,.25);margin-top:16px;">
+    <h3 style="color:var(--accent-red);">AI VM Air-Gap Procedure</h3>
+    <p>The AI VM needs internet access exactly once — during initial setup. Here is the step-by-step procedure to set it up and then lock it down:</p>
+
+    <table>
+      <thead><tr><th>Phase</th><th>Internet Access</th><th>What Happens</th><th>Commands</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><span class="tag tag-green">Phase 1: Setup</span></td>
+          <td><span style="color:var(--accent-green);font-weight:700;">ON</span></td>
+          <td>Ansible installs Docker, NVIDIA toolkit, pulls container images, downloads llama3.1:8b model (~4.7 GB)</td>
+          <td><span class="ic">ansible-playbook playbooks/ai.yml</span></td>
+        </tr>
+        <tr>
+          <td><span class="tag tag-orange">Phase 2: Verify</span></td>
+          <td><span style="color:var(--accent-green);font-weight:700;">ON</span></td>
+          <td>Confirm all containers are healthy, Ollama responds, triage service processes a test webhook</td>
+          <td><span class="ic">curl http://ai-vm:8090/health</span><br><span class="ic">curl http://ai-vm:11434/api/tags</span></td>
+        </tr>
+        <tr>
+          <td><span class="tag tag-must">Phase 3: Lock down</span></td>
+          <td><span style="color:var(--accent-red);font-weight:700;">OFF</span></td>
+          <td>Remove the firewall NAT rule for the AI VM. It can no longer reach the internet. Only internal VLAN traffic allowed.</td>
+          <td>On the edge firewall: remove the AI VM IP from the NAT outbound rule. On the AI VM itself: <span class="ic">sudo ufw default deny outgoing</span> then re-add specific allow rules for internal IPs only.</td>
+        </tr>
+        <tr>
+          <td><span class="tag tag-blue">Phase 4: Validate</span></td>
+          <td><span style="color:var(--accent-red);font-weight:700;">OFF</span></td>
+          <td>Confirm AI VM cannot reach the internet but CAN still reach monitoring VM services</td>
+          <td><span class="ic">curl https://google.com</span> (should fail)<br><span class="ic">curl http://monitoring-vm:9090/-/healthy</span> (should succeed)</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p style="margin-top:14px;"><strong style="color:var(--text);">UFW rules for the air-gapped AI VM:</strong></p>
+<pre><code><span class="cm"># Default: deny all outgoing (air-gap)</span>
+sudo ufw default deny outgoing
+sudo ufw default deny incoming
+
+<span class="cm"># Allow SSH from admin network only</span>
+sudo ufw allow in from 192.168.100.0/24 to any port 22
+
+<span class="cm"># Allow Grafana webhook to reach triage service</span>
+sudo ufw allow in from 192.168.100.10 to any port 8090 proto tcp   <span class="cm"># monitoring VM only</span>
+
+<span class="cm"># Allow Prometheus to scrape AI VM exporters</span>
+sudo ufw allow in from 192.168.100.10 to any port 9100 proto tcp   <span class="cm"># node_exporter</span>
+sudo ufw allow in from 192.168.100.10 to any port 8081 proto tcp   <span class="cm"># cAdvisor</span>
+
+<span class="cm"># Allow AI VM to query monitoring VM services (MCP bridges need this)</span>
+sudo ufw allow out to 192.168.100.10 port 9090 proto tcp   <span class="cm"># Prometheus API</span>
+sudo ufw allow out to 192.168.100.10 port 3100 proto tcp   <span class="cm"># Loki API</span>
+sudo ufw allow out to 192.168.100.10 port 16686 proto tcp  <span class="cm"># Jaeger API</span>
+
+<span class="cm"># Allow SMTP outbound (for RCA escalation emails)</span>
+sudo ufw allow out to any port 587 proto tcp                <span class="cm"># Gmail SMTP (or internal relay)</span>
+
+<span class="cm"># Allow DNS (needed to resolve SMTP hostname)</span>
+sudo ufw allow out to any port 53                           <span class="cm"># DNS</span>
+
+<span class="cm"># Enable firewall</span>
+sudo ufw enable</code></pre>
+
+    <div class="note-box warn" style="margin-top:12px;">
+      <strong>SMTP consideration:</strong> If the AI VM is air-gapped, it can still send emails via SMTP port 587 (allowed above). For maximum security, replace Gmail SMTP with an <strong>internal SMTP relay</strong> on the CIRES network — then the AI VM only needs to reach an internal IP, not the internet at all. Update <span class="ic">triage_smtp_host</span> in <span class="ic">group_vars/ai.yml</span> to point to the internal relay.
+    </div>
+  </div>
+
+  <div class="card" style="border-color:rgba(224,96,112,.25);margin-top:16px;">
+    <h3 style="color:var(--accent-red);">Firewall Rules — All VMs</h3>
+    <p>Each VM keeps its UFW rules from Sprint 1, with additions for Sprint 2 cross-VM traffic. Here is the complete rule set per VM:</p>
+
+    <table>
+      <thead><tr><th>VM</th><th>Inbound ALLOW</th><th>Outbound</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong>monitoring</strong><br><span class="ic">.10</span></td>
+          <td>
+            SSH (:22) from admin VLAN<br>
+            Grafana (:3000) from admin VLAN + app consumers<br>
+            Prometheus (:9090), Loki (:3100), Jaeger (:16686), OTel (:4317/:4318) from observability VLAN<br>
+            Node exporter (:9100), cAdvisor (:8081) from self
+          </td>
+          <td>All outbound (needs internet for Grafana plugin updates, apt)</td>
+        </tr>
+        <tr>
+          <td><strong>backend</strong><br><span class="ic">.30</span></td>
+          <td>
+            SSH (:22) from admin VLAN<br>
+            HTTP (:80/:8080) from network VM only<br>
+            Node exporter (:9100), cAdvisor (:8081) from monitoring VM
+          </td>
+          <td>Outbound to monitoring VM (telemetry), MySQL VM (:3306), internet (Docker pulls, apt)</td>
+        </tr>
+        <tr>
+          <td><strong>network</strong><br><span class="ic">.15</span></td>
+          <td>
+            SSH (:22) from admin VLAN<br>
+            Kong proxy (:8000) from app consumers (could be wider network)<br>
+            Kong admin (:8001) from admin VLAN only<br>
+            Node exporter (:9100), cAdvisor (:8081) from monitoring VM
+          </td>
+          <td>Outbound to backend VM (:80), CloudFront or local Nginx, monitoring VM (telemetry)</td>
+        </tr>
+        <tr>
+          <td><strong>ai</strong><br><span class="ic">.40</span></td>
+          <td>
+            SSH (:22) from admin VLAN<br>
+            Triage (:8090) from monitoring VM only<br>
+            Node exporter (:9100), cAdvisor (:8081) from monitoring VM
+          </td>
+          <td><strong style="color:var(--accent-red);">Air-gapped.</strong> Only to monitoring VM (Prom/Loki/Jaeger), SMTP relay (:587), DNS (:53). No internet.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="section-label">Database — Self-Hosted MySQL</div>
+
+  <div class="card" style="border-color:rgba(78,168,222,.25);">
+    <h3 style="color:var(--accent-blue);">RDS Replacement Options</h3>
+    <p>AWS RDS is a managed service -- it handles backups, patching, and failover for you. On private cloud, you manage MySQL yourself. Two options:</p>
+
+    <table>
+      <thead><tr><th>Option</th><th>How</th><th>Pros</th><th>Cons</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong>Option A:</strong> Revert to Docker container (Sprint 1 style)</td>
+          <td>Un-stub <span class="ic">roles/mysql/</span>, add MySQL service back to <span class="ic">application-compose.yml.j2</span></td>
+          <td>Fastest to implement, already tested in Sprint 1</td>
+          <td>Data on Docker volume (backup = volume snapshot), shares resources with Spring Boot</td>
+        </tr>
+        <tr>
+          <td><strong>Option B:</strong> Dedicated MySQL VM</td>
+          <td>5th VM running MySQL natively (not in Docker), on the same VLAN</td>
+          <td>Isolated resources, easier backup (mysqldump cron), better performance</td>
+          <td>Extra VM to maintain, new playbook needed</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p style="margin-top:14px;"><strong style="color:var(--text);">Either way, you MUST add backup jobs:</strong></p>
+<pre><code><span class="cm"># Add to crontab on the MySQL host (or as an Ansible task)</span>
+<span class="cm"># Daily backup at 2 AM, keep 7 days</span>
+<span class="num">0 2</span> * * * mysqldump -u appuser -p'PASSWORD' app_db | gzip > /backups/app_db_$(date +\%F).sql.gz
+<span class="num">0 3</span> * * * find /backups -name "*.sql.gz" -mtime +7 -delete</code></pre>
+
+    <div class="note-box warn" style="margin-top:12px;margin-bottom:0;">
+      <strong>Update the Ansible variable:</strong> Change <span class="ic">spring_datasource_url</span> in <span class="ic">group_vars/application.yml</span> to point to the new MySQL host. If using Option A (Docker), revert to <span class="ic">jdbc:mysql://mysql:3306/app_db</span>. If using Option B (dedicated VM), use <span class="ic">jdbc:mysql://192.168.100.50:3306/app_db</span>.
+    </div>
+  </div>
+
+  <div class="section-label">Frontend — Replace S3 + CloudFront</div>
+
+  <div class="card" style="border-color:rgba(64,208,208,.25);">
+    <h3 style="color:var(--accent-cyan);">Serving React Without AWS</h3>
+    <p>On AWS, S3+CloudFront serves the React frontend globally via CDN. On private cloud, the simplest replacement is <strong>Nginx on the network VM</strong> serving the static build files.</p>
+
+<pre><code><span class="cm"># Add to network-compose.yml.j2:</span>
+  <span class="kw">nginx-frontend</span>:
+    <span class="var">image</span>: <span class="str">nginx:alpine</span>
+    <span class="var">container_name</span>: <span class="str">nginx-frontend</span>
+    <span class="var">restart</span>: <span class="str">unless-stopped</span>
+    <span class="var">ports</span>:
+      - <span class="str">"8080:80"</span>
+    <span class="var">volumes</span>:
+      - <span class="str">/opt/stack/frontend/build:/usr/share/nginx/html:ro</span>
+      - <span class="str">/opt/stack/frontend/nginx.conf:/etc/nginx/conf.d/default.conf:ro</span></code></pre>
+
+<pre><code><span class="cm"># nginx.conf — SPA fallback (same concept as CloudFront custom error response)</span>
+<span class="kw">server</span> {
+    <span class="var">listen</span> <span class="num">80</span>;
+    <span class="var">root</span> <span class="str">/usr/share/nginx/html</span>;
+    <span class="var">index</span> <span class="str">index.html</span>;
+
+    <span class="kw">location</span> / {
+        <span class="var">try_files</span> $uri $uri/ <span class="str">/index.html</span>;   <span class="cm"># React Router fallback</span>
+    }
+}</code></pre>
+
+    <p style="margin-top:12px;">Then update <span class="ic">kong.yml.j2</span> to proxy <span class="ic">/</span> to <span class="ic">http://nginx-frontend:80</span> instead of <span class="ic">https://{{ cloudfront_domain }}</span>.</p>
+  </div>
+
+  <div class="section-label">LLM Model Updates — Offline Procedure</div>
+
+  <div class="card" style="border-color:rgba(176,126,232,.25);">
+    <h3 style="color:var(--accent-purple);">Updating Ollama Models Without Internet</h3>
+    <p>Since the AI VM is air-gapped after initial setup, you can't just run <span class="ic">ollama pull</span> to update models. Here's the offline procedure:</p>
+
+    <table>
+      <thead><tr><th>Step</th><th>Where</th><th>Command</th></tr></thead>
+      <tbody>
+        <tr><td>1. Download model on a machine WITH internet</td><td>Your laptop or a staging server</td><td><span class="ic">ollama pull llama3.1:8b</span></td></tr>
+        <tr><td>2. Export the model to a file</td><td>Same machine</td><td><span class="ic">ollama cp llama3.1:8b /tmp/llama3.1-8b.tar</span> (or tar the <span class="ic">~/.ollama/models/</span> directory)</td></tr>
+        <tr><td>3. Transfer to AI VM via SCP</td><td>Your laptop &rarr; AI VM</td><td><span class="ic">scp /tmp/llama3.1-8b.tar deploy@ai-vm:/tmp/</span></td></tr>
+        <tr><td>4. Import into Ollama on the AI VM</td><td>AI VM</td><td><span class="ic">docker cp /tmp/llama3.1-8b.tar ollama:/root/.ollama/models/</span> and restart</td></tr>
+        <tr><td>5. Verify</td><td>AI VM</td><td><span class="ic">docker exec ollama ollama list</span></td></tr>
+      </tbody>
+    </table>
+
+    <div class="note-box" style="margin-top:12px;margin-bottom:0;">
+      <strong>Docker image updates follow the same pattern:</strong> Pull updated images on a machine with internet, <span class="ic">docker save image:tag > image.tar</span>, SCP to the AI VM, <span class="ic">docker load < image.tar</span>. This applies to all containers on the AI VM (triage-service, MCP servers, OTel Collector).
+    </div>
+  </div>
+
+  <div class="section-label">Migration Workload Estimate</div>
+
+  <div class="card" style="border-color:rgba(240,160,80,.25);">
+    <h3 style="color:var(--accent-orange);">Task Breakdown</h3>
+
+    <table>
+      <thead><tr><th>Task</th><th>Estimate</th><th>Who</th><th>Details</th></tr></thead>
+      <tbody>
+        <tr><td colspan="4" style="color:var(--accent-red);font-weight:600;background:rgba(224,96,112,.06);">Phase 1 — Network &amp; Infrastructure (coordinate with CIRES IT)</td></tr>
+        <tr><td>Request dedicated VLAN</td><td>1-3 days</td><td>Network team</td><td>VLAN ID, subnet (e.g., 192.168.100.0/24), gateway IP. May require change request approval.</td></tr>
+        <tr><td>Provision 4 VMs (+ optional 5th for MySQL)</td><td>1 day</td><td>Infra team</td><td>Ubuntu 22.04, assign static IPs, ensure SSH access from admin network. Sizes: same as AWS (8 GB monitoring, 2 GB backend/network, 16 GB + GPU for AI).</td></tr>
+        <tr><td>Configure edge firewall rules</td><td>1 day</td><td>Network team</td><td>VLAN-to-VLAN rules, NAT for outbound internet, port forwards for Grafana/Kong if needed from corporate net.</td></tr>
+        <tr><td>GPU driver installation on AI VM</td><td>0.5 day</td><td>You</td><td>If the AI VM has an NVIDIA GPU. AWS g4dn instances have pre-installed drivers; bare metal may need <span class="ic">ubuntu-drivers autoinstall</span>.</td></tr>
+
+        <tr><td colspan="4" style="color:var(--accent-blue);font-weight:600;background:rgba(78,168,222,.06);">Phase 2 — Ansible Deployment (you do this)</td></tr>
+        <tr><td>Update <span class="ic">group_vars/all.yml</span> with new IPs</td><td>15 min</td><td>You</td><td>Replace AWS private IPs with VLAN IPs. Remove <span class="ic">rds_endpoint</span> and <span class="ic">cloudfront_domain</span> if not using AWS.</td></tr>
+        <tr><td>Update <span class="ic">inventory/production.yml</span></td><td>15 min</td><td>You</td><td>Update <span class="ic">ansible_host</span> for all 4 VMs to the new static IPs.</td></tr>
+        <tr><td>Revert MySQL to Docker or add dedicated VM</td><td>1-2 hours</td><td>You</td><td>Un-stub the mysql role OR create a new VM + playbook. Add backup cron.</td></tr>
+        <tr><td>Add Nginx frontend to network VM</td><td>1 hour</td><td>You</td><td>Add Nginx service to compose template, update Kong route.</td></tr>
+        <tr><td>Run <span class="ic">ansible-playbook playbooks/site.yml playbooks/ai.yml</span></td><td>30-45 min</td><td>You</td><td>Full deployment. Same as AWS, just different IPs.</td></tr>
+
+        <tr><td colspan="4" style="color:var(--accent-red);font-weight:600;background:rgba(224,96,112,.06);">Phase 3 — Security Hardening (critical)</td></tr>
+        <tr><td>Configure UFW on all VMs</td><td>1 hour</td><td>You</td><td>Sprint 1 rules + Sprint 2 AI VM rules. The <span class="ic">common</span> Ansible role already does this.</td></tr>
+        <tr><td>Air-gap the AI VM</td><td>30 min</td><td>You + Network team</td><td>Remove NAT rule for AI VM IP on edge firewall. Configure AI VM UFW to deny all outgoing except internal IPs + SMTP.</td></tr>
+        <tr><td>Validate air-gap</td><td>15 min</td><td>You</td><td>Confirm AI VM can't reach internet, CAN reach monitoring VM, CAN send emails.</td></tr>
+        <tr><td>Set up internal SMTP relay (optional)</td><td>2-4 hours</td><td>You + IT</td><td>Replace Gmail SMTP with CIRES internal relay. Removes the AI VM's last reason to touch the internet.</td></tr>
+        <tr><td>Change all default passwords</td><td>30 min</td><td>You</td><td>Grafana admin, MySQL root/appuser, any hardcoded defaults in group_vars.</td></tr>
+
+        <tr><td colspan="4" style="color:var(--accent-green);font-weight:600;background:rgba(107,207,127,.06);">Phase 4 — Validation</td></tr>
+        <tr><td>Run integration tests</td><td>1 hour</td><td>You</td><td><span class="ic">ansible-playbook playbooks/integration.yml</span> — verifies all services healthy, cross-VM communication works.</td></tr>
+        <tr><td>Trigger test alert end-to-end</td><td>30 min</td><td>You</td><td>Generate load, wait for alert, verify webhook reaches triage, LLM produces RCA, email arrives.</td></tr>
+        <tr><td>Document final network diagram</td><td>1 hour</td><td>You</td><td>Actual IPs, VLAN ID, firewall rules, access points. For the ops team and future maintenance.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="note-box" style="margin-top:16px;">
+      <strong>Total estimate:</strong> ~3-5 days of your work (Phases 2-4), plus 2-5 days of waiting on CIRES IT for VLAN + VM provisioning + firewall rules (Phase 1). These can overlap — start Phase 2 prep (updating variables, reverting MySQL, adding Nginx) while waiting for infrastructure.
+    </div>
+  </div>
+
+  <div class="section-label">Ansible Variables — What Changes for Private Cloud</div>
+
+  <div class="card" style="border-color:rgba(64,208,208,.25);">
+    <h3 style="color:var(--accent-cyan);">group_vars/all.yml — Diff Between AWS and Private Cloud</h3>
+<pre><code><span class="cm"># --- AWS Demo Values (current) ---</span>
+<span class="var">monitoring_vm_ip</span>: <span class="str">"10.0.2.x"</span>          <span class="cm"># AWS private subnet IPs</span>
+<span class="var">application_vm_ip</span>: <span class="str">"10.0.2.x"</span>
+<span class="var">network_vm_ip</span>: <span class="str">"10.0.2.x"</span>
+<span class="var">ai_vm_ip</span>: <span class="str">"10.0.2.x"</span>
+<span class="var">rds_endpoint</span>: <span class="str">"observability-rca-mysql.abc123.rds.amazonaws.com"</span>
+<span class="var">rds_port</span>: <span class="num">3306</span>
+<span class="var">cloudfront_domain</span>: <span class="str">"d1234abcd.cloudfront.net"</span>
+
+<span class="cm"># --- Private Cloud Values (production) ---</span>
+<span class="var">monitoring_vm_ip</span>: <span class="str">"192.168.100.10"</span>   <span class="cm"># VLAN static IPs</span>
+<span class="var">application_vm_ip</span>: <span class="str">"192.168.100.30"</span>
+<span class="var">network_vm_ip</span>: <span class="str">"192.168.100.15"</span>
+<span class="var">ai_vm_ip</span>: <span class="str">"192.168.100.40"</span>
+<span class="var">rds_endpoint</span>: <span class="str">"192.168.100.50"</span>    <span class="cm"># Self-hosted MySQL (or "mysql" if Docker on backend VM)</span>
+<span class="var">rds_port</span>: <span class="num">3306</span>
+<span class="var">cloudfront_domain</span>: <span class="str">"192.168.100.15:8080"</span>  <span class="cm"># Nginx on network VM (or remove if Kong serves frontend)</span></code></pre>
+
+    <p style="margin-top:12px;">That's it. Change 7 variables, re-run the playbooks, and the entire stack deploys to the private cloud. Every template, every config file, every docker-compose picks up the new IPs automatically.</p>
+  </div>
+
+  <div class="section-label">Security Checklist — Before Going Live</div>
+
+  <div class="card" style="border-color:rgba(224,96,112,.25);">
+    <h3 style="color:var(--accent-red);">Pre-Production Security Checklist</h3>
+    <ul class="checklist">
+      <li><div class="chk"></div><strong>VLAN isolation</strong> — observability stack is on a dedicated VLAN, not the general corporate network</li>
+      <li><div class="chk"></div><strong>Edge firewall rules</strong> — only Grafana (:3000) and Kong (:8000) are accessible from outside the VLAN</li>
+      <li><div class="chk"></div><strong>UFW on all VMs</strong> — per-VM firewall rules match the table above</li>
+      <li><div class="chk"></div><strong>AI VM air-gapped</strong> — cannot reach the internet, confirmed with <span class="ic">curl https://google.com</span> (fails)</li>
+      <li><div class="chk"></div><strong>AI VM internal access works</strong> — can reach monitoring VM's Prometheus, Loki, Jaeger (confirmed with curl)</li>
+      <li><div class="chk"></div><strong>SMTP works</strong> — triage service can send emails (internal relay or allowed outbound :587)</li>
+      <li><div class="chk"></div><strong>Default passwords changed</strong> — Grafana admin, MySQL root, MySQL appuser are all strong, unique passwords</li>
+      <li><div class="chk"></div><strong>SSH key-only auth</strong> — password authentication disabled on all VMs (<span class="ic">PasswordAuthentication no</span> in sshd_config)</li>
+      <li><div class="chk"></div><strong>SSH restricted to admin VLAN</strong> — UFW allows SSH only from the management/admin network</li>
+      <li><div class="chk"></div><strong>MySQL backup cron running</strong> — daily dumps, 7-day retention, verified restore test</li>
+      <li><div class="chk"></div><strong>Docker image versions pinned</strong> — no <span class="ic">:latest</span> tags in production compose files (pin exact versions)</li>
+      <li><div class="chk"></div><strong>Secrets not in git</strong> — SMTP passwords, DB passwords, Grafana admin password are in env vars or Ansible vault, not in committed files</li>
+      <li><div class="chk"></div><strong>Integration tests pass</strong> — <span class="ic">ansible-playbook playbooks/integration.yml</span> all green</li>
+      <li><div class="chk"></div><strong>End-to-end alert test</strong> — fired a test alert, triage processed it, RCA email received</li>
+      <li><div class="chk"></div><strong>Network diagram documented</strong> — actual IPs, VLAN ID, firewall rules, access points documented for ops team</li>
+    </ul>
+  </div>
+
+</div>
+</div><!-- /tab-production -->
 
 
 <!-- ===================== JS ===================== -->
