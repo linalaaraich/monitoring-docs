@@ -2081,7 +2081,7 @@ ansible-playbook playbooks/site.yml playbooks/ai.yml</code></pre>
         <strong>HashiCorp best practice — standalone rule resources:</strong> We use <span class="ic">aws_vpc_security_group_ingress_rule</span> and <span class="ic">aws_vpc_security_group_egress_rule</span> instead of inline <span class="ic">ingress</span>/<span class="ic">egress</span> blocks inside <span class="ic">aws_security_group</span>. Inline rules struggle with managing multiple CIDR blocks and lack unique IDs, tags, and descriptions per rule. With standalone resources, each rule is independently trackable in the Terraform state and AWS console. <strong>Never mix inline and standalone rules</strong> — this causes rule conflicts and perpetual diffs.
       </div>
 
-      <p style="margin-top:10px;"><strong style="color:var(--text);">File structure:</strong> The <span class="ic">aws_security_group</span> resources are defined first as empty shells (name, description, VPC, tags, lifecycle). All rules follow as separate <span class="ic">aws_vpc_security_group_ingress_rule</span> / <span class="ic">aws_vpc_security_group_egress_rule</span> resources, grouped by security group. SSH rules use <span class="ic">for_each = toset(var.allowed_ssh_cidrs)</span> to handle multiple CIDRs cleanly (one rule per CIDR, as required by the standalone resource).</p>
+      <p style="margin-top:10px;"><strong style="color:var(--text);">File structure:</strong> The <span class="ic">aws_security_group</span> resources are defined first as empty shells (name, description, VPC, tags, lifecycle). Next, a <span class="ic">locals</span> block builds maps that describe repeated rule patterns (SSH, OTel, Node Exporter/cAdvisor). Then three shared <span class="ic">for_each</span> resources create all the repeated rules from those maps. Finally, service-specific rules (Prometheus, Grafana, Kong, Ollama, etc.) are defined individually per SG since they're each unique.</p>
       <p style="margin-top:10px;">Five security groups control which ports are open and who can talk to whom:</p>
 
       <table>
@@ -2202,7 +2202,75 @@ ansible-playbook playbooks/site.yml playbooks/ai.yml</code></pre>
 
         <p style="margin-top:10px;"><strong style="color:var(--text);">Why not just use <span class="ic">count</span>?</strong> <span class="ic">count</span> creates resources indexed by number: <span class="ic">[0], [1], [2]</span>. If you remove item <span class="ic">[0]</span>, Terraform sees <span class="ic">[1]</span> become <span class="ic">[0]</span> and <span class="ic">[2]</span> become <span class="ic">[1]</span> — it destroys and recreates them with new indices. With <span class="ic">for_each</span>, each resource is keyed by the CIDR string itself, so removals only affect the specific resource. This is why <span class="ic">for_each</span> is preferred for collections that may change.</p>
       </div>
-      <div class="note-box">
+
+      <div class="note-box" style="margin-top:12px;">
+        <strong style="color:var(--accent-cyan);">Eliminating repetition with <span class="ic">locals</span> — SSH, OTel, and infra scrape rules</strong>
+
+        <p style="margin-top:8px;"><strong style="color:var(--text);">The problem:</strong> Looking at the rules table above, several patterns repeat across all 4 VM security groups — SSH (:22), OTel Collector (:4317/:4318), Node Exporter (:9100), and cAdvisor (:8081). Writing 4 separate SSH blocks, 8 separate OTel blocks, and 6 separate scrape blocks that differ only in the SG ID is the same kind of duplication that <span class="ic">for_each</span> was designed to eliminate.</p>
+
+        <p style="margin-top:10px;"><strong style="color:var(--text);">The solution — <span class="ic">locals</span> + <span class="ic">for_each</span>:</strong> We need to build maps that <span class="ic">for_each</span> can iterate over, but these maps are complex expressions (combining SG names with ports and CIDRs). That's where <span class="ic">locals</span> comes in.</p>
+
+        <p style="margin-top:10px;"><strong style="color:var(--accent-red);">What is <span class="ic">locals</span>?</strong> A block where you define <strong>computed values</strong> that you reuse within the same module. Think of it like declaring variables — except instead of receiving values from outside (like <span class="ic">variable</span> does), they're calculated internally from other resources and variables. You give a name to an expression so you don't repeat it.</p>
+
+        <p style="margin-top:8px;">One quirk: you <strong>declare</strong> in a <span class="ic">locals</span> block (plural), but <strong>reference</strong> with <span class="ic">local.</span> (singular). That's just Terraform's syntax.</p>
+
+<pre style="margin-top:6px;"><code><span class="cm"># Declare — plural "locals"</span>
+<span class="kw">locals</span> {
+  <span class="var">vm_security_groups</span> = {           <span class="cm"># A name for a reusable map</span>
+    <span class="var">monitoring</span> = <span class="var">aws_security_group</span>.monitoring.id
+    <span class="var">backend</span>    = <span class="var">aws_security_group</span>.backend.id
+    <span class="var">network</span>    = <span class="var">aws_security_group</span>.network.id
+    <span class="var">ai</span>         = <span class="var">aws_security_group</span>.ai.id
+  }
+}
+
+<span class="cm"># Reference — singular "local"</span>
+<span class="kw">resource</span> <span class="str">"..."</span> <span class="str">"..."</span> {
+  <span class="var">for_each</span> = <span class="var">local</span>.vm_security_groups   <span class="cm"># Use the map defined above</span>
+}</code></pre>
+
+        <p style="margin-top:10px;"><strong style="color:var(--text);">Building the maps — <span class="ic">for</span> expressions inside <span class="ic">locals</span>:</strong> The SSH rules are the most interesting case. We need one rule per <em>combination</em> of SG and CIDR (4 SGs × N CIDRs). A Terraform <span class="ic">for</span> expression loops over the SGs and, inside that, loops over the CIDRs, producing a flat map:</p>
+
+<pre style="margin-top:6px;"><code><span class="kw">locals</span> {
+  <span class="cm"># Build one map entry per (SG × CIDR) combination</span>
+  <span class="var">ssh_rules</span> = <span class="var">merge</span>([
+    <span class="kw">for</span> <span class="var">sg_name</span>, <span class="var">sg_id</span> <span class="kw">in</span> <span class="var">local</span>.vm_security_groups : {
+      <span class="kw">for</span> <span class="var">cidr</span> <span class="kw">in</span> <span class="var">var</span>.allowed_ssh_cidrs :
+      <span class="str">"${sg_name}-${cidr}"</span> => {         <span class="cm"># Key: "monitoring-41.137.0.0/16"</span>
+        <span class="var">sg_id</span>   = <span class="var">sg_id</span>                 <span class="cm"># Value: the SG ID</span>
+        <span class="var">sg_name</span> = <span class="var">sg_name</span>               <span class="cm"># Value: for tags</span>
+        <span class="var">cidr</span>    = <span class="var">cidr</span>                  <span class="cm"># Value: the CIDR</span>
+      }
+    }
+  ]...)                                <span class="cm"># ... spreads the list into merge()</span>
+}
+
+<span class="cm"># One resource creates ALL SSH rules across ALL SGs</span>
+<span class="kw">resource</span> <span class="str">"aws_vpc_security_group_ingress_rule"</span> <span class="str">"ssh"</span> {
+  <span class="var">for_each</span> = <span class="var">local</span>.ssh_rules
+
+  <span class="var">security_group_id</span> = <span class="var">each</span>.value.sg_id   <span class="cm"># each.value is the whole object</span>
+  <span class="var">description</span>       = <span class="str">"SSH"</span>
+  <span class="var">from_port</span>         = <span class="num">22</span>
+  <span class="var">to_port</span>           = <span class="num">22</span>
+  <span class="var">ip_protocol</span>       = <span class="str">"tcp"</span>
+  <span class="var">cidr_ipv4</span>         = <span class="var">each</span>.value.cidr     <span class="cm"># each.value.cidr is the CIDR</span>
+}</code></pre>
+
+        <p style="margin-top:10px;"><strong style="color:var(--text);">Reading <span class="ic">merge([for ...]...)</span>:</strong> This pattern looks dense, so let's unpack it step by step:</p>
+        <ol style="margin-top:6px;">
+          <li>The outer <span class="ic">for sg_name, sg_id in local.vm_security_groups</span> loops over the 4 SGs, producing a <em>list</em> of maps (one map per SG)</li>
+          <li>The inner <span class="ic">for cidr in var.allowed_ssh_cidrs</span> loops over the CIDRs within each SG's map</li>
+          <li><span class="ic">merge()</span> flattens the list of maps into a single map</li>
+          <li><span class="ic">...</span> (the splat operator) spreads the list into separate arguments for <span class="ic">merge()</span> — it turns <span class="ic">merge([map1, map2])</span> into <span class="ic">merge(map1, map2)</span></li>
+        </ol>
+
+        <p style="margin-top:10px;"><strong style="color:var(--text);">The same pattern works for OTel and infra scrape rules.</strong> OTel iterates over 4 SGs × 2 ports (gRPC, HTTP). Node Exporter + cAdvisor iterates over 3 SGs (backend, network, ai — monitoring scrapes itself locally) × 2 ports. The result: <strong>37 rule blocks reduced to 19</strong>, with no change in behavior.</p>
+
+        <p style="margin-top:10px;"><strong style="color:var(--text);">Is <span class="ic">locals</span> best practice?</strong> Yes — HashiCorp recommends <span class="ic">locals</span> for giving meaningful names to complex expressions and for reducing repetition. The alternative would be putting those <span class="ic">merge([for ...]...)</span> expressions directly inline in <span class="ic">for_each</span>, which would work but be much harder to read.</p>
+      </div>
+
+      <div class="note-box" style="margin-top:8px;">
         <strong>lifecycle { create_before_destroy = true }:</strong> Every <span class="ic">aws_security_group</span> shell uses this lifecycle rule. Without it, Terraform would try to delete the old SG before creating the new one during updates. Since SGs are referenced by EC2 instances, deleting them first would fail. <span class="ic">create_before_destroy</span> creates the replacement SG first, updates references, then deletes the old one. The standalone rule resources (<span class="ic">aws_vpc_security_group_ingress_rule</span>) are independently managed and don't need this — they can be added/removed without affecting the parent SG.
       </div>
 
