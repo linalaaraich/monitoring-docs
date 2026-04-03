@@ -2058,7 +2058,7 @@ ansible-playbook playbooks/site.yml playbooks/ai.yml</code></pre>
       </table>
 
       <div class="note-box" style="margin-top:12px;">
-        <strong>On AWS we use Security Groups instead of UFW</strong> because they're manageable in Terraform, filter traffic before it touches the VM, and reference other security groups by ID (not just IP ranges). On the private cloud, there are no Security Groups — <strong>UFW is the direct equivalent</strong>, configured by the Ansible <span class="ic">common</span> role. The rules are the same; only the tool changes. See the <strong>Production Migration</strong> tab for the complete UFW ruleset.
+        <strong>On AWS we use Security Groups instead of UFW</strong> because they're manageable in Terraform, filter traffic before it touches the VM, and reference other security groups by ID (not just IP ranges). On the private cloud, there are no Security Groups — the equivalent is a <strong>two-layer setup</strong>: an <strong>edge firewall</strong> at the VLAN boundary (filters traffic before it reaches VMs, like Security Groups do) plus <strong>UFW on each VM</strong> as a second line of defense. See the <strong>Production Migration</strong> tab for the complete two-layer architecture.
       </div>
 
       <p style="margin-top:14px;"><strong style="color:var(--accent-purple);">How Security Groups fit into our defense-in-depth model</strong></p>
@@ -5472,9 +5472,42 @@ count_over_time({job="llm-triage"} | json | event = "rca_complete" [24h])</code>
 
   <div class="section-label">Security Architecture — Private Cloud (Security First)</div>
 
-  <div class="card" style="border-color:rgba(224,96,112,.25);">
+  <div class="card" style="border-color:rgba(240,160,80,.25);">
+    <h3 style="color:var(--accent-orange);">Two-Layer Firewall Architecture — Why UFW Alone Is Not Enough</h3>
+    <p>On AWS, Security Groups filter traffic <em>outside</em> the VM at the network layer. On the private cloud, we need to replicate that with a <strong style="color:var(--text);">centralized edge firewall</strong> at the VLAN boundary. UFW inside each VM is the <em>second</em> layer — not the only one.</p>
+
+    <table>
+      <thead><tr><th>Layer</th><th>What</th><th>Where It Runs</th><th>AWS Equivalent</th><th>Why It's Needed</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong style="color:var(--accent-red);">Layer 1: Edge Firewall</strong></td>
+          <td>Centralized firewall appliance (pfSense, OPNsense, FortiGate, or existing CIRES hardware)</td>
+          <td>At the VLAN boundary — on the network switch/router, <strong>outside all VMs</strong></td>
+          <td>AWS Security Groups</td>
+          <td>Controls what enters/leaves the VLAN. Blocks traffic before it reaches any VM. If a VM is compromised, the attacker still can't bypass this layer.</td>
+        </tr>
+        <tr>
+          <td><strong style="color:var(--accent-blue);">Layer 2: UFW on each VM</strong></td>
+          <td>Host-based firewall (iptables via UFW)</td>
+          <td>Inside each VM's Linux kernel</td>
+          <td>No AWS equivalent (SGs made it unnecessary)</td>
+          <td>Defense in depth. If the edge firewall is misconfigured or the attacker is already inside the VLAN (e.g., compromised another VM), UFW still protects each individual VM.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="note-box warn" style="margin-top:12px;">
+      <strong>Why not UFW only?</strong> UFW runs <em>inside</em> the VM. If a VM is compromised (e.g., a container escape exploit), the attacker has root access and can run <span class="ic">ufw disable</span>. An edge firewall running on separate hardware cannot be disabled from a compromised VM — it's a completely independent security boundary. This is the same reason AWS Security Groups run outside the VM, not inside it.
+    </div>
+
+    <div class="note-box" style="margin-top:8px;">
+      <strong>What to ask the CIRES network team:</strong> <em>"We need a dedicated VLAN with firewall rules at the edge. Do we have an existing firewall appliance (pfSense, FortiGate, etc.) or do we need to set one up? We need to control both inbound rules (which corporate IPs can reach Grafana/Kong) and outbound rules (AI VM must be air-gapped after setup)."</em> The network team configures Layer 1. You configure Layer 2 (UFW via Ansible).
+    </div>
+  </div>
+
+  <div class="card" style="border-color:rgba(224,96,112,.25);margin-top:16px;">
     <h3 style="color:var(--accent-red);">Network Segmentation — VLAN Isolation</h3>
-    <p><strong style="color:var(--text);">Principle:</strong> The observability stack must be on its own VLAN, isolated from the general CIRES corporate network. No machine outside the VLAN should reach Prometheus, Grafana, Loki, Jaeger, or Ollama unless explicitly allowed through the firewall.</p>
+    <p><strong style="color:var(--text);">Principle:</strong> The observability stack must be on its own VLAN, isolated from the general CIRES corporate network. No machine outside the VLAN should reach Prometheus, Grafana, Loki, Jaeger, or Ollama unless explicitly allowed through the edge firewall (Layer 1).</p>
 
     <div class="arch-diagram" style="font-family:'JetBrains Mono','Fira Code',monospace;font-size:12px;line-height:1.6;">
 <pre style="background:transparent;border:none;padding:0;margin:0;"><code style="color:var(--muted);">  <span style="color:var(--accent-orange);">CIRES Corporate Network</span>
@@ -5583,8 +5616,9 @@ sudo ufw enable</code></pre>
   </div>
 
   <div class="card" style="border-color:rgba(224,96,112,.25);margin-top:16px;">
-    <h3 style="color:var(--accent-red);">Firewall Rules — All VMs</h3>
-    <p>Each VM keeps its UFW rules from Sprint 1, with additions for Sprint 2 cross-VM traffic. Here is the complete rule set per VM:</p>
+    <h3 style="color:var(--accent-red);">Firewall Rules — Both Layers Combined</h3>
+    <p>The table below shows the <strong>combined effect</strong> of both layers. Layer 1 (edge firewall) enforces VLAN-level rules — what can enter/leave the VLAN from the corporate network and internet. Layer 2 (UFW on each VM) enforces per-VM rules — even within the VLAN, each VM only accepts traffic from specific sources on specific ports.</p>
+    <p style="margin-top:8px;">The rules are intentionally <strong style="color:var(--text);">duplicated across both layers</strong>. If the edge firewall allows port 8090 to the AI VM from the monitoring VM, UFW on the AI VM ALSO allows port 8090 from the monitoring VM IP. This means either layer can independently block unauthorized traffic — neither trusts the other to be correctly configured.</p>
 
     <table>
       <thead><tr><th>VM</th><th>Inbound ALLOW</th><th>Outbound</th></tr></thead>
