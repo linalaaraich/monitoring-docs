@@ -2157,6 +2157,33 @@ ansible-playbook playbooks/site.yml playbooks/ai.yml</code></pre>
   <span class="var">ip_protocol</span>       = <span class="str">"tcp"</span>
   <span class="var">cidr_ipv4</span>         = <span class="var">each</span>.value
 }</code></pre>
+
+      <div class="note-box" style="margin-top:12px;">
+        <strong style="color:var(--accent-cyan);">Understanding <span class="ic">for_each</span>, <span class="ic">toset()</span>, and <span class="ic">each.value</span></strong>
+        <p style="margin-top:8px;"><strong style="color:var(--text);">The problem:</strong> The old inline <span class="ic">ingress</span> block accepted a <em>list</em> of CIDRs: <span class="ic">cidr_blocks = ["41.137.0.0/16", "105.159.0.0/16"]</span> — one rule, multiple CIDRs. The new standalone <span class="ic">aws_vpc_security_group_ingress_rule</span> resource accepts only <strong>one CIDR per rule</strong> via <span class="ic">cidr_ipv4</span>. So if we have 2 allowed SSH CIDRs, we need to create 2 separate rule resources.</p>
+
+        <p style="margin-top:10px;"><strong style="color:var(--text);">The solution — <span class="ic">for_each</span>:</strong> Instead of copy-pasting the same resource block for every CIDR, we tell Terraform: <em>"create one copy of this resource for each item in a collection."</em> It's like a loop, but instead of running code N times, it creates N resources.</p>
+
+        <p style="margin-top:10px;"><strong style="color:var(--text);">Why <span class="ic">toset()</span>?</strong> <span class="ic">for_each</span> only accepts a <strong>set</strong> or a <strong>map</strong>, not a list. Why? Because Terraform needs a <em>unique key</em> for each resource instance (to track it in state). Lists are ordered by index (<span class="ic">[0], [1], [2]</span>) — if you remove item <span class="ic">[0]</span>, everything shifts and Terraform would destroy and recreate all subsequent resources. Sets use the <em>value itself</em> as the key, so adding or removing one CIDR only affects that one rule. <span class="ic">toset(var.allowed_ssh_cidrs)</span> converts the list <span class="ic">["41.137.0.0/16", "105.159.0.0/16"]</span> into a set.</p>
+
+        <p style="margin-top:10px;"><strong style="color:var(--text);">What is <span class="ic">each.value</span>?</strong> Inside a <span class="ic">for_each</span> block, Terraform gives you the <span class="ic">each</span> object to access the current item. For a set of strings, <span class="ic">each.key</span> and <span class="ic">each.value</span> are the same — the string itself (the CIDR). For a map, <span class="ic">each.key</span> is the map key and <span class="ic">each.value</span> is the map value. So <span class="ic">cidr_ipv4 = each.value</span> means "use the current CIDR from the set."</p>
+
+        <p style="margin-top:10px;"><strong style="color:var(--text);">What Terraform actually creates:</strong></p>
+<pre style="margin-top:6px;"><code><span class="cm"># If var.allowed_ssh_cidrs = ["41.137.0.0/16", "105.159.0.0/16"]</span>
+<span class="cm"># Terraform creates two independent resources:</span>
+
+<span class="var">aws_vpc_security_group_ingress_rule</span>.monitoring_ssh[<span class="str">"41.137.0.0/16"</span>]
+  <span class="cm"># → cidr_ipv4 = "41.137.0.0/16"</span>
+
+<span class="var">aws_vpc_security_group_ingress_rule</span>.monitoring_ssh[<span class="str">"105.159.0.0/16"</span>]
+  <span class="cm"># → cidr_ipv4 = "105.159.0.0/16"</span>
+
+<span class="cm"># Each is tracked independently in state.</span>
+<span class="cm"># Remove "105.159.0.0/16" from the variable → Terraform destroys only that one rule.</span>
+<span class="cm"># The other rule is untouched.</span></code></pre>
+
+        <p style="margin-top:10px;"><strong style="color:var(--text);">Why not just use <span class="ic">count</span>?</strong> <span class="ic">count</span> creates resources indexed by number: <span class="ic">[0], [1], [2]</span>. If you remove item <span class="ic">[0]</span>, Terraform sees <span class="ic">[1]</span> become <span class="ic">[0]</span> and <span class="ic">[2]</span> become <span class="ic">[1]</span> — it destroys and recreates them with new indices. With <span class="ic">for_each</span>, each resource is keyed by the CIDR string itself, so removals only affect the specific resource. This is why <span class="ic">for_each</span> is preferred for collections that may change.</p>
+      </div>
       <div class="note-box">
         <strong>lifecycle { create_before_destroy = true }:</strong> Every <span class="ic">aws_security_group</span> shell uses this lifecycle rule. Without it, Terraform would try to delete the old SG before creating the new one during updates. Since SGs are referenced by EC2 instances, deleting them first would fail. <span class="ic">create_before_destroy</span> creates the replacement SG first, updates references, then deletes the old one. The standalone rule resources (<span class="ic">aws_vpc_security_group_ingress_rule</span>) are independently managed and don't need this — they can be added/removed without affecting the parent SG.
       </div>
