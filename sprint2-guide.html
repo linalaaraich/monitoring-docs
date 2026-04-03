@@ -1338,6 +1338,49 @@ ansible-playbook playbooks/site.yml playbooks/ai.yml</code></pre>
   </div>
   <div class="step-connector"></div>
 
+  <div class="section-label">Terraform -- Approach & Decision Logic</div>
+
+  <div class="card" style="border-color:rgba(240,160,80,.25);">
+    <h3 style="color:var(--accent-orange);">How Terraform Works (Mental Model)</h3>
+    <p>Terraform is <strong style="color:var(--text);">declarative</strong> -- you describe the desired end state, not the steps to get there. When you run <span class="ic">terraform apply</span>, Terraform reads <em>all</em> <span class="ic">.tf</span> files in the directory simultaneously, builds a <strong style="color:var(--text);">dependency graph</strong> from resource references (e.g., <span class="ic">aws_instance</span> references <span class="ic">aws_subnet.private.id</span>), and creates resources in the correct order automatically. You don't need to number files or worry about execution order.</p>
+    <p style="margin-top:10px;"><strong style="color:var(--text);">However</strong>, when <em>writing</em> the files, there's a natural order driven by dependencies. You can't reference <span class="ic">aws_subnet.private.id</span> in your EC2 config if you haven't thought about the subnet yet. The order below reflects the <strong style="color:var(--text);">thought process</strong>, not the execution order.</p>
+  </div>
+
+  <div class="card" style="border-color:rgba(176,126,232,.25);margin-top:16px;">
+    <h3 style="color:var(--accent-purple);">Step 0: Start from the Application Architecture</h3>
+    <p>Before writing a single line of Terraform, the first question is: <strong style="color:var(--text);">"What does the application need to run?"</strong> Looking at the Sprint 1 lab setup and Sprint 2 requirements:</p>
+    <ul>
+      <li><strong>4 VMs</strong> -- monitoring (Prometheus, Grafana, Loki, Jaeger), backend (Spring Boot), network (Kong), AI/LLM (Ollama + triage)</li>
+      <li><strong>A managed database</strong> -- MySQL, replacing the Docker container from Sprint 1</li>
+      <li><strong>Static file hosting</strong> -- React frontend served via CDN instead of bundled in Spring Boot</li>
+      <li><strong>Networking</strong> -- all VMs need to talk to each other on private IPs, plus outbound internet for Docker pulls, apt, SMTP</li>
+      <li><strong>Security</strong> -- each VM only exposes the ports it needs, to the sources that need them</li>
+    </ul>
+    <p style="margin-top:10px;">This gives us the resource list: VPC + subnets, 5 security groups, 4 EC2 instances, 1 RDS instance, 1 S3 bucket + CloudFront distribution, and supporting resources (key pair, EIPs, NAT gateway, route tables). From here, we write files in dependency order.</p>
+  </div>
+
+  <div class="card" style="border-color:rgba(64,208,208,.25);margin-top:16px;">
+    <h3 style="color:var(--accent-cyan);">File Writing Order & Why</h3>
+    <p>Each file depends on the ones above it. This is the order you'd write them from scratch:</p>
+    <table>
+      <thead><tr><th>#</th><th>File</th><th>Why This Order</th><th>What Depends on It</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td><span class="ic">providers.tf</span></td><td>Nothing works without it. <span class="ic">terraform init</span> needs a provider to download.</td><td>Everything</td></tr>
+        <tr><td>2</td><td><span class="ic">variables.tf</span></td><td>Every other file references <span class="ic">var.something</span>. Define inputs before using them.</td><td>Everything</td></tr>
+        <tr><td>3</td><td><span class="ic">vpc.tf</span></td><td>Every resource (EC2, RDS, SGs) needs a VPC and subnet to live in.</td><td>security-groups.tf, ec2.tf, rds.tf</td></tr>
+        <tr><td>4</td><td><span class="ic">security-groups.tf</span></td><td>EC2 and RDS require <span class="ic">vpc_security_group_ids</span> at creation.</td><td>ec2.tf, rds.tf</td></tr>
+        <tr><td>5</td><td><span class="ic">key-pair.tf</span></td><td>EC2 instances need <span class="ic">key_name</span> to enable SSH.</td><td>ec2.tf</td></tr>
+        <tr><td>6</td><td><span class="ic">ec2.tf</span></td><td>Needs subnet, SG, and key pair -- all defined above.</td><td>outputs.tf</td></tr>
+        <tr><td>7</td><td><span class="ic">rds.tf</span></td><td>Needs subnets and SG. Independent from EC2, but conceptually after compute.</td><td>outputs.tf</td></tr>
+        <tr><td>8</td><td><span class="ic">s3-cloudfront.tf</span></td><td>Completely independent -- no VPC, no SG needed. Written whenever convenient.</td><td>outputs.tf</td></tr>
+        <tr><td>9</td><td><span class="ic">outputs.tf</span></td><td>References resources from every other file. Always written last.</td><td>generate-inventory.sh</td></tr>
+      </tbody>
+    </table>
+    <div class="note-box" style="margin-top:12px;margin-bottom:0;">
+      <strong>Rule of thumb:</strong> Write dependencies before dependents. The chain is always: <strong>provider &rarr; variables &rarr; networking &rarr; security &rarr; compute &rarr; data &rarr; outputs</strong>. If resource B needs the ID of resource A, write A's file first.
+    </div>
+  </div>
+
   <div class="section-label">Terraform -- File-by-File Deep Dive</div>
 
   <!-- ======================== STEP 12 ======================== -->
@@ -1371,6 +1414,9 @@ ansible-playbook playbooks/site.yml playbooks/ai.yml</code></pre>
   }
 }</code></pre>
       <div class="note-box">
+        <strong>Why <span class="ic">~&gt; 5.0</span> and not an exact version?</strong> The <span class="ic">~&gt;</span> is Terraform's <em>pessimistic constraint operator</em>. <span class="ic">~&gt; 5.0</span> means "any version &gt;= 5.0 and &lt; 6.0." Minor/patch updates (5.1, 5.2, 5.78) are backwards-compatible -- they add new resource types and fix bugs but don't break your code. You <em>want</em> those automatically. Major updates (6.0) can have breaking changes (renamed attributes, removed resources). <span class="ic">~&gt; 5.0</span> blocks those until you explicitly upgrade. If you pinned <span class="ic">= 5.82.1</span>, every teammate would need that exact version and you'd miss bug fixes. If you wrote <span class="ic">&gt;= 5.0</span> with no upper bound, a future 6.0 could break your code silently.
+      </div>
+      <div class="note-box" style="margin-top:8px;">
         <strong>default_tags:</strong> Every AWS resource created by this Terraform config automatically gets these 3 tags. This makes it easy to find all resources in the AWS console (filter by <span class="ic">ManagedBy = terraform</span>) and calculate costs per project.
       </div>
 
@@ -1427,7 +1473,41 @@ ansible-playbook playbooks/site.yml playbooks/ai.yml</code></pre>
     <div class="step-num"><div class="step-circle" style="background:rgba(240,160,80,.15);border:1.5px solid rgba(240,160,80,.4);color:var(--accent-orange);">13</div></div>
     <div class="step-body">
       <h4>VPC + Networking (vpc.tf)</h4>
-      <p>This file creates the entire network foundation: VPC, subnets, gateways, and route tables.</p>
+      <p><strong style="color:var(--text);">WHY this is written first (after variables):</strong> Every single resource -- EC2, RDS, security groups -- needs a VPC and subnet to exist. The network is the foundation everything else sits on. The core question is: <em>"How do my VMs reach each other, and how do they reach the internet without being directly exposed?"</em></p>
+
+      <p style="margin-top:14px;"><strong style="color:var(--text);">Network topology -- what we're building and why:</strong></p>
+      <div class="arch-diagram" style="font-family:'JetBrains Mono','Fira Code',monospace;font-size:12px;line-height:1.6;">
+<pre style="background:transparent;border:none;padding:0;margin:0;"><code style="color:var(--muted);">                         Internet
+                            |
+                    ┌───────┴───────┐
+                    │ <span style="color:var(--accent-blue);">Internet GW</span>    │  &larr; Gives public subnet internet access
+                    └───────┬───────┘
+                            |
+          ┌─────────────────┴─────────────────┐
+          │  <span style="color:var(--accent-green);">Public Subnet (10.0.1.0/24)</span>        │  &larr; ONLY the NAT Gateway lives here
+          │                                    │     No EC2 instances are placed here
+          │    ┌──────────────┐                │
+          │    │ <span style="color:var(--accent-orange);">NAT Gateway</span>  │                │  &larr; Lets private VMs reach internet
+          │    │ + Elastic IP │                │     (Docker Hub, apt, SMTP, etc.)
+          │    └──────┬───────┘                │     without being directly exposed
+          └───────────┼────────────────────────┘
+                      |  (NAT = outbound only, no inbound)
+          ┌───────────┴────────────────────────┐
+          │  <span style="color:var(--accent-purple);">Private Subnet A (10.0.2.0/24)</span>    │  &larr; ALL 4 EC2 instances + RDS live here
+          │                                    │     Protected from direct internet access
+          │  <span style="color:var(--accent-cyan);">monitoring</span>  <span style="color:var(--accent-cyan);">backend</span>  <span style="color:var(--accent-cyan);">network</span>  <span style="color:var(--accent-cyan);">ai</span>  │     Each has an Elastic IP for SSH only
+          └────────────────────────────────────┘
+          ┌────────────────────────────────────┐
+          │  <span style="color:var(--accent-yellow);">Private Subnet B (10.0.3.0/24)</span>    │  &larr; EXISTS ONLY for RDS requirement
+          │  (us-east-1b)                      │     AWS mandates 2 AZs for DB subnet group
+          │  No instances placed here          │     Even though we use single-AZ mode
+          └────────────────────────────────────┘</code></pre>
+      </div>
+      <div class="note-box" style="margin-top:12px;">
+        <strong>Key design decisions:</strong> (1) VMs go in the <em>private</em> subnet so they're not directly internet-accessible -- more secure. (2) NAT Gateway lets private VMs pull Docker images, OS updates, send SMTP emails without being exposed. (3) Elastic IPs give each VM a stable public IP specifically for SSH access. (4) Private Subnet B exists solely because AWS RDS forces DB subnet groups to span 2 AZs, even in single-AZ mode.
+      </div>
+
+      <p style="margin-top:14px;">This file creates the entire network foundation: VPC, subnets, gateways, and route tables.</p>
 <pre><code><span class="cm"># ---- VPC: The virtual network that contains everything ----</span>
 <span class="kw">resource</span> <span class="str">"aws_vpc"</span> <span class="str">"main"</span> {
   <span class="var">cidr_block</span>           = <span class="var">var</span>.vpc_cidr     <span class="cm"># 10.0.0.0/16 = 65,536 IPs</span>
@@ -1536,7 +1616,10 @@ ansible-playbook playbooks/site.yml playbooks/ai.yml</code></pre>
     <div class="step-num"><div class="step-circle" style="background:rgba(240,160,80,.15);border:1.5px solid rgba(240,160,80,.4);color:var(--accent-orange);">14</div></div>
     <div class="step-body">
       <h4>Security Groups (security-groups.tf)</h4>
-      <p>Five security groups control which ports are open and who can talk to whom. Think of them as per-VM firewalls.</p>
+      <p><strong style="color:var(--text);">WHY written before EC2/RDS:</strong> Both <span class="ic">aws_instance</span> and <span class="ic">aws_db_instance</span> require <span class="ic">vpc_security_group_ids</span> at creation time. You must define the firewall rules before the resources they protect.</p>
+      <p style="margin-top:10px;"><strong style="color:var(--text);">Thought process for each SG:</strong> Ask <em>"What ports does this service expose? Who needs to reach them?"</em> Then only allow exactly that. This is the <strong style="color:var(--accent-green);">principle of least privilege</strong> -- no port is open unless a specific service needs it from a specific source.</p>
+      <p style="margin-top:10px;"><strong style="color:var(--text);">Order within the file matters for readability:</strong> <span class="ic">sg-monitoring</span> and <span class="ic">sg-network</span> are defined first (standalone, no SG references). Then <span class="ic">sg-backend</span> (references sg-network and sg-monitoring). Then <span class="ic">sg-ai</span> (references sg-monitoring). Finally <span class="ic">sg-rds</span> (references sg-backend). Terraform resolves this automatically, but writing them in dependency order makes the code easier to follow.</p>
+      <p style="margin-top:10px;">Five security groups control which ports are open and who can talk to whom. Think of them as per-VM firewalls.</p>
 
       <table>
         <thead><tr><th>Security Group</th><th>Attached To</th><th>Key Ingress Rules</th></tr></thead>
@@ -1613,7 +1696,16 @@ ansible-playbook playbooks/site.yml playbooks/ai.yml</code></pre>
     <div class="step-body">
       <h4>EC2 Instances (ec2.tf)</h4>
 
-      <p><strong style="color:var(--text);">Ubuntu AMI data source -- always gets the latest 22.04 image:</strong></p>
+      <p><strong style="color:var(--text);">WHY this file is written after networking + security:</strong> An EC2 instance needs three things that must exist first: a <em>subnet</em> to live in (from vpc.tf), a <em>security group</em> to define its firewall (from security-groups.tf), and a <em>key pair</em> for SSH (from key-pair.tf). This file ties them all together.</p>
+
+      <p style="margin-top:14px;"><strong style="color:var(--text);">Three design decisions explained:</strong></p>
+      <ul>
+        <li><strong>Dynamic AMI lookup</strong> instead of hardcoded ID -- AMI IDs change every time Canonical releases an update. A data source always finds the latest.</li>
+        <li><strong>user_data bootstrap script</strong> -- bridges the gap between "Terraform creates a bare VM" and "Ansible configures it." Creates the <span class="ic">deploy</span> user, copies SSH keys, installs Python3.</li>
+        <li><strong>Elastic IPs</strong> -- without EIPs, public IPs would change on every VM restart, breaking SSH configs and Ansible inventory.</li>
+      </ul>
+
+      <p style="margin-top:14px;"><strong style="color:var(--text);">Ubuntu AMI data source -- always gets the latest 22.04 image:</strong></p>
 <pre><code><span class="kw">data</span> <span class="str">"aws_ami"</span> <span class="str">"ubuntu"</span> {
   <span class="var">most_recent</span> = <span class="kw">true</span>
   <span class="var">owners</span>      = [<span class="str">"099720109477"</span>]   <span class="cm"># Canonical (Ubuntu publisher)</span>
@@ -1711,6 +1803,9 @@ ansible-playbook playbooks/site.yml playbooks/ai.yml</code></pre>
     <div class="step-num"><div class="step-circle" style="background:rgba(240,160,80,.15);border:1.5px solid rgba(240,160,80,.4);color:var(--accent-orange);">16</div></div>
     <div class="step-body">
       <h4>RDS MySQL (rds.tf)</h4>
+      <p><strong style="color:var(--text);">WHY RDS instead of a Docker container?</strong> In Sprint 1, MySQL ran in a Docker container on the application VM. This is fine for a local lab, but for an AWS demo, managed RDS gives: automated backups, OS patching, monitoring via CloudWatch, and proper network isolation (private subnet, SG-restricted access). It also simplifies the application VM -- it only runs Spring Boot now.</p>
+      <p style="margin-top:10px;"><strong style="color:var(--text);">WHY single-AZ + skip_final_snapshot?</strong> This is a 10-day demo environment. Multi-AZ doubles the cost for failover we don't need. <span class="ic">skip_final_snapshot</span> lets <span class="ic">terraform destroy</span> delete the RDS instance cleanly -- in production, you'd set this to <span class="ic">false</span> to keep a backup.</p>
+
 <pre><code><span class="cm"># ---- DB Subnet Group: RDS requires subnets in at least 2 AZs ----</span>
 <span class="kw">resource</span> <span class="str">"aws_db_subnet_group"</span> <span class="str">"main"</span> {
   <span class="var">name</span>       = <span class="str">"${var.project_name}-db-subnet"</span>
@@ -1759,6 +1854,10 @@ ansible-playbook playbooks/site.yml playbooks/ai.yml</code></pre>
     <div class="step-num"><div class="step-circle" style="background:rgba(240,160,80,.15);border:1.5px solid rgba(240,160,80,.4);color:var(--accent-orange);">17</div></div>
     <div class="step-body">
       <h4>S3 + CloudFront (s3-cloudfront.tf)</h4>
+      <p><strong style="color:var(--text);">WHY S3 + CloudFront instead of serving from Spring Boot?</strong> In Sprint 1, the React frontend was bundled inside the Spring Boot JAR. This couples frontend deploys to backend deploys and puts static file serving load on the application VM. S3 + CloudFront is the standard AWS pattern for SPAs: static files served from a global CDN with HTTPS, no load on your backend, and independent deploy cycles.</p>
+      <p style="margin-top:10px;"><strong style="color:var(--text);">WHY this file can be written at any point:</strong> S3 and CloudFront don't depend on the VPC, subnets, or security groups at all. They're a completely separate AWS service. You could write this first or last -- it makes no difference. It's typically done last because it's the least coupled to everything else.</p>
+      <p style="margin-top:10px;"><strong style="color:var(--text);">Three security layers:</strong> (1) S3 public access block prevents any public ACLs. (2) OAC ensures only this specific CloudFront distribution can read from the bucket. (3) Bucket policy explicitly grants CloudFront access using the distribution's ARN as a condition.</p>
+
 <pre><code><span class="cm"># ---- S3 Bucket: Stores React frontend build + Drain3 snapshots ----</span>
 <span class="kw">resource</span> <span class="str">"aws_s3_bucket"</span> <span class="str">"frontend"</span> {
   <span class="var">bucket</span> = <span class="var">var</span>.s3_bucket_name   <span class="cm"># Must be globally unique across all AWS accounts</span>
@@ -1859,7 +1958,9 @@ ansible-playbook playbooks/site.yml playbooks/ai.yml</code></pre>
     <div class="step-body">
       <h4>Outputs + Inventory Generator</h4>
 
-      <p><strong style="color:var(--text);">outputs.tf -- grouped by category:</strong></p>
+      <p><strong style="color:var(--text);">WHY outputs.tf is always the last file:</strong> Outputs reference resources from every other file -- EC2 IPs, RDS endpoints, CloudFront domains. You can't write <span class="ic">aws_instance.monitoring.private_ip</span> until ec2.tf exists. Outputs serve two purposes: (1) print important values to the terminal after <span class="ic">terraform apply</span>, and (2) allow <span class="ic">terraform output -raw &lt;name&gt;</span> to be called from scripts -- which is exactly what <span class="ic">generate-inventory.sh</span> does to feed values into Ansible.</p>
+
+      <p style="margin-top:14px;"><strong style="color:var(--text);">outputs.tf -- grouped by category:</strong></p>
 <pre><code><span class="cm"># ---- EC2 Private IPs (used by Ansible inventory for inter-VM communication) ----</span>
 <span class="kw">output</span> <span class="str">"monitoring_private_ip"</span> { <span class="var">value</span> = <span class="var">aws_instance</span>.monitoring.private_ip }
 <span class="kw">output</span> <span class="str">"backend_private_ip"</span>    { <span class="var">value</span> = <span class="var">aws_instance</span>.backend.private_ip }
@@ -1966,6 +2067,174 @@ aws cloudfront create-invalidation \
         <strong style="color:var(--accent-green);">Three commands</strong> -- <span class="ic">terraform apply</span>, <span class="ic">./generate-inventory.sh</span>, <span class="ic">ansible-playbook</span> -- take you from zero infrastructure to a fully deployed observability + AI RCA stack. The generate-inventory.sh script is the glue that connects Terraform outputs to Ansible variables, making the entire pipeline reproducible.
       </div>
     </div>
+  </div>
+
+  <div class="section-label">Replicate from Scratch -- Step-by-Step</div>
+
+  <div class="card" style="border-color:rgba(107,207,127,.25);">
+    <h3 style="color:var(--accent-green);">Prerequisites</h3>
+    <ul>
+      <li><strong>Terraform CLI</strong> &gt;= 1.5.0 installed (<span class="ic">brew install terraform</span> or <a href="https://developer.hashicorp.com/terraform/install" style="color:var(--accent-blue);">official install</a>)</li>
+      <li><strong>AWS CLI</strong> configured with credentials (<span class="ic">aws configure</span> -- needs an IAM user with EC2, RDS, S3, CloudFront, VPC permissions)</li>
+      <li><strong>SSH key pair</strong> generated: <span class="ic">ssh-keygen -t ed25519 -f ~/.ssh/ansible_key -N ""</span></li>
+      <li><strong>Ansible</strong> installed on your local machine (<span class="ic">pip install ansible</span>)</li>
+      <li><strong>Your public IP</strong> -- find it with <span class="ic">curl ifconfig.me</span> (needed for SSH security group rules)</li>
+    </ul>
+  </div>
+
+  <div class="step" style="margin-top:20px;">
+    <div class="step-num"><div class="step-circle" style="background:rgba(107,207,127,.15);border:1.5px solid rgba(107,207,127,.4);color:var(--accent-green);">1</div></div>
+    <div class="step-body">
+      <h4>Clone and configure</h4>
+<pre><code><span class="cm"># Clone the Terraform repo</span>
+<span class="kw">cd</span> ~/projects
+git clone &lt;provisioning-monitoring-infra-repo-url&gt;
+<span class="kw">cd</span> provisioning-monitoring-infra
+
+<span class="cm"># Create your tfvars from the example</span>
+cp terraform.tfvars.example terraform.tfvars
+
+<span class="cm"># Edit terraform.tfvars with YOUR values:</span>
+<span class="cm">#   - allowed_ssh_cidrs = ["YOUR_IP/32"]     (from curl ifconfig.me)</span>
+<span class="cm">#   - ssh_public_key_path = "~/.ssh/ansible_key.pub"</span>
+<span class="cm">#   - db_password = "a-strong-password-here"</span>
+<span class="cm">#   - s3_bucket_name = "something-globally-unique"</span>
+nano terraform.tfvars</code></pre>
+      <div class="note-box warn" style="margin-bottom:0;">
+        <strong>Never commit terraform.tfvars</strong> -- it contains your RDS password and IP. It's already in <span class="ic">.gitignore</span>.
+      </div>
+    </div>
+  </div>
+  <div class="step-connector"></div>
+
+  <div class="step">
+    <div class="step-num"><div class="step-circle" style="background:rgba(107,207,127,.15);border:1.5px solid rgba(107,207,127,.4);color:var(--accent-green);">2</div></div>
+    <div class="step-body">
+      <h4>Initialize and preview</h4>
+<pre><code><span class="cm"># Download the AWS provider plugin (~200 MB, one-time)</span>
+terraform init
+
+<span class="cm"># Preview what will be created (NO resources are created yet)</span>
+<span class="cm"># This is your chance to review before committing</span>
+terraform plan
+
+<span class="cm"># You should see ~25 resources to create:</span>
+<span class="cm">#   1 VPC, 3 subnets, 1 IGW, 1 NAT GW, 2 route tables,</span>
+<span class="cm">#   3 route table associations, 5 security groups,</span>
+<span class="cm">#   1 key pair, 4 EC2 instances, 4 EIPs, 4 EIP associations,</span>
+<span class="cm">#   1 RDS instance, 1 DB subnet group,</span>
+<span class="cm">#   1 S3 bucket, 1 access block, 1 OAC, 1 CloudFront distribution,</span>
+<span class="cm">#   1 bucket policy, 1 NAT EIP</span></code></pre>
+    </div>
+  </div>
+  <div class="step-connector"></div>
+
+  <div class="step">
+    <div class="step-num"><div class="step-circle" style="background:rgba(107,207,127,.15);border:1.5px solid rgba(107,207,127,.4);color:var(--accent-green);">3</div></div>
+    <div class="step-body">
+      <h4>Apply (create all resources)</h4>
+<pre><code><span class="cm"># Create everything -- type 'yes' when prompted</span>
+terraform apply
+
+<span class="cm"># Timing:</span>
+<span class="cm">#   EC2 instances: ~1-2 minutes</span>
+<span class="cm">#   RDS MySQL:     ~8-12 minutes (AWS spins up a managed DB)</span>
+<span class="cm">#   CloudFront:    ~5-10 minutes (global CDN edge propagation)</span>
+<span class="cm">#   TOTAL:         ~10-15 minutes</span>
+
+<span class="cm"># After apply completes, verify outputs:</span>
+terraform output</code></pre>
+      <p>You should see all 4 public IPs, 4 private IPs, RDS endpoint, CloudFront domain, and S3 bucket name.</p>
+    </div>
+  </div>
+  <div class="step-connector"></div>
+
+  <div class="step">
+    <div class="step-num"><div class="step-circle" style="background:rgba(107,207,127,.15);border:1.5px solid rgba(107,207,127,.4);color:var(--accent-green);">4</div></div>
+    <div class="step-body">
+      <h4>Bridge to Ansible (generate inventory)</h4>
+<pre><code><span class="cm"># Run the inventory generator script</span>
+<span class="cm"># This reads terraform output and writes IPs into the Ansible project</span>
+./generate-inventory.sh ../monitoring-project
+
+<span class="cm"># Verify it worked:</span>
+cat ../monitoring-project/inventory/group_vars/all.yml | grep "_ip\|rds_\|cloudfront"
+
+<span class="cm"># You should see real IPs and endpoints, NOT placeholders</span></code></pre>
+    </div>
+  </div>
+  <div class="step-connector"></div>
+
+  <div class="step">
+    <div class="step-num"><div class="step-circle" style="background:rgba(107,207,127,.15);border:1.5px solid rgba(107,207,127,.4);color:var(--accent-green);">5</div></div>
+    <div class="step-body">
+      <h4>Deploy with Ansible</h4>
+<pre><code><span class="cm"># Switch to the Ansible project</span>
+<span class="kw">cd</span> ../monitoring-project
+
+<span class="cm"># Test SSH connectivity to all 4 VMs</span>
+<span class="cm"># (wait ~2 min after terraform apply for user_data script to finish)</span>
+ansible all -m ping
+
+<span class="cm"># Deploy Sprint 1 stack (monitoring + app + network)</span>
+ansible-playbook playbooks/site.yml
+
+<span class="cm"># Deploy Sprint 2 AI stack (Ollama + triage + MCP)</span>
+ansible-playbook playbooks/ai.yml</code></pre>
+    </div>
+  </div>
+  <div class="step-connector"></div>
+
+  <div class="step">
+    <div class="step-num"><div class="step-circle" style="background:rgba(107,207,127,.15);border:1.5px solid rgba(107,207,127,.4);color:var(--accent-green);">6</div></div>
+    <div class="step-body">
+      <h4>Deploy React frontend to S3</h4>
+<pre><code><span class="cm"># Build the React app</span>
+<span class="kw">cd</span> ../react-frontend
+npm install && npm run build
+
+<span class="cm"># Upload to S3</span>
+aws s3 sync build/ s3://$(terraform -chdir=../provisioning-monitoring-infra output -raw s3_bucket_name)/
+
+<span class="cm"># Invalidate CloudFront cache so changes appear immediately</span>
+aws cloudfront create-invalidation \
+  --distribution-id $(terraform -chdir=../provisioning-monitoring-infra output -raw cloudfront_distribution_id) \
+  --paths "/*"</code></pre>
+    </div>
+  </div>
+  <div class="step-connector"></div>
+
+  <div class="step">
+    <div class="step-num"><div class="step-circle" style="background:rgba(224,96,112,.15);border:1.5px solid rgba(224,96,112,.4);color:var(--accent-red);">7</div></div>
+    <div class="step-body">
+      <h4>Teardown (after demo)</h4>
+<pre><code><span class="cm"># IMPORTANT: Destroy all AWS resources to stop billing</span>
+<span class="kw">cd</span> ../provisioning-monitoring-infra
+terraform destroy
+
+<span class="cm"># Type 'yes' to confirm. This deletes EVERYTHING:</span>
+<span class="cm">#   4 EC2 instances, RDS, S3 bucket contents, CloudFront,</span>
+<span class="cm">#   VPC, subnets, security groups, EIPs, NAT Gateway</span>
+<span class="cm"># After ~5 minutes, all resources are gone and billing stops.</span></code></pre>
+      <div class="note-box warn" style="margin-bottom:0;">
+        <strong>Do not forget this step.</strong> The GPU instance alone costs $0.53/hr ($12.67/day). Running the full stack for a month without teardown would cost ~$500+.
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="border-color:rgba(64,208,208,.25);margin-top:24px;">
+    <h3 style="color:var(--accent-cyan);">Troubleshooting Common Issues</h3>
+    <table>
+      <thead><tr><th>Problem</th><th>Cause</th><th>Fix</th></tr></thead>
+      <tbody>
+        <tr><td><span class="ic">ansible all -m ping</span> fails</td><td>user_data script hasn't finished yet</td><td>Wait 2-3 minutes after <span class="ic">terraform apply</span>, then retry. The script creates the <span class="ic">deploy</span> user and installs Python.</td></tr>
+        <tr><td>S3 bucket name already taken</td><td>S3 names are globally unique across ALL AWS accounts</td><td>Change <span class="ic">s3_bucket_name</span> in <span class="ic">terraform.tfvars</span> to something unique (add your initials, date, etc.)</td></tr>
+        <tr><td>g4dn.xlarge quota error</td><td>AWS limits GPU instances by default (often 0)</td><td>Open AWS Support Console &rarr; Service Quotas &rarr; EC2 &rarr; "Running On-Demand G and VT instances" &rarr; Request increase to at least 4 vCPUs</td></tr>
+        <tr><td>RDS takes 15+ minutes</td><td>Normal for managed databases</td><td>This is expected. Terraform will wait. Don't cancel the apply.</td></tr>
+        <tr><td><span class="ic">terraform destroy</span> hangs on CloudFront</td><td>CloudFront distributions take time to disable before deletion</td><td>Wait ~5-10 minutes. This is normal AWS behavior.</td></tr>
+        <tr><td>SSH timeout on Elastic IP</td><td>Security group <span class="ic">allowed_ssh_cidrs</span> doesn't match your IP</td><td>Run <span class="ic">curl ifconfig.me</span> and update your <span class="ic">terraform.tfvars</span>, then <span class="ic">terraform apply</span></td></tr>
+      </tbody>
+    </table>
   </div>
 
   <div class="section-label">Cost Summary</div>
