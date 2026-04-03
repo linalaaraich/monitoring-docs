@@ -750,6 +750,32 @@ ansible-playbook playbooks/site.yml playbooks/ai.yml</code></pre>
     </ul>
   </div>
 
+  <div class="card" style="border-color:rgba(78,168,222,.25);margin-top:16px;">
+    <h3 style="color:var(--accent-blue);">Which File Do You Edit? (Ansible Edition)</h3>
+    <p>Ansible has many files that look similar. Here's how to know which one to modify:</p>
+    <table>
+      <thead><tr><th>What You Want to Do</th><th>Edit Which File</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>Change the Prometheus scrape interval</td><td><span class="ic">group_vars/monitoring.yml</span></td><td>This is a monitoring-specific setting. Change the variable, re-run the playbook, and the <span class="ic">prometheus.yml.j2</span> template picks up the new value automatically.</td></tr>
+        <tr><td>Change a VM IP (after Terraform redeploy)</td><td><span class="ic">group_vars/all.yml</span></td><td>VM IPs are shared across all groups (monitoring needs them for scrape targets, AI needs them for MCP endpoints). Or better: just re-run <span class="ic">generate-inventory.sh</span>.</td></tr>
+        <tr><td>Change the Ollama model from llama3.1:8b to mistral:7b</td><td><span class="ic">group_vars/ai.yml</span></td><td>AI-specific setting. Only the AI VM cares about which model to use.</td></tr>
+        <tr><td>Change how Prometheus formats its config file</td><td><span class="ic">roles/prometheus/templates/prometheus.yml.j2</span></td><td>Templates define the <em>structure</em> of config files. Change the template when you need to add/remove config sections, not just change values.</td></tr>
+        <tr><td>Add a new Prometheus scrape target</td><td><span class="ic">group_vars/monitoring.yml</span> (add to <span class="ic">prometheus_targets</span> list)</td><td>The template loops over this list with <span class="ic">{% for target in prometheus_targets %}</span>. Adding to the list = new target. No template change needed.</td></tr>
+        <tr><td>Add a new Grafana alert rule</td><td><span class="ic">roles/grafana/templates/alertrules.yml.j2</span></td><td>Alert rules are defined in the template itself (Grafana provisioning YAML format), not as variables. Add a new rule block inside the existing group.</td></tr>
+        <tr><td>Change which SSH key Ansible uses</td><td><span class="ic">ansible.cfg</span></td><td>The <span class="ic">private_key_file</span> setting controls which key Ansible uses for all SSH connections.</td></tr>
+        <tr><td>Add a new host (e.g., a 5th VM)</td><td><span class="ic">inventory/production.yml</span> (add host) + new <span class="ic">group_vars/newgroup.yml</span> + new playbook</td><td>Inventory defines what exists. Group vars define its config. Playbook defines what to deploy.</td></tr>
+        <tr><td>Change a Docker image version for a service</td><td><span class="ic">group_vars/*.yml</span> (the variable) or the <span class="ic">*-compose.yml.j2</span> template (if hardcoded)</td><td>If the image is a variable (like <span class="ic">{{ ollama_image }}</span>), change the variable. If hardcoded in the template (like <span class="ic">prom/prometheus:latest</span>), change the template.</td></tr>
+        <tr><td>Change a port mapping (e.g., Grafana from 3000 to 8080)</td><td><span class="ic">group_vars/monitoring.yml</span> (change <span class="ic">grafana_port</span>)</td><td>Port variables flow into both the docker-compose template (port mapping) AND security groups / firewall rules. Change in one place, propagates everywhere.</td></tr>
+      </tbody>
+    </table>
+    <div class="note-box" style="margin-top:12px;">
+      <strong>The golden rule:</strong> Change <em>variables</em> when you want different values. Change <em>templates</em> when you want different structure. Variables live in <span class="ic">group_vars/</span> or <span class="ic">roles/*/defaults/</span>. Templates live in <span class="ic">roles/*/templates/</span> or <span class="ic">playbooks/templates/</span>. Never hardcode values in templates when a variable can do the job -- that's what makes the same playbook work on both the lab and AWS.
+    </div>
+    <div class="note-box warn" style="margin-top:8px;margin-bottom:0;">
+      <strong>After any change:</strong> Re-run the relevant playbook. Ansible is idempotent -- it only changes what's different. <span class="ic">ansible-playbook playbooks/monitoring.yml</span> will re-template the changed config and restart the affected service. You don't need to re-run <span class="ic">site.yml</span> for a monitoring-only change.
+    </div>
+  </div>
+
   <div class="section-label">Ansible Migration -- What Changed and Why</div>
 
   <!-- ======================== STEP 6 ======================== -->
@@ -1581,6 +1607,23 @@ ansible-playbook playbooks/site.yml playbooks/ai.yml</code></pre>
 <span class="var">s3_bucket_name</span> = <span class="str">"cires-observability-demo-UNIQUE_SUFFIX"</span></code></pre>
       <div class="note-box warn">
         <strong>Security:</strong> <span class="ic">terraform.tfvars</span> is in <span class="ic">.gitignore</span>. It contains the RDS password and your SSH public key path. Never commit this file. The <span class="ic">db_password</span> variable is marked <span class="ic">sensitive = true</span> in variables.tf, so Terraform will mask it in plan output.
+      </div>
+
+      <p style="margin-top:18px;"><strong style="color:var(--accent-cyan);">Which file do you edit? variables.tf vs terraform.tfvars</strong></p>
+      <p><span class="ic">variables.tf</span> <strong style="color:var(--text);">declares</strong> that a variable exists (its name, type, description, and optionally a default value). Think of it as the schema. <span class="ic">terraform.tfvars</span> <strong style="color:var(--text);">overrides</strong> those defaults with your specific values. It's where secrets and environment-specific settings go.</p>
+      <table style="margin-top:12px;">
+        <thead><tr><th>What You Want to Do</th><th>Edit Which File</th><th>Why</th></tr></thead>
+        <tbody>
+          <tr><td>Change the monitoring VM to a bigger size <em>for your deployment</em></td><td><span class="ic">terraform.tfvars</span></td><td>Your value, your environment -- doesn't change the default for others</td></tr>
+          <tr><td>Change the default size <em>for all future users</em> of this code</td><td><span class="ic">variables.tf</span> (change the <span class="ic">default</span>)</td><td>Changes the baseline for everyone who uses this repo</td></tr>
+          <tr><td>Add a brand new variable (e.g., <span class="ic">backup_retention_days</span>)</td><td><strong>Both:</strong> <span class="ic">variables.tf</span> (declare it) + <span class="ic">terraform.tfvars</span> (set your value)</td><td>Must be declared before it can be used anywhere</td></tr>
+          <tr><td>Change your DB password or SSH key path</td><td><span class="ic">terraform.tfvars</span></td><td>Secrets always go here -- never in variables.tf (which is committed to git)</td></tr>
+          <tr><td>Change the region from us-east-1 to eu-west-1</td><td><span class="ic">terraform.tfvars</span></td><td>Environment-specific choice</td></tr>
+          <tr><td>Add a new resource that needs a configurable value</td><td><span class="ic">variables.tf</span> (declare) + the <span class="ic">.tf</span> file that uses it</td><td>Other <span class="ic">.tf</span> files reference it as <span class="ic">var.new_variable</span></td></tr>
+        </tbody>
+      </table>
+      <div class="note-box" style="margin-top:12px;margin-bottom:0;">
+        <strong>Rule of thumb:</strong> <span class="ic">variables.tf</span> = <em>"what CAN be configured"</em> (structure, types, sensible defaults). <span class="ic">terraform.tfvars</span> = <em>"what IS configured for THIS deployment"</em> (your actual values, secrets). If the value is a secret or differs per environment, it goes in <span class="ic">.tfvars</span>. If it's a structural change (new variable, changed type, new default), it goes in <span class="ic">variables.tf</span>.
       </div>
     </div>
   </div>
@@ -2646,6 +2689,32 @@ docker stats ollama --no-stream</code></pre>
 
       <li><strong>Why structured JSON output from the LLM?</strong><br><span style="color:var(--muted);">Free-text LLM responses are hard to parse programmatically. By requiring a specific JSON schema (decision, severity, rca, evidence, etc.), the code can reliably extract the verdict and populate the RCA record. Ollama's <span class="ic">"format": "json"</span> flag constrains output to valid JSON tokens, and Pydantic validates the structure. If parsing fails after 2 attempts, the fallback is ESCALATE.</span></li>
     </ul>
+  </div>
+
+  <div class="card" style="border-color:rgba(224,208,96,.25);margin-top:16px;">
+    <h3 style="color:var(--accent-yellow);">Which File Do You Edit? (Triage Service &amp; AI Pipeline Edition)</h3>
+    <p>The AI pipeline has three layers of configuration: Ansible variables (deployment-time), environment variables (container-time), and Python code (runtime). Here's how they connect and where to make changes:</p>
+    <table>
+      <thead><tr><th>What You Want to Do</th><th>Edit Which File</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>Change the LLM model (e.g., llama3.1:8b &rarr; mistral:7b)</td><td><span class="ic">group_vars/ai.yml</span> (<span class="ic">ollama_model</span>)</td><td>Ansible variable flows into <span class="ic">ai-compose.yml.j2</span> as <span class="ic">OLLAMA_MODEL</span> env var &rarr; read by <span class="ic">config.py</span> at startup. Change once, propagates through the whole chain.</td></tr>
+        <tr><td>Change the dedup window from 5 min to 10 min</td><td><span class="ic">group_vars/ai.yml</span> or directly in <span class="ic">ai-compose.yml.j2</span> env vars</td><td>Set <span class="ic">DEDUP_WINDOW_SECONDS=600</span>. The <span class="ic">config.py</span> Settings class reads this env var automatically.</td></tr>
+        <tr><td>Tune Drain3 sensitivity (anomaly threshold)</td><td><span class="ic">group_vars/ai.yml</span> (<span class="ic">DRAIN3_ANOMALY_THRESHOLD</span> env var)</td><td>Lower value = more things flagged as anomalous. Default 5 means a log pattern needs 5+ matches to be "known." Set to 3 for more sensitive, 10 for less.</td></tr>
+        <tr><td>Tune Drain3 clustering behavior (similarity, masking)</td><td><span class="ic">drain3.ini</span> in the triage service repo</td><td>This is the Drain3 library config, NOT an Ansible variable. Change <span class="ic">sim_th</span> (similarity threshold) or masking regex here. Requires rebuilding the Docker image.</td></tr>
+        <tr><td>Change the LLM system prompt (how it analyzes alerts)</td><td><span class="ic">app/llm_client.py</span> (<span class="ic">SYSTEM_PROMPT</span> constant)</td><td>This is Python code, not a config variable. Change the instructions the LLM receives. Requires rebuilding the Docker image.</td></tr>
+        <tr><td>Add a new MCP bridge server</td><td>Three files: (1) new Python server code, (2) <span class="ic">ai-compose.yml.j2</span> (add service), (3) <span class="ic">config.py</span> (add URL setting)</td><td>MCP servers are standalone FastAPI services. Each needs container definition + a URL env var so the triage service can find it.</td></tr>
+        <tr><td>Change the email template / format</td><td><span class="ic">app/notifier.py</span></td><td>Email HTML templates are in the Python code. Change the <span class="ic">send_escalation()</span> method. Requires rebuilding the Docker image.</td></tr>
+        <tr><td>Change SMTP credentials</td><td><span class="ic">group_vars/ai.yml</span> (<span class="ic">triage_smtp_*</span> variables)</td><td>These flow into env vars via docker-compose. Never hardcode credentials in Python code.</td></tr>
+        <tr><td>Change how many log lines the LLM sees</td><td><span class="ic">group_vars/ai.yml</span> or env var <span class="ic">LOKI_LOG_LIMIT</span></td><td>Default: 50 lines. Increase for more context (slower LLM inference), decrease for faster response.</td></tr>
+        <tr><td>Add a new alert rule in Grafana</td><td><span class="ic">roles/grafana/templates/alertrules.yml.j2</span></td><td>Alert rules are Grafana provisioning YAML. Add a new rule block. No triage service changes needed -- it processes any alert Grafana sends.</td></tr>
+      </tbody>
+    </table>
+    <div class="note-box" style="margin-top:12px;">
+      <strong>The configuration chain:</strong> <span class="ic">group_vars/ai.yml</span> (Ansible variable) &rarr; <span class="ic">ai-compose.yml.j2</span> (rendered to docker-compose with env vars) &rarr; <span class="ic">config.py</span> (pydantic-settings reads env vars at container startup) &rarr; used by all Python modules. Most tuning happens at the Ansible variable level. You only touch Python code to change <em>behavior</em> (prompts, templates, logic), not <em>values</em> (thresholds, URLs, credentials).
+    </div>
+    <div class="note-box warn" style="margin-top:8px;margin-bottom:0;">
+      <strong>Code change vs config change:</strong> If you change an Ansible variable or env var, just re-run <span class="ic">ansible-playbook playbooks/ai.yml</span> -- it recreates the containers with new env vars. If you change Python code (<span class="ic">app/*.py</span>) or <span class="ic">drain3.ini</span>, you must <strong>rebuild the Docker image</strong> first: <span class="ic">docker compose build triage-service</span> then re-run the playbook. The difference: env var changes are instant; code changes require a rebuild.
+    </div>
   </div>
 
   <div class="section-label">Implementation Deep Dive</div>
