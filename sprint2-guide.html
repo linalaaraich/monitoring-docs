@@ -632,6 +632,124 @@ ansible-playbook playbooks/site.yml playbooks/ai.yml</code></pre>
     </div>
   </div>
 
+  <div class="section-label">Ansible -- How It Works & Why We Use It</div>
+
+  <div class="card" style="border-color:rgba(78,168,222,.25);">
+    <h3 style="color:var(--accent-blue);">Terraform vs Ansible -- Two Tools, Two Jobs</h3>
+    <p><strong style="color:var(--text);">Terraform</strong> creates the <em>infrastructure</em> -- VMs, databases, networks, S3 buckets. It talks to the AWS API. Once <span class="ic">terraform apply</span> finishes, you have empty VMs with nothing installed on them.</p>
+    <p style="margin-top:8px;"><strong style="color:var(--text);">Ansible</strong> <em>configures</em> those VMs -- installs Docker, deploys Prometheus configs, starts containers, pulls LLM models. It connects via SSH and runs commands on the remote machines. Think of Terraform as the construction company that builds the house, and Ansible as the interior designer that furnishes it.</p>
+    <table style="margin-top:12px;">
+      <thead><tr><th>Aspect</th><th>Terraform</th><th>Ansible</th></tr></thead>
+      <tbody>
+        <tr><td>What it manages</td><td>Cloud resources (AWS, GCP, Azure)</td><td>Software on servers (configs, packages, containers)</td></tr>
+        <tr><td>How it connects</td><td>Cloud provider API (HTTP)</td><td>SSH into each server</td></tr>
+        <tr><td>State tracking</td><td>terraform.tfstate file</td><td>No state file -- checks live system each run</td></tr>
+        <tr><td>Language</td><td>HCL (.tf files)</td><td>YAML (.yml files)</td></tr>
+        <tr><td>Idempotent?</td><td>Yes -- won't recreate existing resources</td><td>Yes -- won't re-install packages already present</td></tr>
+        <tr><td>When it runs</td><td>Once (to create infra), then only on changes</td><td>Every deploy (ensures desired state)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card" style="border-color:rgba(107,207,127,.25);margin-top:16px;">
+    <h3 style="color:var(--accent-green);">How Ansible Works (Mental Model)</h3>
+    <p>Ansible is <strong style="color:var(--text);">agentless</strong> -- nothing needs to be installed on the target servers. It connects over SSH, copies small Python scripts to the remote machine, runs them, and reports back. Here's the flow from your laptop to a configured server:</p>
+
+    <div class="arch-diagram" style="font-family:'JetBrains Mono','Fira Code',monospace;font-size:12px;line-height:1.6;">
+<pre style="background:transparent;border:none;padding:0;margin:0;"><code style="color:var(--muted);"><span style="color:var(--accent-blue);">ansible.cfg</span>              &larr; "Where's my inventory? What SSH key? What user?"
+       |
+<span style="color:var(--accent-green);">inventory/production.yml</span>  &larr; "Which servers exist? What group is each in?"
+       |
+<span style="color:var(--accent-purple);">playbooks/site.yml</span>        &larr; "Run these roles on these host groups"
+       |
+   imports:
+   ├── <span style="color:var(--accent-orange);">monitoring.yml</span>    &larr; "On monitoring group: run roles common, docker, prometheus, grafana..."
+   ├── <span style="color:var(--accent-orange);">application.yml</span>   &larr; "On application group: run roles common, docker, spring_backend..."
+   ├── <span style="color:var(--accent-orange);">network.yml</span>       &larr; "On network group: run roles common, docker, kong..."
+   └── <span style="color:var(--accent-orange);">ai.yml</span>            &larr; "On ai group: run roles common, docker, nvidia_docker, ollama..."
+              |
+         each role:
+         ├── <span style="color:var(--accent-cyan);">defaults/main.yml</span>   &larr; default variable values (lowest priority)
+         ├── <span style="color:var(--accent-cyan);">tasks/main.yml</span>      &larr; the actual work (create dirs, copy files, install packages)
+         ├── <span style="color:var(--accent-cyan);">templates/*.j2</span>      &larr; Jinja2 config files (variables get replaced with real values)
+         └── <span style="color:var(--accent-cyan);">handlers/main.yml</span>   &larr; triggered actions (e.g., "restart docker" when config changes)</code></pre>
+    </div>
+
+    <p style="margin-top:12px;"><strong style="color:var(--text);">The key concept: Jinja2 templates.</strong> A template like <span class="ic">prometheus.yml.j2</span> contains placeholders like <span class="ic">{{ monitoring_vm_ip }}</span>. When Ansible deploys this file, it replaces every <span class="ic">{{ variable }}</span> with the real value from <span class="ic">group_vars</span>. This is how one set of templates works for both the local lab (192.168.127.x) and AWS (10.0.2.x) -- only the variables change.</p>
+  </div>
+
+  <div class="card" style="border-color:rgba(176,126,232,.25);margin-top:16px;">
+    <h3 style="color:var(--accent-purple);">Variable Hierarchy -- How Values Flow</h3>
+    <p>Ansible has a priority system for variables. Understanding this is critical for knowing where to put what:</p>
+
+    <div class="arch-diagram" style="font-family:'JetBrains Mono','Fira Code',monospace;font-size:12px;line-height:1.6;">
+<pre style="background:transparent;border:none;padding:0;margin:0;"><code style="color:var(--muted);"><span style="color:var(--accent-red);">HIGHEST PRIORITY</span>
+  |
+  ├── Command line: <span style="color:var(--accent-orange);">-e "var=value"</span>          (overrides everything)
+  ├── Host vars: <span style="color:var(--accent-orange);">inventory/production.yml</span>   (per-server overrides)
+  ├── Group vars: <span style="color:var(--accent-cyan);">group_vars/monitoring.yml</span>  (per-group settings)
+  ├── Group vars: <span style="color:var(--accent-cyan);">group_vars/all.yml</span>         (shared across all groups)
+  └── Role defaults: <span style="color:var(--accent-green);">roles/*/defaults/main.yml</span> (fallback values)
+  |
+<span style="color:var(--accent-green);">LOWEST PRIORITY</span></code></pre>
+    </div>
+
+    <p style="margin-top:12px;"><strong style="color:var(--text);">What goes where and why:</strong></p>
+    <ul>
+      <li><strong>all.yml</strong> -- values shared by ALL VMs: VM IPs (<span class="ic">monitoring_vm_ip</span>), AWS endpoints (<span class="ic">rds_endpoint</span>, <span class="ic">cloudfront_domain</span>), common ports (<span class="ic">node_port: 9100</span>), Docker version. Put it here if multiple groups need the same value.</li>
+      <li><strong>monitoring.yml</strong> -- values only the monitoring VM needs: Grafana password, Prometheus scrape targets, alert webhook URL, Loki retention days. Other VMs don't need to know Grafana's admin password.</li>
+      <li><strong>application.yml</strong> -- Spring Boot config: RDS JDBC URL, OTel agent version. Only the backend VM cares about these.</li>
+      <li><strong>ai.yml</strong> -- AI stack config: Ollama model, MCP server ports, SMTP credentials, GPU runtime flag. Only the AI VM needs these.</li>
+      <li><strong>Role defaults</strong> -- safe fallback values that work out of the box. For example, <span class="ic">ollama_model: "llama3:8b"</span> in <span class="ic">roles/ollama/defaults/main.yml</span>. These can be overridden by group_vars.</li>
+    </ul>
+  </div>
+
+  <div class="card" style="border-color:rgba(240,160,80,.25);margin-top:16px;">
+    <h3 style="color:var(--accent-orange);">Deployment Order -- Why Monitoring Goes First</h3>
+    <p>The playbooks are imported in a specific order in <span class="ic">site.yml</span>. This order matters because of cross-VM dependencies:</p>
+
+    <table>
+      <thead><tr><th>#</th><th>Playbook</th><th>Deploys</th><th>Why This Order</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td><span class="ic">monitoring.yml</span></td><td>Prometheus, Loki, Jaeger, Grafana, OTel Collector</td><td><strong>First</strong> because all other VMs ship metrics, logs, and traces TO the monitoring VM. If monitoring isn't ready, telemetry from other VMs has nowhere to go.</td></tr>
+        <tr><td>2</td><td><span class="ic">application.yml</span></td><td>Spring Boot, OTel agent</td><td><strong>Second</strong> because the backend needs the monitoring VM's OTel Collector endpoint to ship traces, and RDS must be ready (Terraform already created it).</td></tr>
+        <tr><td>3</td><td><span class="ic">network.yml</span></td><td>Kong API Gateway</td><td><strong>Third</strong> because Kong proxies to the Spring Boot backend -- the backend must be running first. Kong also ships traces to monitoring's OTel Collector.</td></tr>
+        <tr><td>4</td><td><span class="ic">ai.yml</span></td><td>Ollama, Triage, MCP servers</td><td><strong>Last</strong> because the AI VM queries the monitoring VM (Prometheus, Loki, Jaeger) during investigations. Those services must be running and populated with data.</td></tr>
+        <tr><td>5</td><td><span class="ic">integration.yml</span></td><td>End-to-end tests</td><td><strong>After everything</strong> -- verifies all cross-VM connections work: ping, HTTP health, load test, trace/log/metric verification.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card" style="border-color:rgba(64,208,208,.25);margin-top:16px;">
+    <h3 style="color:var(--accent-cyan);">The Role Pattern -- How Every Role Works</h3>
+    <p>Every role in this project follows the same 3-step pattern. Once you understand it for one role, you understand all 19:</p>
+
+    <table>
+      <thead><tr><th>Step</th><th>What Happens</th><th>Example (prometheus role)</th></tr></thead>
+      <tbody>
+        <tr><td><strong>1. Create directories</strong></td><td>The role creates config and data directories on the remote VM</td><td><span class="ic">mkdir /etc/prometheus</span>, <span class="ic">/var/lib/prometheus</span></td></tr>
+        <tr><td><strong>2. Deploy templates</strong></td><td>Jinja2 templates are rendered with real variable values and copied to the VM</td><td><span class="ic">prometheus.yml.j2</span> &rarr; <span class="ic">/etc/prometheus/prometheus.yml</span> (with real IPs filled in)</td></tr>
+        <tr><td><strong>3. Notify handler</strong></td><td>If the config changed, trigger a handler (usually "restart stack")</td><td><span class="ic">notify: restart stack</span> &rarr; runs <span class="ic">docker compose up -d</span></td></tr>
+      </tbody>
+    </table>
+
+    <p style="margin-top:12px;">The actual container startup is NOT done by individual roles. Instead, the <strong style="color:var(--text);">playbook</strong> deploys a single <span class="ic">docker-compose.yml</span> per VM (rendered from a Jinja2 template) and runs <span class="ic">docker compose up -d</span>. Each VM has exactly ONE docker-compose file at <span class="ic">/opt/stack/docker-compose.yml</span> containing all services for that VM.</p>
+
+    <div class="note-box" style="margin-top:12px;margin-bottom:0;">
+      <strong>Why one docker-compose per VM?</strong> All services on a VM share a Docker network, which means they can reach each other by container name (e.g., <span class="ic">http://prometheus:9090</span> from inside the Grafana container). If each service had its own compose file, they'd be on separate networks and couldn't communicate without extra configuration.
+    </div>
+  </div>
+
+  <div class="card" style="border-color:rgba(224,208,96,.25);margin-top:16px;">
+    <h3 style="color:var(--accent-yellow);">Stub Roles -- Why Some Roles Do Nothing</h3>
+    <p>You'll notice some roles like <span class="ic">mysql</span>, <span class="ic">node_exporter</span>, <span class="ic">cadvisor</span>, and <span class="ic">react_frontend</span> contain only a <span class="ic">debug</span> message that says "this is managed by [something else]." Why not just delete them?</p>
+    <ul>
+      <li><strong>node_exporter &amp; cadvisor:</strong> Their containers are defined in the docker-compose template, not managed by separate Ansible tasks. The stub role exists so the playbook's <span class="ic">roles:</span> list documents what's deployed, even if the role itself is a no-op.</li>
+      <li><strong>mysql:</strong> In Sprint 1, this role deployed a MySQL Docker container. In Sprint 2, MySQL moved to AWS RDS (managed by Terraform). The role is stubbed instead of deleted because <span class="ic">application.yml</span> still has <span class="ic">- mysql</span> in its roles list -- deleting the directory would cause an Ansible error.</li>
+      <li><strong>react_frontend:</strong> Same story -- the React frontend moved from Spring Boot to S3+CloudFront. The stub explains where the frontend is now served from.</li>
+    </ul>
+  </div>
+
   <div class="section-label">Ansible Migration -- What Changed and Why</div>
 
   <!-- ======================== STEP 6 ======================== -->
@@ -2404,6 +2522,133 @@ docker stats ollama --no-stream</code></pre>
 <!-- =========================================================== FASTAPI TRIAGE SERVICE -->
 <div id="tab-fastapi" class="tab-content">
 <div class="content">
+
+  <div class="section-label">AI Concepts -- What You Need to Know First</div>
+
+  <div class="card" style="border-color:rgba(107,207,127,.25);">
+    <h3 style="color:var(--accent-green);">What is an LLM? (Plain English)</h3>
+    <p>An LLM (Large Language Model) is a program that has read billions of sentences and learned patterns in language. Think of it as <strong style="color:var(--text);">autocomplete on steroids</strong> -- given some text, it predicts what words should come next. But because it has seen so much text (technical docs, code, incident reports, etc.), its "predictions" are actually useful analysis.</p>
+
+    <p style="margin-top:10px;"><strong style="color:var(--text);">In this project:</strong> We use <span class="ic">llama3.1:8b</span> -- a model with 8 billion parameters (think of parameters as "things it learned"). It runs <em>locally</em> on the AI VM's GPU, NOT on any external cloud. We send it an alert + all the context (metrics, logs, traces) and ask: <em>"Is this a real problem or noise? If real, what's the root cause?"</em></p>
+
+    <p style="margin-top:10px;"><strong style="color:var(--text);">Key limitations to understand:</strong></p>
+    <ul>
+      <li><strong>Not deterministic:</strong> Ask the same question twice, you might get slightly different answers. That's normal for LLMs.</li>
+      <li><strong>Can hallucinate:</strong> It might confidently say something incorrect. That's why we require structured JSON output and validate it with Pydantic.</li>
+      <li><strong>Slow:</strong> Generating a response takes 2-30 seconds depending on context length. That's why webhooks return <span class="ic">202 Accepted</span> immediately and process in the background.</li>
+      <li><strong>Safety fallback:</strong> If the LLM can't produce valid output, we ALWAYS escalate (send the alert to a human). A missed real alert is worse than a false alarm.</li>
+    </ul>
+  </div>
+
+  <div class="card" style="border-color:rgba(224,208,96,.25);margin-top:16px;">
+    <h3 style="color:var(--accent-yellow);">What is Drain3? (Log Anomaly Detection for Beginners)</h3>
+    <p><strong style="color:var(--text);">The problem:</strong> Your application produces thousands of log lines per minute. Most are normal ("GET /api/products 200 OK"). But buried in there might be a line you've never seen before ("FATAL: connection pool exhausted, cannot allocate new connection"). How do you automatically find the unusual ones?</p>
+
+    <p style="margin-top:14px;"><strong style="color:var(--accent-yellow);">Drain3's approach: Log Template Mining</strong></p>
+    <p>Drain3 groups log lines into <strong style="color:var(--text);">templates</strong> by replacing variable parts (IPs, numbers, IDs) with placeholders. Here's a concrete example:</p>
+
+    <table>
+      <thead><tr><th>Raw Log Line</th><th>Drain3 Template</th><th>Cluster Size</th></tr></thead>
+      <tbody>
+        <tr><td><span class="ic">GET /api/users 42 192.168.127.30 200</span></td><td rowspan="3"><span class="ic">GET /api/users &lt;NUM&gt; &lt;IP&gt; &lt;NUM&gt;</span></td><td rowspan="3" style="color:var(--accent-green);font-weight:700;">3,847 matches<br><span class="tag tag-green">KNOWN</span></td></tr>
+        <tr><td><span class="ic">GET /api/users 99 192.168.127.10 200</span></td></tr>
+        <tr><td><span class="ic">GET /api/users 7 10.0.2.15 200</span></td></tr>
+        <tr style="border-top:2px solid var(--border);">
+          <td><span class="ic">FATAL: connection pool exhausted at 10.0.2.30</span></td>
+          <td><span class="ic">FATAL: connection pool exhausted at &lt;IP&gt;</span></td>
+          <td style="color:var(--accent-red);font-weight:700;">1 match<br><span class="tag tag-must">ANOMALY</span></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p style="margin-top:14px;"><strong style="color:var(--text);">How it decides what's anomalous:</strong></p>
+    <ul>
+      <li><strong>Step 1 -- Masking:</strong> Replace IPs with <span class="ic">&lt;IP&gt;</span>, numbers with <span class="ic">&lt;NUM&gt;</span>, UUIDs with <span class="ic">&lt;UUID&gt;</span>. This way, the same request with different IDs clusters into one template instead of creating thousands.</li>
+      <li><strong>Step 2 -- Clustering:</strong> Drain3 compares each masked line to existing templates. If it's similar enough (similarity threshold: 0.4), it joins that cluster. If not, a brand new cluster is created.</li>
+      <li><strong>Step 3 -- Counting:</strong> Each cluster tracks how many log lines match it. A template with 3,847 matches is clearly "normal baseline."</li>
+      <li><strong>Step 4 -- Anomaly threshold:</strong> If a template has fewer than <strong style="color:var(--accent-red);">5 matches</strong> (configurable), it's flagged as <span class="ic">[ANOMALY]</span>. If 5 or more, it's <span class="ic">[KNOWN]</span>.</li>
+    </ul>
+
+    <div class="note-box" style="margin-top:12px;">
+      <strong>Why does this matter for the LLM?</strong> When the triage service sends logs to the LLM, each line is prefixed with <span class="ic">[ANOMALY]</span> or <span class="ic">[KNOWN]</span>. This helps the LLM focus on the unusual lines. Without Drain3, the LLM would have to read 50 log lines and figure out which ones are noteworthy by itself -- much slower and less reliable. With Drain3, the LLM can immediately see: <em>"3 of 50 lines are anomalous, and they all mention connection pool exhaustion -- that's the root cause."</em>
+    </div>
+
+    <p style="margin-top:14px;"><strong style="color:var(--text);">Background ingestion -- building the baseline:</strong></p>
+    <p>Drain3 needs to know what "normal" looks like before it can detect anomalies. At startup, it fetches 1 hour of recent logs from Loki (up to 1,000 lines) and feeds them through the template miner to build an initial baseline. Then, every 30 seconds, it polls Loki for new logs to keep the baseline current. Without this background ingestion, <em>every</em> log line would appear "new" because Drain3 would have no reference point.</p>
+
+    <p style="margin-top:14px;"><strong style="color:var(--text);">State persistence:</strong> Drain3 saves all its learned templates to a file (<span class="ic">drain3_state.bin</span>) every 10 minutes. If the container restarts, it reloads this file instead of re-learning from scratch. The file is stored on a Docker volume that survives container restarts.</p>
+  </div>
+
+  <div class="card" style="border-color:rgba(176,126,232,.25);margin-top:16px;">
+    <h3 style="color:var(--accent-purple);">The Full AI RCA Pipeline -- How It All Fits Together</h3>
+    <p><strong style="color:var(--text);">Analogy: Think of it like a hospital triage system.</strong></p>
+
+    <table>
+      <thead><tr><th>Hospital Triage</th><th>AI RCA Pipeline</th><th>Component</th></tr></thead>
+      <tbody>
+        <tr><td>Patient arrives at ER</td><td>Grafana fires an alert webhook</td><td><span class="ic">POST /webhook/grafana</span></td></tr>
+        <tr><td>Receptionist checks: "Were you just here?"</td><td>Deduplication: "Did we already process this alert in the last 5 min?"</td><td><span class="ic">dedup.py</span></td></tr>
+        <tr><td>Nurse takes vitals (blood pressure, temp, heart rate)</td><td>Context gathering: query Prometheus (metrics), Loki (logs), Jaeger (traces) in parallel</td><td><span class="ic">context.py</span></td></tr>
+        <tr><td>Lab runs blood tests, flags abnormal results</td><td>Drain3 annotates logs: marks unusual patterns as [ANOMALY]</td><td><span class="ic">drain_analyzer.py</span></td></tr>
+        <tr><td>Doctor reviews all results, makes diagnosis</td><td>LLM reviews alert + metrics + annotated logs + traces, produces RCA verdict</td><td><span class="ic">llm_client.py</span></td></tr>
+        <tr><td>Doctor decides: admit (serious) or discharge (fine)</td><td>LLM decides: ESCALATE (real issue) or DISMISS (noise)</td><td><span class="ic">LLMDecision</span></td></tr>
+        <tr><td>If admitted: file chart, notify specialist</td><td>If ESCALATE: save to RCA history, send email with root cause analysis</td><td><span class="ic">notifier.py</span> + <span class="ic">rca_store.py</span></td></tr>
+        <tr><td>If discharged: note in records</td><td>If DISMISS: save to history, log the reason, no email</td><td><span class="ic">rca_store.py</span></td></tr>
+      </tbody>
+    </table>
+
+    <p style="margin-top:14px;"><strong style="color:var(--text);">The 9-step pipeline in code (pipeline.py):</strong></p>
+    <div class="arch-diagram" style="font-family:'JetBrains Mono','Fira Code',monospace;font-size:12px;line-height:1.8;">
+<pre style="background:transparent;border:none;padding:0;margin:0;"><code style="color:var(--muted);">  <span style="color:var(--accent-red);">Grafana webhook arrives</span>
+         |
+  <span style="color:var(--accent-orange);">Step 1:</span> Dedup check (is this a repeat within 5 min?)
+         |--- YES &rarr; skip, increment counter, done
+         |--- NO  &darr;
+  <span style="color:var(--accent-orange);">Step 2:</span> Start 5-min timeout (safety net)
+         |
+  <span style="color:var(--accent-cyan);">Step 3:</span> Gather context in PARALLEL (max 8s each):
+         |   ├── Prometheus MCP &rarr; metrics from last 15 min
+         |   ├── Loki MCP &rarr; last 50 log lines
+         |   └── Jaeger MCP &rarr; last 20 traces
+         |   (if any source is down, continue with partial data)
+         |
+  <span style="color:var(--accent-yellow);">Step 4:</span> Drain3 annotates log lines: [ANOMALY] or [KNOWN]
+         |
+  <span style="color:var(--accent-blue);">Step 5:</span> Check RCA history: "has this alert fired before?"
+         |
+  <span style="color:var(--accent-green);">Step 6:</span> Send everything to Ollama LLM &rarr; get ESCALATE/DISMISS verdict
+         |
+  <span style="color:var(--accent-purple);">Step 7:</span> Build RCA record (all details for audit trail)
+         |
+  <span style="color:var(--accent-red);">Step 8:</span> Act on verdict:
+         |   ├── ESCALATE &rarr; send RCA email via Gmail SMTP
+         |   └── DISMISS  &rarr; log the reason, no email
+         |
+  <span style="color:var(--accent-blue);">Step 9:</span> Save decision to SQLite (RCA history for future reference)
+
+  <span style="color:var(--accent-orange);">If Step 2 timeout fires (5 min exceeded):</span>
+         └── Send raw alert email (no AI analysis) as safety fallback</code></pre>
+    </div>
+  </div>
+
+  <div class="card" style="border-color:rgba(64,208,208,.25);margin-top:16px;">
+    <h3 style="color:var(--accent-cyan);">Key Design Decisions -- Why Each Choice Was Made</h3>
+    <ul>
+      <li style="margin-bottom:12px;"><strong>Why self-hosted LLM (Ollama) instead of OpenAI/Claude API?</strong><br><span style="color:var(--muted);">Sensitive production data (logs, metrics, error messages) flows through the RCA pipeline. Sending this data to an external API would be a security and compliance risk. Ollama runs entirely on-premise -- no data leaves the network. It's also free (no per-token costs) and works without internet connectivity.</span></li>
+
+      <li style="margin-bottom:12px;"><strong>Why MCP bridge servers instead of direct API calls?</strong><br><span style="color:var(--muted);">MCP (Model Context Protocol) bridges provide a standardized interface for the LLM to access data. Each bridge wraps a complex API (Prometheus PromQL, Loki LogQL, Jaeger search) into simple tool calls. This separation means: (1) the triage service doesn't need to know the query language for each tool, (2) bridges can be tested independently, and (3) the LLM can autonomously decide which tools to call during investigation.</span></li>
+
+      <li style="margin-bottom:12px;"><strong>Why deduplication is critical?</strong><br><span style="color:var(--muted);">Grafana re-sends firing alerts every evaluation interval (typically 60 seconds). Without dedup, a single alert that fires for 5 minutes would trigger 5 separate LLM investigations, each taking 30-120 seconds of GPU time. The 5-minute dedup window means one investigation per incident, not one per minute.</span></li>
+
+      <li style="margin-bottom:12px;"><strong>Why timeout-then-escalate instead of timeout-then-ignore?</strong><br><span style="color:var(--muted);">If the LLM hangs or the GPU is saturated, a 5-minute timeout fires. The safe choice is to ESCALATE (send a raw alert email to the on-call engineer) rather than silently drop the alert. A false positive (unnecessary email) is annoying but harmless. A false negative (missed real incident) could mean production downtime. The system is biased toward safety.</span></li>
+
+      <li style="margin-bottom:12px;"><strong>Why <span class="ic">202 Accepted</span> + BackgroundTasks instead of synchronous processing?</strong><br><span style="color:var(--muted);">LLM inference takes 2-120 seconds. If the webhook endpoint waited for the full pipeline, Grafana's HTTP client would time out (typically 10-30 seconds) and retry, creating duplicate alerts. Returning <span class="ic">202</span> immediately tells Grafana "I got it, don't resend." The actual processing runs asynchronously in the same event loop.</span></li>
+
+      <li><strong>Why structured JSON output from the LLM?</strong><br><span style="color:var(--muted);">Free-text LLM responses are hard to parse programmatically. By requiring a specific JSON schema (decision, severity, rca, evidence, etc.), the code can reliably extract the verdict and populate the RCA record. Ollama's <span class="ic">"format": "json"</span> flag constrains output to valid JSON tokens, and Pydantic validates the structure. If parsing fails after 2 attempts, the fallback is ESCALATE.</span></li>
+    </ul>
+  </div>
+
+  <div class="section-label">Implementation Deep Dive</div>
 
   <div class="note-box purple">
     <strong>This tab documents the actual, implemented triage service</strong> at <span class="ic">~/monitoring-triage-service/</span>. Every code block below is copied from the real source files. The service receives Grafana Alerting webhooks, deduplicates alerts, gathers context from all three observability pillars via MCP bridges, annotates logs with Drain3 anomaly detection, asks Ollama (llama3.1:8b) for an ESCALATE/DISMISS verdict with structured JSON output, stores decisions in SQLite, and sends enriched RCA emails via Gmail SMTP. All processing is async (asyncio), and structured JSON logs are shipped to Loki by the OTel Collector automatically.
