@@ -2164,6 +2164,24 @@ ansible-playbook playbooks/site.yml playbooks/ai.yml</code></pre>
 
         <p style="margin-top:10px;"><strong style="color:var(--text);">The solution — <span class="ic">for_each</span>:</strong> Instead of copy-pasting the same resource block for every CIDR, we tell Terraform: <em>"create one copy of this resource for each item in a collection."</em> It's like a loop, but instead of running code N times, it creates N resources.</p>
 
+        <p style="margin-top:10px;"><strong style="color:var(--text);">Where does <span class="ic">for_each</span> start and end?</strong> There is no special "end" keyword. <span class="ic">for_each</span> is a <strong>meta-argument</strong> — it applies to the <em>entire</em> resource block it's declared in. Its scope starts at the opening <span class="ic">{</span> of the resource and ends at the closing <span class="ic">}</span>. The <span class="ic">each</span> object (<span class="ic">each.key</span>, <span class="ic">each.value</span>) is available anywhere within that block:</p>
+
+<pre style="margin-top:6px;"><code><span class="kw">resource</span> <span class="str">"aws_vpc_security_group_ingress_rule"</span> <span class="str">"monitoring_ssh"</span> {   <span class="cm"># ← block starts</span>
+  <span class="var">for_each</span> = <span class="var">toset</span>(<span class="var">var</span>.allowed_ssh_cidrs)                          <span class="cm"># ← for_each declared here</span>
+
+  <span class="var">security_group_id</span> = <span class="var">aws_security_group</span>.monitoring.id
+  <span class="var">description</span>       = <span class="str">"SSH"</span>
+  <span class="var">from_port</span>         = <span class="num">22</span>
+  <span class="var">to_port</span>           = <span class="num">22</span>
+  <span class="var">ip_protocol</span>       = <span class="str">"tcp"</span>
+  <span class="var">cidr_ipv4</span>         = <span class="var">each</span>.value                                    <span class="cm"># ← each.value used here</span>
+
+  <span class="var">tags</span> = { Name = <span class="str">"${var.project_name}-monitoring-ssh"</span> }
+}                                                                    <span class="cm"># ← block ends, scope ends</span>
+
+<span class="cm"># Everything between the opening { and closing } is "inside the loop."</span>
+<span class="cm"># Terraform creates one complete copy of the entire block per item.</span></code></pre>
+
         <p style="margin-top:10px;"><strong style="color:var(--text);">Why <span class="ic">toset()</span>?</strong> <span class="ic">for_each</span> only accepts a <strong>set</strong> or a <strong>map</strong>, not a list. Why? Because Terraform needs a <em>unique key</em> for each resource instance (to track it in state). Lists are ordered by index (<span class="ic">[0], [1], [2]</span>) — if you remove item <span class="ic">[0]</span>, everything shifts and Terraform would destroy and recreate all subsequent resources. Sets use the <em>value itself</em> as the key, so adding or removing one CIDR only affects that one rule. <span class="ic">toset(var.allowed_ssh_cidrs)</span> converts the list <span class="ic">["41.137.0.0/16", "105.159.0.0/16"]</span> into a set.</p>
 
         <p style="margin-top:10px;"><strong style="color:var(--text);">What is <span class="ic">each.value</span>?</strong> Inside a <span class="ic">for_each</span> block, Terraform gives you the <span class="ic">each</span> object to access the current item. For a set of strings, <span class="ic">each.key</span> and <span class="ic">each.value</span> are the same — the string itself (the CIDR). For a map, <span class="ic">each.key</span> is the map key and <span class="ic">each.value</span> is the map value. So <span class="ic">cidr_ipv4 = each.value</span> means "use the current CIDR from the set."</p>
