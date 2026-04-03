@@ -2077,7 +2077,11 @@ ansible-playbook playbooks/site.yml playbooks/ai.yml</code></pre>
 
       <p><strong style="color:var(--text);">WHY written before EC2/RDS:</strong> Both <span class="ic">aws_instance</span> and <span class="ic">aws_db_instance</span> require <span class="ic">vpc_security_group_ids</span> at creation time. You must define the firewall rules before the resources they protect.</p>
       <p style="margin-top:10px;"><strong style="color:var(--text);">Thought process for each SG:</strong> Ask <em>"What ports does this service expose? Who needs to reach them?"</em> Then only allow exactly that. This is the <strong style="color:var(--accent-green);">principle of least privilege</strong> -- no port is open unless a specific service needs it from a specific source.</p>
-      <p style="margin-top:10px;"><strong style="color:var(--text);">Order within the file matters for readability:</strong> <span class="ic">sg-monitoring</span> and <span class="ic">sg-network</span> are defined first (standalone, no SG references). Then <span class="ic">sg-backend</span> (references sg-network and sg-monitoring). Then <span class="ic">sg-ai</span> (references sg-monitoring). Finally <span class="ic">sg-rds</span> (references sg-backend). Terraform resolves this automatically, but writing them in dependency order makes the code easier to follow.</p>
+      <div class="note-box purple" style="margin-top:10px;">
+        <strong>HashiCorp best practice — standalone rule resources:</strong> We use <span class="ic">aws_vpc_security_group_ingress_rule</span> and <span class="ic">aws_vpc_security_group_egress_rule</span> instead of inline <span class="ic">ingress</span>/<span class="ic">egress</span> blocks inside <span class="ic">aws_security_group</span>. Inline rules struggle with managing multiple CIDR blocks and lack unique IDs, tags, and descriptions per rule. With standalone resources, each rule is independently trackable in the Terraform state and AWS console. <strong>Never mix inline and standalone rules</strong> — this causes rule conflicts and perpetual diffs.
+      </div>
+
+      <p style="margin-top:10px;"><strong style="color:var(--text);">File structure:</strong> The <span class="ic">aws_security_group</span> resources are defined first as empty shells (name, description, VPC, tags, lifecycle). All rules follow as separate <span class="ic">aws_vpc_security_group_ingress_rule</span> / <span class="ic">aws_vpc_security_group_egress_rule</span> resources, grouped by security group. SSH rules use <span class="ic">for_each = toset(var.allowed_ssh_cidrs)</span> to handle multiple CIDRs cleanly (one rule per CIDR, as required by the standalone resource).</p>
       <p style="margin-top:10px;">Five security groups control which ports are open and who can talk to whom:</p>
 
       <table>
@@ -2113,33 +2117,48 @@ ansible-playbook playbooks/site.yml playbooks/ai.yml</code></pre>
 
       <p style="margin-top:14px;"><strong style="color:var(--text);">sg-to-sg references (principle of least privilege):</strong></p>
 <pre><code><span class="cm"># sg-backend: HTTP only from Kong (sg-network), not from the whole subnet</span>
-<span class="kw">ingress</span> {
-  <span class="var">description</span>     = <span class="str">"HTTP from Kong"</span>
-  <span class="var">from_port</span>       = <span class="num">80</span>
-  <span class="var">to_port</span>         = <span class="num">80</span>
-  <span class="var">protocol</span>        = <span class="str">"tcp"</span>
-  <span class="var">security_groups</span> = [<span class="var">aws_security_group</span>.network.id]   <span class="cm"># Only sg-network!</span>
+<span class="kw">resource</span> <span class="str">"aws_vpc_security_group_ingress_rule"</span> <span class="str">"backend_http_from_kong"</span> {
+  <span class="var">security_group_id</span>            = <span class="var">aws_security_group</span>.backend.id
+  <span class="var">description</span>                  = <span class="str">"HTTP from Kong"</span>
+  <span class="var">from_port</span>                    = <span class="num">80</span>
+  <span class="var">to_port</span>                      = <span class="num">80</span>
+  <span class="var">ip_protocol</span>                  = <span class="str">"tcp"</span>
+  <span class="var">referenced_security_group_id</span> = <span class="var">aws_security_group</span>.network.id   <span class="cm"># Only sg-network!</span>
 }
 
 <span class="cm"># sg-rds: MySQL only from Spring Boot (sg-backend)</span>
-<span class="kw">ingress</span> {
-  <span class="var">description</span>     = <span class="str">"MySQL from backend"</span>
-  <span class="var">from_port</span>       = <span class="num">3306</span>
-  <span class="var">to_port</span>         = <span class="num">3306</span>
-  <span class="var">protocol</span>        = <span class="str">"tcp"</span>
-  <span class="var">security_groups</span> = [<span class="var">aws_security_group</span>.backend.id]   <span class="cm"># Only sg-backend!</span>
+<span class="kw">resource</span> <span class="str">"aws_vpc_security_group_ingress_rule"</span> <span class="str">"rds_mysql_from_backend"</span> {
+  <span class="var">security_group_id</span>            = <span class="var">aws_security_group</span>.rds.id
+  <span class="var">description</span>                  = <span class="str">"MySQL from backend"</span>
+  <span class="var">from_port</span>                    = <span class="num">3306</span>
+  <span class="var">to_port</span>                      = <span class="num">3306</span>
+  <span class="var">ip_protocol</span>                  = <span class="str">"tcp"</span>
+  <span class="var">referenced_security_group_id</span> = <span class="var">aws_security_group</span>.backend.id   <span class="cm"># Only sg-backend!</span>
 }
 
 <span class="cm"># sg-ai: Triage webhook only from Grafana (sg-monitoring)</span>
-<span class="kw">ingress</span> {
-  <span class="var">description</span>     = <span class="str">"Triage Service webhook"</span>
-  <span class="var">from_port</span>       = <span class="num">8090</span>
-  <span class="var">to_port</span>         = <span class="num">8090</span>
-  <span class="var">protocol</span>        = <span class="str">"tcp"</span>
-  <span class="var">security_groups</span> = [<span class="var">aws_security_group</span>.monitoring.id]  <span class="cm"># Only sg-monitoring!</span>
+<span class="kw">resource</span> <span class="str">"aws_vpc_security_group_ingress_rule"</span> <span class="str">"ai_triage_webhook"</span> {
+  <span class="var">security_group_id</span>            = <span class="var">aws_security_group</span>.ai.id
+  <span class="var">description</span>                  = <span class="str">"Triage Service webhook (from Grafana)"</span>
+  <span class="var">from_port</span>                    = <span class="num">8090</span>
+  <span class="var">to_port</span>                      = <span class="num">8090</span>
+  <span class="var">ip_protocol</span>                  = <span class="str">"tcp"</span>
+  <span class="var">referenced_security_group_id</span> = <span class="var">aws_security_group</span>.monitoring.id  <span class="cm"># Only sg-monitoring!</span>
+}
+
+<span class="cm"># SSH rules use for_each to handle multiple CIDRs (one rule per CIDR)</span>
+<span class="kw">resource</span> <span class="str">"aws_vpc_security_group_ingress_rule"</span> <span class="str">"monitoring_ssh"</span> {
+  <span class="var">for_each</span> = <span class="var">toset</span>(<span class="var">var</span>.allowed_ssh_cidrs)
+
+  <span class="var">security_group_id</span> = <span class="var">aws_security_group</span>.monitoring.id
+  <span class="var">description</span>       = <span class="str">"SSH"</span>
+  <span class="var">from_port</span>         = <span class="num">22</span>
+  <span class="var">to_port</span>           = <span class="num">22</span>
+  <span class="var">ip_protocol</span>       = <span class="str">"tcp"</span>
+  <span class="var">cidr_ipv4</span>         = <span class="var">each</span>.value
 }</code></pre>
       <div class="note-box">
-        <strong>lifecycle { create_before_destroy = true }:</strong> Every security group uses this lifecycle rule. Without it, Terraform would try to delete the old SG before creating the new one during updates. Since SGs are referenced by EC2 instances, deleting them first would fail. <span class="ic">create_before_destroy</span> creates the replacement SG first, updates references, then deletes the old one.
+        <strong>lifecycle { create_before_destroy = true }:</strong> Every <span class="ic">aws_security_group</span> shell uses this lifecycle rule. Without it, Terraform would try to delete the old SG before creating the new one during updates. Since SGs are referenced by EC2 instances, deleting them first would fail. <span class="ic">create_before_destroy</span> creates the replacement SG first, updates references, then deletes the old one. The standalone rule resources (<span class="ic">aws_vpc_security_group_ingress_rule</span>) are independently managed and don't need this — they can be added/removed without affecting the parent SG.
       </div>
 
       <div class="note-box warn" style="margin-top:8px;">
