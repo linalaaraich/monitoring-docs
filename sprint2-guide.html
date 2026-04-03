@@ -229,6 +229,7 @@
   <div class="tab"           onclick="switchTab('e2e')">End-to-End Test</div>
   <div class="tab"           onclick="switchTab('grafana')">Grafana Dashboard</div>
   <div class="tab"           onclick="switchTab('production')">Production Migration</div>
+  <div class="tab"           onclick="switchTab('hcl')">HCL Language Reference</div>
 </div>
 
 
@@ -6018,6 +6019,485 @@ sudo ufw enable</code></pre>
 
 </div>
 </div><!-- /tab-production -->
+
+
+<!-- =========================================================== HCL LANGUAGE REFERENCE -->
+<div id="tab-hcl" class="tab-content">
+<div class="content">
+
+  <div class="note-box">
+    <strong>What is this tab?</strong> A quick reference for every HCL (HashiCorp Configuration Language) feature used in our Terraform code. If you encounter syntax in <span class="ic">security-groups.tf</span>, <span class="ic">vpc.tf</span>, <span class="ic">ec2.tf</span>, or any other <span class="ic">.tf</span> file and don't know what it does, look it up here. Examples are drawn directly from this project's code.
+  </div>
+
+  <!-- ─────────────── BASICS ─────────────── -->
+  <div class="section-label">The Basics</div>
+
+  <div class="card" style="border-color:rgba(64,160,255,.25);margin-top:16px;">
+    <h3 style="color:var(--accent-blue);">resource</h3>
+    <p>The fundamental building block. A <span class="ic">resource</span> block tells Terraform to create, manage, and track one piece of infrastructure in your cloud provider.</p>
+
+<pre><code><span class="kw">resource</span> <span class="str">"aws_security_group"</span> <span class="str">"monitoring"</span> {
+  <span class="cm">#       ↑ resource type              ↑ local name</span>
+  <span class="cm">#       (from the AWS provider)       (your label — used to reference it elsewhere)</span>
+
+  <span class="var">name_prefix</span> = <span class="str">"${var.project_name}-monitoring-"</span>
+  <span class="var">description</span> = <span class="str">"Monitoring stack"</span>
+  <span class="var">vpc_id</span>      = <span class="var">aws_vpc</span>.main.id    <span class="cm"># Reference another resource's attribute</span>
+}</code></pre>
+
+    <p style="margin-top:10px;"><strong style="color:var(--text);">Two-part naming:</strong> <span class="ic">"aws_security_group"</span> is defined by the provider (you can't change it). <span class="ic">"monitoring"</span> is your name (you pick it). Together they form the address: <span class="ic">aws_security_group.monitoring</span>. You use this address to reference the resource from other blocks (e.g., <span class="ic">aws_security_group.monitoring.id</span>).</p>
+
+    <p style="margin-top:8px;"><strong style="color:var(--text);">What goes inside?</strong> Arguments specific to that resource type. Each resource type has its own set of required and optional arguments — check the <a href="https://registry.terraform.io/providers/hashicorp/aws/latest/docs" style="color:var(--accent-blue);">Terraform AWS Provider docs</a> for the full list.</p>
+  </div>
+
+  <div class="card" style="border-color:rgba(108,200,108,.25);margin-top:16px;">
+    <h3 style="color:var(--accent-green);">variable / var.</h3>
+    <p><strong>Input variables</strong> — values that come from <em>outside</em> the module (from <span class="ic">terraform.tfvars</span>, command-line flags, or environment variables). Defined in <span class="ic">variables.tf</span>, referenced everywhere else with <span class="ic">var.</span></p>
+
+<pre><code><span class="cm"># Defining (in variables.tf)</span>
+<span class="kw">variable</span> <span class="str">"private_subnet_cidr"</span> {
+  <span class="var">description</span> = <span class="str">"CIDR block for the private subnet"</span>
+  <span class="var">type</span>        = <span class="kw">string</span>
+  <span class="var">default</span>     = <span class="str">"10.0.2.0/24"</span>
+}
+
+<span class="kw">variable</span> <span class="str">"allowed_ssh_cidrs"</span> {
+  <span class="var">description</span> = <span class="str">"CIDR blocks allowed to SSH"</span>
+  <span class="var">type</span>        = <span class="kw">list</span>(<span class="kw">string</span>)
+  <span class="var">default</span>     = [<span class="str">"0.0.0.0/0"</span>]
+}
+
+<span class="cm"># Referencing (anywhere in .tf files)</span>
+<span class="var">cidr_ipv4</span> = <span class="var">var</span>.private_subnet_cidr           <span class="cm"># string</span>
+<span class="var">for_each</span>  = <span class="var">toset</span>(<span class="var">var</span>.allowed_ssh_cidrs)      <span class="cm"># list(string)</span></code></pre>
+
+    <p style="margin-top:10px;"><strong style="color:var(--text);">Types:</strong> <span class="ic">string</span>, <span class="ic">number</span>, <span class="ic">bool</span>, <span class="ic">list(type)</span>, <span class="ic">map(type)</span>, <span class="ic">object({...})</span>. The type tells Terraform what shape of data to expect and validates it at plan time.</p>
+  </div>
+
+  <div class="card" style="border-color:rgba(176,126,232,.25);margin-top:16px;">
+    <h3 style="color:var(--accent-purple);">locals / local.</h3>
+    <p><strong>Computed values</strong> — defined <em>inside</em> the module, calculated from other resources, variables, or expressions. Think of them as internal "scratch variables" that you name once and reuse.</p>
+
+<pre><code><span class="cm"># Declare — plural "locals"</span>
+<span class="kw">locals</span> {
+  <span class="var">vm_security_groups</span> = {
+    <span class="var">monitoring</span> = <span class="var">aws_security_group</span>.monitoring.id
+    <span class="var">backend</span>    = <span class="var">aws_security_group</span>.backend.id
+    <span class="var">network</span>    = <span class="var">aws_security_group</span>.network.id
+    <span class="var">ai</span>         = <span class="var">aws_security_group</span>.ai.id
+  }
+}
+
+<span class="cm"># Reference — singular "local"</span>
+<span class="var">for_each</span> = <span class="var">local</span>.vm_security_groups</code></pre>
+
+    <p style="margin-top:10px;"><strong style="color:var(--text);">locals vs variable:</strong></p>
+    <table>
+      <thead><tr><th></th><th><span class="ic">variable</span></th><th><span class="ic">locals</span></th></tr></thead>
+      <tbody>
+        <tr><td><strong>Values come from</strong></td><td>Outside (tfvars, CLI, env)</td><td>Inside (computed from resources/vars)</td></tr>
+        <tr><td><strong>Referenced with</strong></td><td><span class="ic">var.name</span></td><td><span class="ic">local.name</span></td></tr>
+        <tr><td><strong>Can change per environment</strong></td><td>Yes — that's the point</td><td>No — derived from other values</td></tr>
+        <tr><td><strong>Use case</strong></td><td>User-provided inputs</td><td>Reusable intermediate expressions</td></tr>
+      </tbody>
+    </table>
+
+    <p style="margin-top:10px;"><strong style="color:var(--text);">Why the plural/singular quirk?</strong> The <span class="ic">locals</span> block (plural) is a container that can hold many values. Each individual value is accessed via <span class="ic">local.</span> (singular) because you're reading <em>one</em> local value at a time. It's just how HCL's grammar works — you get used to it.</p>
+  </div>
+
+  <div class="card" style="border-color:rgba(240,200,80,.25);margin-top:16px;">
+    <h3 style="color:var(--accent-yellow);">tags</h3>
+    <p>Tags are AWS metadata — key-value pairs attached to resources for identification, billing, and filtering. In HCL, they're written as a <strong>map literal</strong>:</p>
+
+<pre><code><span class="var">tags</span> = { Name = <span class="str">"${var.project_name}-sg-monitoring"</span> }
+
+<span class="cm"># Multiple tags:</span>
+<span class="var">tags</span> = {
+  Name        = <span class="str">"${var.project_name}-sg-monitoring"</span>
+  Environment = <span class="str">"demo"</span>
+  ManagedBy   = <span class="str">"terraform"</span>
+}</code></pre>
+
+    <p style="margin-top:10px;">This is just a <strong>map literal</strong> — <span class="ic">{ key = value }</span> syntax. The <span class="ic">=</span> separates keys from values (not <span class="ic">:</span> like JSON or <span class="ic">=></span> like in <span class="ic">for</span> expressions). You'll see this syntax in many places beyond tags.</p>
+  </div>
+
+  <!-- ─────────────── STRING INTERPOLATION ─────────────── -->
+  <div class="section-label">Strings</div>
+
+  <div class="card" style="border-color:rgba(64,160,255,.25);margin-top:16px;">
+    <h3 style="color:var(--accent-blue);">"${...}" — String Interpolation</h3>
+    <p>Embed expressions inside a string. The <span class="ic">${}</span> wrapper evaluates the expression and inserts the result as text.</p>
+
+<pre><code><span class="cm"># Simple variable insertion</span>
+<span class="var">name_prefix</span> = <span class="str">"${var.project_name}-monitoring-"</span>
+<span class="cm"># If var.project_name = "observability-rca", result: "observability-rca-monitoring-"</span>
+
+<span class="cm"># Combining multiple expressions</span>
+Name = <span class="str">"${var.project_name}-${each.key}-egress-all"</span>
+<span class="cm"># Result: "observability-rca-monitoring-egress-all"</span>
+
+<span class="cm"># Building unique map keys</span>
+<span class="str">"${sg_name}-${cidr}"</span> => { ... }
+<span class="cm"># Result: "monitoring-41.137.0.0/16"</span></code></pre>
+
+    <p style="margin-top:10px;"><strong style="color:var(--text);">When you DON'T need it:</strong> If the entire value is a single reference (no surrounding text), just use the reference directly — no quotes, no <span class="ic">${}</span>:</p>
+
+<pre><code><span class="var">vpc_id</span> = <span class="var">aws_vpc</span>.main.id                  <span class="cm"># ✓ direct reference</span>
+<span class="var">vpc_id</span> = <span class="str">"${aws_vpc.main.id}"</span>              <span class="cm"># ✗ unnecessary wrapping (works but bad style)</span></code></pre>
+  </div>
+
+  <!-- ─────────────── DATA TYPES ─────────────── -->
+  <div class="section-label">Data Types</div>
+
+  <div class="card" style="border-color:rgba(108,200,108,.25);margin-top:16px;">
+    <h3 style="color:var(--accent-green);">Maps (Dictionaries)</h3>
+    <p>A collection of key-value pairs. Keys are always strings. Values can be any type. This is the most important data type for understanding our security group code.</p>
+
+<pre><code><span class="cm"># Simple map — string values</span>
+{
+  <span class="var">monitoring</span> = <span class="var">aws_security_group</span>.monitoring.id
+  <span class="var">backend</span>    = <span class="var">aws_security_group</span>.backend.id
+}
+<span class="cm"># Key: "monitoring", Value: "sg-0abc123..."</span>
+
+<span class="cm"># Map of objects — each value is itself a map</span>
+{
+  <span class="str">"backend-otel-grpc"</span> = { <span class="var">sg_id</span> = <span class="str">"sg-0abc..."</span>, <span class="var">port</span> = <span class="num">4317</span>, <span class="var">desc</span> = <span class="str">"OTel Collector gRPC"</span> }
+  <span class="str">"backend-otel-http"</span> = { <span class="var">sg_id</span> = <span class="str">"sg-0abc..."</span>, <span class="var">port</span> = <span class="num">4318</span>, <span class="var">desc</span> = <span class="str">"OTel Collector HTTP"</span> }
+}
+<span class="cm"># Key: "backend-otel-grpc", Value: an object with .sg_id, .port, .desc</span></code></pre>
+
+    <p style="margin-top:10px;"><strong style="color:var(--text);">Accessing values:</strong> <span class="ic">map.key</span> or <span class="ic">map["key"]</span>. In <span class="ic">for_each</span>, the map key becomes <span class="ic">each.key</span> and the map value becomes <span class="ic">each.value</span>. If the value is an object, you chain: <span class="ic">each.value.port</span>.</p>
+  </div>
+
+  <div class="card" style="border-color:rgba(176,126,232,.25);margin-top:16px;">
+    <h3 style="color:var(--accent-purple);">Sets</h3>
+    <p>An <strong>unordered</strong> collection of <strong>unique</strong> values. No duplicate entries, no index positions. Created with <span class="ic">toset()</span>.</p>
+
+<pre><code><span class="cm"># Converting a list to a set</span>
+<span class="var">toset</span>([<span class="str">"41.137.0.0/16"</span>, <span class="str">"105.159.0.0/16"</span>])
+
+<span class="cm"># Result: a set with two elements (no indices, no ordering)</span>
+<span class="cm"># In for_each, each.key and each.value are both the element itself</span></code></pre>
+
+    <p style="margin-top:10px;"><strong style="color:var(--text);">Sets vs Lists:</strong></p>
+    <table>
+      <thead><tr><th></th><th>List</th><th>Set</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Ordered</strong></td><td>Yes — items have positions [0], [1], [2]</td><td>No — just a bag of unique values</td></tr>
+        <tr><td><strong>Duplicates</strong></td><td>Allowed</td><td>Not allowed</td></tr>
+        <tr><td><strong>Access</strong></td><td>By index: <span class="ic">list[0]</span></td><td>By value (iterate only)</td></tr>
+        <tr><td><strong>Used in <span class="ic">for_each</span></strong></td><td>Not directly (convert with <span class="ic">toset()</span>)</td><td>Yes — value is the key</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card" style="border-color:rgba(240,160,80,.25);margin-top:16px;">
+    <h3 style="color:var(--accent-orange);">Objects</h3>
+    <p>A structured value with named attributes — like a map, but each attribute can have a different type. Used in our code as the <em>values</em> inside maps:</p>
+
+<pre><code><span class="cm"># An object as a map value</span>
+<span class="str">"backend-otel-grpc"</span> = {
+  <span class="var">sg_id</span>   = <span class="var">aws_security_group</span>.backend.id    <span class="cm"># string</span>
+  <span class="var">sg_name</span> = <span class="str">"backend"</span>                       <span class="cm"># string</span>
+  <span class="var">port</span>    = <span class="num">4317</span>                              <span class="cm"># number</span>
+  <span class="var">desc</span>    = <span class="str">"OTel Collector gRPC"</span>             <span class="cm"># string</span>
+}
+
+<span class="cm"># Accessing attributes (inside for_each):</span>
+<span class="var">each</span>.value.sg_id     <span class="cm"># → "sg-0abc123..."</span>
+<span class="var">each</span>.value.port      <span class="cm"># → 4317</span>
+<span class="var">each</span>.value.desc      <span class="cm"># → "OTel Collector gRPC"</span></code></pre>
+  </div>
+
+  <!-- ─────────────── ITERATION ─────────────── -->
+  <div class="section-label">Iteration — Creating Multiple Resources</div>
+
+  <div class="card" style="border-color:rgba(64,208,208,.25);margin-top:16px;">
+    <h3 style="color:var(--accent-cyan);">for_each</h3>
+    <p>A <strong>meta-argument</strong> that tells Terraform: "create one copy of this resource for each item in a set or map." It applies to the <em>entire</em> resource block — there's no separate "end" keyword.</p>
+
+<pre><code><span class="kw">resource</span> <span class="str">"aws_vpc_security_group_egress_rule"</span> <span class="str">"all_outbound"</span> {   <span class="cm"># ← scope starts</span>
+  <span class="var">for_each</span> = {                                                    <span class="cm"># ← for_each declared</span>
+    <span class="var">monitoring</span> = <span class="var">aws_security_group</span>.monitoring.id
+    <span class="var">backend</span>    = <span class="var">aws_security_group</span>.backend.id
+    <span class="var">network</span>    = <span class="var">aws_security_group</span>.network.id
+    <span class="var">ai</span>         = <span class="var">aws_security_group</span>.ai.id
+    <span class="var">rds</span>        = <span class="var">aws_security_group</span>.rds.id
+  }
+
+  <span class="var">security_group_id</span> = <span class="var">each</span>.value                                   <span class="cm"># ← each available here</span>
+  <span class="var">ip_protocol</span>       = <span class="str">"-1"</span>
+  <span class="var">cidr_ipv4</span>         = <span class="str">"0.0.0.0/0"</span>
+
+  <span class="var">tags</span> = { Name = <span class="str">"${var.project_name}-${each.key}-egress-all"</span> }  <span class="cm"># ← and here</span>
+}                                                                    <span class="cm"># ← scope ends</span></code></pre>
+
+    <p style="margin-top:10px;"><strong style="color:var(--text);">What <span class="ic">for_each</span> accepts:</strong></p>
+    <ul>
+      <li><strong>A set</strong> — <span class="ic">for_each = toset(["a", "b"])</span>. Each element is both key and value.</li>
+      <li><strong>A map</strong> — <span class="ic">for_each = { name = value }</span>. Key and value are different.</li>
+      <li><strong>NOT a list</strong> — convert with <span class="ic">toset()</span> first.</li>
+    </ul>
+
+    <p style="margin-top:10px;"><strong style="color:var(--text);">Why not a list?</strong> Terraform tracks each resource instance by its key. Lists use indices (<span class="ic">[0], [1], [2]</span>) — if you remove item <span class="ic">[0]</span>, everything shifts and Terraform would destroy/recreate the rest. Sets and maps use stable keys (the value or the map key), so adding/removing one item only affects that one resource.</p>
+  </div>
+
+  <div class="card" style="border-color:rgba(64,160,255,.25);margin-top:16px;">
+    <h3 style="color:var(--accent-blue);">each.key / each.value</h3>
+    <p>Inside a <span class="ic">for_each</span> block, the <span class="ic">each</span> object gives you the current item. What <span class="ic">key</span> and <span class="ic">value</span> mean depends on whether you're iterating a set or a map:</p>
+
+    <table>
+      <thead><tr><th>Collection type</th><th><span class="ic">each.key</span></th><th><span class="ic">each.value</span></th><th>Example</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong>Set</strong></td>
+          <td>The element itself</td>
+          <td>Same as key</td>
+          <td>Set: <span class="ic">toset(["41.137.0.0/16"])</span> → key = value = <span class="ic">"41.137.0.0/16"</span></td>
+        </tr>
+        <tr>
+          <td><strong>Map (simple)</strong></td>
+          <td>The map key</td>
+          <td>The map value</td>
+          <td>Map: <span class="ic">{ monitoring = "sg-abc" }</span> → key = <span class="ic">"monitoring"</span>, value = <span class="ic">"sg-abc"</span></td>
+        </tr>
+        <tr>
+          <td><strong>Map (of objects)</strong></td>
+          <td>The map key</td>
+          <td>The entire object</td>
+          <td>Map: <span class="ic">{ "x" = { port = 22 } }</span> → key = <span class="ic">"x"</span>, value.port = <span class="ic">22</span></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p style="margin-top:10px;"><strong style="color:var(--text);">Resource addresses:</strong> Terraform names each instance using the key: <span class="ic">resource_type.name["key"]</span>. For example:</p>
+<pre><code><span class="var">aws_vpc_security_group_egress_rule</span>.all_outbound[<span class="str">"monitoring"</span>]   <span class="cm"># map key</span>
+<span class="var">aws_vpc_security_group_ingress_rule</span>.ssh[<span class="str">"backend-41.137.0.0/16"</span>]  <span class="cm"># composite key</span></code></pre>
+  </div>
+
+  <div class="card" style="border-color:rgba(108,200,108,.25);margin-top:16px;">
+    <h3 style="color:var(--accent-green);">count (and why we don't use it)</h3>
+    <p>Another meta-argument for creating multiples, but indexed by number:</p>
+
+<pre><code><span class="kw">resource</span> <span class="str">"aws_vpc_security_group_ingress_rule"</span> <span class="str">"ssh"</span> {
+  <span class="var">count</span> = <span class="var">length</span>(<span class="var">var</span>.allowed_ssh_cidrs)       <span class="cm"># count = 2 → creates [0] and [1]</span>
+  <span class="var">cidr_ipv4</span> = <span class="var">var</span>.allowed_ssh_cidrs[<span class="var">count</span>.index]
+}</code></pre>
+
+    <p style="margin-top:10px;"><strong style="color:var(--text);">The problem:</strong> Resources are tracked as <span class="ic">[0]</span>, <span class="ic">[1]</span>, <span class="ic">[2]</span>. Remove item <span class="ic">[0]</span> and everything shifts — Terraform destroys <span class="ic">[1]</span> and <span class="ic">[2]</span> and recreates them as <span class="ic">[0]</span> and <span class="ic">[1]</span>. Unnecessary destruction.</p>
+
+    <p style="margin-top:8px;"><strong style="color:var(--text);">When <span class="ic">count</span> is fine:</strong> For on/off toggles (<span class="ic">count = var.enable_feature ? 1 : 0</span>) or when the collection never changes. For everything else, <span class="ic">for_each</span> is preferred.</p>
+  </div>
+
+  <!-- ─────────────── FOR EXPRESSIONS ─────────────── -->
+  <div class="section-label">for Expressions — Building Collections</div>
+
+  <div class="card" style="border-color:rgba(240,160,80,.25);margin-top:16px;">
+    <h3 style="color:var(--accent-orange);">for ... in ... : — Producing Maps and Lists</h3>
+    <p>A <span class="ic">for</span> expression loops over a collection and produces a <strong>new</strong> collection. The shape of the braces determines the output type:</p>
+
+<pre><code><span class="cm"># Curly braces { } → produces a MAP</span>
+{ <span class="kw">for</span> <span class="var">name</span>, <span class="var">id</span> <span class="kw">in</span> <span class="var">local</span>.vm_security_groups : <span class="var">name</span> => <span class="var">id</span> }
+<span class="cm"># Result: { "monitoring" = "sg-abc", "backend" = "sg-def", ... }</span>
+
+<span class="cm"># Square brackets [ ] → produces a LIST</span>
+[ <span class="kw">for</span> <span class="var">name</span>, <span class="var">id</span> <span class="kw">in</span> <span class="var">local</span>.vm_security_groups : <span class="var">name</span> ]
+<span class="cm"># Result: ["monitoring", "backend", "network", "ai"]</span></code></pre>
+
+    <p style="margin-top:10px;"><strong style="color:var(--text);">Anatomy of a <span class="ic">for</span> expression:</strong></p>
+<pre><code>{ <span class="kw">for</span> <span class="var">sg_name</span>, <span class="var">sg_id</span> <span class="kw">in</span> <span class="var">local</span>.vm_security_groups : <span class="var">sg_name</span> => <span class="var">sg_id</span> }
+  <span class="cm">     ↑          ↑         ↑                          ↑          ↑</span>
+  <span class="cm">     key var   value var  collection to loop over     map key   map value</span></code></pre>
+
+    <p style="margin-top:10px;"><strong style="color:var(--text);">One loop variable vs two:</strong> When iterating a <em>map</em>, you get two variables (<span class="ic">name, id</span>) — the key and the value. When iterating a <em>list</em> or <em>set</em>, you can use one (<span class="ic">item</span>) or two (<span class="ic">index, item</span>).</p>
+  </div>
+
+  <div class="card" style="border-color:rgba(224,96,112,.25);margin-top:16px;">
+    <h3 style="color:var(--accent-red);">=> — The Map Key-Value Separator</h3>
+    <p>Inside a <span class="ic">for</span> expression that produces a map, <span class="ic">=></span> separates the key from the value. It's only used inside <span class="ic">for</span> expressions — not in regular map literals (which use <span class="ic">=</span>).</p>
+
+<pre><code><span class="cm"># In a for expression (produces a map): use =></span>
+{ <span class="kw">for</span> <span class="var">cidr</span> <span class="kw">in</span> <span class="var">var</span>.allowed_ssh_cidrs : <span class="var">cidr</span> => { <span class="var">sg_id</span> = <span class="str">"sg-abc"</span> } }
+<span class="cm">#                                       key  ↑  value</span>
+
+<span class="cm"># In a regular map literal: use =</span>
+{ <span class="var">monitoring</span> = <span class="var">aws_security_group</span>.monitoring.id }
+<span class="cm">#            ↑</span></code></pre>
+
+    <p style="margin-top:10px;"><strong style="color:var(--text);">Why different symbols?</strong> HCL uses <span class="ic">=</span> for assignment (setting a value) and <span class="ic">=></span> for mapping (describing a relationship in a loop). The distinction prevents ambiguity inside <span class="ic">for</span> expressions where both the key and value are expressions.</p>
+  </div>
+
+  <div class="card" style="border-color:rgba(64,208,208,.25);margin-top:16px;">
+    <h3 style="color:var(--accent-cyan);">Nested for Expressions</h3>
+    <p>A <span class="ic">for</span> inside a <span class="ic">for</span> — used when you need to create a <strong>cross-product</strong> (every combination of two collections). This is exactly what the SSH rules need: every SG × every CIDR.</p>
+
+<pre><code><span class="kw">locals</span> {
+  <span class="var">ssh_rules</span> = <span class="var">merge</span>([                        <span class="cm"># 3. Flatten into one map</span>
+    <span class="kw">for</span> <span class="var">sg_name</span>, <span class="var">sg_id</span> <span class="kw">in</span> <span class="var">local</span>.vm_security_groups : {    <span class="cm"># 1. Outer: loop SGs</span>
+      <span class="kw">for</span> <span class="var">cidr</span> <span class="kw">in</span> <span class="var">var</span>.allowed_ssh_cidrs :                    <span class="cm"># 2. Inner: loop CIDRs</span>
+      <span class="str">"${sg_name}-${cidr}"</span> => {                               <span class="cm">#    Unique key per combo</span>
+        <span class="var">sg_id</span>   = <span class="var">sg_id</span>
+        <span class="var">sg_name</span> = <span class="var">sg_name</span>
+        <span class="var">cidr</span>    = <span class="var">cidr</span>
+      }
+    }
+  ]...)                                                      <span class="cm"># 4. ... spreads into merge()</span>
+}</code></pre>
+
+    <p style="margin-top:10px;"><strong style="color:var(--text);">Step by step — what happens at each layer:</strong></p>
+    <p><strong>Step 1 (outer for):</strong> Loops over 4 SGs. For each SG, the inner <span class="ic">for</span> runs.</p>
+    <p style="margin-top:4px;"><strong>Step 2 (inner for):</strong> Loops over CIDRs. Produces a map for this SG: <span class="ic">{ "monitoring-41.137.0.0/16" = {...}, "monitoring-105.159.0.0/16" = {...} }</span></p>
+    <p style="margin-top:4px;"><strong>Step 3 (the list [ ]):</strong> The outer <span class="ic">for</span> is wrapped in <span class="ic">[ ]</span>, so it produces a <em>list</em> of maps — one map per SG.</p>
+    <p style="margin-top:4px;"><strong>Step 4 (<span class="ic">merge()</span> + <span class="ic">...</span>):</strong> Flattens the list of maps into one single map that <span class="ic">for_each</span> can use. (More on these two below.)</p>
+  </div>
+
+  <!-- ─────────────── FUNCTIONS ─────────────── -->
+  <div class="section-label">Functions</div>
+
+  <div class="card" style="border-color:rgba(176,126,232,.25);margin-top:16px;">
+    <h3 style="color:var(--accent-purple);">toset()</h3>
+    <p>Converts a <strong>list</strong> to a <strong>set</strong>. Removes duplicates and discards ordering.</p>
+
+<pre><code><span class="var">toset</span>([<span class="str">"41.137.0.0/16"</span>, <span class="str">"105.159.0.0/16"</span>])
+<span class="cm"># → set("41.137.0.0/16", "105.159.0.0/16")</span>
+
+<span class="cm"># Primary use: converting a list variable for for_each</span>
+<span class="var">for_each</span> = <span class="var">toset</span>(<span class="var">var</span>.allowed_ssh_cidrs)</code></pre>
+
+    <p style="margin-top:10px;"><strong style="color:var(--text);">Why it exists:</strong> <span class="ic">for_each</span> refuses lists (because index-based keys are unstable). <span class="ic">toset()</span> is the standard way to bridge that gap.</p>
+  </div>
+
+  <div class="card" style="border-color:rgba(240,160,80,.25);margin-top:16px;">
+    <h3 style="color:var(--accent-orange);">merge()</h3>
+    <p>Takes <strong>multiple maps</strong> as separate arguments and combines them into <strong>one map</strong>. If keys overlap, later maps win.</p>
+
+<pre><code><span class="var">merge</span>(
+  { <span class="var">a</span> = <span class="num">1</span>, <span class="var">b</span> = <span class="num">2</span> },
+  { <span class="var">c</span> = <span class="num">3</span>, <span class="var">d</span> = <span class="num">4</span> }
+)
+<span class="cm"># → { a = 1, b = 2, c = 3, d = 4 }</span></code></pre>
+
+    <p style="margin-top:10px;"><strong style="color:var(--text);">Why we need it:</strong> The nested <span class="ic">for</span> expression produces a <em>list</em> of maps (one per SG). But <span class="ic">for_each</span> needs a <em>single</em> map. <span class="ic">merge()</span> glues them together.</p>
+
+    <p style="margin-top:8px;"><strong style="color:var(--text);">Important:</strong> <span class="ic">merge()</span> takes maps as <strong>separate arguments</strong> — <span class="ic">merge(map1, map2, map3)</span> — NOT as a list. That's why we need the <span class="ic">...</span> operator (below).</p>
+  </div>
+
+  <div class="card" style="border-color:rgba(224,96,112,.25);margin-top:16px;">
+    <h3 style="color:var(--accent-red);">... — The Expansion (Splat) Operator</h3>
+    <p>Placed <em>after</em> a list inside a function call, it <strong>unpacks</strong> the list into separate arguments.</p>
+
+<pre><code><span class="cm"># Without ... — merge receives ONE argument (a list) — ERROR</span>
+<span class="var">merge</span>([map1, map2, map3])         <span class="cm"># ✗ merge() doesn't accept a list</span>
+
+<span class="cm"># With ... — the list is unpacked into THREE arguments — WORKS</span>
+<span class="var">merge</span>([map1, map2, map3]...)      <span class="cm"># ✓ same as merge(map1, map2, map3)</span></code></pre>
+
+    <p style="margin-top:10px;"><strong style="color:var(--text);">Where it appears in our code:</strong></p>
+<pre><code><span class="var">merge</span>([
+  <span class="kw">for</span> <span class="var">sg_name</span>, <span class="var">sg_id</span> <span class="kw">in</span> <span class="var">local</span>.vm_security_groups : {
+    ...
+  }
+]<strong>...</strong>)
+<span class="cm"># ↑ The [ ] produces a list of maps</span>
+<span class="cm"># ↑ The ... unpacks it so merge() gets separate map arguments</span></code></pre>
+
+    <p style="margin-top:10px;"><strong style="color:var(--text);">Analogy:</strong> If <span class="ic">merge()</span> is a function that expects you to hand it maps one by one, and you have them in a box (a list), <span class="ic">...</span> dumps the box out onto the table so you can hand them over individually.</p>
+  </div>
+
+  <div class="card" style="border-color:rgba(64,160,255,.25);margin-top:16px;">
+    <h3 style="color:var(--accent-blue);">length()</h3>
+    <p>Returns the number of elements in a list, set, map, or string.</p>
+
+<pre><code><span class="var">length</span>(<span class="var">var</span>.allowed_ssh_cidrs)     <span class="cm"># → 2 (if list has two CIDRs)</span>
+<span class="var">length</span>(<span class="str">"hello"</span>)                   <span class="cm"># → 5 (characters in a string)</span></code></pre>
+
+    <p style="margin-top:10px;">Used with <span class="ic">count</span> (e.g., <span class="ic">count = length(var.list)</span>), but since we prefer <span class="ic">for_each</span>, you'll rarely see it in this project.</p>
+  </div>
+
+  <!-- ─────────────── META-ARGUMENTS ─────────────── -->
+  <div class="section-label">Meta-Arguments</div>
+
+  <div class="card" style="border-color:rgba(240,200,80,.25);margin-top:16px;">
+    <h3 style="color:var(--accent-yellow);">lifecycle</h3>
+    <p>A block inside a resource that controls <em>how</em> Terraform manages the resource's lifecycle — not <em>what</em> the resource is. It's a meta-argument (about Terraform's behavior, not the cloud resource).</p>
+
+<pre><code><span class="kw">resource</span> <span class="str">"aws_security_group"</span> <span class="str">"monitoring"</span> {
+  <span class="cm"># ... normal arguments ...</span>
+
+  <span class="kw">lifecycle</span> {
+    <span class="var">create_before_destroy</span> = <span class="kw">true</span>
+  }
+}</code></pre>
+
+    <p style="margin-top:10px;"><strong style="color:var(--text);">Common lifecycle rules:</strong></p>
+    <table>
+      <thead><tr><th>Rule</th><th>What It Does</th><th>When to Use</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><span class="ic">create_before_destroy</span></td>
+          <td>Creates the replacement <em>before</em> destroying the old one</td>
+          <td>When other resources reference this one (like SGs referenced by EC2 instances). Without it, Terraform tries to delete the SG first → fails because EC2 still uses it.</td>
+        </tr>
+        <tr>
+          <td><span class="ic">prevent_destroy</span></td>
+          <td>Terraform refuses to destroy this resource</td>
+          <td>Critical resources you never want accidentally deleted (production databases).</td>
+        </tr>
+        <tr>
+          <td><span class="ic">ignore_changes</span></td>
+          <td>Terraform ignores changes to specified attributes</td>
+          <td>When something outside Terraform modifies an attribute (auto-scaling groups changing instance count).</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ─────────────── PUTTING IT ALL TOGETHER ─────────────── -->
+  <div class="section-label">Putting It All Together — Reading the Full Pattern</div>
+
+  <div class="card" style="border-color:rgba(64,208,208,.25);margin-top:16px;">
+    <h3 style="color:var(--accent-cyan);">The merge([for ...]...) Pattern</h3>
+    <p>This is the most complex pattern in our code. Now that you know each piece, here's how they combine to create all OTel Collector rules from a single resource block:</p>
+
+<pre><code><span class="cm"># 1. locals: build a map describing every rule we need</span>
+<span class="kw">locals</span> {
+  <span class="var">otel_rules</span> = <span class="var">merge</span>([                                              <span class="cm"># 5. merge() flattens</span>
+    <span class="kw">for</span> <span class="var">sg_name</span>, <span class="var">sg_id</span> <span class="kw">in</span> <span class="var">local</span>.vm_security_groups : {              <span class="cm"># 2. loop 4 SGs</span>
+      <span class="str">"${sg_name}-otel-grpc"</span> = {                                     <span class="cm"># 3. 2 entries per SG</span>
+        <span class="var">sg_id</span> = <span class="var">sg_id</span>, <span class="var">sg_name</span> = <span class="var">sg_name</span>,
+        <span class="var">port</span> = <span class="num">4317</span>, <span class="var">desc</span> = <span class="str">"OTel Collector gRPC"</span>
+      }
+      <span class="str">"${sg_name}-otel-http"</span> = {
+        <span class="var">sg_id</span> = <span class="var">sg_id</span>, <span class="var">sg_name</span> = <span class="var">sg_name</span>,
+        <span class="var">port</span> = <span class="num">4318</span>, <span class="var">desc</span> = <span class="str">"OTel Collector HTTP"</span>
+      }
+    }
+  ]...)                                                              <span class="cm"># 4. ... unpacks the list</span>
+}
+<span class="cm"># Result: a flat map with 8 entries (4 SGs × 2 ports)</span>
+
+<span class="cm"># 6. One resource block creates all 8 rules</span>
+<span class="kw">resource</span> <span class="str">"aws_vpc_security_group_ingress_rule"</span> <span class="str">"otel"</span> {
+  <span class="var">for_each</span> = <span class="var">local</span>.otel_rules                                     <span class="cm"># Iterate the map</span>
+
+  <span class="var">security_group_id</span> = <span class="var">each</span>.value.sg_id                               <span class="cm"># Object attribute</span>
+  <span class="var">description</span>       = <span class="var">each</span>.value.desc
+  <span class="var">from_port</span>         = <span class="var">each</span>.value.port
+  <span class="var">to_port</span>           = <span class="var">each</span>.value.port
+  <span class="var">ip_protocol</span>       = <span class="str">"tcp"</span>
+  <span class="var">cidr_ipv4</span>         = <span class="var">var</span>.private_subnet_cidr
+
+  <span class="var">tags</span> = { Name = <span class="str">"${var.project_name}-${each.key}"</span> }              <span class="cm"># each.key = "backend-otel-grpc"</span>
+}</code></pre>
+
+    <p style="margin-top:10px;"><strong style="color:var(--text);">Reading order:</strong> Start from the <span class="ic">resource</span> block at the bottom — it says <span class="ic">for_each = local.otel_rules</span>. Then look up at the <span class="ic">locals</span> block to understand what <span class="ic">otel_rules</span> contains. Read the <span class="ic">for</span> expression inside-out: inner loop produces entries, outer loop iterates SGs, <span class="ic">merge()</span> flattens, <span class="ic">...</span> unpacks. The resource block then creates one AWS rule per map entry.</p>
+
+    <p style="margin-top:10px;"><strong style="color:var(--text);">The payoff:</strong> 8 identical resource blocks → 1 <span class="ic">locals</span> definition + 1 resource block. Add a 5th VM? Add one line to <span class="ic">local.vm_security_groups</span> and both OTel rules are automatically created for it.</p>
+  </div>
+
+</div>
+</div><!-- /tab-hcl -->
 
 
 <!-- ===================== JS ===================== -->
