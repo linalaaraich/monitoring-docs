@@ -2012,10 +2012,73 @@ ansible-playbook playbooks/site.yml playbooks/ai.yml</code></pre>
     <div class="step-num"><div class="step-circle" style="background:rgba(240,160,80,.15);border:1.5px solid rgba(240,160,80,.4);color:var(--accent-orange);">14</div></div>
     <div class="step-body">
       <h4>Security Groups (security-groups.tf)</h4>
+
+      <p>Step 13 built the network (VPC, subnets, gateways, route tables) — the roads and doors. Now we need to decide <strong style="color:var(--text);">who is allowed to use those roads</strong>. That's what Security Groups do.</p>
+
+      <p style="margin-top:14px;"><strong style="color:var(--accent-red);">What is a Security Group? Where it fits in the firewall world</strong></p>
+      <p>A Security Group is a <strong style="color:var(--text);">stateful packet-filter firewall</strong> that AWS attaches to a VM's network interface. It inspects every inbound and outbound packet and decides: allow or drop. To understand what it can and can't do, here's where it sits in the spectrum of firewall types:</p>
+
+      <table>
+        <thead><tr><th>Firewall Type</th><th>What It Checks</th><th>Examples</th><th>OSI Layer</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Packet filter</strong></td><td>Source/destination IP, port, protocol</td><td><span class="ic">iptables</span> rules</td><td>Layer 3-4</td></tr>
+          <tr><td><strong style="color:var(--accent-blue);">Stateful packet filter</strong></td><td>Same as above + tracks connection state (if you sent a request out, the response is auto-allowed in)</td><td><strong style="color:var(--accent-blue);">AWS Security Groups</strong>, <strong>UFW</strong></td><td>Layer 3-4</td></tr>
+          <tr><td><strong>NGFW (Next-Gen Firewall)</strong></td><td>All of the above + deep packet inspection, application-level filtering, intrusion detection, URL filtering</td><td>Palo Alto, Fortinet, pfSense+Suricata</td><td>Layer 3-7</td></tr>
+        </tbody>
+      </table>
+
+      <p style="margin-top:14px;"><strong style="color:var(--text);">What Security Groups CAN do:</strong></p>
+      <ul>
+        <li>Allow/deny by IP address, CIDR range, or security group reference</li>
+        <li>Allow/deny by port number and protocol (TCP, UDP, ICMP)</li>
+        <li>Automatically allow response traffic (stateful — if port 443 outbound is allowed, the HTTPS response comes back in without a separate inbound rule)</li>
+        <li>Be shared across multiple instances or reference other security groups (e.g., "allow port 3306 from any instance in sg-backend")</li>
+      </ul>
+
+      <p style="margin-top:10px;"><strong style="color:var(--text);">What Security Groups CANNOT do</strong> (that a full NGFW can):</p>
+      <ul>
+        <li>Inspect packet contents ("block SQL injection inside HTTP traffic")</li>
+        <li>Filter by domain name ("allow <span class="ic">docker.io</span> but block <span class="ic">evil.com</span>")</li>
+        <li>Detect intrusion patterns ("this looks like a port scan")</li>
+        <li>Rate limit traffic ("max 100 requests/sec")</li>
+        <li>Log denied packets (SGs silently drop — no logging by default)</li>
+      </ul>
+
+      <p style="margin-top:14px;"><strong style="color:var(--accent-cyan);">Security Groups vs UFW — same job, different location</strong></p>
+      <p>Security Groups and UFW are both stateful Layer 3-4 firewalls. The difference is <em>where</em> they run:</p>
+      <table>
+        <thead><tr><th></th><th>AWS Security Groups</th><th>UFW (on private cloud)</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Where it runs</strong></td><td>AWS networking layer — <em>outside</em> the VM</td><td>Inside the VM (Linux kernel / iptables)</td></tr>
+          <tr><td><strong>When it filters</strong></td><td>Before the packet reaches the VM's network interface</td><td>After the packet reaches the VM, before the application sees it</td></tr>
+          <tr><td><strong>Managed by</strong></td><td>Terraform (<span class="ic">security-groups.tf</span>)</td><td>Ansible (<span class="ic">roles/common/tasks/main.yml</span>)</td></tr>
+          <tr><td><strong>Survives VM rebuild</strong></td><td>Yes — it's an AWS resource, independent of the VM</td><td>No — inside the VM, lost if you recreate it (Ansible re-applies it)</td></tr>
+          <tr><td><strong>Used in this project</strong></td><td>AWS demo only</td><td>Both AWS and private cloud (Sprint 1 already configured UFW)</td></tr>
+        </tbody>
+      </table>
+
+      <div class="note-box" style="margin-top:12px;">
+        <strong>On AWS we use Security Groups instead of UFW</strong> because they're manageable in Terraform, filter traffic before it touches the VM, and reference other security groups by ID (not just IP ranges). On the private cloud, there are no Security Groups — <strong>UFW is the direct equivalent</strong>, configured by the Ansible <span class="ic">common</span> role. The rules are the same; only the tool changes. See the <strong>Production Migration</strong> tab for the complete UFW ruleset.
+      </div>
+
+      <p style="margin-top:14px;"><strong style="color:var(--accent-purple);">How Security Groups fit into our defense-in-depth model</strong></p>
+      <p>Security Groups are one layer in a multi-layer defense. No single layer is sufficient alone:</p>
+      <table>
+        <thead><tr><th>Layer</th><th>What It Blocks</th><th>What It Doesn't Block</th></tr></thead>
+        <tbody>
+          <tr><td><strong>1. Private subnet + NAT</strong> (vpc.tf)</td><td>All unsolicited inbound from internet — no route exists</td><td>Traffic from within the VPC, traffic via Elastic IPs</td></tr>
+          <tr><td><strong>2. Security Groups</strong> (security-groups.tf)</td><td>Wrong port, wrong source IP/SG, wrong protocol</td><td>Allowed traffic that happens to be malicious (e.g., SQL injection over an allowed MySQL port)</td></tr>
+          <tr><td><strong>3. Application-level auth</strong> (Grafana login, Kong auth plugins)</td><td>Unauthorized users on allowed ports</td><td>Authenticated users doing malicious things</td></tr>
+        </tbody>
+      </table>
+      <p style="margin-top:8px;">Each layer catches what the previous layer missed. The private subnet blocks internet-originating attacks. Security Groups block unauthorized internal traffic. Application auth blocks unauthorized users. For this demo project, layers 1+2 are sufficient. Production should add layer 3 (see Production Migration tab).</p>
+
+      <p style="margin-top:18px;"><strong style="color:var(--text);">Now — the specific rules for our project</strong></p>
+
       <p><strong style="color:var(--text);">WHY written before EC2/RDS:</strong> Both <span class="ic">aws_instance</span> and <span class="ic">aws_db_instance</span> require <span class="ic">vpc_security_group_ids</span> at creation time. You must define the firewall rules before the resources they protect.</p>
       <p style="margin-top:10px;"><strong style="color:var(--text);">Thought process for each SG:</strong> Ask <em>"What ports does this service expose? Who needs to reach them?"</em> Then only allow exactly that. This is the <strong style="color:var(--accent-green);">principle of least privilege</strong> -- no port is open unless a specific service needs it from a specific source.</p>
       <p style="margin-top:10px;"><strong style="color:var(--text);">Order within the file matters for readability:</strong> <span class="ic">sg-monitoring</span> and <span class="ic">sg-network</span> are defined first (standalone, no SG references). Then <span class="ic">sg-backend</span> (references sg-network and sg-monitoring). Then <span class="ic">sg-ai</span> (references sg-monitoring). Finally <span class="ic">sg-rds</span> (references sg-backend). Terraform resolves this automatically, but writing them in dependency order makes the code easier to follow.</p>
-      <p style="margin-top:10px;">Five security groups control which ports are open and who can talk to whom. Think of them as per-VM firewalls.</p>
+      <p style="margin-top:10px;">Five security groups control which ports are open and who can talk to whom:</p>
 
       <table>
         <thead><tr><th>Security Group</th><th>Attached To</th><th>Key Ingress Rules</th></tr></thead>
@@ -2080,7 +2143,11 @@ ansible-playbook playbooks/site.yml playbooks/ai.yml</code></pre>
       </div>
 
       <div class="note-box warn" style="margin-top:8px;">
-        <strong>All egress is open:</strong> Every SG has <span class="ic">egress 0.0.0.0/0 all ports</span>. This is intentional for a demo -- instances need to reach Docker Hub, apt repos, Gmail SMTP, etc. In production, you would restrict egress to specific endpoints.
+        <strong>All egress is open:</strong> Every SG has <span class="ic">egress 0.0.0.0/0 all ports</span>. This is intentional for a demo — instances need to reach Docker Hub, apt repos, Gmail SMTP, etc. In production on the private cloud, the AI VM's egress will be <strong>completely locked down</strong> after initial setup (see the <strong>Production Migration</strong> tab for the air-gap procedure and UFW rules). Other VMs will have egress restricted to specific internal IPs + essential external services.
+      </div>
+
+      <div class="note-box purple" style="margin-top:8px;">
+        <strong>Connecting the layers — from Step 13 to Step 14:</strong> Step 13 (vpc.tf) built the network topology that makes certain traffic <em>physically impossible</em> (no route from internet to private subnet). Step 14 (security-groups.tf) adds fine-grained filtering for traffic that <em>is</em> routable (which ports, which sources). Together they form two independent security layers — even if one is misconfigured, the other still protects you. This is defense in depth.
       </div>
     </div>
   </div>
@@ -2092,7 +2159,7 @@ ansible-playbook playbooks/site.yml playbooks/ai.yml</code></pre>
     <div class="step-body">
       <h4>EC2 Instances (ec2.tf)</h4>
 
-      <p><strong style="color:var(--text);">WHY this file is written after networking + security:</strong> An EC2 instance needs three things that must exist first: a <em>subnet</em> to live in (from vpc.tf), a <em>security group</em> to define its firewall (from security-groups.tf), and a <em>key pair</em> for SSH (from key-pair.tf). This file ties them all together.</p>
+      <p>Steps 13-14 built the network (roads, doors, traffic rules). Now we place the actual VMs on that network. Each EC2 instance references the infrastructure we've already created: a <em>subnet</em> to live in (from vpc.tf), a <em>security group</em> to define its firewall (from security-groups.tf), and a <em>key pair</em> for SSH (from key-pair.tf). This file ties them all together.</p>
 
       <p style="margin-top:14px;"><strong style="color:var(--text);">Three design decisions explained:</strong></p>
       <ul>
