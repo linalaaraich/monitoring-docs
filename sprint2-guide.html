@@ -1525,6 +1525,79 @@ ansible-playbook playbooks/site.yml playbooks/ai.yml</code></pre>
     </div>
   </div>
 
+  <div class="card" style="border-color:rgba(224,96,112,.25);margin-top:16px;">
+    <h3 style="color:var(--accent-red);">How to Know Which Arguments to Put in a Resource Block</h3>
+    <p>Every Terraform resource has dozens of possible arguments. In this project, we only use a few per resource. Here's how to decide what to include and what to skip.</p>
+
+    <p style="margin-top:14px;"><strong style="color:var(--text);">Example -- deconstructing the VPC resource:</strong></p>
+<pre><code><span class="kw">resource</span> <span class="str">"aws_vpc"</span> <span class="str">"main"</span> {
+  <span class="var">cidr_block</span>           = <span class="var">var</span>.vpc_cidr       <span class="cm"># REQUIRED — every VPC must have an IP range</span>
+  <span class="var">enable_dns_support</span>   = <span class="kw">true</span>              <span class="cm"># OPTIONAL — but we NEED it (RDS hostnames)</span>
+  <span class="var">enable_dns_hostnames</span> = <span class="kw">true</span>              <span class="cm"># OPTIONAL — but we NEED it (EC2 DNS names)</span>
+
+  <span class="var">tags</span> = { <span class="var">Name</span> = <span class="str">"${var.project_name}-vpc"</span> }  <span class="cm"># OPTIONAL — but always add for readability</span>
+}</code></pre>
+
+    <p style="margin-top:14px;"><strong style="color:var(--text);">Line by line -- why each argument is there:</strong></p>
+    <table>
+      <thead><tr><th>Argument</th><th>Required?</th><th>Why we added it</th></tr></thead>
+      <tbody>
+        <tr><td><span class="ic">cidr_block</span></td><td><span class="tag tag-must">Required</span></td><td>AWS needs to know the IP range for your virtual network. <span class="ic">10.0.0.0/16</span> = 65,536 IPs.</td></tr>
+        <tr><td><span class="ic">enable_dns_support</span></td><td><span class="tag tag-blue">Optional</span></td><td>Without this, VMs can't resolve DNS names. RDS gives you a hostname like <span class="ic">observability-rca-mysql.abc123.rds.amazonaws.com</span> -- your app needs DNS to resolve it. Docker pulls from <span class="ic">registry.hub.docker.com</span> also need DNS.</td></tr>
+        <tr><td><span class="ic">enable_dns_hostnames</span></td><td><span class="tag tag-blue">Optional</span></td><td>Gives EC2 instances DNS hostnames (e.g., <span class="ic">ip-10-0-2-15.ec2.internal</span>). Needed for internal service discovery.</td></tr>
+        <tr><td><span class="ic">tags</span></td><td><span class="tag tag-blue">Optional</span></td><td>Without a <span class="ic">Name</span> tag, the VPC shows up as a blank row in the AWS console. With 50+ resources, you'd have no idea which belongs to which project.</td></tr>
+      </tbody>
+    </table>
+
+    <p style="margin-top:14px;"><strong style="color:var(--text);">Arguments we intentionally SKIPPED (and why):</strong></p>
+    <table>
+      <thead><tr><th>Skipped Argument</th><th>What It Does</th><th>Why We Don't Need It</th></tr></thead>
+      <tbody>
+        <tr><td><span class="ic">instance_tenancy</span></td><td>Dedicated vs shared hardware</td><td>Default <span class="ic">"default"</span> (shared) is fine. Dedicated costs 10x more -- no benefit for a demo.</td></tr>
+        <tr><td><span class="ic">ipv6_cidr_block</span></td><td>Add IPv6 support</td><td>All our services use private IPv4. No IPv6 needed.</td></tr>
+        <tr><td><span class="ic">ipv4_ipam_pool_id</span></td><td>Use AWS IPAM to assign CIDRs</td><td>We hardcode the CIDR directly. IPAM is for large orgs managing hundreds of VPCs.</td></tr>
+        <tr><td><span class="ic">enable_network_address_usage_metrics</span></td><td>Track IP address usage</td><td>Overkill for a 4-VM demo environment.</td></tr>
+      </tbody>
+    </table>
+
+    <p style="margin-top:14px;"><strong style="color:var(--accent-cyan);">The same pattern applies to EVERY resource. Example -- subnet:</strong></p>
+<pre><code><span class="kw">resource</span> <span class="str">"aws_subnet"</span> <span class="str">"public"</span> {
+  <span class="var">vpc_id</span>                  = <span class="var">aws_vpc</span>.main.id        <span class="cm"># REQUIRED: which VPC does this belong to?</span>
+  <span class="var">cidr_block</span>              = <span class="var">var</span>.public_subnet_cidr  <span class="cm"># REQUIRED: what IP range?</span>
+  <span class="var">availability_zone</span>       = <span class="var">var</span>.availability_zone   <span class="cm"># OPTIONAL: but we need a specific AZ for consistency</span>
+  <span class="var">map_public_ip_on_launch</span> = <span class="kw">true</span>                    <span class="cm"># OPTIONAL: needed so the NAT GW gets a public IP</span>
+  <span class="cm"># Skipped: assign_ipv6_address_on_creation, customer_owned_ipv4_pool,</span>
+  <span class="cm">#          enable_dns64, ipv6_native, outpost_arn (+ 10 more) — not relevant</span>
+}</code></pre>
+
+    <div class="note-box" style="margin-top:14px;">
+      <strong>The 4-question checklist for every argument:</strong>
+    </div>
+    <table style="margin-top:0;">
+      <thead><tr><th>#</th><th>Question</th><th>If Yes</th><th>If No</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>Is it marked <strong>Required</strong> in the Terraform docs?</td><td>Add it -- <span class="ic">terraform plan</span> will fail without it</td><td>Continue to question 2</td></tr>
+        <tr><td>2</td><td>Does my application break without it?</td><td>Add it (e.g., DNS support for RDS hostnames)</td><td>Continue to question 3</td></tr>
+        <tr><td>3</td><td>Is the default value wrong for my use case?</td><td>Add it with the correct value</td><td>Continue to question 4</td></tr>
+        <tr><td>4</td><td>None of the above?</td><td colspan="2"><strong>Skip it.</strong> Less config = less to maintain. The default is fine.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="note-box warn" style="margin-top:12px;">
+      <strong>How to find the docs:</strong> Google <span class="ic">terraform aws_vpc</span> (or whatever resource). The first result is the <strong>Terraform Registry</strong> page. Every resource page lists arguments in three groups: <strong>Required</strong> (must set), <strong>Optional</strong> (has defaults), and <strong>Read-Only</strong> (outputs like <span class="ic">.id</span>, <span class="ic">.arn</span> that you reference elsewhere). Start with Required, scan Optional for what you need, skip the rest.
+    </div>
+
+    <p style="margin-top:14px;"><strong style="color:var(--text);">This principle applies beyond Terraform:</strong></p>
+    <ul>
+      <li><strong>Docker Compose:</strong> each service has dozens of possible keys (<span class="ic">deploy</span>, <span class="ic">ulimits</span>, <span class="ic">sysctls</span>, <span class="ic">cap_add</span>...). Only add what you need. The <span class="ic">ollama</span> service has <span class="ic">runtime: nvidia</span> because it needs GPU access. The <span class="ic">triage-service</span> doesn't have it because it doesn't use GPU.</li>
+      <li><strong>Ansible tasks:</strong> the <span class="ic">template</span> module has parameters like <span class="ic">validate</span>, <span class="ic">backup</span>, <span class="ic">follow</span>, <span class="ic">unsafe_writes</span>. We only use <span class="ic">src</span>, <span class="ic">dest</span>, <span class="ic">owner</span>, <span class="ic">mode</span> -- the essentials.</li>
+      <li><strong>Grafana alert rules:</strong> each rule could have <span class="ic">noDataState</span>, <span class="ic">execErrState</span>, <span class="ic">isPaused</span>, etc. We only set what differs from the default.</li>
+    </ul>
+    <div class="note-box" style="margin-top:12px;margin-bottom:0;">
+      <strong>The universal rule:</strong> Every tool's documentation lists all possible options. Your job is not to use all of them -- it's to find the minimum set that makes your specific use case work. Start with what's required, add what's needed, skip everything else. You can always add more later when you actually need it.
+    </div>
+  </div>
+
   <div class="section-label">Terraform -- File-by-File Deep Dive</div>
 
   <!-- ======================== STEP 12 ======================== -->
