@@ -1893,8 +1893,115 @@ ansible-playbook playbooks/site.yml playbooks/ai.yml</code></pre>
   <span class="var">route_table_id</span> = <span class="var">aws_route_table</span>.private.id   <span class="cm"># Same route table as private</span>
 }</code></pre>
 
-      <div class="note-box">
-        <strong>Traffic flow summary:</strong> EC2 instances in the <em>private</em> subnet can reach the internet (for apt, Docker Hub, etc.) via the NAT Gateway, but nothing from the internet can reach them directly. SSH access uses Elastic IPs associated with each instance. The public subnet exists <em>only</em> for the NAT Gateway -- no EC2 instances are placed there.
+      <p style="margin-top:18px;"><strong style="color:var(--accent-cyan);">How VPC Networking Actually Works — The Complete Picture</strong></p>
+      <p>Route tables, gateways, security groups, and Elastic IPs each handle a different piece of the networking puzzle. Understanding how they fit together is the key to understanding the entire VPC.</p>
+
+      <p style="margin-top:14px;"><strong style="color:var(--text);">1. Route Tables — Outbound GPS (where to send packets leaving a subnet)</strong></p>
+      <p>A route table is a <strong style="color:var(--text);">passive lookup list</strong>. When a packet leaves a VM, the route table answers: <em>"This packet wants to reach X.X.X.X — which gateway do I send it through?"</em> Route tables <strong>only control outbound direction</strong>. They have zero say over what comes in.</p>
+
+      <p style="margin-top:10px;">Every route table has an <strong style="color:var(--text);">automatic <span class="ic">local</span> route</strong> that AWS adds and you cannot remove:</p>
+      <table>
+        <thead><tr><th colspan="3">Public Route Table (attached to public subnet)</th></tr><tr><th>Destination</th><th>Target</th><th>Meaning</th></tr></thead>
+        <tbody>
+          <tr><td><span class="ic">10.0.0.0/16</span></td><td><span class="ic">local</span></td><td>Traffic for any IP inside the VPC is delivered directly — no gateway needed. <strong>Auto-added by AWS, cannot be removed.</strong></td></tr>
+          <tr><td><span class="ic">0.0.0.0/0</span></td><td><span class="ic">igw-xxxxx</span></td><td>Everything else (internet) goes through the Internet Gateway. <em>This is what we define in Terraform.</em></td></tr>
+        </tbody>
+      </table>
+      <table style="margin-top:12px;">
+        <thead><tr><th colspan="3">Private Route Table (attached to private subnets)</th></tr><tr><th>Destination</th><th>Target</th><th>Meaning</th></tr></thead>
+        <tbody>
+          <tr><td><span class="ic">10.0.0.0/16</span></td><td><span class="ic">local</span></td><td>Same — VM-to-VM traffic within the VPC goes direct. Monitoring VM (10.0.2.10) reaches backend VM (10.0.2.30) without any gateway.</td></tr>
+          <tr><td><span class="ic">0.0.0.0/0</span></td><td><span class="ic">nat-xxxxx</span></td><td>Everything else goes through NAT Gateway (outbound only). <em>This is what we define in Terraform.</em></td></tr>
+        </tbody>
+      </table>
+
+      <div class="note-box" style="margin-top:12px;">
+        <strong>The <span class="ic">local</span> route is why we don't write it in Terraform.</strong> You only see <span class="ic">0.0.0.0/0</span> in the Terraform code because the <span class="ic">local</span> route is automatic. But it's the most important route — it's how all inter-VM communication works (Prometheus scraping backend metrics, AI VM querying monitoring VM, etc.).
+      </div>
+
+      <p style="margin-top:18px;"><strong style="color:var(--text);">2. Route Tables vs Gateways — They're Independent</strong></p>
+      <p>A common misconception is that gateways "manage" route tables or vice versa. They're <strong style="color:var(--text);">completely separate resources</strong>:</p>
+      <ul>
+        <li><strong>Route table</strong> = a passive lookup list. It just says "send packets for 0.0.0.0/0 to gateway X." It doesn't forward anything itself.</li>
+        <li><strong>Gateway</strong> = the active service that receives the packet and actually forwards it to the internet (or drops it). It doesn't know which route tables point to it.</li>
+        <li><strong>Route table association</strong> = the link between a subnet and its route table. Each subnet gets exactly one route table.</li>
+      </ul>
+      <p style="margin-top:8px;">You could create a gateway and never put it in any route table (it would sit idle). You could also create a route table pointing to a gateway that doesn't exist (Terraform would catch this error). They're just linked by reference — <span class="ic">gateway_id = aws_internet_gateway.main.id</span>.</p>
+
+      <p style="margin-top:18px;"><strong style="color:var(--text);">3. Inbound Traffic — How Packets Reach Your VMs</strong></p>
+      <p>Route tables are outbound-only, so <strong style="color:var(--text);">three separate mechanisms</strong> handle inbound traffic:</p>
+
+      <table>
+        <thead><tr><th>Inbound Scenario</th><th>How It Works</th><th>Route Table Involved?</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong style="color:var(--accent-blue);">SSH via Elastic IP</strong><br>(your laptop &rarr; VM)</td>
+            <td>The Internet Gateway maintains a mapping: <span class="ic">Elastic IP 54.x.x.x &harr; Private IP 10.0.2.10</span>. When a packet arrives for the Elastic IP, the IGW translates the destination IP and delivers it directly to the instance. The <strong>security group</strong> then decides if the port/source IP is allowed.</td>
+            <td>No. The IGW handles the Elastic IP translation internally.</td>
+          </tr>
+          <tr>
+            <td><strong style="color:var(--accent-green);">Response to outbound request</strong><br>(apt server replying to your VM)</td>
+            <td>The NAT Gateway is <strong>stateful</strong> — it remembers every outbound connection. When the monitoring VM sends a packet to Docker Hub, NAT records: <em>"10.0.2.10:54321 is talking to 52.x.x.x:443."</em> When the response comes back, NAT matches it to the original connection and forwards it to 10.0.2.10. Unsolicited inbound packets (no matching state) are <strong>silently dropped</strong>.</td>
+            <td>No. NAT handles reverse mapping from its connection state table.</td>
+          </tr>
+          <tr>
+            <td><strong style="color:var(--accent-cyan);">VM to VM within VPC</strong><br>(AI VM &rarr; monitoring VM)</td>
+            <td>The <span class="ic">local</span> route delivers traffic directly within the VPC fabric. When the AI VM (10.0.2.40) sends a packet to Prometheus (10.0.2.10:9090), the route table matches <span class="ic">10.0.0.0/16 &rarr; local</span> and delivers it directly. No gateway involved at all.</td>
+            <td>Yes — the <span class="ic">local</span> route (auto-added).</td>
+          </tr>
+          <tr>
+            <td><strong style="color:var(--accent-red);">Random internet &rarr; private subnet</strong><br>(hacker trying to reach Prometheus)</td>
+            <td><strong>Impossible.</strong> There is no route from the IGW to the private subnet. The IGW only delivers to Elastic IP associations. The private subnet's route table only has outbound rules. There is simply no path for unsolicited internet traffic to reach a private subnet instance (unless it has an Elastic IP AND the security group allows it).</td>
+            <td>N/A — no route exists.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p style="margin-top:18px;"><strong style="color:var(--text);">4. The Full Picture — How All Layers Work Together</strong></p>
+      <p>Four layers of networking are involved for every packet. Here's the order for each traffic type:</p>
+
+      <div class="arch-diagram" style="font-family:'JetBrains Mono','Fira Code',monospace;font-size:12px;line-height:1.7;">
+<pre style="background:transparent;border:none;padding:0;margin:0;"><code style="color:var(--muted);"><span style="color:var(--accent-green);">OUTBOUND: VM wants to reach the internet (docker pull, apt)</span>
+  VM sends packet
+    &darr;
+  <span style="color:var(--accent-cyan);">Route table lookup:</span> 0.0.0.0/0 &rarr; NAT Gateway
+    &darr;
+  <span style="color:var(--accent-orange);">NAT Gateway:</span> rewrites source IP (10.0.2.x &rarr; NAT's public IP), records state
+    &darr;
+  <span style="color:var(--accent-blue);">Internet Gateway:</span> forwards to the internet
+    &darr;
+  Internet &rarr; response comes back &rarr; IGW &rarr; NAT (matches state) &rarr; VM
+
+
+<span style="color:var(--accent-blue);">INBOUND: SSH from your laptop to a VM</span>
+  Your laptop sends packet to Elastic IP 54.x.x.x:22
+    &darr;
+  <span style="color:var(--accent-blue);">Internet Gateway:</span> translates 54.x.x.x &rarr; 10.0.2.10 (Elastic IP mapping)
+    &darr;
+  <span style="color:var(--accent-red);">Security Group:</span> Is source IP in allowed_ssh_cidrs? Is port 22? &rarr; ALLOW or DROP
+    &darr;
+  VM receives packet
+
+
+<span style="color:var(--accent-cyan);">INTERNAL: AI VM queries Prometheus on monitoring VM</span>
+  AI VM (10.0.2.40) sends packet to 10.0.2.10:9090
+    &darr;
+  <span style="color:var(--accent-cyan);">Route table lookup:</span> 10.0.2.10 matches 10.0.0.0/16 &rarr; local
+    &darr;
+  <span style="color:var(--accent-red);">Security Group:</span> Is source in private subnet CIDR? Is port 9090? &rarr; ALLOW
+    &darr;
+  Monitoring VM receives packet  (no gateway touched)
+
+
+<span style="color:var(--accent-red);">BLOCKED: Random internet user tries to reach Prometheus</span>
+  Hacker sends packet to... where?
+    &rarr; Private IP 10.0.2.10? <span style="color:var(--accent-red);">Not routable from internet. Dropped.</span>
+    &rarr; NAT Gateway IP?       <span style="color:var(--accent-red);">No matching state entry. Dropped by NAT.</span>
+    &rarr; Elastic IP on :9090?  <span style="color:var(--accent-red);">Security Group: port 9090 not in allowed_ssh_cidrs. Dropped.</span></code></pre>
+      </div>
+
+      <div class="note-box" style="margin-top:12px;">
+        <strong>Summary of responsibilities:</strong> <strong>Route tables</strong> decide the outbound path (which gateway). <strong>Gateways</strong> do the actual forwarding and IP translation. <strong>Security groups</strong> filter which ports/sources are allowed (both inbound and outbound). <strong>Elastic IPs</strong> create a direct inbound path to a specific instance, bypassing NAT. All four are independent resources that work together — no single one "controls" the others.
       </div>
     </div>
   </div>
