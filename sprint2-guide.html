@@ -1741,6 +1741,60 @@ ansible-playbook playbooks/site.yml playbooks/ai.yml</code></pre>
         <strong>Key design decisions:</strong> (1) VMs go in the <em>private</em> subnet so they're not directly internet-accessible -- more secure. (2) NAT Gateway lets private VMs pull Docker images, OS updates, send SMTP emails without being exposed. (3) Elastic IPs give each VM a stable public IP specifically for SSH access. (4) Private Subnet B exists solely because AWS RDS forces DB subnet groups to span 2 AZs, even in single-AZ mode.
       </div>
 
+      <p style="margin-top:18px;"><strong style="color:var(--accent-blue);">Internet Gateway vs NAT Gateway -- why two separate services?</strong></p>
+      <p>If you've launched EC2 instances before using the AWS console without configuring any gateways, you were using AWS's <strong style="color:var(--text);">default VPC</strong> -- which comes pre-built with an Internet Gateway, public subnets, and route tables already wired up. AWS didn't "spin up" an IGW when you assigned a public IP; <em>it was already there from day one.</em> That's why it felt like you didn't need any of this.</p>
+
+      <p style="margin-top:12px;">In a custom VPC (like ours), you build everything yourself. And you need two gateway types because they solve <strong style="color:var(--text);">fundamentally different security problems</strong>:</p>
+
+      <table style="margin-top:12px;">
+        <thead><tr><th></th><th>Internet Gateway (IGW)</th><th>NAT Gateway</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Direction</strong></td><td>Bidirectional -- traffic flows IN and OUT</td><td>Outbound only -- traffic flows OUT but nothing comes IN</td></tr>
+          <tr><td><strong>Analogy</strong></td><td>An open front door -- anyone can walk in if they know the address</td><td>A one-way mirror -- you can see out, nobody can see in</td></tr>
+          <tr><td><strong>Who's exposed</strong></td><td>Resources ARE directly reachable from internet</td><td>Resources are NOT reachable -- invisible to the outside world</td></tr>
+          <tr><td><strong>Use case</strong></td><td>Public-facing services (web servers, load balancers)</td><td>Private backend services that need to download things</td></tr>
+          <tr><td><strong>In our project</strong></td><td>Exists so the NAT Gateway can reach the internet. No EC2 instances use it directly.</td><td>Lets private VMs do <span class="ic">apt-get</span>, <span class="ic">docker pull</span>, <span class="ic">ollama pull</span>, send Gmail SMTP -- all outbound.</td></tr>
+          <tr><td><strong>Cost</strong></td><td>Free</td><td>~$0.045/hr + data processing fees</td></tr>
+        </tbody>
+      </table>
+
+      <p style="margin-top:14px;"><strong style="color:var(--text);">Why not one unified service?</strong> If AWS combined them, you'd lose the ability to say <em>"this subnet can reach out but can't be reached."</em> Every VM would either have full internet access (both directions) or no internet at all. There'd be no middle ground. The separation is what makes the private subnet pattern possible.</p>
+
+      <p style="margin-top:14px;"><strong style="color:var(--text);">How traffic actually flows in our project:</strong></p>
+      <div class="arch-diagram" style="font-family:'JetBrains Mono','Fira Code',monospace;font-size:12px;line-height:1.6;">
+<pre style="background:transparent;border:none;padding:0;margin:0;"><code style="color:var(--muted);"><span style="color:var(--accent-green);">OUTBOUND (VM needs to download something):</span>
+  monitoring VM &rarr; NAT Gateway &rarr; IGW &rarr; Internet     <span style="color:var(--accent-green);">&#10003; Works</span>
+  (10.0.2.x)       (10.0.1.x)    (edge)    (docker hub, apt, smtp)
+
+<span style="color:var(--accent-red);">INBOUND from random internet:</span>
+  Internet &rarr; IGW &rarr; ???                              <span style="color:var(--accent-red);">&#10007; No route to private subnet</span>
+  (hacker)    (edge)   (no route table entry for 10.0.2.0/24)
+
+<span style="color:var(--accent-blue);">SSH from your laptop (via Elastic IP):</span>
+  Your IP &rarr; Elastic IP &rarr; directly to instance       <span style="color:var(--accent-blue);">&#10003; Bypasses NAT entirely</span>
+  (x.x.x.x)   (public IP)    (if security group allows your IP)</code></pre>
+      </div>
+      <div class="note-box" style="margin-top:12px;">
+        <strong>The Elastic IP trick:</strong> <em>"If VMs are in a private subnet, how do we SSH in?"</em> Each VM gets an Elastic IP (a static public IP) associated directly with the instance. This creates a direct path for SSH that bypasses the NAT Gateway. The security group's <span class="ic">allowed_ssh_cidrs</span> controls who can use it -- just your IP. So: SSH works for you, everything else is blocked, and outbound internet goes through NAT.
+      </div>
+
+      <p style="margin-top:14px;"><strong style="color:var(--text);">Default VPC vs Custom VPC -- why we build our own:</strong></p>
+      <table>
+        <thead><tr><th></th><th>Default VPC (what you used before)</th><th>Custom VPC (what we build)</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Subnets</strong></td><td>All public -- every instance gets a public IP</td><td>Public + Private -- VMs are hidden by default</td></tr>
+          <tr><td><strong>IP range</strong></td><td><span class="ic">172.31.0.0/16</span> (AWS picks it)</td><td><span class="ic">10.0.0.0/16</span> (we control it)</td></tr>
+          <tr><td><strong>NAT Gateway</strong></td><td>None (not needed -- everything is already public)</td><td>Yes (private VMs need outbound access)</td></tr>
+          <tr><td><strong>Security layers</strong></td><td>Security groups only (one layer)</td><td>Security groups + private subnet + NAT (two layers)</td></tr>
+          <tr><td><strong>Isolation</strong></td><td>Shared with everything else in the account</td><td>Dedicated to this project -- tagged <span class="ic">observability-rca</span></td></tr>
+          <tr><td><strong>Setup effort</strong></td><td>Zero -- AWS creates it for you</td><td>You write the Terraform (vpc.tf)</td></tr>
+          <tr><td><strong>Best for</strong></td><td>Quick experiments, learning</td><td>Real projects with databases, sensitive data, compliance</td></tr>
+        </tbody>
+      </table>
+      <div class="note-box warn" style="margin-top:12px;">
+        <strong>Why the default VPC is risky for this project:</strong> If all VMs were in the default VPC's public subnets, Grafana (:3000), Prometheus (:9090), and Ollama (:11434) would be reachable by anyone on the internet. Security groups would be the <em>only</em> defense. With our custom VPC, even if a security group rule is misconfigured, there's <strong>no route</strong> from the internet to the private subnet -- defense in depth.
+      </div>
+
       <p style="margin-top:14px;">This file creates the entire network foundation: VPC, subnets, gateways, and route tables.</p>
 <pre><code><span class="cm"># ---- VPC: The virtual network that contains everything ----</span>
 <span class="kw">resource</span> <span class="str">"aws_vpc"</span> <span class="str">"main"</span> {
