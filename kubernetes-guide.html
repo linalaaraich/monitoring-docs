@@ -46,7 +46,7 @@
   .tab-content.active { display:block; }
 
   /* Content */
-  .content { padding:32px; max-width:1200px; margin:0 auto; }
+  .content { padding:32px 40px; max-width:1400px; margin:0 auto; }
 
   /* Section headers */
   .section-title { font-size:22px; font-weight:800; margin-bottom:8px; letter-spacing:-.3px; }
@@ -488,11 +488,177 @@
     </div>
   </div>
 
+  <div class="h2">Declarative vs imperative — side by side</div>
+  <p>This is the single biggest mindset shift coming from Docker/Compose. Look at the same task done both ways:</p>
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title"><span style="color:var(--accent-orange)">⚡ Imperative (Docker)</span></div>
+      <p>"Do these steps in order." If a step fails, the system doesn't know how to recover. If you re-run, you might get a different result. State lives in your head.</p>
+      <pre>docker run -d --name web --restart=always \
+  -p 80:80 -e ENV=prod nginx:1.27
+docker stop web
+docker rm web
+docker run -d --name web --restart=always \
+  -p 80:80 -e ENV=prod nginx:1.28   # upgrade
+# if this crashes mid-way, what state are you in?</pre>
+    </div>
+    <div class="card">
+      <div class="card-title"><span style="color:var(--accent-green)">📜 Declarative (K8s)</span></div>
+      <p>"Here's what should exist." The system figures out the steps. Re-running is a no-op if state already matches. State lives in git.</p>
+      <pre>apiVersion: apps/v1
+kind: Deployment
+metadata: { name: web }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: web } }
+  template:
+    metadata: { labels: { app: web } }
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.28
+        ports: [{ containerPort: 80 }]
+# kubectl apply -f web.yaml
+# Re-run safely. Roll back with one command.</pre>
+    </div>
+  </div>
+
+  <div class="callout callout-info">
+    <div class="callout-icon">💡</div>
+    <div class="callout-body">
+      <strong>Subtle but important:</strong> the YAML doesn't say "create" or "update". It says "this should exist". <code>kubectl apply</code> is the same command whether the object is brand new, already correct, or needs a change. The system figures it out by comparing your YAML to what's in etcd.
+    </div>
+  </div>
+
+  <div class="h2">The triangle that runs everything</div>
+  <p>If you remember nothing else about K8s internals, remember this triangle:</p>
+
+  <div class="card" style="text-align:center; padding:30px;">
+    <div style="font-family:monospace; font-size:13px; line-height:1.8; color:var(--text); white-space:pre; text-align:left; display:inline-block;">
+                          <span style="color:var(--accent-cyan); font-weight:700;">┌────────────────────┐</span>
+                          <span style="color:var(--accent-cyan); font-weight:700;">│   kube-apiserver   │</span>  ← <span style="color:var(--muted);">the only door in</span>
+                          <span style="color:var(--accent-cyan); font-weight:700;">└─────────┬──────────┘</span>
+                                    │
+              <span style="color:var(--muted);">reads/writes</span>  │  <span style="color:var(--muted);">watches for changes</span>
+                                    │
+                ┌───────────────────┼───────────────────┐
+                ▼                                       ▼
+       <span style="color:var(--accent-blue); font-weight:700;">┌───────────────┐</span>                   <span style="color:var(--accent-orange); font-weight:700;">┌─────────────────────┐</span>
+       <span style="color:var(--accent-blue); font-weight:700;">│     etcd      │</span>                   <span style="color:var(--accent-orange); font-weight:700;">│    Controllers     │</span>
+       <span style="color:var(--accent-blue); font-weight:700;">│ (the truth)   │</span>                   <span style="color:var(--accent-orange); font-weight:700;">│ (the workers, ~30  │</span>
+       <span style="color:var(--accent-blue); font-weight:700;">└───────────────┘</span>                   <span style="color:var(--accent-orange); font-weight:700;">│  reconcile loops)  │</span>
+                                           <span style="color:var(--accent-orange); font-weight:700;">└─────────────────────┘</span>
+    </div>
+  </div>
+
+  <p>Three pieces, three jobs:</p>
+  <ul>
+    <li><strong>etcd</strong> stores objects. Just a key-value store. It doesn't know what a Pod is — it just stores the JSON for any key under <code>/registry/pods/...</code>.</li>
+    <li><strong>kube-apiserver</strong> is a REST/gRPC front door over etcd. It validates schema, runs admission policies, enforces RBAC. <strong>Nothing else in the cluster talks to etcd directly</strong> — only through the API server.</li>
+    <li><strong>Controllers</strong> are independent loops. They <em>watch</em> the API server (long-poll for changes) and react. Each owns one object kind. Together they implement the entire behavior of K8s.</li>
+  </ul>
+
+  <p>Everything else — kubelet, kube-proxy, the scheduler — is also "just a controller" in disguise. The kubelet watches Pods assigned to its node. The scheduler watches Pods with no node. The Deployment controller watches Deployments. Same pattern, different scope.</p>
+
+  <div class="h2">Common misconceptions to clear up now</div>
+  <div class="card">
+    <p><strong>"Kubernetes runs my containers."</strong> &nbsp;No — <em>kubelet</em> tells <em>containerd</em> to run them. K8s is the orchestrator above; containerd is the runtime below. K8s itself doesn't touch a container.</p>
+  </div>
+  <div class="card">
+    <p><strong>"Kubernetes is Docker for clusters."</strong> &nbsp;No — Docker is a packaging + runtime tool. K8s removed Docker as a runtime in 1.24 (it uses containerd directly). K8s and Docker live at different layers.</p>
+  </div>
+  <div class="card">
+    <p><strong>"You need YAML to use K8s."</strong> &nbsp;Yes, but you can generate it. Helm templates, Kustomize overlays, <code>kubectl create deployment foo --image=bar --dry-run=client -o yaml</code>, CDK8s — many ways to avoid hand-writing it.</p>
+  </div>
+  <div class="card">
+    <p><strong>"Pods are like containers."</strong> &nbsp;Almost — a Pod is one or more containers sharing a network namespace. Most pods have one container, but the Pod abstraction lets you add sidecars (log shippers, proxies, init steps) that share the same IP.</p>
+  </div>
+  <div class="card">
+    <p><strong>"K8s gives you HA automatically."</strong> &nbsp;No — it gives you the <em>tools</em> for HA (replicas, probes, anti-affinity, PDBs), but you still have to configure them. A 1-replica Deployment is not HA.</p>
+  </div>
+  <div class="card">
+    <p><strong>"More replicas = more performance."</strong> &nbsp;Only if your app is stateless and your bottleneck is CPU/concurrency. If the bottleneck is the database or a shared lock, replicas don't help.</p>
+  </div>
+  <div class="card">
+    <p><strong>"K8s can run any workload."</strong> &nbsp;It can <em>schedule</em> any workload, but stateful systems (databases, message queues) take significant additional setup (StatefulSets, persistent storage, operators). Stateless web apps are the easy case.</p>
+  </div>
+
+  <div class="h2">When NOT to use Kubernetes</div>
+  <p>K8s is powerful but it has real cost. Be honest about whether you need it.</p>
+  <div class="grid-2">
+    <div class="card" style="border-color:rgba(224,96,112,.3);">
+      <div class="card-title"><span style="color:var(--accent-red)">🚫</span> Don't use K8s when…</div>
+      <ul style="margin:0 0 0 18px;">
+        <li>You have 1–3 services and one VM works fine.</li>
+        <li>Your team is one person and you're shipping a side project.</li>
+        <li>Your workload is a single long-running binary with no scaling needs.</li>
+        <li>You don't have someone willing to learn it (the operational burden is real).</li>
+        <li>You're optimizing for cost — K8s control plane is overhead.</li>
+        <li>Your app is fundamentally single-machine (legacy monolith with file locks, etc).</li>
+        <li>You need sub-millisecond latency and can't tolerate kube-proxy iptables overhead.</li>
+      </ul>
+    </div>
+    <div class="card" style="border-color:rgba(107,207,127,.3);">
+      <div class="card-title"><span style="color:var(--accent-green)">✅</span> Do use K8s when…</div>
+      <ul style="margin:0 0 0 18px;">
+        <li>You have many services that need to scale independently.</li>
+        <li>You need self-healing, rolling updates, blue/green or canary deploys.</li>
+        <li>Multiple teams ship to shared infrastructure.</li>
+        <li>You want a portable layer between cloud providers.</li>
+        <li>You need a uniform substrate for observability, secrets, networking, deploys.</li>
+        <li>You're learning it deliberately (the case for this project).</li>
+        <li>You want declarative everything with git as source of truth.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="callout callout-tip">
+    <div class="callout-icon">🎯</div>
+    <div class="callout-body">
+      <strong>For our project, the reason is the third one:</strong> we want a portable, declarative way to express the same observability target on a laptop, on EC2, and (later) in CIRES private cloud. K8s gives us that. We're not chasing autoscaling — we're chasing reproducibility and skill-building.
+    </div>
+  </div>
+
+  <div class="h2">Key terminology cheat sheet</div>
+  <p>Words that get thrown around constantly. Skim these now; they'll come up in every other tab.</p>
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <thead><tr><th>Term</th><th>What it means</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Cluster</strong></td><td>One control plane + zero or more worker nodes. The whole K8s installation.</td></tr>
+        <tr><td><strong>Node</strong></td><td>A machine (VM or physical) that runs pods. Has a kubelet.</td></tr>
+        <tr><td><strong>Control plane</strong></td><td>The brain: API server, etcd, scheduler, controller manager. Can run on dedicated nodes or share with workers.</td></tr>
+        <tr><td><strong>Worker node</strong></td><td>A node that runs your application pods. Has kubelet + kube-proxy + container runtime.</td></tr>
+        <tr><td><strong>Workload</strong></td><td>Anything running as a pod: Deployment, StatefulSet, DaemonSet, Job.</td></tr>
+        <tr><td><strong>Object</strong></td><td>A row in etcd. Has a kind, name, namespace, labels, spec, status.</td></tr>
+        <tr><td><strong>Resource</strong></td><td>The plural form / API endpoint of an object kind. <code>pods</code> is the resource for Pod objects.</td></tr>
+        <tr><td><strong>Manifest</strong></td><td>A YAML file describing one or more objects you want to apply.</td></tr>
+        <tr><td><strong>Spec</strong></td><td>The "desired state" part of an object — what you wrote.</td></tr>
+        <tr><td><strong>Status</strong></td><td>The "actual state" part — what controllers wrote back after observing reality.</td></tr>
+        <tr><td><strong>Controller</strong></td><td>A program that watches a resource and reconciles desired vs actual state.</td></tr>
+        <tr><td><strong>Operator</strong></td><td>A controller for a custom resource (CRD). Encodes operational knowledge.</td></tr>
+        <tr><td><strong>Reconcile</strong></td><td>The act of taking one step toward making actual match desired.</td></tr>
+        <tr><td><strong>Selector</strong></td><td>A label query: <code>app=web,tier=frontend</code>. How objects find each other.</td></tr>
+        <tr><td><strong>Namespace</strong></td><td>A virtual partition within a cluster. Most objects are scoped to one.</td></tr>
+        <tr><td><strong>kubeconfig</strong></td><td>The file (<code>~/.kube/config</code>) that tells <code>kubectl</code> which cluster to talk to and how to auth.</td></tr>
+        <tr><td><strong>Context</strong></td><td>One named (cluster + user + namespace) combo in a kubeconfig.</td></tr>
+        <tr><td><strong>CRD</strong></td><td>Custom Resource Definition — teaches the API server a new object kind.</td></tr>
+        <tr><td><strong>Helm chart</strong></td><td>A packaged bundle of templated K8s manifests + a values.yaml.</td></tr>
+        <tr><td><strong>RBAC</strong></td><td>Role-Based Access Control. Who can do what.</td></tr>
+        <tr><td><strong>Drain</strong></td><td>Evict all pods from a node so you can take it down for maintenance.</td></tr>
+        <tr><td><strong>Cordon</strong></td><td>Mark a node unschedulable (no new pods) without evicting existing ones.</td></tr>
+        <tr><td><strong>Taint / toleration</strong></td><td>A node says "only pods that tolerate me can run here". Used for dedicated nodes (GPU, etc.).</td></tr>
+      </tbody>
+    </table>
+  </div>
+
   <div class="h2">What you should remember from this tab</div>
   <ul>
     <li>K8s = declarative state + control loops + a cluster of machines.</li>
     <li>The API server is the front door. etcd is the truth. Controllers do the work.</li>
     <li>Labels &gt; names. Loose coupling everywhere.</li>
+    <li>K8s doesn't run containers — kubelet tells containerd to.</li>
     <li>The mind map above is the entire territory — every other tab in this guide is a zoom-in on one branch.</li>
   </ul>
 </div>
@@ -681,6 +847,373 @@
       <strong>Anchor concepts for our project:</strong> Deployment + Service + Ingress for the apps; DaemonSet for the in-cluster OTel Collector; ConfigMap for prom scrape config and Grafana dashboards; Secret for RDS credentials; PVC for any stateful storage; CRD/Operator if we adopt the OpenTelemetry Operator. That's basically all you need to build the migration.
     </div>
   </div>
+
+  <div class="h2">Worked YAML examples</div>
+  <p>This is what these objects actually look like. Read each one — even if you don't memorize the fields, the <em>shape</em> will become familiar.</p>
+
+  <div class="h3">A complete Pod (rarely written by hand, but useful to read)</div>
+  <pre>apiVersion: v1
+kind: Pod
+metadata:
+  name: hello
+  namespace: default
+  labels:
+    app: hello
+    tier: frontend
+spec:
+  containers:
+  - name: web
+    image: nginx:1.27.0
+    ports:
+    - containerPort: 80
+      name: http
+    env:
+    - name: GREETING
+      value: "hello world"
+    resources:
+      requests:
+        cpu: "100m"      # 0.1 CPU core
+        memory: "128Mi"
+      limits:
+        cpu: "500m"
+        memory: "256Mi"
+    livenessProbe:
+      httpGet: { path: /, port: http }
+      initialDelaySeconds: 5
+      periodSeconds: 10
+    readinessProbe:
+      httpGet: { path: /, port: http }
+      periodSeconds: 5</pre>
+
+  <div class="h3">A Deployment — what you actually write</div>
+  <pre>apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spring-boot
+  namespace: app
+  labels:
+    app: spring-boot
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1          # one extra pod during rollout
+      maxUnavailable: 0    # never go below desired count
+  selector:
+    matchLabels:
+      app: spring-boot
+  template:                # this is the Pod template
+    metadata:
+      labels:
+        app: spring-boot   # MUST match selector above
+    spec:
+      containers:
+      - name: app
+        image: cires/spring-boot:1.4.2     # ALWAYS pin a version
+        ports:
+        - containerPort: 8080
+        envFrom:
+        - configMapRef: { name: spring-config }
+        - secretRef: { name: rds-credentials }
+        resources:
+          requests: { cpu: 200m, memory: 512Mi }
+          limits:   { cpu: 1000m, memory: 1Gi }
+        livenessProbe:
+          httpGet: { path: /actuator/health/liveness, port: 8080 }
+          initialDelaySeconds: 30
+        readinessProbe:
+          httpGet: { path: /actuator/health/readiness, port: 8080 }
+          initialDelaySeconds: 10</pre>
+  <p><strong>Notice:</strong> the <code>selector.matchLabels</code> and <code>template.metadata.labels</code> must match. This is how the Deployment controller knows which Pods belong to it.</p>
+
+  <div class="h3">A Service that fronts the Deployment</div>
+  <pre>apiVersion: v1
+kind: Service
+metadata:
+  name: spring-boot
+  namespace: app
+spec:
+  type: ClusterIP                    # internal only (default)
+  selector:
+    app: spring-boot                 # finds pods by label
+  ports:
+  - name: http
+    port: 80                         # the Service port
+    targetPort: 8080                 # the container port
+    protocol: TCP</pre>
+  <p>Now any pod in the cluster can reach this with <code>http://spring-boot.app.svc.cluster.local</code> (or just <code>http://spring-boot</code> from inside the same namespace). K8s gives it a virtual IP and load-balances across all healthy pods matching <code>app=spring-boot</code>.</p>
+
+  <div class="h3">An Ingress (HTTP routing into the cluster)</div>
+  <pre>apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: cires-routes
+  namespace: app
+spec:
+  ingressClassName: nginx           # which controller handles this
+  rules:
+  - host: cires.example.com
+    http:
+      paths:
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: spring-boot
+            port: { number: 80 }
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: react-frontend
+            port: { number: 80 }</pre>
+
+  <div class="h3">A ConfigMap and how a pod uses it</div>
+  <pre># The ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: spring-config
+  namespace: app
+data:
+  SPRING_PROFILES_ACTIVE: "prod"
+  SERVER_PORT: "8080"
+  application.properties: |
+    spring.datasource.url=jdbc:mysql://rds.cires.internal:3306/app
+    logging.level.root=INFO
+---
+# A Pod consuming it three different ways
+apiVersion: v1
+kind: Pod
+metadata: { name: example }
+spec:
+  containers:
+  - name: app
+    image: cires/spring-boot:1.4.2
+    env:
+    - name: SPRING_PROFILES_ACTIVE      # 1. one env var from one key
+      valueFrom:
+        configMapKeyRef:
+          name: spring-config
+          key: SPRING_PROFILES_ACTIVE
+    envFrom:
+    - configMapRef: { name: spring-config }   # 2. all keys as env vars
+    volumeMounts:
+    - name: config                            # 3. as files
+      mountPath: /etc/spring
+  volumes:
+  - name: config
+    configMap:
+      name: spring-config
+      items:
+      - key: application.properties
+        path: application.properties</pre>
+
+  <div class="h3">A Secret (almost identical to ConfigMap)</div>
+  <pre>apiVersion: v1
+kind: Secret
+metadata:
+  name: rds-credentials
+  namespace: app
+type: Opaque
+stringData:                          # plain text (k8s base64-encodes for you)
+  DB_USERNAME: app_user
+  DB_PASSWORD: "super-secret-pw"
+# Use as envFrom: [{ secretRef: { name: rds-credentials } }]</pre>
+  <div class="callout callout-warn">
+    <div class="callout-icon">⚠️</div>
+    <div class="callout-body">
+      <strong>Secrets are NOT encrypted by default</strong> — they're base64-encoded. Anyone with <code>get secrets</code> RBAC can read them in plain text. For real protection: enable <code>EncryptionConfiguration</code> on the API server, or use Sealed Secrets / External Secrets Operator / SOPS.
+    </div>
+  </div>
+
+  <div class="h3">A StatefulSet (for databases &amp; queues)</div>
+  <pre>apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: db
+spec:
+  serviceName: postgres              # required: a headless Service
+  replicas: 3
+  selector:
+    matchLabels: { app: postgres }
+  template:
+    metadata:
+      labels: { app: postgres }
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:16.2
+        ports: [{ containerPort: 5432 }]
+        volumeMounts:
+        - name: data
+          mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:              # each pod gets its own PVC
+  - metadata: { name: data }
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      storageClassName: fast-ssd
+      resources:
+        requests: { storage: 20Gi }</pre>
+  <p>Pods are named <code>postgres-0</code>, <code>postgres-1</code>, <code>postgres-2</code> (stable!). Each gets its own PVC: <code>data-postgres-0</code>, <code>data-postgres-1</code>, etc. If <code>postgres-1</code> dies, it comes back as <code>postgres-1</code> with the same disk.</p>
+
+  <div class="h3">A DaemonSet (one pod per node)</div>
+  <pre>apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: otel-collector-agent
+  namespace: monitoring
+spec:
+  selector:
+    matchLabels: { app: otel-agent }
+  template:
+    metadata:
+      labels: { app: otel-agent }
+    spec:
+      hostNetwork: true              # use the node's network
+      containers:
+      - name: otel
+        image: otel/opentelemetry-collector-contrib:0.96.0
+        volumeMounts:
+        - name: varlog
+          mountPath: /var/log
+          readOnly: true
+        - name: varlibdockercontainers
+          mountPath: /var/lib/docker/containers
+          readOnly: true
+      volumes:
+      - name: varlog
+        hostPath: { path: /var/log }
+      - name: varlibdockercontainers
+        hostPath: { path: /var/lib/docker/containers }</pre>
+  <p>This is exactly the pattern we'd use for our in-cluster OTel Collector. Add a node to the cluster → a new collector pod is auto-created on it.</p>
+
+  <div class="h3">A CronJob (scheduled task)</div>
+  <pre>apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: nightly-backup
+  namespace: db
+spec:
+  schedule: "0 2 * * *"              # 2am daily, cron syntax
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: backup
+            image: cires/db-backup:1.0
+            envFrom:
+            - secretRef: { name: rds-credentials }</pre>
+
+  <div class="h3">A PVC + how a pod claims it</div>
+  <pre>apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: prometheus-data
+  namespace: monitoring
+spec:
+  accessModes: [ "ReadWriteOnce" ]
+  storageClassName: local-path        # k3s default
+  resources:
+    requests:
+      storage: 50Gi
+---
+# Pod using it
+spec:
+  containers:
+  - name: prometheus
+    image: prom/prometheus:v2.51.0
+    volumeMounts:
+    - name: data
+      mountPath: /prometheus
+  volumes:
+  - name: data
+    persistentVolumeClaim:
+      claimName: prometheus-data</pre>
+
+  <div class="h3">RBAC: ServiceAccount + Role + RoleBinding</div>
+  <pre># 1. Identity for the prometheus pod
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: prometheus
+  namespace: monitoring
+---
+# 2. What that identity is allowed to do
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata: { name: prometheus-scraper }
+rules:
+- apiGroups: [""]
+  resources: ["nodes", "pods", "services", "endpoints"]
+  verbs: ["get", "list", "watch"]
+- nonResourceURLs: ["/metrics"]
+  verbs: ["get"]
+---
+# 3. Grant the role to the SA
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata: { name: prometheus-can-scrape }
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: prometheus-scraper
+subjects:
+- kind: ServiceAccount
+  name: prometheus
+  namespace: monitoring</pre>
+  <p>Now the prometheus pod (running with <code>serviceAccountName: prometheus</code>) can hit the K8s API to discover scrape targets. Without this, it would get 403 Forbidden.</p>
+
+  <div class="h2">"Which workload do I use?" — decision tree</div>
+  <div class="card">
+    <p><strong>Stateless web app or API?</strong> &nbsp;→ <code>Deployment</code></p>
+    <p><strong>Database, queue, anything where pod identity / persistent storage per pod matters?</strong> &nbsp;→ <code>StatefulSet</code></p>
+    <p><strong>One agent per node (log shipper, metrics exporter, CNI, storage driver)?</strong> &nbsp;→ <code>DaemonSet</code></p>
+    <p><strong>Run-once batch task (migration, import, backup)?</strong> &nbsp;→ <code>Job</code></p>
+    <p><strong>Same as Job but on a schedule?</strong> &nbsp;→ <code>CronJob</code></p>
+    <p><strong>One-off pod for debugging?</strong> &nbsp;→ <code>kubectl run -it --rm --image=busybox debug -- sh</code></p>
+  </div>
+
+  <div class="h2">Labels &amp; selectors — the secret sauce</div>
+  <p>Labels are how everything in K8s connects. They're short key=value pairs on every object. Selectors are queries against them. <strong>You will use them constantly, so internalize the patterns:</strong></p>
+  <pre># Common label conventions (the "recommended labels")
+metadata:
+  labels:
+    app.kubernetes.io/name: spring-boot       # the app name
+    app.kubernetes.io/instance: prod-1         # this specific instance
+    app.kubernetes.io/version: "1.4.2"
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: cires-platform
+    app.kubernetes.io/managed-by: helm
+
+# Selectors used in Service / NetworkPolicy / etc:
+selector:
+  matchLabels:
+    app: spring-boot
+
+# More expressive form:
+selector:
+  matchExpressions:
+  - { key: tier, operator: In, values: [backend, middleware] }
+  - { key: env, operator: NotIn, values: [dev] }
+
+# Selecting from kubectl:
+kubectl get pods -l app=spring-boot,tier=backend
+kubectl get pods -l 'env in (prod, staging)'
+kubectl delete pods -l app=spring-boot       # all spring-boot pods</pre>
+
+  <div class="callout callout-info">
+    <div class="callout-icon">💡</div>
+    <div class="callout-body">
+      <strong>Why labels and not names:</strong> Pod names change (they include random hashes). Labels don't. A Service's selector remains valid even as Pods are created and destroyed. This decoupling is what makes self-healing possible — you can replace pods freely and references keep working.
+    </div>
+  </div>
 </div>
 </div>
 
@@ -814,6 +1347,90 @@
     <div class="step"><div class="step-line"><div class="step-num">7</div><div class="step-connector"></div></div><div class="step-content"><h3>Status flows back</h3><p>kubelet reports the pod is Running. The API server updates the Pod object's status. <code>kubectl get pods</code> reflects it.</p></div></div>
   </div>
   <p>Notice: <strong>nothing was given a direct command</strong>. Every step was a controller noticing a state change in the API server and reacting. This is the reconciliation loop in action.</p>
+
+  <div class="h2">Reference: ports, file paths, and processes</div>
+  <p>When something breaks, knowing where to look is half the battle. Here's the field guide for a vanilla kubeadm cluster — k3s collapses most of these into one process but the conceptual layout is the same.</p>
+
+  <div class="h3">Control plane (vanilla kubeadm)</div>
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <thead><tr><th>Component</th><th>Default port</th><th>Manifest / config</th><th>Logs</th></tr></thead>
+      <tbody>
+        <tr><td><strong>kube-apiserver</strong></td><td>6443 (HTTPS)</td><td><code>/etc/kubernetes/manifests/kube-apiserver.yaml</code></td><td><code>kubectl logs -n kube-system kube-apiserver-&lt;node&gt;</code></td></tr>
+        <tr><td><strong>etcd</strong></td><td>2379 (client), 2380 (peer)</td><td><code>/etc/kubernetes/manifests/etcd.yaml</code></td><td>same as above with <code>etcd-&lt;node&gt;</code></td></tr>
+        <tr><td><strong>kube-scheduler</strong></td><td>10259 (metrics)</td><td><code>/etc/kubernetes/manifests/kube-scheduler.yaml</code></td><td><code>kube-scheduler-&lt;node&gt;</code></td></tr>
+        <tr><td><strong>kube-controller-manager</strong></td><td>10257 (metrics)</td><td><code>/etc/kubernetes/manifests/kube-controller-manager.yaml</code></td><td><code>kube-controller-manager-&lt;node&gt;</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>The "manifest" files are <strong>static pod manifests</strong> — kubelet watches that directory and runs whatever pods it finds there. Edit a file → kubelet restarts the component. This is how the control plane bootstraps without needing a control plane.</p>
+
+  <div class="h3">Node components</div>
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <thead><tr><th>Component</th><th>Default port</th><th>Config</th><th>Logs</th></tr></thead>
+      <tbody>
+        <tr><td><strong>kubelet</strong></td><td>10250 (HTTPS), 10255 (read-only, deprecated)</td><td><code>/var/lib/kubelet/config.yaml</code> + <code>/etc/kubernetes/kubelet.conf</code></td><td><code>journalctl -u kubelet</code></td></tr>
+        <tr><td><strong>kube-proxy</strong></td><td>10256 (health)</td><td>ConfigMap <code>kube-proxy</code> in <code>kube-system</code></td><td><code>kubectl logs -n kube-system -l k8s-app=kube-proxy</code></td></tr>
+        <tr><td><strong>containerd</strong></td><td>(Unix socket)</td><td><code>/etc/containerd/config.toml</code></td><td><code>journalctl -u containerd</code></td></tr>
+        <tr><td><strong>CNI plugin</strong></td><td>varies</td><td><code>/etc/cni/net.d/</code></td><td>plugin-specific (DaemonSet logs)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="h3">Important directories</div>
+  <pre>/etc/kubernetes/                 # control plane configuration
+├── manifests/                   # static pod manifests (kubelet watches this)
+├── pki/                         # all the cluster TLS certs
+│   ├── ca.crt                   # cluster CA
+│   ├── apiserver.crt
+│   ├── apiserver-kubelet-client.crt
+│   └── etcd/                    # etcd's own PKI
+├── admin.conf                   # kubeconfig for cluster admin
+├── kubelet.conf                 # kubeconfig kubelet uses to talk to API server
+├── controller-manager.conf
+└── scheduler.conf
+
+/var/lib/kubelet/                # kubelet state
+├── config.yaml                  # kubelet's config
+├── pods/                        # per-pod working dirs (volumes, logs)
+└── pki/                         # kubelet's own certs
+
+/var/log/pods/                   # pod stdout/stderr (one dir per pod)
+/var/log/containers/             # symlinks to /var/log/pods (legacy)
+
+/etc/containerd/config.toml      # containerd config (CRI runtime)
+/etc/cni/net.d/                  # CNI plugin configs (which CNI to use, settings)
+/opt/cni/bin/                    # CNI plugin binaries</pre>
+
+  <div class="h3">k3s collapses all of this</div>
+  <p>k3s is fundamentally the same architecture, but condensed:</p>
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <thead><tr><th>What it does</th><th>Vanilla kubeadm</th><th>k3s equivalent</th></tr></thead>
+      <tbody>
+        <tr><td>Control plane processes</td><td>4 separate static pods</td><td>All goroutines inside the <code>k3s</code> binary</td></tr>
+        <tr><td>Datastore</td><td>etcd (always)</td><td>SQLite (default), or embedded etcd, or external SQL</td></tr>
+        <tr><td>Container runtime</td><td>containerd as separate service</td><td>containerd embedded in k3s</td></tr>
+        <tr><td>kube-proxy</td><td>DaemonSet</td><td>Inside the k3s process</td></tr>
+        <tr><td>CNI</td><td>You install it</td><td>Flannel bundled (replaceable)</td></tr>
+        <tr><td>Logs</td><td>per-component pods</td><td><code>journalctl -u k3s</code> for everything</td></tr>
+        <tr><td>Static pod manifests</td><td><code>/etc/kubernetes/manifests/</code></td><td><code>/var/lib/rancher/k3s/server/manifests/</code></td></tr>
+        <tr><td>kubeconfig</td><td><code>/etc/kubernetes/admin.conf</code></td><td><code>/etc/rancher/k3s/k3s.yaml</code></td></tr>
+        <tr><td>PKI</td><td><code>/etc/kubernetes/pki/</code></td><td><code>/var/lib/rancher/k3s/server/tls/</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout callout-info">
+    <div class="callout-icon">💡</div>
+    <div class="callout-body">
+      <strong>Worth memorizing:</strong> on any K8s cluster, "what's actually running on the node" is answered by <code>crictl ps</code> (containerd) or <code>docker ps</code> (legacy). "What does kubelet think is happening" is in <code>journalctl -u kubelet</code> (or <code>journalctl -u k3s</code>). "What does the API server think" is in <code>kubectl get pod &lt;name&gt; -o yaml</code>. When something is broken, all three views should agree — when they disagree, that's where the bug is.
+    </div>
+  </div>
+
+  <div class="h2">Leader election &amp; HA</div>
+  <p>In a multi-server (HA) setup, there are multiple instances of <code>kube-controller-manager</code> and <code>kube-scheduler</code>. <strong>Only one is "leader" at a time.</strong> They use a Lease object in the <code>kube-system</code> namespace to coordinate — the current leader renews the lease every few seconds; if it dies, another instance grabs it. The API server itself is stateless and runs active-active behind a load balancer. etcd uses Raft consensus for HA (3, 5, or 7 members; odd numbers for quorum).</p>
 </div>
 </div>
 
@@ -937,6 +1554,122 @@ roleRef:
     <li><strong>Limits</strong> — the cap. Exceed CPU limit → throttled. Exceed memory limit → OOMKilled.</li>
   </ul>
   <p>If you don't set requests, the scheduler can't make smart decisions. If you don't set limits, a runaway container can starve the node. <strong>Set both. Always.</strong></p>
+
+  <div class="h2">QoS classes</div>
+  <p>Based on how you set requests and limits, K8s assigns each pod a Quality of Service class. This decides who gets killed first when the node runs out of memory:</p>
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <thead><tr><th>Class</th><th>How to get it</th><th>Eviction priority</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Guaranteed</strong></td><td>Every container has requests == limits for both CPU and memory</td><td>Killed last</td></tr>
+        <tr><td><strong>Burstable</strong></td><td>At least one container has requests &lt; limits, or requests set without limits</td><td>Killed in the middle</td></tr>
+        <tr><td><strong>BestEffort</strong></td><td>No requests or limits set anywhere</td><td>Killed first</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="h2">The scheduler — how it picks a node</div>
+  <p>The scheduler runs two phases for every unscheduled pod:</p>
+  <ol>
+    <li><strong>Filter</strong> (predicates) — eliminate nodes that <em>can't</em> run the pod. Reasons: not enough resources, doesn't tolerate the node's taints, fails nodeSelector / affinity, missing required volume.</li>
+    <li><strong>Score</strong> (priorities) — rank the remaining nodes. Factors: least requested resources, balanced CPU/memory, image already cached locally, topology spread, inter-pod affinity.</li>
+  </ol>
+  <p>Highest score wins. Tie → random. The decision is then written back to the pod's <code>spec.nodeName</code> via the API server.</p>
+
+  <div class="h3">Influencing the scheduler</div>
+  <pre>spec:
+  # 1. Hard requirement — won't schedule unless matched
+  nodeSelector:
+    disktype: ssd
+
+  # 2. More expressive
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+        - matchExpressions:
+          - key: kubernetes.io/arch
+            operator: In
+            values: [amd64, arm64]
+
+    # Spread my pods across zones for HA
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchLabels: { app: spring-boot }
+          topologyKey: topology.kubernetes.io/zone
+
+  # 3. Tolerate a node taint (e.g., GPU node)
+  tolerations:
+  - key: nvidia.com/gpu
+    operator: Exists
+    effect: NoSchedule</pre>
+
+  <div class="h2">The pod-to-pod networking walkthrough</div>
+  <p>Two pods on different nodes want to talk. Here's what actually happens with a typical CNI (Flannel VXLAN):</p>
+  <ol>
+    <li>Pod A on Node 1 (IP <code>10.42.1.5</code>) sends a packet to Pod B on Node 2 (IP <code>10.42.2.7</code>).</li>
+    <li>The packet leaves Pod A's network namespace via a veth pair into Node 1's root network namespace.</li>
+    <li>Node 1's routing table has a route for <code>10.42.2.0/24</code> via the Flannel device (<code>flannel.1</code>).</li>
+    <li>Flannel wraps the packet in a VXLAN UDP datagram destined for Node 2's IP (a real, routable IP).</li>
+    <li>The wrapped packet travels through whatever network connects the nodes (a real switch, a cloud VPC, etc.).</li>
+    <li>Node 2 receives it, unwraps the VXLAN, sees a packet for <code>10.42.2.7</code>.</li>
+    <li>Node 2's routing table sends it via veth pair into Pod B's network namespace.</li>
+    <li>Pod B sees a packet from <code>10.42.1.5</code> — no NAT, no rewrite. From its point of view, it just got a packet from another pod.</li>
+  </ol>
+  <p>Calico does the same thing without VXLAN encapsulation if your underlying network can route pod CIDRs directly (BGP). Cilium does it with eBPF programs in the kernel, no iptables. All three satisfy the same K8s networking model.</p>
+
+  <div class="h2">DNS lookup walkthrough</div>
+  <p>Inside a pod, you run <code>curl http://prometheus.monitoring</code>. What happens:</p>
+  <ol>
+    <li>libc reads <code>/etc/resolv.conf</code> in the pod (kubelet wrote it). Contains: <code>nameserver 10.96.0.10</code> (the CoreDNS Service ClusterIP) and <code>search default.svc.cluster.local svc.cluster.local cluster.local</code>.</li>
+    <li>libc tries to resolve <code>prometheus.monitoring</code>. It appends each search domain in turn: <code>prometheus.monitoring.default.svc.cluster.local</code> (NXDOMAIN), then <code>prometheus.monitoring.svc.cluster.local</code> (hit!).</li>
+    <li>The DNS query goes to <code>10.96.0.10:53</code>. iptables rules from kube-proxy redirect this to one of the actual CoreDNS pod IPs.</li>
+    <li>CoreDNS looks up the Service, returns its ClusterIP, e.g., <code>10.96.42.7</code>.</li>
+    <li>libc returns <code>10.96.42.7</code> to curl. curl opens a TCP connection.</li>
+    <li>The packet goes out. iptables (kube-proxy again) rewrites the destination to a random healthy pod IP behind the prometheus Service.</li>
+    <li>The connection lands on a real prometheus pod.</li>
+  </ol>
+  <p>Two layers of iptables magic (DNS and Service), all transparent to the application. <strong>This is why "trace where the traffic actually goes" is a useful K8s debugging skill.</strong></p>
+
+  <div class="h2">Init containers and sidecars</div>
+  <p>A Pod can have multiple containers. They share the network namespace (same IP, can talk on localhost) and optionally volumes.</p>
+
+  <div class="h3">Init containers</div>
+  <p>Run <em>before</em> the main containers, in order, until each succeeds. Used for: waiting for a dependency, running migrations, copying assets to a shared volume.</p>
+  <pre>spec:
+  initContainers:
+  - name: wait-for-db
+    image: busybox:1.36
+    command: ['sh', '-c', 'until nc -z postgres 5432; do sleep 1; done']
+  - name: run-migrations
+    image: cires/spring-boot:1.4.2
+    command: ['java', '-jar', 'app.jar', '--migrate-only']
+  containers:
+  - name: app
+    image: cires/spring-boot:1.4.2
+    # only starts after both init containers succeed</pre>
+
+  <div class="h3">Sidecars</div>
+  <p>Containers that run alongside the main one for the lifetime of the pod. Use cases: log shipper reading the main container's stdout, an OTel agent receiving spans on localhost, a service mesh proxy (Envoy/Linkerd). In K8s 1.29+, sidecars have a special "restartable init container" form so they start before the main and stop after it.</p>
+
+  <div class="h2">PV lifecycle &amp; access modes</div>
+  <p>A PV moves through phases: <strong>Available → Bound → Released → Deleted/Retained</strong>.</p>
+  <ul>
+    <li><strong>Available</strong> — created but not yet claimed.</li>
+    <li><strong>Bound</strong> — matched to a PVC. One-to-one.</li>
+    <li><strong>Released</strong> — the PVC was deleted but the PV still exists (waiting for a reclaim decision).</li>
+    <li><strong>Deleted</strong> or <strong>Retained</strong> — depending on the StorageClass's reclaim policy: <code>Delete</code> destroys the underlying storage, <code>Retain</code> keeps it for manual recovery.</li>
+  </ul>
+  <p>Access modes (a PVC requests one):</p>
+  <ul>
+    <li><code>ReadWriteOnce</code> (RWO) — one node can mount it read-write. Most cloud block storage (EBS, etc.).</li>
+    <li><code>ReadOnlyMany</code> (ROX) — many nodes can mount it read-only.</li>
+    <li><code>ReadWriteMany</code> (RWX) — many nodes can mount it read-write. Needs a network filesystem (NFS, CephFS, EFS).</li>
+    <li><code>ReadWriteOncePod</code> (RWOP, K8s 1.27+) — exactly one Pod can mount it. Stricter than RWO.</li>
+  </ul>
 </div>
 </div>
 
@@ -1084,6 +1817,130 @@ k get events --sort-by=.lastTimestamp   # what just happened
 k explain pod.spec.containers.resources # API docs for any field</pre>
     </div>
   </div>
+
+  <div class="h2">kubectl cheat sheet — by category</div>
+
+  <div class="h3">Inspecting things</div>
+  <pre>k get nodes                         # cluster machines
+k get nodes -o wide                 # with IPs, OS, kernel, k8s version
+k get pods -A                       # all pods everywhere
+k get pods -A -o wide               # with node assignment and IPs
+k get pods --show-labels            # inspect labels
+k get pods -l app=spring-boot       # filter by label
+k get all -n monitoring             # all common resources in a namespace
+k get deploy,svc,ingress -n app     # specific kinds
+k describe pod &lt;name&gt;               # detailed view + events
+k get pod &lt;name&gt; -o yaml            # full YAML as stored in etcd
+k get pod &lt;name&gt; -o json | jq .status</pre>
+
+  <div class="h3">Logs &amp; exec</div>
+  <pre>k logs &lt;pod&gt;                        # one-shot logs
+k logs &lt;pod&gt; -f                     # follow
+k logs &lt;pod&gt; --previous             # previous container's logs (after a crash)
+k logs &lt;pod&gt; -c &lt;container&gt;         # multi-container pod
+k logs -l app=spring-boot --tail=50 # all matching pods (recent versions)
+k exec -it &lt;pod&gt; -- sh              # shell in
+k exec -it &lt;pod&gt; -c &lt;container&gt; -- bash
+k cp /local/file &lt;pod&gt;:/remote/path # copy a file in
+k cp &lt;pod&gt;:/remote/file ./local     # copy out</pre>
+
+  <div class="h3">Applying &amp; deleting</div>
+  <pre>k apply -f manifest.yaml            # create or update
+k apply -f ./directory/             # all YAMLs in a dir
+k apply -k ./overlays/prod/         # Kustomize
+k diff -f manifest.yaml             # what would change
+k delete -f manifest.yaml           # gone
+k delete pod &lt;name&gt; --grace-period=0 --force  # nuclear option
+k replace --force -f manifest.yaml  # delete and recreate (for immutable fields)</pre>
+
+  <div class="h3">Rollouts</div>
+  <pre>k rollout status deploy/foo         # watch rollout progress
+k rollout history deploy/foo        # past revisions
+k rollout undo deploy/foo           # roll back one revision
+k rollout undo deploy/foo --to-revision=3
+k rollout restart deploy/foo        # force a restart (no spec change)
+k rollout pause deploy/foo          # pause a rollout mid-flight
+k rollout resume deploy/foo</pre>
+
+  <div class="h3">Networking &amp; debugging</div>
+  <pre>k port-forward svc/grafana 3000:80  # local:remote
+k port-forward pod/&lt;name&gt; 8080      # to a specific pod
+k get svc &lt;name&gt; -o yaml            # see selector and ports
+k get endpoints &lt;name&gt;              # which pods are actually behind it
+k run -it --rm debug --image=nicolaka/netshoot --restart=Never -- sh
+                                    # ephemeral debug pod with all networking tools
+k debug -it &lt;pod&gt; --image=busybox --target=&lt;container&gt;
+                                    # attach a debug container to a running pod (1.25+)</pre>
+
+  <div class="h3">Events &amp; troubleshooting</div>
+  <pre>k get events -A --sort-by=.lastTimestamp
+k get events --field-selector type=Warning
+k top nodes                         # CPU/memory usage (needs metrics-server)
+k top pods -A
+k get pod &lt;name&gt; -o jsonpath='{.status.containerStatuses[0].lastState}'</pre>
+
+  <div class="h3">Context &amp; namespace</div>
+  <pre>k config get-contexts               # list known clusters
+k config current-context
+k config use-context prod
+k config set-context --current --namespace=monitoring  # switch default ns</pre>
+
+  <div class="h3">Discovery &amp; docs</div>
+  <pre>k api-resources                     # all object kinds in this cluster
+k api-versions                      # all API groups/versions
+k explain pod                       # docs for the Pod kind
+k explain pod.spec                  # drill down
+k explain pod.spec.containers.resources --recursive</pre>
+
+  <div class="h2">Debugging recipes</div>
+  <p>Things will break. Here's where to look first.</p>
+
+  <div class="h3">"My pod is in Pending forever"</div>
+  <pre>k describe pod &lt;name&gt; | tail -20
+# Look at Events. Common causes:
+# - "Insufficient cpu/memory" → bump node size or reduce requests
+# - "0/3 nodes are available: 3 node(s) had untolerated taint" → add tolerations
+# - "no PV available" → no StorageClass or quota issue
+# - "FailedScheduling" with no detail → look at scheduler logs</pre>
+
+  <div class="h3">"My pod is CrashLoopBackOff"</div>
+  <pre>k logs &lt;pod&gt;                        # current container
+k logs &lt;pod&gt; --previous             # the one that just died
+k describe pod &lt;name&gt; | grep -A5 "Last State"
+# Look for: Exit Code, Reason: OOMKilled / Error / Completed
+# OOMKilled → bump memory limit
+# Exit Code 1 → app error, check the previous logs
+# Exit Code 137 → SIGKILL, often OOM
+# Exit Code 139 → segfault
+# Probe failures → check liveness/readiness URLs and timing</pre>
+
+  <div class="h3">"I can't reach my Service"</div>
+  <pre># 1. Does the Service exist and have endpoints?
+k get svc &lt;name&gt;
+k get endpoints &lt;name&gt;              # if EMPTY, no pods match the selector
+k get pods -l &lt;selector-from-svc&gt;   # do those pods exist and run?
+
+# 2. Are pods Ready (passing readinessProbe)?
+k get pods -l app=&lt;name&gt;            # READY column is X/Y
+
+# 3. From inside the cluster, does DNS resolve?
+k run -it --rm dnstest --image=busybox --restart=Never -- nslookup &lt;svc-name&gt;
+
+# 4. Can you reach the pod IP directly (skip the Service)?
+k run -it --rm test --image=busybox --restart=Never -- wget -qO- &lt;pod-ip&gt;:&lt;port&gt;</pre>
+
+  <div class="h3">"ImagePullBackOff"</div>
+  <pre>k describe pod &lt;name&gt; | grep -A3 "Failed"
+# Common causes:
+# - Wrong image tag (typo, deleted upstream)
+# - Private registry without imagePullSecret
+# - Rate-limited (Docker Hub anonymous pulls)
+# Fix: check image name, add imagePullSecrets, or pre-load with `crictl pull`</pre>
+
+  <div class="h3">"My ConfigMap/Secret change isn't taking effect"</div>
+  <p>Pods don't auto-reload mounted ConfigMaps/Secrets. Restart the deployment:</p>
+  <pre>k rollout restart deploy/&lt;name&gt;</pre>
+  <p>For environment variables specifically, you <em>must</em> restart — they're injected at pod start. Mounted file ConfigMaps update in-place but the app has to re-read the file (most don't).</p>
 </div>
 </div>
 
@@ -1206,6 +2063,141 @@ k explain pod.spec.containers.resources # API docs for any field</pre>
     </table>
   </div>
   <p>For our project the natural split is: <strong>Terraform</strong> for AWS (VPC, EC2, RDS, S3), <strong>Ansible</strong> for installing k3s on the EC2 instance, <strong>Helm</strong> (driven by Ansible or by hand) for installing the workloads into k3s, and <strong>ArgoCD later</strong> if we want full GitOps.</p>
+
+  <div class="h2">Concrete examples — each ladder rung in action</div>
+
+  <div class="h3">Rung 1: Terraform with pinned providers</div>
+  <pre># providers.tf
+terraform {
+  required_version = "~&gt; 1.7.0"        # pin Terraform itself
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "= 5.43.0"              # exact version
+    }
+  }
+}
+
+# ec2.tf — pin the AMI explicitly
+resource "aws_instance" "k3s" {
+  ami           = "ami-0a3c3a20c09d6f377"   # specific AMI ID, not "most recent"
+  instance_type = "t3.large"
+  # ...
+}
+
+# Commit .terraform.lock.hcl to git — it pins provider plugin checksums</pre>
+  <div class="callout callout-warn">
+    <div class="callout-icon">⚠️</div>
+    <div class="callout-body">
+      <strong>Anti-pattern:</strong> <code>data "aws_ami" "ubuntu" { most_recent = true }</code> — picks whatever AMI is newest <em>at apply time</em>. Two runs a week apart can produce different VMs. Pin the AMI ID once, update it deliberately.
+    </div>
+  </div>
+
+  <div class="h3">Rung 2: Ansible with pinned roles</div>
+  <pre># requirements.yml
+roles:
+  - name: xanmanning.k3s
+    version: v3.4.4                     # specific tag, not master/main
+  - name: geerlingguy.docker
+    version: 7.2.1
+collections:
+  - name: community.general
+    version: "9.0.1"
+# Install with: ansible-galaxy install -r requirements.yml</pre>
+
+  <div class="h3">Rung 3: K8s version pinned at install</div>
+  <pre># In your Ansible role for k3s
+- name: Install k3s with pinned version
+  ansible.builtin.shell: |
+    curl -sfL https://get.k3s.io | \
+      INSTALL_K3S_VERSION="v1.30.2+k3s1" \
+      INSTALL_K3S_EXEC="--disable=traefik" \
+      sh -
+  args:
+    creates: /usr/local/bin/k3s
+
+# In group_vars (using xanmanning.k3s role)
+k3s_release_version: v1.30.2+k3s1</pre>
+
+  <div class="h3">Rung 5: Helm charts pinned</div>
+  <pre># Helmfile / Ansible / shell — always pass --version
+helm install kube-prometheus-stack \
+  prometheus-community/kube-prometheus-stack \
+  --version 58.2.1 \                    # pin chart version
+  --namespace monitoring \
+  --create-namespace \
+  -f values.yaml                        # commit values.yaml to git
+
+# Or via the Ansible community.kubernetes.helm module
+- name: Install kube-prometheus-stack
+  kubernetes.core.helm:
+    name: kube-prometheus-stack
+    chart_ref: prometheus-community/kube-prometheus-stack
+    chart_version: "58.2.1"
+    release_namespace: monitoring
+    create_namespace: true
+    values_files:
+      - "{{ playbook_dir }}/values/kube-prometheus-stack.yml"</pre>
+
+  <div class="h3">Rung 6: Image digests (the strongest pin)</div>
+  <pre># Tag (good)
+image: prom/prometheus:v2.51.0
+
+# Digest (best — guaranteed identical bytes)
+image: prom/prometheus@sha256:5c5d5e9c9c6c5a1f8c7e8f1234567890abcdef...
+
+# Get the digest of a tag:
+crane digest prom/prometheus:v2.51.0
+# or
+docker buildx imagetools inspect prom/prometheus:v2.51.0</pre>
+  <div class="callout callout-danger">
+    <div class="callout-icon">🚫</div>
+    <div class="callout-body">
+      <strong>Never write</strong> <code>image: prom/prometheus</code> (no tag — defaults to <code>:latest</code>) or <code>image: prom/prometheus:latest</code>. The tag <code>:latest</code> is mutable upstream — you'll get whatever the maintainer pushed last, possibly different on every node, possibly different on every restart.
+    </div>
+  </div>
+
+  <div class="h3">Rung 8: Secrets that live safely in git</div>
+  <p>Sealed Secrets — you encrypt with a public key, the controller in the cluster decrypts with a private key. The encrypted form is safe to commit:</p>
+  <pre># Plain Secret (don't commit this)
+echo -n 'super-secret-pw' | kubectl create secret generic db \
+  --dry-run=client --from-file=password=/dev/stdin -o yaml &gt; secret.yaml
+
+# Seal it
+kubeseal --controller-name sealed-secrets-controller \
+  -o yaml &lt; secret.yaml &gt; sealed-secret.yaml
+
+# sealed-secret.yaml is now safe to commit. Apply with kubectl apply -f.
+# Inside the cluster, sealed-secrets-controller decrypts and creates the real Secret.</pre>
+
+  <div class="h2">Anti-pattern gallery</div>
+  <div class="card" style="border-left:3px solid var(--accent-red);">
+    <p><strong>🚫 <code>kubectl edit deploy/foo</code> in production.</strong> Changes the cluster but not git. Now git no longer reflects reality. Drift. Don't.</p>
+  </div>
+  <div class="card" style="border-left:3px solid var(--accent-red);">
+    <p><strong>🚫 <code>helm install</code> without <code>--version</code>.</strong> Pulls whatever is "stable" at apply time. Could be a new major version with breaking changes.</p>
+  </div>
+  <div class="card" style="border-left:3px solid var(--accent-red);">
+    <p><strong>🚫 <code>image: myapp:latest</code>.</strong> Already covered. Worth saying twice.</p>
+  </div>
+  <div class="card" style="border-left:3px solid var(--accent-red);">
+    <p><strong>🚫 Secrets in plaintext YAML committed to git.</strong> Even if your repo is private, anyone who clones it has them forever. Use sealed-secrets, SOPS, or external-secrets.</p>
+  </div>
+  <div class="card" style="border-left:3px solid var(--accent-red);">
+    <p><strong>🚫 "It's only dev, version pins don't matter".</strong> Dev that doesn't match prod is the source of "works on my machine" bugs. The cost of pinning is near zero — pay it.</p>
+  </div>
+  <div class="card" style="border-left:3px solid var(--accent-red);">
+    <p><strong>🚫 Hand-edited <code>kubectl apply</code> from a developer laptop with no git trail.</strong> That change exists nowhere except in someone's shell history. Will be lost on the next deploy.</p>
+  </div>
+
+  <div class="h2">Detecting drift</div>
+  <p>Even with discipline, drift creeps in. Tools to find it:</p>
+  <ul>
+    <li><code>kubectl diff -f manifest.yaml</code> — what would change if I applied this now?</li>
+    <li><strong>ArgoCD</strong> — its UI shows "OutOfSync" for any object that doesn't match git, and offers a one-click sync.</li>
+    <li><strong>Flux</strong> — same idea, different UX.</li>
+    <li><code>kube-no-trouble (kubent)</code> — finds deprecated APIs that will break on upgrade.</li>
+  </ul>
 </div>
 </div>
 
@@ -1614,6 +2606,245 @@ k3s_become: true</pre>
   </ul>
   <p>You delete more roles than you add. Goodbye <code>spring_backend</code>, <code>kong</code>, <code>triage_service</code>, <code>mcp_servers</code> Ansible roles — they all become Helm values files.</p>
 
+  <div class="h2">k3s file &amp; directory layout reference</div>
+  <p>Knowing where things live is half of operating k3s. Bookmark this:</p>
+  <pre>/usr/local/bin/k3s                              # the binary itself
+/usr/local/bin/kubectl                          # symlink to k3s
+/usr/local/bin/crictl                           # symlink to k3s
+
+/etc/systemd/system/k3s.service                 # systemd unit (server)
+/etc/systemd/system/k3s-agent.service           # systemd unit (agent)
+/etc/rancher/k3s/k3s.yaml                       # kubeconfig
+/etc/rancher/k3s/config.yaml                    # server flags as YAML (alternative to CLI flags)
+
+/var/lib/rancher/k3s/                           # all state
+├── server/
+│   ├── manifests/                              # auto-deployed manifests (drop YAML here)
+│   ├── tls/                                    # the cluster's PKI
+│   ├── token                                   # node-join token
+│   └── db/                                     # SQLite or embedded etcd data
+├── agent/
+│   ├── containerd/                             # containerd state
+│   └── pod-manifests/                          # static pods
+└── storage/                                    # local-path-provisioner volumes
+                                                # (each PVC gets a subdirectory)
+
+/var/log/journal/                               # all logs (journalctl -u k3s)</pre>
+
+  <div class="h2">k3s configuration via config.yaml</div>
+  <p>Instead of stuffing flags into <code>INSTALL_K3S_EXEC</code>, you can use a YAML config file that k3s reads on startup. Cleaner for IaC:</p>
+  <pre># /etc/rancher/k3s/config.yaml
+write-kubeconfig-mode: "0644"
+disable:
+  - traefik
+  - servicelb            # if you want to use MetalLB instead
+disable-network-policy: false
+flannel-backend: "vxlan"
+node-label:
+  - "node-role=worker"
+  - "environment=prod"
+kube-apiserver-arg:
+  - "audit-log-path=/var/log/k3s-audit.log"
+  - "audit-log-maxage=7"</pre>
+  <p>k3s reads this on every restart. Change the file → <code>systemctl restart k3s</code> → new config in effect.</p>
+
+  <div class="h2">Full Ansible setup for k3s — what we'd actually write</div>
+  <p>Here's a complete role-based playbook that bootstraps k3s on a fresh EC2 instance, the way our project would do it:</p>
+
+  <div class="h3"><code>requirements.yml</code></div>
+  <pre>roles:
+  - name: xanmanning.k3s
+    version: v3.4.4</pre>
+
+  <div class="h3"><code>inventory/group_vars/k3s.yml</code></div>
+  <pre>k3s_release_version: v1.30.2+k3s1
+k3s_become: true
+k3s_install_hard_links: true
+
+# Server (control plane) flags
+k3s_server:
+  write-kubeconfig-mode: "0644"
+  disable:
+    - traefik          # we use Kong instead
+  cluster-cidr: "10.42.0.0/16"
+  service-cidr: "10.43.0.0/16"
+  node-label:
+    - "role=control-plane"
+
+# Agent flags (only used on worker nodes if any)
+k3s_agent:
+  node-label:
+    - "role=worker"</pre>
+
+  <div class="h3"><code>inventory/production.yml</code></div>
+  <pre>all:
+  children:
+    k3s_cluster:
+      children:
+        k3s_servers:
+          hosts:
+            k3s-1:
+              ansible_host: 10.0.1.10
+              k3s_control_node: true   # this is the first server
+        k3s_agents:
+          hosts: {}                    # empty for single-node</pre>
+
+  <div class="h3"><code>playbooks/k3s.yml</code></div>
+  <pre>- name: Bootstrap k3s cluster
+  hosts: k3s_cluster
+  become: true
+  pre_tasks:
+    - name: Ensure base packages
+      ansible.builtin.apt:
+        name: [curl, ca-certificates, jq]
+        state: present
+        update_cache: true
+  roles:
+    - role: xanmanning.k3s
+  post_tasks:
+    - name: Fetch kubeconfig to control machine
+      ansible.builtin.fetch:
+        src: /etc/rancher/k3s/k3s.yaml
+        dest: ./artifacts/kubeconfig.yaml
+        flat: true
+      when: k3s_control_node | default(false)
+    - name: Patch kubeconfig server URL
+      delegate_to: localhost
+      become: false
+      ansible.builtin.replace:
+        path: ./artifacts/kubeconfig.yaml
+        regexp: 'https://127.0.0.1:6443'
+        replace: 'https://{{ ansible_host }}:6443'
+      when: k3s_control_node | default(false)</pre>
+  <p>After running <code>ansible-playbook playbooks/k3s.yml</code>, you have a working cluster and a local <code>artifacts/kubeconfig.yaml</code> you can point <code>kubectl --kubeconfig=...</code> at. Total time: a couple of minutes.</p>
+
+  <div class="h2">k3s HA setup — multi-server with embedded etcd</div>
+  <p>For real HA, run 3 servers (odd number for quorum). The first one initializes the etcd cluster; the others join it.</p>
+
+  <div class="h3">Manual setup (so you understand what the role does)</div>
+  <pre># On the first server:
+curl -sfL https://get.k3s.io | \
+  INSTALL_K3S_VERSION="v1.30.2+k3s1" \
+  K3S_TOKEN="my-shared-secret" \
+  sh -s - server \
+    --cluster-init \
+    --tls-san my-loadbalancer.example.com
+
+# Read the join token
+cat /var/lib/rancher/k3s/server/node-token
+
+# On the 2nd and 3rd servers:
+curl -sfL https://get.k3s.io | \
+  INSTALL_K3S_VERSION="v1.30.2+k3s1" \
+  K3S_TOKEN="&lt;node-token-from-server-1&gt;" \
+  sh -s - server \
+    --server https://&lt;server-1-ip&gt;:6443 \
+    --tls-san my-loadbalancer.example.com</pre>
+  <p>Now etcd is replicated across all three. Any server can lose its disk and the cluster keeps running. Put a load balancer in front of port 6443 on all three for client (kubectl) access.</p>
+
+  <div class="h3">With the Ansible role</div>
+  <pre># group_vars/k3s.yml
+k3s_etcd_datastore: true
+k3s_use_unsupported_config: false
+k3s_token: "{{ vault_k3s_token }}"     # store in ansible-vault
+
+k3s_server:
+  cluster-init: true       # only on the first server
+  tls-san:
+    - my-loadbalancer.example.com</pre>
+  <pre># inventory
+all:
+  children:
+    k3s_cluster:
+      children:
+        k3s_servers:
+          hosts:
+            k3s-1:
+              ansible_host: 10.0.1.10
+              k3s_control_node: true
+            k3s-2:
+              ansible_host: 10.0.1.11
+              k3s_control_node: true
+            k3s-3:
+              ansible_host: 10.0.1.12
+              k3s_control_node: true</pre>
+
+  <div class="h2">Backup &amp; recovery</div>
+  <p>k3s with embedded etcd auto-snapshots etcd to <code>/var/lib/rancher/k3s/server/db/snapshots/</code> every 12 hours by default. Override:</p>
+  <pre>k3s_server:
+  etcd-snapshot-schedule-cron: "0 */4 * * *"     # every 4 hours
+  etcd-snapshot-retention: 10                    # keep last 10
+  etcd-s3: true                                  # also push to S3
+  etcd-s3-bucket: cires-k3s-backups
+  etcd-s3-region: eu-west-1</pre>
+  <p>To restore: stop k3s, run <code>k3s server --cluster-reset --cluster-reset-restore-path=&lt;snapshot&gt;</code>, restart. Read the docs carefully — restore is a one-shot operation.</p>
+  <p>For SQLite (single-node) k3s, "backup" means copying <code>/var/lib/rancher/k3s/server/db/state.db</code> when k3s is stopped. Put it in a cron job.</p>
+
+  <div class="h2">Monitoring k3s itself</div>
+  <p>k3s exposes Prometheus-compatible metrics — but unlike kubeadm where each control plane component has its own port, k3s exposes everything from the kubelet's metrics endpoint:</p>
+  <ul>
+    <li><code>https://&lt;node&gt;:10250/metrics</code> — kubelet metrics (cAdvisor included)</li>
+    <li><code>https://&lt;node&gt;:10250/metrics/cadvisor</code> — container metrics</li>
+    <li><code>https://&lt;node&gt;:10250/metrics/probes</code> — probe metrics</li>
+    <li><code>https://&lt;node&gt;:6443/metrics</code> — API server metrics (needs auth)</li>
+    <li><code>https://&lt;node&gt;:10257/metrics</code> — controller-manager (k3s exposes via <code>--bind-address</code> arg)</li>
+  </ul>
+  <p>For our project: the external Prometheus on the monitoring VM will scrape these endpoints via <code>kubernetes_sd_configs</code>, with bearer token auth from a ServiceAccount in the cluster.</p>
+
+  <div class="h2">Common k3s troubleshooting</div>
+
+  <div class="h3">"k3s won't start"</div>
+  <pre>journalctl -u k3s -e --no-pager
+systemctl status k3s
+# Common: port 6443 already in use, /var/lib/rancher/k3s permission denied,
+# datastore corruption (look for "etcd" or "sqlite" errors)</pre>
+
+  <div class="h3">"kubectl says: connection refused"</div>
+  <pre>sudo systemctl status k3s             # is it running?
+sudo cat /etc/rancher/k3s/k3s.yaml    # is the kubeconfig there?
+export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+kubectl get nodes</pre>
+
+  <div class="h3">"Pod stuck in ContainerCreating"</div>
+  <pre>kubectl describe pod &lt;name&gt; | tail -30
+# Common k3s causes:
+# - CNI not ready (check /var/lib/rancher/k3s/agent/etc/cni/net.d/)
+# - Image pull from a private registry without credentials
+# - PVC not bound (local-path can't provision because /var/lib/rancher/k3s/storage is full)</pre>
+
+  <div class="h3">"DNS doesn't work inside pods"</div>
+  <pre>kubectl run -it --rm dnstest --image=busybox --restart=Never -- nslookup kubernetes.default
+# If this fails, check coredns:
+kubectl get pods -n kube-system -l k8s-app=kube-dns
+kubectl logs -n kube-system -l k8s-app=kube-dns</pre>
+
+  <div class="h2">Auto-deploying manifests — the manifests/ directory trick</div>
+  <p>Anything you drop into <code>/var/lib/rancher/k3s/server/manifests/</code> gets <code>kubectl apply</code>'d automatically. Great for bootstrap:</p>
+  <pre># Copy a manifest to all k3s servers
+- name: Auto-deploy Kong CRDs at boot
+  ansible.builtin.copy:
+    src: kong-crds.yaml
+    dest: /var/lib/rancher/k3s/server/manifests/kong-crds.yaml
+    owner: root
+    group: root
+    mode: '0644'
+  notify: restart k3s</pre>
+  <p>k3s also supports <em>HelmChart CRDs</em> in this directory — drop in a HelmChart resource and k3s will install the chart for you, no helm CLI needed:</p>
+  <pre># /var/lib/rancher/k3s/server/manifests/cert-manager.yaml
+apiVersion: helm.cattle.io/v1
+kind: HelmChart
+metadata:
+  name: cert-manager
+  namespace: kube-system
+spec:
+  chart: cert-manager
+  repo: https://charts.jetstack.io
+  targetNamespace: cert-manager
+  createNamespace: true
+  version: v1.14.4
+  valuesContent: |-
+    installCRDs: true</pre>
+
   <div class="callout callout-info">
     <div class="callout-icon">📚</div>
     <div class="callout-body">
@@ -1622,6 +2853,7 @@ k3s_become: true</pre>
         <li><a href="https://docs.k3s.io/" style="color:var(--accent-cyan);">docs.k3s.io</a> — official docs</li>
         <li><a href="https://docs.k3s.io/installation/configuration" style="color:var(--accent-cyan);">Installation flags reference</a></li>
         <li><a href="https://docs.k3s.io/datastore/ha-embedded" style="color:var(--accent-cyan);">HA with embedded etcd</a></li>
+        <li><a href="https://docs.k3s.io/cli/server" style="color:var(--accent-cyan);">k3s server CLI reference (every flag)</a></li>
         <li><a href="https://galaxy.ansible.com/xanmanning/k3s" style="color:var(--accent-cyan);">xanmanning.k3s Ansible role</a></li>
         <li><a href="https://longhorn.io/" style="color:var(--accent-cyan);">Longhorn (when you need real storage)</a></li>
       </ul>
