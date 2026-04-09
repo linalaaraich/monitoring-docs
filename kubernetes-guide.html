@@ -3134,16 +3134,95 @@ kubectl get pods -l app=pinger -o wide
   <p><strong>Checkpoint:</strong> for any new piece of software, you know whether to model it as a Deployment, StatefulSet, DaemonSet, or Job. You've used the downward API (<code>fieldRef</code>) to inject node info into a pod.</p>
 
   <div class="h2">Phase 3 — Networking &amp; configuration depth</div>
-  <p>Goal: you can debug "why can't service A talk to service B" without panicking.</p>
-  <ol>
-    <li>Stand up an Ingress (Traefik on k3d, or Kong/NGINX). Route <code>/api</code> to one Service, <code>/</code> to another.</li>
-    <li>Use <code>kubectl exec</code> to shell into one pod and curl another via its Service DNS name. Try the FQDN form (<code>service.namespace.svc.cluster.local</code>).</li>
-    <li>Read the iptables rules kube-proxy generated: <code>iptables -t nat -L KUBE-SERVICES</code> on a node.</li>
-    <li>Set resource requests and limits on a container. Verify with <code>kubectl describe</code> and <code>kubectl top pod</code>.</li>
-    <li>Add liveness and readiness probes. Make a probe fail on purpose; observe the consequences (restart vs traffic removal).</li>
-    <li>Create a NetworkPolicy that blocks all ingress to a namespace except from one labeled source.</li>
-  </ol>
-  <p><strong>Checkpoint:</strong> when an app can't reach another app, you know to check: DNS, Service selector matching, Endpoints, NetworkPolicy, kube-proxy rules — and you know how to check each.</p>
+  <p>Goal: you can debug "why can't service A talk to service B" without panicking. This is the phase where K8s stops feeling like magic.</p>
+
+  <div class="h3">Exercise 3.1: in-cluster DNS resolution</div>
+  <pre>kubectl run -it --rm dnstest --image=nicolaka/netshoot --restart=Never -- bash
+# Inside the pod:
+nslookup hello                                    # short form (same namespace)
+nslookup hello.default                            # ns-qualified
+nslookup hello.default.svc.cluster.local          # FQDN
+cat /etc/resolv.conf                              # see the search domains
+dig +trace hello.default.svc.cluster.local</pre>
+
+  <div class="h3">Exercise 3.2: Service vs pod IPs</div>
+  <pre># From the netshoot pod:
+curl -v http://hello                              # via Service (load balanced)
+curl -v http://&lt;some-pod-ip&gt;                      # direct to one pod
+# Then on the host:
+kubectl get endpoints hello                       # see the actual pod IPs the Service routes to
+kubectl get svc hello -o yaml                     # see selector + port mapping</pre>
+
+  <div class="h3">Exercise 3.3: read kube-proxy's iptables rules</div>
+  <pre># SSH into a node (or k3d's node container):
+docker exec -it k3d-learn-server-0 sh
+iptables -t nat -L KUBE-SERVICES -n | grep hello
+iptables -t nat -L KUBE-SVC-XXXXX -n              # use the chain name from above
+# You'll see DNAT rules sending traffic to pod IPs with random load balancing</pre>
+
+  <div class="h3">Exercise 3.4: probes that fail on purpose</div>
+  <pre># Patch the deployment to set a deliberately broken liveness probe
+kubectl patch deploy hello --type=strategic -p '
+spec:
+  template:
+    spec:
+      containers:
+      - name: web
+        livenessProbe:
+          httpGet: { path: /this-does-not-exist, port: 80 }
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          failureThreshold: 2'
+
+kubectl get pods -l app=hello -w
+# Watch RESTARTS column climb. The app is being killed by kubelet on probe failure.
+# Patch it back to a working path to stop the loop.</pre>
+
+  <div class="h3">Exercise 3.5: NetworkPolicy (needs Calico/Cilium)</div>
+  <pre>cat &lt;&lt;EOF | kubectl apply -f -
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-all-ingress
+  namespace: default
+spec:
+  podSelector: {}                  # all pods in the namespace
+  policyTypes: [Ingress]
+  # no ingress rules = deny all
+EOF
+
+# Now try to reach hello — it should fail.
+kubectl run -it --rm test --image=busybox --restart=Never -- wget -qO- --timeout=3 http://hello
+
+# Allow only pods labeled access=yes:
+cat &lt;&lt;EOF | kubectl apply -f -
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-from-labeled
+spec:
+  podSelector: { matchLabels: { app: hello } }
+  policyTypes: [Ingress]
+  ingress:
+  - from:
+    - podSelector: { matchLabels: { access: "yes" } }
+EOF
+
+# A pod without the label still fails. Add the label, it succeeds.
+kubectl run -it --rm test --image=busybox --labels=access=yes --restart=Never \
+  -- wget -qO- http://hello</pre>
+
+  <div class="h3">Exercise 3.6: resource requests and OOMKill</div>
+  <pre># Create a pod that allocates too much memory
+kubectl run hog --image=polinux/stress \
+  --requests='memory=100Mi' --limits='memory=100Mi' \
+  -- stress --vm 1 --vm-bytes 200M --vm-hang 1
+
+kubectl get pod hog -w
+# Expected: OOMKilled, then restart, OOMKilled, restart, → CrashLoopBackOff
+kubectl describe pod hog | grep -A3 "Last State"</pre>
+
+  <p><strong>Checkpoint:</strong> when an app can't reach another app, you know to check (in order): DNS resolution → Service exists with correct selector → Endpoints object lists the right pod IPs → pods are Ready → NetworkPolicy doesn't block → iptables rules look sane. You can do all of these from <code>kubectl</code> in under 30 seconds.</p>
 
   <div class="h2">Phase 4 — Helm &amp; real software</div>
   <p>Goal: you can install third-party software the way the rest of the world does.</p>
