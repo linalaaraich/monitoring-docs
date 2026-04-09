@@ -1,0 +1,1787 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kubernetes Learning Guide — Observability Platform</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --card: #1a1d27;
+    --card2: #1e2130;
+    --border: #2a2d3a;
+    --text: #e0e0e0;
+    --muted: #8890a0;
+    --accent-blue: #4ea8de;
+    --accent-green: #6bcf7f;
+    --accent-orange: #f0a050;
+    --accent-purple: #b07ee8;
+    --accent-red: #e06070;
+    --accent-cyan: #40d0d0;
+    --accent-yellow: #e0d060;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Inter','Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+
+  /* Top nav */
+  .topnav { display:flex; align-items:center; gap:12px; padding:14px 32px; background:#13151e; border-bottom:1px solid var(--border); flex-wrap:wrap; }
+  .back-link { color:var(--muted); text-decoration:none; font-size:13px; display:flex; align-items:center; gap:6px; transition:color .2s; margin-right:8px; }
+  .back-link:hover { color:var(--text); }
+  .topnav-title { font-size:15px; font-weight:700; color:var(--text); flex:1; }
+  .navlink { display:inline-flex; align-items:center; gap:6px; padding:6px 14px; border-radius:8px; font-size:12px; font-weight:600; text-decoration:none; border:1px solid; transition:background .2s, transform .15s; }
+  .navlink:hover { transform:translateY(-1px); }
+  .navlink-arch { color:var(--accent-blue); border-color:rgba(78,168,222,.4); background:rgba(78,168,222,.08); }
+  .navlink-arch:hover { background:rgba(78,168,222,.18); }
+  .navlink-sprint { color:var(--accent-purple); border-color:rgba(176,126,232,.4); background:rgba(176,126,232,.08); }
+  .navlink-sprint:hover { background:rgba(176,126,232,.18); }
+  .navlink-k8s { color:var(--accent-cyan); border-color:rgba(64,208,208,.4); background:rgba(64,208,208,.08); }
+  .navlink-k8s:hover { background:rgba(64,208,208,.18); }
+
+  /* Tabs */
+  .tabs { display:flex; border-bottom:2px solid var(--border); padding:0 32px; background:#13151e; gap:4px; overflow-x:auto; }
+  .tab { padding:13px 18px; cursor:pointer; font-size:13px; font-weight:600; color:var(--muted); border-bottom:3px solid transparent; margin-bottom:-2px; transition:all .2s; letter-spacing:.3px; white-space:nowrap; }
+  .tab:hover { color:var(--text); }
+  .tab.active { color:var(--accent-cyan); border-bottom-color:var(--accent-cyan); }
+  .tab-content { display:none; }
+  .tab-content.active { display:block; }
+
+  /* Content */
+  .content { padding:32px; max-width:1200px; margin:0 auto; }
+
+  /* Section headers */
+  .section-title { font-size:22px; font-weight:800; margin-bottom:8px; letter-spacing:-.3px; }
+  .section-sub { font-size:14px; color:var(--muted); margin-bottom:28px; line-height:1.7; }
+  .h2 { font-size:18px; font-weight:700; margin:32px 0 12px; padding-top:8px; border-top:1px solid var(--border); }
+  .h2:first-of-type { border-top:none; padding-top:0; margin-top:0; }
+  .h3 { font-size:15px; font-weight:700; margin:20px 0 8px; color:var(--accent-cyan); }
+  .h4 { font-size:13px; font-weight:700; margin:14px 0 6px; color:var(--accent-blue); text-transform:uppercase; letter-spacing:.5px; }
+
+  /* Body text */
+  p, li { font-size:14px; line-height:1.75; color:var(--text); }
+  p { margin-bottom:12px; }
+  ul, ol { margin:8px 0 14px 24px; }
+  li { margin-bottom:6px; }
+  strong { color:#fff; font-weight:700; }
+  em { color:var(--accent-yellow); font-style:normal; font-weight:600; }
+
+  /* Cards */
+  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:22px; margin-bottom:16px; }
+  .card-title { font-size:15px; font-weight:700; margin-bottom:10px; display:flex; align-items:center; gap:10px; }
+  .card p { font-size:13px; color:var(--muted); line-height:1.7; margin-bottom:8px; }
+  .card p:last-child { margin-bottom:0; }
+
+  /* Grids */
+  .grid-2 { display:grid; grid-template-columns:repeat(auto-fill,minmax(420px,1fr)); gap:16px; margin-bottom:20px; }
+  .grid-3 { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:16px; margin-bottom:20px; }
+
+  /* Tables */
+  .tbl { width:100%; border-collapse:collapse; font-size:13px; }
+  .tbl th { background:var(--card2); padding:10px 14px; text-align:left; font-weight:600; font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; border-bottom:1px solid var(--border); }
+  .tbl td { padding:10px 14px; border-bottom:1px solid var(--border); line-height:1.55; vertical-align:top; color:var(--text); }
+  .tbl tr:last-child td { border-bottom:none; }
+  .tbl tr:hover td { background:rgba(255,255,255,.02); }
+  .tbl-wrap { background:var(--card); border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:20px; }
+  .tbl strong { color:#fff; }
+
+  /* Code */
+  pre { background:#0a0c12; border:1px solid var(--border); border-radius:8px; padding:14px 16px; overflow-x:auto; font-family:'JetBrains Mono','Fira Code',monospace; font-size:12px; line-height:1.7; margin:12px 0; color:#dde; }
+  code { font-family:'JetBrains Mono','Fira Code',monospace; font-size:12.5px; background:rgba(255,255,255,.07); padding:2px 6px; border-radius:4px; color:var(--accent-cyan); }
+  pre code { background:transparent; padding:0; color:inherit; font-size:12px; }
+
+  /* Tags */
+  .tag { font-size:11px; padding:2px 8px; border-radius:4px; font-weight:600; display:inline-block; }
+  .tag-blue { background:rgba(78,168,222,.1); color:var(--accent-blue); }
+  .tag-green { background:rgba(107,207,127,.1); color:var(--accent-green); }
+  .tag-orange { background:rgba(240,160,80,.1); color:var(--accent-orange); }
+  .tag-purple { background:rgba(176,126,232,.1); color:var(--accent-purple); }
+  .tag-cyan { background:rgba(64,208,208,.1); color:var(--accent-cyan); }
+  .tag-red { background:rgba(224,96,112,.1); color:var(--accent-red); }
+  .tag-yellow { background:rgba(224,208,96,.1); color:var(--accent-yellow); }
+  .tag-muted { background:rgba(136,144,160,.1); color:var(--muted); }
+
+  /* Callouts */
+  .callout { border-radius:8px; padding:14px 18px; margin:14px 0; display:flex; gap:12px; }
+  .callout-warn { background:rgba(240,160,80,.08); border:1px solid rgba(240,160,80,.25); }
+  .callout-info { background:rgba(78,168,222,.08); border:1px solid rgba(78,168,222,.25); }
+  .callout-tip { background:rgba(107,207,127,.08); border:1px solid rgba(107,207,127,.25); }
+  .callout-danger { background:rgba(224,96,112,.08); border:1px solid rgba(224,96,112,.25); }
+  .callout-icon { font-size:16px; flex-shrink:0; margin-top:1px; }
+  .callout-body { font-size:13px; line-height:1.7; color:var(--text); }
+  .callout-body strong { color:#fff; }
+
+  /* Mind map */
+  .mindmap { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:30px; margin:20px 0; overflow-x:auto; }
+  .mm-center { display:flex; justify-content:center; margin-bottom:24px; }
+  .mm-core { background:linear-gradient(135deg, rgba(64,208,208,.2), rgba(78,168,222,.2)); border:2px solid var(--accent-cyan); border-radius:50%; width:140px; height:140px; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:18px; color:var(--accent-cyan); text-align:center; box-shadow:0 0 30px rgba(64,208,208,.15); }
+  .mm-branches { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:16px; }
+  .mm-branch { background:var(--card2); border:1px solid var(--border); border-radius:10px; padding:16px; border-left:3px solid; }
+  .mm-branch h4 { font-size:13px; font-weight:700; margin-bottom:8px; text-transform:uppercase; letter-spacing:.5px; }
+  .mm-branch ul { list-style:none; margin:0; padding:0; }
+  .mm-branch li { font-size:12px; color:var(--muted); padding:3px 0; line-height:1.6; }
+  .mm-branch li:before { content:"›  "; color:var(--border); font-weight:700; }
+  .mm-branch.b-blue { border-left-color:var(--accent-blue); } .mm-branch.b-blue h4 { color:var(--accent-blue); }
+  .mm-branch.b-green { border-left-color:var(--accent-green); } .mm-branch.b-green h4 { color:var(--accent-green); }
+  .mm-branch.b-orange { border-left-color:var(--accent-orange); } .mm-branch.b-orange h4 { color:var(--accent-orange); }
+  .mm-branch.b-purple { border-left-color:var(--accent-purple); } .mm-branch.b-purple h4 { color:var(--accent-purple); }
+  .mm-branch.b-cyan { border-left-color:var(--accent-cyan); } .mm-branch.b-cyan h4 { color:var(--accent-cyan); }
+  .mm-branch.b-red { border-left-color:var(--accent-red); } .mm-branch.b-red h4 { color:var(--accent-red); }
+  .mm-branch.b-yellow { border-left-color:var(--accent-yellow); } .mm-branch.b-yellow h4 { color:var(--accent-yellow); }
+
+  /* Architecture diagram */
+  .arch-diagram { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:24px; margin:20px 0; }
+  .arch-layer { background:var(--card2); border:1px solid var(--border); border-radius:10px; padding:16px; margin-bottom:14px; }
+  .arch-layer-title { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); margin-bottom:12px; }
+  .arch-components { display:flex; flex-wrap:wrap; gap:8px; }
+  .arch-comp { padding:8px 14px; border-radius:8px; font-size:12px; font-weight:600; border:1px solid; }
+  .arch-comp-blue { background:rgba(78,168,222,.1); border-color:rgba(78,168,222,.4); color:var(--accent-blue); }
+  .arch-comp-green { background:rgba(107,207,127,.1); border-color:rgba(107,207,127,.4); color:var(--accent-green); }
+  .arch-comp-orange { background:rgba(240,160,80,.1); border-color:rgba(240,160,80,.4); color:var(--accent-orange); }
+  .arch-comp-purple { background:rgba(176,126,232,.1); border-color:rgba(176,126,232,.4); color:var(--accent-purple); }
+  .arch-comp-cyan { background:rgba(64,208,208,.1); border-color:rgba(64,208,208,.4); color:var(--accent-cyan); }
+  .arch-comp-red { background:rgba(224,96,112,.1); border-color:rgba(224,96,112,.4); color:var(--accent-red); }
+
+  /* Concept rows */
+  .concept { display:grid; grid-template-columns:140px 1fr; gap:18px; padding:14px 0; border-bottom:1px solid var(--border); }
+  .concept:last-child { border-bottom:none; }
+  .concept-name { font-weight:700; font-size:14px; color:var(--accent-cyan); }
+  .concept-name .small { display:block; font-size:11px; color:var(--muted); font-weight:500; margin-top:2px; }
+  .concept-body { font-size:13px; line-height:1.7; color:var(--text); }
+  .concept-body code { font-size:12px; }
+
+  /* Steps */
+  .steps { display:flex; flex-direction:column; gap:0; margin:16px 0; }
+  .step { display:flex; gap:18px; position:relative; }
+  .step-line { display:flex; flex-direction:column; align-items:center; }
+  .step-num { width:30px; height:30px; border-radius:50%; background:rgba(64,208,208,.15); border:2px solid rgba(64,208,208,.4); display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; color:var(--accent-cyan); flex-shrink:0; }
+  .step-connector { width:2px; flex:1; background:var(--border); margin-top:4px; min-height:12px; }
+  .step:last-child .step-connector { display:none; }
+  .step-content { padding-bottom:24px; flex:1; }
+  .step-content h3 { font-size:14px; font-weight:700; margin-bottom:6px; padding-top:4px; color:var(--text); }
+  .step-content p { font-size:13px; color:var(--muted); line-height:1.7; }
+  .step-content code { font-size:12px; }
+
+  /* Distro cards */
+  .distro-card { background:var(--card); border:2px solid var(--border); border-radius:12px; padding:22px; margin-bottom:18px; }
+  .distro-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; flex-wrap:wrap; gap:8px; }
+  .distro-name { font-size:18px; font-weight:800; }
+  .distro-tags { display:flex; gap:6px; flex-wrap:wrap; }
+  .distro-pros-cons { display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-top:14px; }
+  .pros-box { background:rgba(107,207,127,.05); border:1px solid rgba(107,207,127,.2); border-radius:8px; padding:12px 14px; }
+  .cons-box { background:rgba(224,96,112,.05); border:1px solid rgba(224,96,112,.2); border-radius:8px; padding:12px 14px; }
+  .pros-box h5, .cons-box h5 { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; margin-bottom:6px; }
+  .pros-box h5 { color:var(--accent-green); }
+  .cons-box h5 { color:var(--accent-red); }
+  .pros-box ul, .cons-box ul { margin:0 0 0 16px; padding:0; }
+  .pros-box li, .cons-box li { font-size:12px; line-height:1.6; margin:2px 0; color:var(--text); }
+  .distro-when { background:rgba(78,168,222,.05); border:1px solid rgba(78,168,222,.2); border-radius:8px; padding:12px 14px; margin-top:12px; font-size:13px; line-height:1.7; }
+  .distro-when strong { color:var(--accent-blue); }
+
+  .distro-recommend { border-color:rgba(64,208,208,.5); box-shadow:0 0 0 1px rgba(64,208,208,.15); }
+
+  /* Reproducibility ladder */
+  .ladder { display:flex; flex-direction:column; gap:8px; margin:16px 0; }
+  .ladder-rung { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:14px 18px; display:grid; grid-template-columns:42px 180px 1fr; gap:14px; align-items:center; }
+  .ladder-num { font-family:monospace; font-size:18px; font-weight:800; color:var(--accent-cyan); text-align:center; }
+  .ladder-layer { font-weight:700; font-size:13px; color:var(--text); }
+  .ladder-how { font-size:12px; color:var(--muted); line-height:1.6; }
+  .ladder-how code { font-size:11px; }
+
+  /* Tool list */
+  .tool { display:grid; grid-template-columns:160px 1fr; gap:18px; padding:14px 0; border-bottom:1px solid var(--border); }
+  .tool:last-child { border-bottom:none; }
+  .tool-name { font-weight:700; font-size:14px; }
+  .tool-name .essential { display:inline-block; font-size:9px; padding:2px 6px; border-radius:3px; background:rgba(224,96,112,.15); color:var(--accent-red); margin-left:6px; vertical-align:middle; font-weight:700; }
+  .tool-name .nice { display:inline-block; font-size:9px; padding:2px 6px; border-radius:3px; background:rgba(78,168,222,.15); color:var(--accent-blue); margin-left:6px; vertical-align:middle; font-weight:700; }
+  .tool-name .small { display:block; font-size:11px; color:var(--muted); font-weight:500; margin-top:2px; }
+  .tool-body { font-size:13px; color:var(--muted); line-height:1.7; }
+
+  @media(max-width:700px) {
+    .content { padding:20px 16px; }
+    .topnav { padding:12px 16px; }
+    .tabs { padding:0 16px; }
+    .grid-2, .grid-3 { grid-template-columns:1fr; }
+    .concept, .tool { grid-template-columns:1fr; gap:6px; }
+    .ladder-rung { grid-template-columns:36px 1fr; }
+    .ladder-rung .ladder-how { grid-column:2; }
+    .ladder-rung .ladder-layer { grid-column:2; }
+    .distro-pros-cons { grid-template-columns:1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topnav">
+  <a href="index.html" class="back-link">← Home</a>
+  <span class="topnav-title">☸️ Kubernetes Learning Guide</span>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;">
+    <a href="build-guide.html" class="navlink navlink-arch">📖 Build Guide</a>
+    <a href="sprint2-guide.html" class="navlink navlink-sprint">🛠️ Sprint 2 Guide</a>
+    <a href="architecture.html" class="navlink navlink-arch">🏗️ Architecture</a>
+  </div>
+</div>
+
+<div class="tabs">
+  <div class="tab active" onclick="showTab('big-picture')">1 · Big Picture</div>
+  <div class="tab" onclick="showTab('concepts')">2 · Core Concepts</div>
+  <div class="tab" onclick="showTab('architecture')">3 · Architecture</div>
+  <div class="tab" onclick="showTab('how-it-works')">4 · How It Works</div>
+  <div class="tab" onclick="showTab('tools')">5 · Tools</div>
+  <div class="tab" onclick="showTab('reproducibility')">6 · Reproducibility</div>
+  <div class="tab" onclick="showTab('distros')">7 · Distributions</div>
+  <div class="tab" onclick="showTab('k3s')">8 · k3s Deep Dive</div>
+  <div class="tab" onclick="showTab('learning-path')">9 · Learning Path</div>
+</div>
+
+<!-- ═══════════════════════════════════════════ 1. BIG PICTURE ═══════════════════════════════════════════ -->
+<div id="tab-big-picture" class="tab-content active">
+<div class="content">
+  <div class="section-title">Kubernetes — The Big Picture</div>
+  <div class="section-sub">
+    Before any details: a one-page mental model of what Kubernetes is, why it exists, and the universe of things it touches. Come back to this tab whenever the details start to feel disconnected from each other.
+  </div>
+
+  <div class="h2">What it is, in one sentence</div>
+  <p>
+    <strong>Kubernetes (K8s) is a system that takes a description of how you want your applications to run and continuously works to make reality match that description</strong>, on top of a cluster of machines you give it.
+  </p>
+  <p>
+    That's it. Everything else is detail. The "description" is YAML files. The "continuously works" is a swarm of small programs called <em>controllers</em>. The "cluster of machines" is anywhere from one laptop VM to thousands of cloud servers.
+  </p>
+
+  <div class="callout callout-info">
+    <div class="callout-icon">💡</div>
+    <div class="callout-body">
+      <strong>The shift in thinking:</strong> with Docker/Compose you write commands like <em>"start this container, restart it if it crashes"</em>. With Kubernetes you write <em>"three copies of this container should always exist"</em> and the system figures out where, how, and what to do when something breaks. This is called <strong>declarative</strong> (vs imperative). It's the single most important idea in K8s.
+    </div>
+  </div>
+
+  <div class="h2">Why it exists — the short history</div>
+  <ol>
+    <li><strong>Bare metal</strong>: one app per server. Wasteful, slow to provision, painful failover.</li>
+    <li><strong>Virtual machines</strong>: many isolated environments per server. Better utilization but each VM is heavy (full OS).</li>
+    <li><strong>Containers (Docker)</strong>: lightweight, fast to start, share the host kernel. Solved packaging but not <em>operations at scale</em>.</li>
+    <li><strong>Container orchestration</strong>: how do you run thousands of containers across hundreds of machines, restart them when they fail, route traffic to healthy ones, do rolling upgrades, manage storage, secrets, networking, all automatically? Google had been doing this internally for ~15 years with a system called Borg. They donated a public version called Kubernetes to the CNCF in 2014. Everyone agreed it solved the problem and it became the standard.</li>
+  </ol>
+
+  <div class="h2">The mind map</div>
+  <p>This is the universe you're stepping into. Don't try to learn everything at once — just notice the shape of it.</p>
+
+  <div class="mindmap">
+    <div class="mm-center"><div class="mm-core">KUBERNETES</div></div>
+    <div class="mm-branches">
+
+      <div class="mm-branch b-blue">
+        <h4>🏛️ Architecture</h4>
+        <ul>
+          <li>Control plane (the brain)</li>
+          <li>Nodes (the muscle)</li>
+          <li>kube-apiserver</li>
+          <li>etcd (the database)</li>
+          <li>Scheduler</li>
+          <li>Controller manager</li>
+          <li>kubelet (per node)</li>
+          <li>kube-proxy (networking)</li>
+          <li>Container runtime (containerd)</li>
+        </ul>
+      </div>
+
+      <div class="mm-branch b-green">
+        <h4>📦 Workload Objects</h4>
+        <ul>
+          <li>Pod (smallest unit)</li>
+          <li>ReplicaSet</li>
+          <li>Deployment</li>
+          <li>StatefulSet</li>
+          <li>DaemonSet</li>
+          <li>Job / CronJob</li>
+          <li>Init containers / sidecars</li>
+        </ul>
+      </div>
+
+      <div class="mm-branch b-orange">
+        <h4>🌐 Networking</h4>
+        <ul>
+          <li>Service (ClusterIP, NodePort, LB)</li>
+          <li>Ingress / IngressController</li>
+          <li>NetworkPolicy</li>
+          <li>CNI plugins (Flannel, Calico, Cilium)</li>
+          <li>CoreDNS (in-cluster DNS)</li>
+          <li>Pod IPs &amp; cluster CIDR</li>
+        </ul>
+      </div>
+
+      <div class="mm-branch b-purple">
+        <h4>💾 Storage</h4>
+        <ul>
+          <li>Volume</li>
+          <li>PersistentVolume (PV)</li>
+          <li>PersistentVolumeClaim (PVC)</li>
+          <li>StorageClass</li>
+          <li>CSI drivers (AWS EBS, etc.)</li>
+          <li>Stateful workloads</li>
+        </ul>
+      </div>
+
+      <div class="mm-branch b-cyan">
+        <h4>🔐 Security &amp; Config</h4>
+        <ul>
+          <li>ConfigMap</li>
+          <li>Secret</li>
+          <li>ServiceAccount</li>
+          <li>RBAC (Role / Binding)</li>
+          <li>NetworkPolicy</li>
+          <li>PodSecurity admission</li>
+          <li>Pod Security Standards</li>
+        </ul>
+      </div>
+
+      <div class="mm-branch b-yellow">
+        <h4>🛠️ Tools You Use</h4>
+        <ul>
+          <li>kubectl (the CLI)</li>
+          <li>Helm (package manager)</li>
+          <li>Kustomize (overlays)</li>
+          <li>k9s (TUI)</li>
+          <li>stern (multi-pod logs)</li>
+          <li>kubectx / kubens</li>
+          <li>ArgoCD / Flux (GitOps)</li>
+        </ul>
+      </div>
+
+      <div class="mm-branch b-red">
+        <h4>⚙️ Extensibility</h4>
+        <ul>
+          <li>CustomResourceDefinition (CRD)</li>
+          <li>Operator pattern</li>
+          <li>Admission webhooks</li>
+          <li>Custom controllers</li>
+          <li>Aggregated API servers</li>
+        </ul>
+      </div>
+
+      <div class="mm-branch b-blue">
+        <h4>📦 Distributions</h4>
+        <ul>
+          <li>kubeadm (vanilla upstream)</li>
+          <li>k3s (lightweight prod)</li>
+          <li>k3d (k3s in Docker)</li>
+          <li>minikube (local dev)</li>
+          <li>kind (CI clusters)</li>
+          <li>microk8s (Canonical)</li>
+          <li>EKS / AKS / GKE (managed)</li>
+          <li>OpenShift / Rancher</li>
+        </ul>
+      </div>
+
+      <div class="mm-branch b-green">
+        <h4>🔁 Operations</h4>
+        <ul>
+          <li>Rolling updates</li>
+          <li>Health probes</li>
+          <li>Autoscaling (HPA / VPA)</li>
+          <li>Resource requests / limits</li>
+          <li>Taints &amp; tolerations</li>
+          <li>Affinity / anti-affinity</li>
+          <li>Drain / cordon</li>
+        </ul>
+      </div>
+
+      <div class="mm-branch b-orange">
+        <h4>📊 Observability</h4>
+        <ul>
+          <li>Metrics (Prometheus)</li>
+          <li>Logs (Loki / Fluent)</li>
+          <li>Traces (OTel)</li>
+          <li>Events (kubectl get events)</li>
+          <li>Audit logs</li>
+          <li>kube-state-metrics</li>
+        </ul>
+      </div>
+
+      <div class="mm-branch b-purple">
+        <h4>🚀 Delivery</h4>
+        <ul>
+          <li>Manifests in git</li>
+          <li>Helm charts</li>
+          <li>Kustomize overlays</li>
+          <li>GitOps (ArgoCD/Flux)</li>
+          <li>CI/CD (GH Actions, GitLab)</li>
+          <li>Image registries</li>
+        </ul>
+      </div>
+
+      <div class="mm-branch b-cyan">
+        <h4>🧠 Mental Models</h4>
+        <ul>
+          <li>Declarative > imperative</li>
+          <li>Reconciliation loops</li>
+          <li>Desired vs actual state</li>
+          <li>Everything is an object</li>
+          <li>Labels &gt; names</li>
+          <li>Loosely coupled controllers</li>
+        </ul>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="h2">The 5 ideas you must internalize first</div>
+  <p>If you walk away with only these five things, you'll understand 80% of K8s discussions.</p>
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title"><span style="color:var(--accent-cyan)">①</span> Declarative state</div>
+      <p>You write a YAML file saying what you <em>want</em>. K8s is responsible for making it true. You don't say "create this pod", you say "this pod should exist". If it gets deleted, K8s recreates it. If you change the YAML, K8s reconciles to the new desired state.</p>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span style="color:var(--accent-cyan)">②</span> Reconciliation loops</div>
+      <p>Inside the cluster, dozens of small programs called <em>controllers</em> are running, each watching one type of object. Each controller is just a loop: <code>while true { compare desired vs actual, take a step toward desired }</code>. That's the whole engine.</p>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span style="color:var(--accent-cyan)">③</span> Everything is an object</div>
+      <p>Pods, services, configmaps, secrets, even nodes and namespaces — they're all rows in a database (etcd) accessed through one API (kube-apiserver). <code>kubectl get X</code> works for any X. Every object has the same metadata shape (name, namespace, labels, annotations).</p>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span style="color:var(--accent-cyan)">④</span> Labels and selectors, not names</div>
+      <p>Things connect to each other by <em>matching labels</em>, not by hard-coded names. A Service finds its Pods by saying "give me everything labeled <code>app=spring-boot</code>". This is why you can replace pods freely without breaking anything.</p>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span style="color:var(--accent-cyan)">⑤</span> Controllers compose</div>
+      <p>A Deployment controller creates ReplicaSets. A ReplicaSet controller creates Pods. A Pod is scheduled by the scheduler. A kubelet runs the container. None of them know about each other directly — they all communicate through the API server. Loose coupling, all the way down.</p>
+    </div>
+  </div>
+
+  <div class="h2">When NOT to use Kubernetes</div>
+  <p>K8s is powerful but it has real cost. Be honest about whether you need it.</p>
+  <div class="grid-2">
+    <div class="card" style="border-color:rgba(224,96,112,.3);">
+      <div class="card-title"><span style="color:var(--accent-red)">🚫</span> Don't use K8s when…</div>
+      <ul style="margin:0 0 0 18px;">
+        <li>You have 1–3 services and one VM works fine.</li>
+        <li>Your team is one person and you're shipping a side project.</li>
+        <li>Your workload is a single long-running binary with no scaling needs.</li>
+        <li>You don't have someone willing to learn it (the operational burden is real).</li>
+        <li>You're optimizing for cost — K8s control plane is overhead.</li>
+      </ul>
+    </div>
+    <div class="card" style="border-color:rgba(107,207,127,.3);">
+      <div class="card-title"><span style="color:var(--accent-green)">✅</span> Do use K8s when…</div>
+      <ul style="margin:0 0 0 18px;">
+        <li>You have many services that need to scale independently.</li>
+        <li>You need self-healing, rolling updates, blue/green or canary deploys.</li>
+        <li>Multiple teams ship to shared infrastructure.</li>
+        <li>You want a portable layer between cloud providers.</li>
+        <li>You need a uniform substrate for observability, secrets, networking, deploys.</li>
+        <li>You're learning it deliberately (the case for this project).</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="callout callout-tip">
+    <div class="callout-icon">🎯</div>
+    <div class="callout-body">
+      <strong>For our project, the reason is the third one:</strong> we want a portable, declarative way to express the same observability target on a laptop, on EC2, and (later) in CIRES private cloud. K8s gives us that. We're not chasing autoscaling — we're chasing reproducibility and skill-building.
+    </div>
+  </div>
+
+  <div class="h2">What you should remember from this tab</div>
+  <ul>
+    <li>K8s = declarative state + control loops + a cluster of machines.</li>
+    <li>The API server is the front door. etcd is the truth. Controllers do the work.</li>
+    <li>Labels &gt; names. Loose coupling everywhere.</li>
+    <li>The mind map above is the entire territory — every other tab in this guide is a zoom-in on one branch.</li>
+  </ul>
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════ 2. CORE CONCEPTS ═══════════════════════════════════════════ -->
+<div id="tab-concepts" class="tab-content">
+<div class="content">
+  <div class="section-title">Core Concepts — The Object Model</div>
+  <div class="section-sub">
+    Everything in Kubernetes is an <em>object</em>: a row in etcd with a kind, a name, labels, and a spec. Here are the kinds you'll meet first, grouped by what they do. Read this once, then come back when a specific one confuses you.
+  </div>
+
+  <div class="h2">Workload objects — "what should run"</div>
+  <p>These describe the things that actually execute code.</p>
+
+  <div class="card">
+    <div class="concept">
+      <div class="concept-name">Pod<span class="small">the atomic unit</span></div>
+      <div class="concept-body">
+        A pod is one or more containers that share a network namespace (same IP, can talk on <code>localhost</code>) and optionally storage volumes. <strong>You almost never create pods directly</strong> — you create a higher-level object (Deployment) that creates pods for you. Why "pod" and not "container"? So you can run helper sidecars (e.g. a log shipper) in the same network namespace as your main container.
+      </div>
+    </div>
+    <div class="concept">
+      <div class="concept-name">ReplicaSet<span class="small">N copies of a pod</span></div>
+      <div class="concept-body">
+        Says "make sure exactly N pods matching this template exist". You also rarely create these directly — Deployment creates them for you. Their job is to maintain count.
+      </div>
+    </div>
+    <div class="concept">
+      <div class="concept-name">Deployment<span class="small">the workhorse</span></div>
+      <div class="concept-body">
+        The thing you actually write for stateless apps. It manages a ReplicaSet, which manages Pods. Adds <strong>rolling updates</strong>, rollback, pause/resume, history. 95% of "running an app on K8s" is writing a Deployment + a Service.
+      </div>
+    </div>
+    <div class="concept">
+      <div class="concept-name">StatefulSet<span class="small">stable identity per pod</span></div>
+      <div class="concept-body">
+        Like a Deployment but pods get stable, ordered names (<code>db-0</code>, <code>db-1</code>, <code>db-2</code>) and stable storage (each gets its own PVC that follows it across restarts). Use for databases, message queues, anything where pod identity matters.
+      </div>
+    </div>
+    <div class="concept">
+      <div class="concept-name">DaemonSet<span class="small">one pod per node</span></div>
+      <div class="concept-body">
+        Runs exactly one copy of a pod on every node (or a labeled subset). Used for node-level agents: log collectors, metrics exporters, CNI plugins, OTel Collector. New node joins → DaemonSet automatically schedules a pod on it.
+      </div>
+    </div>
+    <div class="concept">
+      <div class="concept-name">Job<span class="small">run to completion</span></div>
+      <div class="concept-body">
+        Runs a pod (or several) until they exit successfully. Use for batch tasks, migrations, backups.
+      </div>
+    </div>
+    <div class="concept">
+      <div class="concept-name">CronJob<span class="small">scheduled Job</span></div>
+      <div class="concept-body">
+        A Job that runs on a cron schedule. Like <code>cron</code> but with K8s pod isolation, retries, and history.
+      </div>
+    </div>
+  </div>
+
+  <div class="h2">Networking objects — "how do things talk"</div>
+
+  <div class="card">
+    <div class="concept">
+      <div class="concept-name">Service<span class="small">stable virtual IP</span></div>
+      <div class="concept-body">
+        Pods come and go, IPs change. A Service is a stable virtual IP + DNS name that load-balances across all pods matching a label selector. Four types:
+        <ul style="margin:8px 0 0 18px;">
+          <li><code>ClusterIP</code> (default) — only reachable inside the cluster.</li>
+          <li><code>NodePort</code> — exposed on a port on every node.</li>
+          <li><code>LoadBalancer</code> — provisions an external load balancer (cloud-only, or k3s ServiceLB).</li>
+          <li><code>ExternalName</code> — DNS alias to an external host (use for "point to RDS").</li>
+        </ul>
+      </div>
+    </div>
+    <div class="concept">
+      <div class="concept-name">Ingress<span class="small">HTTP routing</span></div>
+      <div class="concept-body">
+        Layer-7 (HTTP/HTTPS) routing rules: "<code>/api</code> → spring-service, <code>/</code> → frontend-service". Needs an <strong>Ingress Controller</strong> (NGINX, Traefik, Kong, etc.) actually running in the cluster to enforce the rules. Ingress is just the spec; the controller is the worker.
+      </div>
+    </div>
+    <div class="concept">
+      <div class="concept-name">NetworkPolicy<span class="small">firewall rules</span></div>
+      <div class="concept-body">
+        Pod-to-pod firewall rules expressed in YAML: "pods labeled <code>app=db</code> only accept traffic from pods labeled <code>tier=backend</code>". Requires a CNI that enforces them (Calico, Cilium do; Flannel doesn't).
+      </div>
+    </div>
+  </div>
+
+  <div class="h2">Configuration &amp; secrets</div>
+
+  <div class="card">
+    <div class="concept">
+      <div class="concept-name">ConfigMap<span class="small">non-secret config</span></div>
+      <div class="concept-body">
+        Key-value pairs for configuration. Mounted into pods as environment variables, files, or command-line args. Use for app config, scrape targets, dashboard JSON.
+      </div>
+    </div>
+    <div class="concept">
+      <div class="concept-name">Secret<span class="small">sensitive config</span></div>
+      <div class="concept-body">
+        Same shape as ConfigMap but for sensitive values. Stored base64-encoded (<strong>not encrypted by default</strong> — see <code>EncryptionConfiguration</code> for at-rest encryption). Mounted as env vars or files. Tools like <em>Sealed Secrets</em> or <em>External Secrets Operator</em> exist for git-safe secret management.
+      </div>
+    </div>
+  </div>
+
+  <div class="h2">Storage</div>
+
+  <div class="card">
+    <div class="concept">
+      <div class="concept-name">Volume<span class="small">pod-scoped storage</span></div>
+      <div class="concept-body">
+        A directory accessible to a pod. Lives as long as the pod does. Comes in many "types": emptyDir (scratch), hostPath (node disk), and the more useful kinds below.
+      </div>
+    </div>
+    <div class="concept">
+      <div class="concept-name">PersistentVolume (PV)<span class="small">cluster-scoped storage</span></div>
+      <div class="concept-body">
+        A piece of storage in the cluster — a chunk of an EBS volume, an NFS export, etc. Lives independently of any pod. Created by an admin or auto-provisioned.
+      </div>
+    </div>
+    <div class="concept">
+      <div class="concept-name">PersistentVolumeClaim (PVC)<span class="small">a request for storage</span></div>
+      <div class="concept-body">
+        A pod says "I need 10Gi of storage with class <code>fast-ssd</code>". K8s finds or provisions a PV that matches and binds them. The pod mounts the PVC; the PV moves with the pod across reschedules.
+      </div>
+    </div>
+    <div class="concept">
+      <div class="concept-name">StorageClass<span class="small">storage profile</span></div>
+      <div class="concept-body">
+        A "type" of storage (e.g. <code>gp3-ssd</code>, <code>standard-hdd</code>) and the driver that provisions it. Cloud distros come with one default; on-prem you install one (e.g. <em>local-path-provisioner</em> on k3s, Longhorn, Rook/Ceph).
+      </div>
+    </div>
+  </div>
+
+  <div class="h2">Organization &amp; identity</div>
+
+  <div class="card">
+    <div class="concept">
+      <div class="concept-name">Namespace<span class="small">virtual cluster</span></div>
+      <div class="concept-body">
+        A way to slice a cluster into independent environments — prod, staging, per-team, per-app. RBAC, quotas, NetworkPolicies are mostly namespace-scoped. Cluster-wide objects (Nodes, PVs, ClusterRoles) are not.
+      </div>
+    </div>
+    <div class="concept">
+      <div class="concept-name">Label / Annotation<span class="small">metadata</span></div>
+      <div class="concept-body">
+        <strong>Labels</strong> are short key-value pairs used for selection (<code>app=spring-boot</code>, <code>tier=backend</code>). <strong>Annotations</strong> are for metadata that tools read but K8s ignores (e.g. <code>prometheus.io/scrape: "true"</code>). Labels are queryable; annotations are not.
+      </div>
+    </div>
+    <div class="concept">
+      <div class="concept-name">ServiceAccount<span class="small">identity for pods</span></div>
+      <div class="concept-body">
+        Every pod runs as a ServiceAccount. The ServiceAccount has tokens it uses to talk to the API server (e.g. for an operator that needs to read pods). Distinct from a human user.
+      </div>
+    </div>
+    <div class="concept">
+      <div class="concept-name">Role / RoleBinding<span class="small">RBAC</span></div>
+      <div class="concept-body">
+        A <strong>Role</strong> says "this set of verbs (get, list, create, delete) on these resources (pods, configmaps)". A <strong>RoleBinding</strong> grants that Role to a ServiceAccount or user. <strong>ClusterRole</strong> / <strong>ClusterRoleBinding</strong> are the cluster-wide versions.
+      </div>
+    </div>
+  </div>
+
+  <div class="h2">Extensibility</div>
+
+  <div class="card">
+    <div class="concept">
+      <div class="concept-name">CRD<span class="small">custom object kind</span></div>
+      <div class="concept-body">
+        <strong>CustomResourceDefinition</strong> lets you teach the API server a new object kind. Once registered, <code>kubectl get mything</code> works just like <code>kubectl get pods</code>. The object exists in etcd; it does nothing until a controller acts on it.
+      </div>
+    </div>
+    <div class="concept">
+      <div class="concept-name">Operator<span class="small">CRD + controller</span></div>
+      <div class="concept-body">
+        A pattern: define a CRD (e.g. <code>PostgresCluster</code>) and write a controller that watches for those objects and reconciles them into real workloads (StatefulSets, Services, PVCs, Secrets). It's how you encode operational knowledge into the cluster. <em>Examples: Prometheus Operator, cert-manager, OpenTelemetry Operator</em>.
+      </div>
+    </div>
+  </div>
+
+  <div class="callout callout-tip">
+    <div class="callout-icon">🧭</div>
+    <div class="callout-body">
+      <strong>Anchor concepts for our project:</strong> Deployment + Service + Ingress for the apps; DaemonSet for the in-cluster OTel Collector; ConfigMap for prom scrape config and Grafana dashboards; Secret for RDS credentials; PVC for any stateful storage; CRD/Operator if we adopt the OpenTelemetry Operator. That's basically all you need to build the migration.
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════ 3. ARCHITECTURE ═══════════════════════════════════════════ -->
+<div id="tab-architecture" class="tab-content">
+<div class="content">
+  <div class="section-title">Architecture — What's Inside a Cluster</div>
+  <div class="section-sub">
+    A Kubernetes cluster has two kinds of machines: the <strong>control plane</strong> (the brain) and <strong>worker nodes</strong> (where your apps actually run). On a small cluster they can be the same machine. Here's everything that runs and what it does.
+  </div>
+
+  <div class="arch-diagram">
+    <div class="arch-layer" style="border-left:3px solid var(--accent-blue);">
+      <div class="arch-layer-title">🧠 Control Plane (the brain)</div>
+      <div class="arch-components">
+        <span class="arch-comp arch-comp-blue">kube-apiserver</span>
+        <span class="arch-comp arch-comp-blue">etcd</span>
+        <span class="arch-comp arch-comp-blue">kube-scheduler</span>
+        <span class="arch-comp arch-comp-blue">kube-controller-manager</span>
+        <span class="arch-comp arch-comp-blue">cloud-controller-manager</span>
+      </div>
+    </div>
+    <div class="arch-layer" style="border-left:3px solid var(--accent-green);">
+      <div class="arch-layer-title">💪 Worker Node (one per machine)</div>
+      <div class="arch-components">
+        <span class="arch-comp arch-comp-green">kubelet</span>
+        <span class="arch-comp arch-comp-green">kube-proxy</span>
+        <span class="arch-comp arch-comp-green">container runtime (containerd)</span>
+        <span class="arch-comp arch-comp-green">CNI plugin</span>
+      </div>
+    </div>
+    <div class="arch-layer" style="border-left:3px solid var(--accent-purple);">
+      <div class="arch-layer-title">🧩 Standard Add-ons (deployed as pods)</div>
+      <div class="arch-components">
+        <span class="arch-comp arch-comp-purple">CoreDNS</span>
+        <span class="arch-comp arch-comp-purple">metrics-server</span>
+        <span class="arch-comp arch-comp-purple">Ingress Controller</span>
+        <span class="arch-comp arch-comp-purple">Storage provisioner</span>
+        <span class="arch-comp arch-comp-purple">Dashboard (optional)</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="h2">Control plane components</div>
+
+  <div class="card">
+    <div class="card-title"><span class="tag tag-blue">CORE</span> kube-apiserver</div>
+    <p><strong>The only door into the cluster.</strong> Every <code>kubectl</code> command, every controller, every kubelet, talks to it via REST. It validates requests, enforces RBAC, runs admission webhooks, and reads/writes etcd. If the API server is down, nothing in the cluster can be changed (existing pods keep running).</p>
+    <p><strong>Stateless</strong> — you can run multiple replicas behind a load balancer for HA. State lives in etcd.</p>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><span class="tag tag-blue">CORE</span> etcd</div>
+    <p><strong>The cluster's database.</strong> A distributed key-value store (Raft consensus). Every K8s object you've ever created is a key in etcd under <code>/registry/...</code>. Lose etcd, lose the cluster's memory.</p>
+    <p>Production clusters run 3 or 5 etcd members (odd numbers for quorum). For HA, etcd is the hard part — backup is non-negotiable. <em>k3s replaces etcd with SQLite by default for single-node, or embedded etcd / external SQL for HA.</em></p>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><span class="tag tag-blue">CORE</span> kube-scheduler</div>
+    <p><strong>Decides where pods run.</strong> Watches for pods with no node assignment, scores every node against constraints (resources, labels, affinity, taints, topology), picks the best one, writes the choice back to the API server. Doesn't actually <em>run</em> the pod — that's the kubelet's job.</p>
+    <p>Stateless. The decision logic is pluggable; you can write a custom scheduler if you need to.</p>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><span class="tag tag-blue">CORE</span> kube-controller-manager</div>
+    <p><strong>The reconciliation engine.</strong> A single binary running ~30 controllers as goroutines: Deployment controller, ReplicaSet controller, Node controller, Service controller, Endpoint controller, Job controller, ServiceAccount controller, etc. Each watches one type of object and drives actual state toward desired state.</p>
+    <p>This is where the "K8s magic" actually happens. When you create a Deployment, the Deployment controller notices and creates a ReplicaSet. The ReplicaSet controller notices and creates Pods. The scheduler notices unscheduled Pods and assigns them to nodes. The kubelet notices a pod assigned to its node and starts the container. <strong>Nobody told anybody to do anything</strong> — they all just react to the API server.</p>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><span class="tag tag-blue">OPTIONAL</span> cloud-controller-manager</div>
+    <p>The bridge between K8s and a cloud provider's APIs. Translates "Service type LoadBalancer" into "create an AWS ELB", "Node deleted" into "release this EC2 instance", etc. Only present on cloud-managed clusters or self-managed with cloud integration. <strong>Not relevant for k3s on a single VM.</strong></p>
+  </div>
+
+  <div class="h2">Worker node components</div>
+
+  <div class="card">
+    <div class="card-title"><span class="tag tag-green">CORE</span> kubelet</div>
+    <p><strong>The agent on every node.</strong> Watches the API server for pods assigned to its node, then talks to the container runtime to actually start them. Reports node health and pod status back. Runs liveness/readiness probes. Mounts volumes. <strong>If kubelet dies on a node, that node goes "NotReady" and the scheduler stops sending pods there.</strong></p>
+    <p>Configured via <code>/var/lib/kubelet/config.yaml</code> and a kubeconfig that points to the API server.</p>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><span class="tag tag-green">CORE</span> kube-proxy</div>
+    <p><strong>Implements Services on each node.</strong> Watches Services and their Endpoints, then writes iptables (or IPVS, or eBPF) rules so traffic to a Service IP gets load-balanced to actual pod IPs. Runs as a DaemonSet on every node. <em>Some modern CNIs (Cilium) replace kube-proxy entirely with eBPF.</em></p>
+    <p>You'll see kube-proxy logs blame "the network is broken" when really an iptables rule is missing — knowing it exists matters.</p>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><span class="tag tag-green">CORE</span> Container runtime</div>
+    <p><strong>The thing that actually starts containers.</strong> kubelet talks to it via the CRI (Container Runtime Interface). Today this is almost always <strong>containerd</strong> (lightweight, used by k3s, EKS, etc.). Older clusters used Docker via dockershim — that was removed in K8s 1.24.</p>
+    <p>You can shell into a node and use <code>crictl ps</code> to see what's running, just like <code>docker ps</code> but for containerd.</p>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><span class="tag tag-green">CORE</span> CNI plugin</div>
+    <p><strong>Pod networking.</strong> The Container Network Interface is a spec; the plugin (Flannel, Calico, Cilium, Weave, etc.) is the implementation. It gives every pod its own IP, sets up routing between nodes, and (depending on plugin) enforces NetworkPolicies.</p>
+    <p>The K8s networking model has three rules: every pod gets a unique IP, pods can talk to each other without NAT, and nodes can talk to pods without NAT. The CNI's job is to make those rules true on whatever underlying network you have.</p>
+  </div>
+
+  <div class="h2">Standard add-ons (deployed as regular workloads)</div>
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title"><span class="tag tag-purple">ADD-ON</span> CoreDNS</div>
+      <p>In-cluster DNS. Resolves service names: <code>my-service.my-namespace.svc.cluster.local</code> → ClusterIP. Without it, pods can't find each other by name. Runs as a Deployment with 2 replicas by default. Bundled in essentially every distro.</p>
+    </div>
+    <div class="card">
+      <div class="card-title"><span class="tag tag-purple">ADD-ON</span> metrics-server</div>
+      <p>Lightweight CPU/memory aggregator. Powers <code>kubectl top pods</code> and <code>HorizontalPodAutoscaler</code>. Not Prometheus — much simpler, in-memory only. You install it separately on most distros (k3s bundles it).</p>
+    </div>
+    <div class="card">
+      <div class="card-title"><span class="tag tag-purple">ADD-ON</span> Ingress Controller</div>
+      <p>An actual program (NGINX, Traefik, Kong, HAProxy, etc.) that reads Ingress objects and translates them into reverse-proxy config. Needed if you want HTTP routing into the cluster. Each distro picks a default; you can replace it.</p>
+    </div>
+    <div class="card">
+      <div class="card-title"><span class="tag tag-purple">ADD-ON</span> Storage provisioner</div>
+      <p>Watches for PVCs and creates PVs. The cloud distros use cloud-CSI drivers (EBS, GCE PD, Azure Disk). On bare metal, common picks are <em>local-path-provisioner</em> (k3s default), <em>Longhorn</em>, <em>OpenEBS</em>, <em>Rook/Ceph</em>.</p>
+    </div>
+  </div>
+
+  <div class="h2">How it all fits together</div>
+  <p>Imagine you run <code>kubectl apply -f deployment.yaml</code>. Here's what happens, end to end:</p>
+  <div class="steps">
+    <div class="step"><div class="step-line"><div class="step-num">1</div><div class="step-connector"></div></div><div class="step-content"><h3>kubectl → API server</h3><p>Your kubectl client authenticates (cert in <code>~/.kube/config</code>) and POSTs the Deployment YAML to the API server.</p></div></div>
+    <div class="step"><div class="step-line"><div class="step-num">2</div><div class="step-connector"></div></div><div class="step-content"><h3>API server: auth → admission → validation → persist</h3><p>RBAC check, admission webhooks run (e.g. inject sidecars), the object is validated against its schema, then written to etcd. The API server now has a Deployment object.</p></div></div>
+    <div class="step"><div class="step-line"><div class="step-num">3</div><div class="step-connector"></div></div><div class="step-content"><h3>Deployment controller wakes up</h3><p>It was watching for Deployments. It sees the new one, creates a ReplicaSet, POSTs it to the API server.</p></div></div>
+    <div class="step"><div class="step-line"><div class="step-num">4</div><div class="step-connector"></div></div><div class="step-content"><h3>ReplicaSet controller wakes up</h3><p>It sees a new ReplicaSet wanting N pods. It creates N Pod objects via the API server. Each pod is created with no node assigned.</p></div></div>
+    <div class="step"><div class="step-line"><div class="step-num">5</div><div class="step-connector"></div></div><div class="step-content"><h3>Scheduler wakes up</h3><p>It sees pods with empty <code>spec.nodeName</code>. It scores nodes, picks one per pod, and writes the assignment back to the API server.</p></div></div>
+    <div class="step"><div class="step-line"><div class="step-num">6</div><div class="step-connector"></div></div><div class="step-content"><h3>kubelet on the chosen node wakes up</h3><p>It was watching for pods assigned to its node. It pulls the container image (via containerd), sets up volumes and networking (via the CNI), and starts the container.</p></div></div>
+    <div class="step"><div class="step-line"><div class="step-num">7</div><div class="step-connector"></div></div><div class="step-content"><h3>Status flows back</h3><p>kubelet reports the pod is Running. The API server updates the Pod object's status. <code>kubectl get pods</code> reflects it.</p></div></div>
+  </div>
+  <p>Notice: <strong>nothing was given a direct command</strong>. Every step was a controller noticing a state change in the API server and reacting. This is the reconciliation loop in action.</p>
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════ 4. HOW IT WORKS ═══════════════════════════════════════════ -->
+<div id="tab-how-it-works" class="tab-content">
+<div class="content">
+  <div class="section-title">How K8s Actually Works</div>
+  <div class="section-sub">
+    The previous tab listed the components. This one shows the patterns those components use to do their jobs: reconciliation, networking, storage, security, health checks. These are the patterns that repeat everywhere.
+  </div>
+
+  <div class="h2">The reconciliation loop pattern</div>
+  <p>Every controller in the cluster follows the same shape:</p>
+  <pre>while true {
+  desired = read_from_api_server()       // what should exist
+  actual  = observe_real_world()         // what does exist
+  diff    = compute_difference(desired, actual)
+  if diff != empty {
+    take_one_step_toward(desired)        // create, update, delete
+  }
+  sleep_or_wait_for_event()
+}</pre>
+  <p>Three properties fall out of this:</p>
+  <ul>
+    <li><strong>Idempotent.</strong> Running the loop ten times has the same effect as running it once. You can never "double-create" something.</li>
+    <li><strong>Self-healing.</strong> If you delete a Pod managed by a Deployment, the ReplicaSet controller sees actual &lt; desired and creates another. You can't keep things broken without changing the desired state.</li>
+    <li><strong>Eventually consistent.</strong> Changes propagate through the system asynchronously. <code>kubectl apply</code> returns instantly; the actual change can take seconds to manifest.</li>
+  </ul>
+
+  <div class="h2">The networking model</div>
+  <p>K8s has three rules that any conformant network must satisfy:</p>
+  <ol>
+    <li>Every pod gets its own IP.</li>
+    <li>Pods can talk to each other directly without NAT.</li>
+    <li>Nodes can talk to pods directly without NAT.</li>
+  </ol>
+  <p>The CNI plugin makes these true. Different CNIs do it differently:</p>
+  <ul>
+    <li><strong>Flannel</strong> (k3s default): VXLAN overlay. Each node gets a pod-IP subnet, packets between nodes are wrapped in UDP. Simple, fast, no NetworkPolicy.</li>
+    <li><strong>Calico</strong>: BGP-based, no overlay if your network supports it. Enforces NetworkPolicies. Common production choice.</li>
+    <li><strong>Cilium</strong>: eBPF-based. Replaces kube-proxy. Very fast, very featureful, slightly more complex to operate.</li>
+  </ul>
+
+  <div class="h3">How a Service actually works</div>
+  <p>You create a Service of type <code>ClusterIP</code>. The API server allocates an unused IP from the service CIDR. The Endpoints controller watches the Service's selector and writes the matching pod IPs into an Endpoints object. kube-proxy on every node watches Endpoints and writes iptables rules:</p>
+  <pre># Roughly, this is what kube-proxy installs:
+-A KUBE-SERVICES -d 10.96.0.42/32 -p tcp --dport 80 -j KUBE-SVC-XYZ
+-A KUBE-SVC-XYZ -m statistic --mode random --probability 0.333 -j KUBE-SEP-A   # pod 1
+-A KUBE-SVC-XYZ -m statistic --mode random --probability 0.500 -j KUBE-SEP-B   # pod 2
+-A KUBE-SVC-XYZ -j KUBE-SEP-C                                                  # pod 3
+-A KUBE-SEP-A   -p tcp -j DNAT --to-destination 10.244.1.5:80                  # actual pod IP
+-A KUBE-SEP-B   -p tcp -j DNAT --to-destination 10.244.2.7:80
+-A KUBE-SEP-C   -p tcp -j DNAT --to-destination 10.244.3.9:80</pre>
+  <p>That's the entire "magic" of a Service: random load balancing via iptables NAT. No proxy process in the data path. When pods change, kube-proxy rewrites the rules.</p>
+
+  <div class="h3">DNS</div>
+  <p>CoreDNS gives every Service a DNS name: <code>&lt;service-name&gt;.&lt;namespace&gt;.svc.cluster.local</code>. Pods are configured (via <code>/etc/resolv.conf</code> injected by kubelet) to use CoreDNS. So inside a pod, <code>curl http://prometheus.monitoring</code> resolves the Prometheus Service in the <code>monitoring</code> namespace and gets load-balanced to a real pod.</p>
+
+  <div class="h2">The storage flow</div>
+  <p>A pod that needs persistent storage:</p>
+  <div class="steps">
+    <div class="step"><div class="step-line"><div class="step-num">1</div><div class="step-connector"></div></div><div class="step-content"><h3>Pod references a PVC</h3><p>In its spec: <code>volumes: [{ name: data, persistentVolumeClaim: { claimName: my-pvc }}]</code>.</p></div></div>
+    <div class="step"><div class="step-line"><div class="step-num">2</div><div class="step-connector"></div></div><div class="step-content"><h3>PVC requests storage from a StorageClass</h3><p>The PVC says "I need 10Gi from class <code>fast-ssd</code>".</p></div></div>
+    <div class="step"><div class="step-line"><div class="step-num">3</div><div class="step-connector"></div></div><div class="step-content"><h3>The provisioner creates a PV</h3><p>The CSI driver for that StorageClass talks to the underlying storage system (AWS EBS API, NFS server, etc.) and creates a real volume. Wraps it in a PV object.</p></div></div>
+    <div class="step"><div class="step-line"><div class="step-num">4</div><div class="step-connector"></div></div><div class="step-content"><h3>K8s binds PVC to PV</h3><p>Now they're paired one-to-one.</p></div></div>
+    <div class="step"><div class="step-line"><div class="step-num">5</div><div class="step-connector"></div></div><div class="step-content"><h3>kubelet attaches and mounts</h3><p>On the node where the pod is scheduled, kubelet attaches the volume and mounts it into the container's filesystem at the path the pod specified.</p></div></div>
+  </div>
+  <p>If the pod is rescheduled to another node, the volume detaches from the old node and re-attaches to the new one. The pod keeps its data.</p>
+
+  <div class="h2">The security model</div>
+
+  <div class="h3">Authentication (who are you)</div>
+  <p>Three modes:</p>
+  <ul>
+    <li><strong>Client certificates</strong> — what kubectl uses by default. Your <code>~/.kube/config</code> has a cert signed by the cluster CA.</li>
+    <li><strong>Bearer tokens</strong> — what pods use. Each ServiceAccount has a token mounted at <code>/var/run/secrets/kubernetes.io/serviceaccount/token</code>.</li>
+    <li><strong>OIDC</strong> — for human users via SSO providers (Google, Okta, Keycloak).</li>
+  </ul>
+
+  <div class="h3">Authorization (what can you do)</div>
+  <p>RBAC. A Role lists allowed verbs on resources. A RoleBinding grants the Role to a user or ServiceAccount. Example:</p>
+  <pre>apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: monitoring
+  name: prometheus-reader
+rules:
+- apiGroups: [""]
+  resources: ["pods", "services", "endpoints"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: prometheus-can-read
+  namespace: monitoring
+subjects:
+- kind: ServiceAccount
+  name: prometheus
+roleRef:
+  kind: Role
+  name: prometheus-reader
+  apiGroup: rbac.authorization.k8s.io</pre>
+
+  <div class="h3">Admission control</div>
+  <p>After auth/RBAC, the request passes through admission webhooks. These can mutate the object (e.g. inject a sidecar) or reject it (e.g. block privileged containers). This is where most security policy lives in modern clusters.</p>
+
+  <div class="h2">Health probes</div>
+  <p>kubelet runs three kinds of probes against every pod:</p>
+  <ul>
+    <li><strong>Liveness probe</strong> — "is this container still healthy?". Failure → restart the container.</li>
+    <li><strong>Readiness probe</strong> — "should this container receive traffic right now?". Failure → remove from Service endpoints (no restart).</li>
+    <li><strong>Startup probe</strong> — "is the container still starting up?". While failing, the other probes are paused. Use for slow-starting apps.</li>
+  </ul>
+  <p>Probe types: HTTP GET, TCP socket, exec a command in the container. <strong>Misconfigured probes are the #1 source of "why is my pod CrashLoopBackOff" pain.</strong> Always set them, always test them.</p>
+
+  <div class="h2">Resource requests and limits</div>
+  <p>Every container can declare:</p>
+  <ul>
+    <li><strong>Requests</strong> — what the pod needs to be scheduled. The scheduler reserves this much CPU/memory on the node.</li>
+    <li><strong>Limits</strong> — the cap. Exceed CPU limit → throttled. Exceed memory limit → OOMKilled.</li>
+  </ul>
+  <p>If you don't set requests, the scheduler can't make smart decisions. If you don't set limits, a runaway container can starve the node. <strong>Set both. Always.</strong></p>
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════ 5. TOOLS ═══════════════════════════════════════════ -->
+<div id="tab-tools" class="tab-content">
+<div class="content">
+  <div class="section-title">Tools You'll Actually Use</div>
+  <div class="section-sub">
+    Kubernetes is the engine; these are the cockpit. Some are non-negotiable; some are quality-of-life. <span class="essential" style="display:inline-block;font-size:9px;padding:2px 6px;border-radius:3px;background:rgba(224,96,112,.15);color:var(--accent-red);font-weight:700;">ESSENTIAL</span> tools you must learn now. <span class="nice" style="display:inline-block;font-size:9px;padding:2px 6px;border-radius:3px;background:rgba(78,168,222,.15);color:var(--accent-blue);font-weight:700;">NICE</span> tools you'll appreciate later.
+  </div>
+
+  <div class="h2">CLI tools</div>
+  <div class="card">
+    <div class="tool">
+      <div class="tool-name">kubectl<span class="essential">ESSENTIAL</span><span class="small">the K8s CLI</span></div>
+      <div class="tool-body">
+        The Swiss Army knife. Talks to the API server, can do anything. Configured via <code>~/.kube/config</code>. Master: <code>get</code>, <code>describe</code>, <code>logs</code>, <code>apply</code>, <code>delete</code>, <code>exec</code>, <code>port-forward</code>, <code>top</code>, <code>explain</code>, <code>edit</code>, <code>rollout</code>. Set up shell completion and the alias <code>k=kubectl</code> on day one.
+      </div>
+    </div>
+    <div class="tool">
+      <div class="tool-name">Helm<span class="essential">ESSENTIAL</span><span class="small">package manager</span></div>
+      <div class="tool-body">
+        The "apt-get for K8s". A Helm <strong>chart</strong> is a templated bundle of K8s manifests with a <code>values.yaml</code> for parameterization. Install with <code>helm install &lt;name&gt; &lt;chart&gt; -f values.yaml</code>. You'll use it for kube-prometheus-stack, Loki, Jaeger, OpenTelemetry Operator, Kong, etc. <em>Pin chart versions in your install command for reproducibility.</em>
+      </div>
+    </div>
+    <div class="tool">
+      <div class="tool-name">Kustomize<span class="essential">ESSENTIAL</span><span class="small">overlay manager</span></div>
+      <div class="tool-body">
+        Built into <code>kubectl</code> as <code>kubectl apply -k</code>. A <em>different</em> approach to Helm: instead of templating, you write base YAML and overlay environment-specific patches. Cleaner for first-party manifests; less convenient for third-party software (Helm wins there). Most projects use both: Helm for vendored stuff, Kustomize for in-house.
+      </div>
+    </div>
+    <div class="tool">
+      <div class="tool-name">k9s<span class="nice">NICE</span><span class="small">terminal UI</span></div>
+      <div class="tool-body">
+        A full-screen terminal interface for K8s. Browse namespaces, pods, logs, exec into containers, port-forward, describe — all with vim-style keys. <strong>Install this on day two of using K8s</strong> — you'll save thousands of <code>kubectl get pod</code> commands.
+      </div>
+    </div>
+    <div class="tool">
+      <div class="tool-name">stern<span class="nice">NICE</span><span class="small">multi-pod log tail</span></div>
+      <div class="tool-body">
+        <code>kubectl logs</code> only works for one pod. <code>stern app=spring-boot</code> tails logs from <em>all</em> pods matching the selector, color-coded. Essential when debugging a Deployment with multiple replicas.
+      </div>
+    </div>
+    <div class="tool">
+      <div class="tool-name">kubectx / kubens<span class="nice">NICE</span><span class="small">context switching</span></div>
+      <div class="tool-body">
+        Switch between clusters and namespaces interactively. <code>kubectx prod</code>, <code>kubens monitoring</code>. If you ever work with more than one cluster you'll need it.
+      </div>
+    </div>
+    <div class="tool">
+      <div class="tool-name">krew<span class="nice">NICE</span><span class="small">kubectl plugin manager</span></div>
+      <div class="tool-body">
+        Plugins extend kubectl. <code>kubectl krew install ctx ns tree neat who-can</code> — each adds a useful command. Like apt-get for kubectl extensions.
+      </div>
+    </div>
+  </div>
+
+  <div class="h2">GUI tools</div>
+  <div class="card">
+    <div class="tool">
+      <div class="tool-name">Lens<span class="nice">NICE</span><span class="small">desktop K8s IDE</span></div>
+      <div class="tool-body">
+        A desktop app showing every cluster you've configured. Visual log streams, metric graphs, kubectl-as-buttons. Free tier is fine. Some teams love it, some prefer k9s — try both, pick one.
+      </div>
+    </div>
+    <div class="tool">
+      <div class="tool-name">K8s Dashboard<span class="nice">NICE</span><span class="small">in-cluster web UI</span></div>
+      <div class="tool-body">
+        Official web UI you deploy into the cluster. Less popular than Lens these days because it requires careful RBAC setup and doesn't add much over a good CLI workflow.
+      </div>
+    </div>
+  </div>
+
+  <div class="h2">Delivery / GitOps</div>
+  <div class="card">
+    <div class="tool">
+      <div class="tool-name">ArgoCD<span class="nice">NICE</span><span class="small">GitOps controller</span></div>
+      <div class="tool-body">
+        Watches a git repo of K8s manifests/Helm charts and continuously reconciles the cluster to match. The "GitOps" pattern: git is the source of truth, ArgoCD is the only thing that touches the cluster. Comes with a slick web UI showing drift and history. Industry standard for production K8s.
+      </div>
+    </div>
+    <div class="tool">
+      <div class="tool-name">Flux<span class="nice">NICE</span><span class="small">alternative GitOps</span></div>
+      <div class="tool-body">
+        ArgoCD's competitor. CLI-driven, more modular, no web UI by default. Pick one or the other; they do the same job. Flux is more "Unix-y", ArgoCD is more "out of the box".
+      </div>
+    </div>
+    <div class="tool">
+      <div class="tool-name">Skaffold / Tilt<span class="nice">NICE</span><span class="small">dev inner loop</span></div>
+      <div class="tool-body">
+        Watch your source code, automatically rebuild containers and re-deploy to the cluster. The "save and refresh" experience for K8s development. Tilt has a nicer UI, Skaffold integrates better with CI.
+      </div>
+    </div>
+  </div>
+
+  <div class="h2">Building &amp; validation</div>
+  <div class="card">
+    <div class="tool">
+      <div class="tool-name">kubeval / kubeconform<span class="nice">NICE</span><span class="small">manifest linting</span></div>
+      <div class="tool-body">
+        Validates manifest YAML against the K8s schema before you apply. kubeconform is the modern replacement, faster and offline-capable. Add to CI.
+      </div>
+    </div>
+    <div class="tool">
+      <div class="tool-name">kube-linter / Polaris<span class="nice">NICE</span><span class="small">best-practice checker</span></div>
+      <div class="tool-body">
+        Scans manifests for anti-patterns: missing resource limits, missing probes, root containers, latest tags, etc. Run in CI to catch issues before they reach the cluster.
+      </div>
+    </div>
+    <div class="tool">
+      <div class="tool-name">Trivy<span class="nice">NICE</span><span class="small">image scanner</span></div>
+      <div class="tool-body">
+        Scans container images for vulnerable packages and misconfigurations. Replaces the older Clair/Anchore tools.
+      </div>
+    </div>
+  </div>
+
+  <div class="h2">For our project specifically</div>
+  <p>If you're starting from where we are right now, install in this order:</p>
+  <ol>
+    <li><code>kubectl</code> — set up shell completion and the <code>k</code> alias.</li>
+    <li><code>helm</code> — for kube-prometheus-stack, Loki, Jaeger, OpenTelemetry Operator, Kong.</li>
+    <li><code>k9s</code> — your daily driver for poking at the cluster.</li>
+    <li><code>stern</code> — multi-pod log tailing for debugging the AI RCA pipeline pods.</li>
+    <li><code>kubectx</code> + <code>kubens</code> — once you have more than one cluster context.</li>
+    <li><em>Later</em>: ArgoCD when you want git-driven deployment instead of running Helm by hand.</li>
+  </ol>
+
+  <div class="callout callout-info">
+    <div class="callout-icon">⌨️</div>
+    <div class="callout-body">
+      <strong>The kubectl commands you'll run a thousand times:</strong>
+      <pre style="margin-top:8px;">k get pods -A                      # all pods, all namespaces
+k get pods -n monitoring -w        # watch pods in one namespace
+k describe pod &lt;name&gt;              # what's wrong with this pod
+k logs &lt;pod&gt; -f                    # follow logs
+k logs &lt;pod&gt; -c &lt;container&gt;        # specific container in a multi-container pod
+k exec -it &lt;pod&gt; -- sh             # shell into a container
+k port-forward svc/grafana 3000    # access a service from your laptop
+k apply -f manifest.yaml           # create/update objects
+k delete -f manifest.yaml          # delete them
+k rollout status deploy/foo        # watch a rolling update
+k rollout undo deploy/foo          # roll back
+k get events --sort-by=.lastTimestamp   # what just happened
+k explain pod.spec.containers.resources # API docs for any field</pre>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════ 6. REPRODUCIBILITY ═══════════════════════════════════════════ -->
+<div id="tab-reproducibility" class="tab-content">
+<div class="content">
+  <div class="section-title">Reproducibility — What It Means &amp; When You Want It</div>
+  <div class="section-sub">
+    "Reproducible" means: starting from a clean machine and the same inputs, you can reach the same end state. Every time. By anyone. This is harder than it sounds, and K8s gives you both the tools to achieve it and plenty of ways to lose it.
+  </div>
+
+  <div class="h2">What "reproducible" actually means</div>
+  <p>The strict definition: <strong>given the same source code at git commit X, an empty cloud account, and the same Terraform/Ansible/Helm files, anyone running the same commands gets the same cluster with the same workloads behaving identically.</strong></p>
+  <p>The loose definition (most teams settle here): <strong>the cluster is reproducible enough that we can recover from a disaster, redeploy from scratch, and run the same code in dev and prod without surprises.</strong></p>
+
+  <div class="h2">Why you want it — and when you don't</div>
+  <div class="grid-2">
+    <div class="card" style="border-color:rgba(107,207,127,.3);">
+      <div class="card-title"><span style="color:var(--accent-green)">✅</span> You want reproducibility when…</div>
+      <ul style="margin:0 0 0 18px;">
+        <li>The system runs in production and downtime is costly.</li>
+        <li>Multiple people need to deploy and the result must match.</li>
+        <li>You need to recover from a region outage or accidental deletion.</li>
+        <li>You need to audit "what was running on day X".</li>
+        <li>You're moving environments (dev → staging → prod, on-prem → cloud).</li>
+        <li>Compliance requires it (regulated industries).</li>
+      </ul>
+    </div>
+    <div class="card" style="border-color:rgba(240,160,80,.3);">
+      <div class="card-title"><span style="color:var(--accent-orange)">⚠️</span> Reproducibility costs you when…</div>
+      <ul style="margin:0 0 0 18px;">
+        <li>You're exploring — pinning everything slows iteration.</li>
+        <li>You're a one-person side project with no recovery requirement.</li>
+        <li>Security patches need to flow in fast — pinning blocks that unless you also automate updates.</li>
+        <li>You haven't decided what the system <em>is</em> yet — locking it down prematurely is wasted effort.</li>
+      </ul>
+    </div>
+  </div>
+  <p>For our project the answer is <strong>yes, fully reproducible</strong>, because the whole point is to demonstrate "we can deploy this exact stack anywhere on demand". The whole IaC story falls apart if a fresh run produces a different cluster.</p>
+
+  <div class="h2">The reproducibility ladder</div>
+  <p>Reproducibility isn't one switch — it's a layered set of decisions. Each layer pinned eliminates a class of drift. From bottom (machine) to top (apps):</p>
+
+  <div class="ladder">
+    <div class="ladder-rung">
+      <div class="ladder-num">1</div>
+      <div class="ladder-layer">Infrastructure</div>
+      <div class="ladder-how">Terraform with pinned <code>required_providers</code> versions. Pin AMI IDs (not <code>most_recent = true</code>). Pin instance types, region, AZ. Commit <code>.terraform.lock.hcl</code>.</div>
+    </div>
+    <div class="ladder-rung">
+      <div class="ladder-num">2</div>
+      <div class="ladder-layer">OS &amp; node bootstrap</div>
+      <div class="ladder-how">Ansible with pinned role versions in <code>requirements.yml</code> (use git refs / version tags, never <code>master</code>). Pin package versions where possible.</div>
+    </div>
+    <div class="ladder-rung">
+      <div class="ladder-num">3</div>
+      <div class="ladder-layer">Kubernetes version</div>
+      <div class="ladder-how">Install k3s with <code>INSTALL_K3S_VERSION=v1.30.2+k3s1</code> (or kubeadm's <code>kubelet=1.30.2-00 kubeadm=1.30.2-00</code>). Never the unpinned curl pipe.</div>
+    </div>
+    <div class="ladder-rung">
+      <div class="ladder-num">4</div>
+      <div class="ladder-layer">CNI / Ingress / Storage</div>
+      <div class="ladder-how">If you install your own CNI or storage class, pin their versions. If you use a distro's bundled defaults, the K8s version pin (rung 3) covers them.</div>
+    </div>
+    <div class="ladder-rung">
+      <div class="ladder-num">5</div>
+      <div class="ladder-layer">Helm charts</div>
+      <div class="ladder-how">Always pass <code>--version 1.2.3</code> or set <code>chart_version: "1.2.3"</code> in your tooling. Commit your <code>values.yaml</code> to git. Lock with <code>helm dependency update</code> producing a <code>Chart.lock</code>.</div>
+    </div>
+    <div class="ladder-rung">
+      <div class="ladder-num">6</div>
+      <div class="ladder-layer">Container images</div>
+      <div class="ladder-how">Pin by digest: <code>image: nginx@sha256:abc123…</code>. At minimum by tag: <code>nginx:1.27.0</code>. <strong>Never <code>:latest</code></strong>. For your own images, build with a versioned tag in CI.</div>
+    </div>
+    <div class="ladder-rung">
+      <div class="ladder-num">7</div>
+      <div class="ladder-layer">Manifests &amp; config</div>
+      <div class="ladder-how">All YAML committed to git. No "I tweaked it in the cluster" — that's drift. Use <code>kubectl diff</code> to detect drift before applying.</div>
+    </div>
+    <div class="ladder-rung">
+      <div class="ladder-num">8</div>
+      <div class="ladder-layer">Secrets</div>
+      <div class="ladder-how">Sealed Secrets, External Secrets Operator, or SOPS-encrypted YAML. Encrypted form goes in git, plaintext never does. The decryption key is the only out-of-band secret.</div>
+    </div>
+  </div>
+
+  <div class="callout callout-warn">
+    <div class="callout-icon">⚠️</div>
+    <div class="callout-body">
+      <strong>The single biggest reproducibility killer:</strong> <code>image: myapp:latest</code>. Every deploy might pull a different version of the image. The pod template hash doesn't change, so K8s thinks nothing changed and won't even roll. <strong>Always tag immutably.</strong>
+    </div>
+  </div>
+
+  <div class="h2">Imperative vs declarative — and why GitOps helps</div>
+  <p>You can manage K8s in two styles:</p>
+  <ul>
+    <li><strong>Imperative</strong>: <code>kubectl create deployment</code>, <code>kubectl edit</code>, <code>helm upgrade</code> from a developer laptop. Fast for exploring, hostile to reproducibility.</li>
+    <li><strong>Declarative</strong>: write YAML files, commit them, apply them. Reproducible and reviewable.</li>
+  </ul>
+  <p><strong>GitOps</strong> takes declarative one step further: instead of humans running <code>kubectl apply</code>, a controller in the cluster (ArgoCD or Flux) watches a git repo and continuously syncs. The cluster <em>is</em> what's in git, by definition. Drift is a violation that gets corrected automatically. This is the gold standard for production reproducibility.</p>
+
+  <div class="callout callout-tip">
+    <div class="callout-icon">🎯</div>
+    <div class="callout-body">
+      <strong>Where we are vs where we'd go:</strong> for sprint 2, manual <code>helm install</code> + Ansible is fine. For sprint 3 or beyond, adopting ArgoCD would let us push the declarative discipline all the way and remove "did you remember to redeploy?" as a question.
+    </div>
+  </div>
+
+  <div class="h2">Tooling: Terraform vs Ansible vs Helm — what does what</div>
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <thead><tr><th>Tool</th><th>Layer</th><th>What it owns</th><th>What it doesn't</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Terraform</strong></td><td>Cloud infra</td><td>VPCs, subnets, EC2, RDS, S3, IAM, security groups. Anything with a cloud API.</td><td>What runs <em>inside</em> the OS.</td></tr>
+        <tr><td><strong>Ansible</strong></td><td>OS &amp; bootstrap</td><td>Installing packages, configuring services, installing k3s itself, copying files, running commands on remote hosts.</td><td>It can drive K8s but it's not what it's good at — Helm wins there.</td></tr>
+        <tr><td><strong>Helm</strong></td><td>K8s workloads</td><td>Installing packaged applications into a cluster. Templating + values.</td><td>Anything outside the cluster.</td></tr>
+        <tr><td><strong>Kustomize</strong></td><td>K8s workloads</td><td>Overlaying environment-specific changes onto base manifests. No templating.</td><td>Same scope as Helm but different style.</td></tr>
+        <tr><td><strong>ArgoCD</strong></td><td>Delivery</td><td>Continuously syncing the cluster to match a git repo of Helm/Kustomize/manifests.</td><td>Provisioning the cluster itself.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>For our project the natural split is: <strong>Terraform</strong> for AWS (VPC, EC2, RDS, S3), <strong>Ansible</strong> for installing k3s on the EC2 instance, <strong>Helm</strong> (driven by Ansible or by hand) for installing the workloads into k3s, and <strong>ArgoCD later</strong> if we want full GitOps.</p>
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════ 7. DISTRIBUTIONS ═══════════════════════════════════════════ -->
+<div id="tab-distros" class="tab-content">
+<div class="content">
+  <div class="section-title">Distributions — Same K8s, Different Flavors</div>
+  <div class="section-sub">
+    "Kubernetes" is a specification and a set of source code. A <strong>distribution</strong> is a packaged way to install and run it. They all expose the same kubectl/Helm/CRD surface, but they differ in: how they install, what's bundled, what's hidden, and what they're optimized for. Here are the ones worth knowing.
+  </div>
+
+  <div class="h2">At a glance</div>
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <thead><tr><th>Distro</th><th>Vendor</th><th>Footprint</th><th>Best for</th><th>Production?</th></tr></thead>
+      <tbody>
+        <tr><td><strong>kubeadm</strong></td><td>Kubernetes SIG</td><td>~2 GB</td><td>Learning internals; vanilla upstream</td><td>✅ Yes</td></tr>
+        <tr><td><strong>k3s</strong></td><td>Rancher / SUSE</td><td>~512 MB</td><td>Lightweight prod, edge, small clusters</td><td>✅ Yes</td></tr>
+        <tr><td><strong>k3d</strong></td><td>Rancher</td><td>~512 MB</td><td>Local dev / CI (k3s in Docker)</td><td>❌ Dev only</td></tr>
+        <tr><td><strong>minikube</strong></td><td>Kubernetes SIG</td><td>~2 GB</td><td>Local learning, single-node demos</td><td>❌ Dev only</td></tr>
+        <tr><td><strong>kind</strong></td><td>Kubernetes SIG</td><td>~1 GB</td><td>CI pipelines, local multi-node testing</td><td>❌ Dev/CI only</td></tr>
+        <tr><td><strong>microk8s</strong></td><td>Canonical</td><td>~700 MB</td><td>Ubuntu shops, addon-driven setups</td><td>✅ Yes</td></tr>
+        <tr><td><strong>EKS / AKS / GKE</strong></td><td>Cloud vendors</td><td>N/A (hosted)</td><td>Production cloud workloads</td><td>✅ Yes</td></tr>
+        <tr><td><strong>OpenShift</strong></td><td>Red Hat</td><td>Heavy</td><td>Enterprise on-prem with full platform</td><td>✅ Yes</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- kubeadm -->
+  <div class="distro-card">
+    <div class="distro-header">
+      <div class="distro-name">kubeadm <span class="tag tag-blue">vanilla upstream</span></div>
+      <div class="distro-tags"><span class="tag tag-green">Production</span><span class="tag tag-yellow">Most learning value</span></div>
+    </div>
+    <p>The "official" way to install upstream Kubernetes. <code>kubeadm init</code> on a control plane node, <code>kubeadm join</code> on workers. Doesn't bundle a CNI, ingress, or storage — you install those yourself. <strong>This is what under the hood looks like.</strong></p>
+    <div class="distro-pros-cons">
+      <div class="pros-box">
+        <h5>Pros</h5>
+        <ul>
+          <li>Maximum learning value — every component is visible</li>
+          <li>Closest to "real" K8s as documented</li>
+          <li>Static pod manifests at <code>/etc/kubernetes/manifests/</code> — you can read and edit them</li>
+          <li>Real etcd, separate scheduler/controller-manager processes</li>
+          <li>Production-grade for self-managed clusters</li>
+        </ul>
+      </div>
+      <div class="cons-box">
+        <h5>Cons</h5>
+        <ul>
+          <li>Most setup work — CNI, ingress, storage are all manual decisions</li>
+          <li>Heavier footprint (~2 GB control plane)</li>
+          <li>Upgrades require care (<code>kubeadm upgrade plan</code>)</li>
+          <li>No first-class Ansible role of equivalent quality to k3s's</li>
+          <li>Slowest path from zero to a usable cluster</li>
+        </ul>
+      </div>
+    </div>
+    <div class="distro-when"><strong>Use it when:</strong> you want to learn how K8s works internally, or you're building a self-managed production cluster and need full control over every component choice.</div>
+  </div>
+
+  <!-- k3s -->
+  <div class="distro-card distro-recommend">
+    <div class="distro-header">
+      <div class="distro-name">k3s <span class="tag tag-cyan">our pick</span></div>
+      <div class="distro-tags"><span class="tag tag-green">Production</span><span class="tag tag-cyan">Lightweight</span><span class="tag tag-yellow">CNCF certified</span></div>
+    </div>
+    <p>A stripped-down, single-binary K8s distribution from Rancher/SUSE. Originally built for edge and IoT — small footprint, simple install, sane defaults. Real upstream K8s API; not a fork. The whole control plane runs in one process.</p>
+    <div class="distro-pros-cons">
+      <div class="pros-box">
+        <h5>Pros</h5>
+        <ul>
+          <li>One-command install: <code>curl -sfL https://get.k3s.io | sh -</code></li>
+          <li>~512 MB control plane (vs 2 GB for kubeadm)</li>
+          <li>Bundles containerd, Flannel, CoreDNS, Traefik, ServiceLB, local-path storage, metrics-server</li>
+          <li>Production-grade — used in real edge deployments</li>
+          <li>Mature Ansible role (<code>xanmanning.k3s</code>)</li>
+          <li>Scales from single-node to HA with embedded etcd</li>
+          <li>Same kubectl/Helm/CRD experience as any K8s</li>
+        </ul>
+      </div>
+      <div class="cons-box">
+        <h5>Cons</h5>
+        <ul>
+          <li>Hides control plane internals (single binary, no separate processes)</li>
+          <li>SQLite default datastore is single-node only — HA needs etcd or external DB</li>
+          <li>Bundled defaults (Traefik, Flannel) need disabling if you want alternatives</li>
+          <li>Less common in big-corp environments than EKS/OpenShift</li>
+        </ul>
+      </div>
+    </div>
+    <div class="distro-when"><strong>Use it when:</strong> you want production-capable K8s without operational heavy lifting, you have constrained hardware, you're on edge/IoT, or you want the same distro from laptop dev to small-cloud prod.</div>
+  </div>
+
+  <!-- k3d -->
+  <div class="distro-card">
+    <div class="distro-header">
+      <div class="distro-name">k3d <span class="tag tag-cyan">k3s in Docker</span></div>
+      <div class="distro-tags"><span class="tag tag-blue">Dev / CI</span></div>
+    </div>
+    <p>Runs k3s inside Docker containers on your laptop. Each "node" is a container. Spin up multi-node clusters in seconds. <strong>Same exact distribution as k3s</strong> — manifests work identically between k3d (laptop) and k3s (server).</p>
+    <div class="distro-pros-cons">
+      <div class="pros-box">
+        <h5>Pros</h5>
+        <ul>
+          <li>Cluster up in &lt;30 seconds: <code>k3d cluster create demo --agents 2</code></li>
+          <li>True parity with production k3s — same binary, same defaults</li>
+          <li>Multi-node trivially: <code>--servers 3 --agents 5</code></li>
+          <li>Lightweight (Docker containers, no VM overhead)</li>
+          <li>Volume mounts from your host into the cluster for image loading</li>
+        </ul>
+      </div>
+      <div class="cons-box">
+        <h5>Cons</h5>
+        <ul>
+          <li>Local dev only — not deployed as a real cluster</li>
+          <li>Requires Docker on the host</li>
+          <li>Networking quirks (LoadBalancer needs port mapping at creation)</li>
+        </ul>
+      </div>
+    </div>
+    <div class="distro-when"><strong>Use it when:</strong> you want to iterate locally on the same distribution you'll deploy to a server. <em>Skip it if all your work is provisioned by IaC against a remote cluster (our case).</em></div>
+  </div>
+
+  <!-- minikube -->
+  <div class="distro-card">
+    <div class="distro-header">
+      <div class="distro-name">minikube <span class="tag tag-muted">classic local</span></div>
+      <div class="distro-tags"><span class="tag tag-blue">Dev only</span></div>
+    </div>
+    <p>The original "K8s on your laptop" tool. Spins up a single-node cluster inside a VM (Docker, VirtualBox, KVM, Hyper-V, qemu, etc.). The default tutorial environment on kubernetes.io. Many addons available via <code>minikube addons enable</code>.</p>
+    <div class="distro-pros-cons">
+      <div class="pros-box">
+        <h5>Pros</h5>
+        <ul>
+          <li>Most tutorials use it — copy-paste compatibility</li>
+          <li>Many drivers (Docker, KVM, VirtualBox) — runs anywhere</li>
+          <li>Easy addon model (<code>minikube addons enable ingress</code>)</li>
+          <li>Good for following kubernetes.io tutorials</li>
+        </ul>
+      </div>
+      <div class="cons-box">
+        <h5>Cons</h5>
+        <ul>
+          <li>Strictly a dev tool — not designed for server deployment</li>
+          <li>Heavy: full VM under the hood</li>
+          <li>Single-node by default; multi-node is awkward</li>
+          <li>State doesn't survive cleanly across host reboots</li>
+          <li>No deployment path to EC2 or anywhere real</li>
+          <li>Not provisioned by Ansible — meant to be run interactively</li>
+        </ul>
+      </div>
+    </div>
+    <div class="distro-when"><strong>Use it when:</strong> you're following an official tutorial that assumes minikube, or you want the most "documented" local experience. Otherwise k3d gives you more value with less weight.</div>
+  </div>
+
+  <!-- kind -->
+  <div class="distro-card">
+    <div class="distro-header">
+      <div class="distro-name">kind <span class="tag tag-muted">K8s in Docker</span></div>
+      <div class="distro-tags"><span class="tag tag-blue">Dev / CI</span></div>
+    </div>
+    <p>"Kubernetes IN Docker." Runs vanilla upstream K8s nodes as Docker containers. Built by the K8s SIG itself, primarily as a tool for testing K8s upstream. Very fast cluster creation; commonly used in CI pipelines.</p>
+    <div class="distro-pros-cons">
+      <div class="pros-box">
+        <h5>Pros</h5>
+        <ul>
+          <li>Fastest cluster creation in existence</li>
+          <li>Uses real upstream kubeadm under the hood — closer to vanilla than k3d</li>
+          <li>Designed for CI: ephemeral, scriptable, parallelizable</li>
+          <li>Multi-node easily</li>
+          <li>Used by upstream K8s developers themselves</li>
+        </ul>
+      </div>
+      <div class="cons-box">
+        <h5>Cons</h5>
+        <ul>
+          <li>Dev/CI only — not meant for "real" clusters</li>
+          <li>Requires Docker on the host</li>
+          <li>Less batteries-included than k3d</li>
+          <li>Same "no path to server" limitation as minikube</li>
+        </ul>
+      </div>
+    </div>
+    <div class="distro-when"><strong>Use it when:</strong> you need a throwaway K8s cluster in CI, or you want to test against upstream kubeadm specifically. Generally a CI-first tool, not a daily dev driver.</div>
+  </div>
+
+  <!-- microk8s -->
+  <div class="distro-card">
+    <div class="distro-header">
+      <div class="distro-name">microk8s <span class="tag tag-muted">Canonical's distro</span></div>
+      <div class="distro-tags"><span class="tag tag-green">Production (Ubuntu)</span></div>
+    </div>
+    <p>Canonical's lightweight K8s, distributed via snap. Heavy addon catalog (istio, knative, kubeflow, cert-manager — all <code>microk8s enable X</code>). Auto-clustering with dqlite for HA.</p>
+    <div class="distro-pros-cons">
+      <div class="pros-box">
+        <h5>Pros</h5>
+        <ul>
+          <li>One-command install on Ubuntu</li>
+          <li>Huge addon catalog — easy to add complex software</li>
+          <li>HA via dqlite is simpler than k3s embedded etcd</li>
+          <li>CNCF certified</li>
+          <li>Same kubectl experience</li>
+        </ul>
+      </div>
+      <div class="cons-box">
+        <h5>Cons</h5>
+        <ul>
+          <li>Snap dependency — awkward outside Ubuntu (Amazon Linux, RHEL, etc.)</li>
+          <li>Snap auto-updates can change versions out from under you</li>
+          <li>Heavier than k3s due to snap overhead</li>
+          <li>Less mature Ansible story than k3s</li>
+          <li>Tied to Canonical ecosystem for full benefit</li>
+        </ul>
+      </div>
+    </div>
+    <div class="distro-when"><strong>Use it when:</strong> your whole environment is Ubuntu and you want the addon menu without configuring everything yourself.</div>
+  </div>
+
+  <!-- Managed -->
+  <div class="distro-card">
+    <div class="distro-header">
+      <div class="distro-name">EKS / AKS / GKE <span class="tag tag-muted">cloud-managed</span></div>
+      <div class="distro-tags"><span class="tag tag-green">Production</span><span class="tag tag-purple">$$$$</span></div>
+    </div>
+    <p>Cloud providers run the control plane for you (you pay for it). You only manage worker nodes (or even those, in "serverless" modes like Fargate / GKE Autopilot). Same K8s API.</p>
+    <div class="distro-pros-cons">
+      <div class="pros-box">
+        <h5>Pros</h5>
+        <ul>
+          <li>No control plane operations — vendor handles upgrades, etcd, HA</li>
+          <li>Deep cloud integration: IAM, load balancers, storage, secrets</li>
+          <li>Production-grade out of the box</li>
+          <li>Most enterprise environments use one of these</li>
+        </ul>
+      </div>
+      <div class="cons-box">
+        <h5>Cons</h5>
+        <ul>
+          <li>Costs money even when idle (control plane fee + LB fees)</li>
+          <li>Vendor lock-in for the integrated parts</li>
+          <li>Hides everything — minimal learning value about K8s itself</li>
+          <li>Slower to provision than self-managed (15+ minutes for an EKS cluster)</li>
+        </ul>
+      </div>
+    </div>
+    <div class="distro-when"><strong>Use it when:</strong> you're shipping production workloads in a single cloud and don't want to operate the control plane. Skip for learning or for "I want to understand what the cloud is hiding."</div>
+  </div>
+
+  <!-- OpenShift -->
+  <div class="distro-card">
+    <div class="distro-header">
+      <div class="distro-name">OpenShift / Rancher <span class="tag tag-muted">enterprise platform</span></div>
+      <div class="distro-tags"><span class="tag tag-purple">Enterprise</span></div>
+    </div>
+    <p>OpenShift is Red Hat's K8s platform — adds an opinionated layer on top: integrated CI/CD, image registry, RBAC, multi-tenancy, web console, security defaults. Rancher (also SUSE) is a multi-cluster management plane that runs on top of any K8s. Both are popular in big enterprises.</p>
+    <div class="distro-when"><strong>Use it when:</strong> a large org has standardized on it. Not a learning target; you'll meet it if you join a company that uses it.</div>
+  </div>
+
+  <div class="callout callout-tip">
+    <div class="callout-icon">🎯</div>
+    <div class="callout-body">
+      <strong>For our project: k3s is the answer.</strong> It's production-grade, lightweight enough to share an EC2 with Spring Boot/Kong/Ollama, fits our Ansible workflow, and uses the real upstream K8s API so anything we learn transfers anywhere. The next tab goes deep on it.
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════ 8. K3S DEEP DIVE ═══════════════════════════════════════════ -->
+<div id="tab-k3s" class="tab-content">
+<div class="content">
+  <div class="section-title">k3s — Deep Dive</div>
+  <div class="section-sub">
+    Since k3s is what we'll actually use, here's everything you need to know to operate it confidently: what's inside, how to install it, how it differs from vanilla K8s, how to make it production-grade, and where it fits with our Ansible/Terraform workflow.
+  </div>
+
+  <div class="h2">What k3s actually is</div>
+  <p>k3s is a Kubernetes distribution packaged as a <strong>single ~70MB Go binary</strong>. When you run <code>k3s server</code>, that binary starts an entire control plane (API server, scheduler, controller manager, etcd-or-SQLite) and a kubelet, all as goroutines in one process. When you run <code>k3s agent</code> on another machine, it joins as a worker node.</p>
+  <p>It's built by Rancher (now SUSE) and is CNCF-certified. The "k3" in the name is a play on "k8s minus 5" — the original goal was to remove enough optional features to fit in 512 MB of RAM. The result is real upstream K8s with sane defaults baked in.</p>
+
+  <div class="h2">What's bundled (and what to disable)</div>
+  <p>Out of the box, k3s includes everything you'd otherwise install yourself:</p>
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <thead><tr><th>Component</th><th>What it does</th><th>Disable with</th></tr></thead>
+      <tbody>
+        <tr><td><strong>containerd</strong></td><td>Container runtime (replaces Docker)</td><td>Use <code>--container-runtime-endpoint</code> to point at another runtime</td></tr>
+        <tr><td><strong>Flannel</strong></td><td>CNI plugin (pod networking)</td><td><code>--flannel-backend=none</code> + install your own CNI (Calico, Cilium)</td></tr>
+        <tr><td><strong>CoreDNS</strong></td><td>In-cluster DNS</td><td><code>--disable=coredns</code> (rarely needed)</td></tr>
+        <tr><td><strong>Traefik</strong></td><td>Ingress controller</td><td><code>--disable=traefik</code> ← <em>we'll do this to keep Kong</em></td></tr>
+        <tr><td><strong>ServiceLB (klipper-lb)</strong></td><td>LoadBalancer Service implementation (no cloud needed)</td><td><code>--disable=servicelb</code></td></tr>
+        <tr><td><strong>local-path-provisioner</strong></td><td>Default StorageClass for PVCs</td><td><code>--disable=local-storage</code></td></tr>
+        <tr><td><strong>metrics-server</strong></td><td>Powers <code>kubectl top</code> and HPA</td><td><code>--disable=metrics-server</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Each disabled component is one thing you have to provide yourself. For our project we'll disable Traefik (Kong replaces it) and keep everything else.</p>
+
+  <div class="h2">How k3s differs from vanilla K8s</div>
+  <ul>
+    <li><strong>Single binary, single process</strong> — control plane components run as goroutines, not separate processes. <code>journalctl -u k3s</code> shows logs for everything.</li>
+    <li><strong>Default datastore is SQLite</strong> for single-node. Vanilla uses etcd always. k3s can also use embedded etcd (HA mode) or external MySQL/Postgres.</li>
+    <li><strong>kine</strong> — k3s ships with a shim called <em>kine</em> that exposes any database (SQLite, MySQL, Postgres) as if it were etcd. This is how it can use SQLite without breaking compatibility.</li>
+    <li><strong>No separate kube-proxy DaemonSet</strong> — kube-proxy runs inside the k3s process.</li>
+    <li><strong>Storage and ingress bundled by default</strong> — vanilla K8s ships with neither.</li>
+    <li><strong>kubeconfig in <code>/etc/rancher/k3s/k3s.yaml</code></strong>, not <code>~/.kube/config</code>. Symlink or copy it.</li>
+    <li><strong>Static pod manifests at <code>/var/lib/rancher/k3s/server/manifests/</code></strong> — drop YAML files here and k3s applies them automatically (great for bootstrap).</li>
+  </ul>
+
+  <div class="h2">Installing k3s</div>
+
+  <div class="h3">Quick install (don't do this in IaC)</div>
+  <pre>curl -sfL https://get.k3s.io | sh -</pre>
+  <p>This pulls the latest, installs the systemd service, starts the cluster, and writes <code>/etc/rancher/k3s/k3s.yaml</code>. Fast, but unpinned — never use in production.</p>
+
+  <div class="h3">Pinned install (production / IaC)</div>
+  <pre>curl -sfL https://get.k3s.io | \
+  INSTALL_K3S_VERSION="v1.30.2+k3s1" \
+  INSTALL_K3S_EXEC="--disable=traefik --write-kubeconfig-mode=644" \
+  sh -</pre>
+  <p><code>INSTALL_K3S_VERSION</code> pins the exact release. <code>INSTALL_K3S_EXEC</code> passes flags to the server. <code>--write-kubeconfig-mode=644</code> makes the kubeconfig readable so you can copy it.</p>
+
+  <div class="h3">Via Ansible (the way we'll do it)</div>
+  <p>Use the <code>xanmanning.k3s</code> Galaxy role:</p>
+  <pre># requirements.yml
+roles:
+  - name: xanmanning.k3s
+    version: v3.4.4
+
+# group_vars/k3s.yml
+k3s_release_version: v1.30.2+k3s1
+k3s_server:
+  disable:
+    - traefik
+  write-kubeconfig-mode: "0644"
+k3s_become: true</pre>
+  <pre># playbooks/k3s.yml
+- hosts: k3s_servers
+  roles:
+    - role: xanmanning.k3s</pre>
+  <p>That's the entire k3s install playbook. Add multi-node by setting <code>k3s_control_node: true</code> on the first host and joining agents with the auto-generated token. The role handles tokens, kubeconfig fetch, upgrades.</p>
+
+  <div class="h2">Topologies</div>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title"><span style="color:var(--accent-green)">Single-node</span></div>
+      <p>One machine running <code>k3s server</code>. Control plane and workloads on the same host. SQLite datastore. Perfect for our sprint scope: one EC2 instance replaces the application + network VMs. ~512 MB control plane overhead.</p>
+    </div>
+    <div class="card">
+      <div class="card-title"><span style="color:var(--accent-blue)">Single-server + agents</span></div>
+      <p>One control plane, multiple worker nodes. Workers join with a token from the server. Still SQLite — no HA, but you can scale workloads. Good for "I want more compute capacity" without HA needs.</p>
+    </div>
+    <div class="card">
+      <div class="card-title"><span style="color:var(--accent-orange)">HA with embedded etcd</span></div>
+      <p>3 (or 5) servers, each running a full k3s server. They form an etcd cluster automatically. Workers join any of them. Production HA with no external dependencies. First server starts with <code>--cluster-init</code>, others join with <code>--server https://&lt;first&gt;:6443</code>.</p>
+    </div>
+    <div class="card">
+      <div class="card-title"><span style="color:var(--accent-purple)">External datastore</span></div>
+      <p>Servers point at an external MySQL/Postgres/etcd. No embedded etcd. Useful when you already have a managed database and want to avoid running etcd yourself. Less common.</p>
+    </div>
+  </div>
+
+  <div class="h2">Storage on k3s</div>
+  <p>k3s ships with <strong>local-path-provisioner</strong> as the default StorageClass. When a PVC is created, it provisions a directory on the node where the requesting pod is scheduled — under <code>/var/lib/rancher/k3s/storage/</code>.</p>
+  <ul>
+    <li><strong>Pros</strong>: zero config, works on any Linux, fast (local disk).</li>
+    <li><strong>Cons</strong>: <em>node-local</em>. If a pod is rescheduled to another node, the data doesn't follow. For single-node clusters this is fine. For multi-node, you need a real distributed storage solution.</li>
+  </ul>
+  <p>Multi-node options:</p>
+  <ul>
+    <li><strong>Longhorn</strong> — distributed block storage built by Rancher specifically for k3s. Replicates volumes across nodes. The recommended k3s upgrade path.</li>
+    <li><strong>NFS</strong> — install <code>nfs-subdir-external-provisioner</code> chart, point at an NFS server.</li>
+    <li><strong>CSI for AWS EBS / GCE PD / Azure Disk</strong> — if you're on a cloud, install the CSI driver and use cloud volumes.</li>
+  </ul>
+  <p>For our project: single-node EC2 + local-path is fine for sprint 2. Longhorn is the natural upgrade if we add nodes.</p>
+
+  <div class="h2">Networking on k3s</div>
+  <p>Default CNI is <strong>Flannel</strong> with VXLAN backend. Pod CIDR <code>10.42.0.0/16</code>, service CIDR <code>10.43.0.0/16</code>. No NetworkPolicy enforcement.</p>
+  <p>Default ingress is <strong>Traefik</strong> (which we disable to use Kong). Default LoadBalancer implementation is <strong>ServiceLB (klipper-lb)</strong>, which uses host ports on every node — meaning <code>type: LoadBalancer</code> Just Works without a cloud LB.</p>
+  <p>If you want NetworkPolicies, swap Flannel for Calico:</p>
+  <pre>--flannel-backend=none --disable-network-policy
+# then kubectl apply Calico manifests</pre>
+
+  <div class="h2">Upgrading k3s</div>
+  <p>Two clean ways:</p>
+  <ul>
+    <li><strong>Re-run the install script with a new version pin.</strong> The script handles binary swap and service restart.</li>
+    <li><strong>Use the system-upgrade-controller</strong> — a k3s-specific operator that drains and upgrades nodes one at a time based on a CRD. Production-grade.</li>
+  </ul>
+  <p>Always read the release notes for breaking changes (especially for K8s minor version bumps like 1.29 → 1.30).</p>
+
+  <div class="h2">When NOT to use k3s</div>
+  <ul>
+    <li>You need to learn K8s internals at the control-plane level — k3s hides them. Use kubeadm.</li>
+    <li>You need a feature k3s explicitly removed (some legacy in-tree storage drivers, alpha features).</li>
+    <li>You're standardizing on a managed cloud K8s — just use EKS/GKE/AKS, don't reinvent.</li>
+    <li>You need very large clusters (hundreds of nodes) — vanilla K8s is more battle-tested at that scale.</li>
+  </ul>
+
+  <div class="h2">Where k3s fits in our stack</div>
+  <p>The migration shape:</p>
+  <ul>
+    <li><strong>Terraform</strong> provisions: VPC, security groups, an EC2 instance for the k3s host, RDS, S3/CloudFront. Same as today, just fewer EC2s.</li>
+    <li><strong>Ansible</strong> bootstraps the EC2: <code>common</code> role, <code>docker</code> (no longer needed!), then a new <code>k3s</code> role using <code>xanmanning.k3s</code>. Fetches the kubeconfig back to the control node.</li>
+    <li><strong>Helm</strong> (driven from Ansible or by hand) installs the workloads: Kong (DB-less, declarative config as ConfigMap), Spring Boot (Deployment + Service), AI namespace (triage, MCP servers, Ollama). Each pinned to a chart version.</li>
+    <li><strong>The monitoring VM stays where it is</strong> (per our earlier decision) and reaches into the k3s cluster via <code>kubernetes_sd_configs</code> + an in-cluster OTel Collector DaemonSet.</li>
+  </ul>
+  <p>You delete more roles than you add. Goodbye <code>spring_backend</code>, <code>kong</code>, <code>triage_service</code>, <code>mcp_servers</code> Ansible roles — they all become Helm values files.</p>
+
+  <div class="callout callout-info">
+    <div class="callout-icon">📚</div>
+    <div class="callout-body">
+      <strong>k3s docs to bookmark:</strong>
+      <ul style="margin:6px 0 0 18px;">
+        <li><a href="https://docs.k3s.io/" style="color:var(--accent-cyan);">docs.k3s.io</a> — official docs</li>
+        <li><a href="https://docs.k3s.io/installation/configuration" style="color:var(--accent-cyan);">Installation flags reference</a></li>
+        <li><a href="https://docs.k3s.io/datastore/ha-embedded" style="color:var(--accent-cyan);">HA with embedded etcd</a></li>
+        <li><a href="https://galaxy.ansible.com/xanmanning/k3s" style="color:var(--accent-cyan);">xanmanning.k3s Ansible role</a></li>
+        <li><a href="https://longhorn.io/" style="color:var(--accent-cyan);">Longhorn (when you need real storage)</a></li>
+      </ul>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════ 9. LEARNING PATH ═══════════════════════════════════════════ -->
+<div id="tab-learning-path" class="tab-content">
+<div class="content">
+  <div class="section-title">Learning Path — What to Learn Next, In Order</div>
+  <div class="section-sub">
+    A K8s "everything everywhere all at once" approach is overwhelming. This is a phased path: each phase builds on the last and gives you a checkpoint to confirm you're solid before moving on. Match the pace to whatever sprint capacity you have left.
+  </div>
+
+  <div class="h2">Phase 1 — Get hands on a cluster</div>
+  <p>Goal: kubectl commands stop feeling foreign. You can deploy a thing and find out why it broke.</p>
+  <ol>
+    <li>Spin up a local k3d cluster: <code>k3d cluster create learn --agents 2</code> (or use the project's k3s once it exists).</li>
+    <li>Walk through <code>kubectl get nodes</code>, <code>kubectl get pods -A</code>, <code>kubectl describe node</code>. Read what you see.</li>
+    <li>Apply your first manifest: a Deployment running nginx. Then a Service. Then port-forward to it.</li>
+    <li>Break it deliberately: <code>kubectl delete pod &lt;name&gt;</code> and watch the ReplicaSet recreate it.</li>
+    <li>Run <code>kubectl explain pod.spec</code> and read the output. Then <code>kubectl explain deployment.spec.strategy</code>. The API is self-documenting.</li>
+    <li>Install <code>k9s</code> and use it to browse the cluster.</li>
+  </ol>
+  <p><strong>Checkpoint:</strong> you can deploy a stateless web app, expose it via a Service, and explain (out loud) the difference between a Deployment, ReplicaSet, and Pod.</p>
+
+  <div class="h2">Phase 2 — The object model</div>
+  <p>Goal: you've met all the major object types and know which one to reach for.</p>
+  <ol>
+    <li>Add a ConfigMap to your nginx deployment — mount a custom <code>nginx.conf</code>.</li>
+    <li>Add a Secret holding a fake API key, mount it as an env var.</li>
+    <li>Add a PVC with the local-path StorageClass; mount it; write a file; delete the pod; watch the file persist on the new pod.</li>
+    <li>Create a second namespace, deploy the same app there, observe namespace isolation.</li>
+    <li>Create a second Deployment with a different label, then a Service that selects both via shared labels. Understand how selectors work.</li>
+    <li>Create a Job that runs <code>echo "hello"</code>. Then a CronJob that runs it every minute.</li>
+    <li>Create a DaemonSet that runs <code>busybox sleep infinity</code> on every node.</li>
+  </ol>
+  <p><strong>Checkpoint:</strong> for any new piece of software, you know whether to model it as a Deployment, StatefulSet, DaemonSet, or Job.</p>
+
+  <div class="h2">Phase 3 — Networking &amp; configuration depth</div>
+  <p>Goal: you can debug "why can't service A talk to service B" without panicking.</p>
+  <ol>
+    <li>Stand up an Ingress (Traefik on k3d, or Kong/NGINX). Route <code>/api</code> to one Service, <code>/</code> to another.</li>
+    <li>Use <code>kubectl exec</code> to shell into one pod and curl another via its Service DNS name. Try the FQDN form (<code>service.namespace.svc.cluster.local</code>).</li>
+    <li>Read the iptables rules kube-proxy generated: <code>iptables -t nat -L KUBE-SERVICES</code> on a node.</li>
+    <li>Set resource requests and limits on a container. Verify with <code>kubectl describe</code> and <code>kubectl top pod</code>.</li>
+    <li>Add liveness and readiness probes. Make a probe fail on purpose; observe the consequences (restart vs traffic removal).</li>
+    <li>Create a NetworkPolicy that blocks all ingress to a namespace except from one labeled source.</li>
+  </ol>
+  <p><strong>Checkpoint:</strong> when an app can't reach another app, you know to check: DNS, Service selector matching, Endpoints, NetworkPolicy, kube-proxy rules — and you know how to check each.</p>
+
+  <div class="h2">Phase 4 — Helm &amp; real software</div>
+  <p>Goal: you can install third-party software the way the rest of the world does.</p>
+  <ol>
+    <li><code>helm install</code> the kube-prometheus-stack chart into a <code>monitoring</code> namespace. Browse the resulting pods, services, configmaps with k9s.</li>
+    <li>Read the chart's <code>values.yaml</code> on Artifact Hub. Override one value (e.g. Grafana's admin password) via <code>-f values.yaml</code>.</li>
+    <li>Install Loki + OpenTelemetry Collector via their Helm charts.</li>
+    <li>Write your <em>own</em> tiny Helm chart with <code>helm create</code>, edit the template, install it.</li>
+    <li>Practice <code>helm upgrade</code>, <code>helm rollback</code>, <code>helm uninstall</code>.</li>
+  </ol>
+  <p><strong>Checkpoint:</strong> you can take any Helm chart from Artifact Hub, read its values, customize, and install it.</p>
+
+  <div class="h2">Phase 5 — RBAC, security, &amp; CRDs</div>
+  <p>Goal: you understand the security model and the extensibility model.</p>
+  <ol>
+    <li>Create a ServiceAccount, a Role granting it <code>get/list/watch</code> on pods, a RoleBinding. Verify with <code>kubectl auth can-i</code>.</li>
+    <li>Pull the ServiceAccount token from inside a pod (<code>cat /var/run/secrets/.../token</code>) and use it with <code>curl</code> against the API server.</li>
+    <li>Install cert-manager via Helm. Notice it installs CRDs (<code>Certificate</code>, <code>Issuer</code>). <code>kubectl get crds</code> to see them.</li>
+    <li>Read the source of one operator (cert-manager or the Prometheus Operator) — even just skimming the controller's reconcile function teaches a lot.</li>
+  </ol>
+  <p><strong>Checkpoint:</strong> you can grant a workload the minimum permissions it needs and you understand what an operator is doing under the hood.</p>
+
+  <div class="h2">Phase 6 — Production patterns</div>
+  <p>Goal: ready to operate a real cluster.</p>
+  <ol>
+    <li>Set up a HorizontalPodAutoscaler against a real load test.</li>
+    <li>Practice draining a node (<code>kubectl drain</code>), watching pods reschedule, then uncordon.</li>
+    <li>Adopt GitOps: set up ArgoCD or Flux pointing at a git repo of manifests. Make a change in git, watch the cluster sync.</li>
+    <li>Configure resource quotas and LimitRanges per namespace.</li>
+    <li>Read about and experiment with PodDisruptionBudgets, taints/tolerations, affinity/anti-affinity.</li>
+    <li>Read the K8s audit log for one day on a real cluster. You'll learn an enormous amount about what's actually happening.</li>
+  </ol>
+
+  <div class="h2">Optional Phase 7 — Internals (kubeadm walkthrough)</div>
+  <p>Goal: stop being mystified by what the control plane is doing.</p>
+  <ol>
+    <li>On a throwaway VM, install vanilla K8s with <code>kubeadm init</code>.</li>
+    <li>Look at every static pod manifest under <code>/etc/kubernetes/manifests/</code> — read the flags.</li>
+    <li>Use <code>etcdctl</code> (with the certs in <code>/etc/kubernetes/pki/etcd/</code>) to read keys directly from etcd.</li>
+    <li>Move <code>/etc/kubernetes/manifests/kube-scheduler.yaml</code> away. Watch new pods stay Pending. Move it back. You now <em>feel</em> what the scheduler does.</li>
+    <li>Tear it all down with <code>kubeadm reset</code>.</li>
+  </ol>
+  <p>Skip this if time-pressed; come back to it when you want depth.</p>
+
+  <div class="h2">Resources worth your time</div>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">📖 Docs</div>
+      <ul style="margin:0 0 0 18px;">
+        <li><a href="https://kubernetes.io/docs/concepts/" style="color:var(--accent-cyan);">kubernetes.io/docs/concepts</a> — the official conceptual docs are genuinely good</li>
+        <li><a href="https://docs.k3s.io/" style="color:var(--accent-cyan);">docs.k3s.io</a> — short and complete</li>
+        <li><a href="https://helm.sh/docs/" style="color:var(--accent-cyan);">helm.sh/docs</a></li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="card-title">📚 Books</div>
+      <ul style="margin:0 0 0 18px;">
+        <li><strong>Kubernetes Up &amp; Running</strong> (Hightower, Burns, Beda) — the classic intro</li>
+        <li><strong>Kubernetes Patterns</strong> (Ibryam, Huß) — how to model real workloads</li>
+        <li><strong>Programming Kubernetes</strong> (Hausenblas, Schimanski) — for when you want to write controllers</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="card-title">🎥 Videos &amp; courses</div>
+      <ul style="margin:0 0 0 18px;">
+        <li><strong>TechWorld with Nana</strong> on YouTube — the most-recommended free K8s intro</li>
+        <li><strong>Kubernetes the Hard Way</strong> (Kelsey Hightower, GitHub) — read it, don't necessarily run it; teaches internals</li>
+        <li><strong>KubeCon talks</strong> on YouTube — once you know the basics, the conference talks accelerate everything</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="card-title">🛠️ Practice playgrounds</div>
+      <ul style="margin:0 0 0 18px;">
+        <li><a href="https://killercoda.com/" style="color:var(--accent-cyan);">killercoda.com</a> — free interactive K8s labs in the browser</li>
+        <li><a href="https://kubernetes.io/docs/tutorials/" style="color:var(--accent-cyan);">kubernetes.io/docs/tutorials</a> — official walkthroughs</li>
+        <li><strong>CKA / CKAD</strong> certifications — even if you don't take them, the practice questions are excellent forced learning</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="callout callout-tip">
+    <div class="callout-icon">🌱</div>
+    <div class="callout-body">
+      <strong>The most valuable habit:</strong> when you don't understand what something does, run <code>kubectl explain &lt;thing&gt;</code> and read it. The K8s API is meticulously self-documenting and most engineers never touch this command. It will quietly carry you further than any tutorial.
+    </div>
+  </div>
+
+  <div class="h2">What to do this week (for our project)</div>
+  <ol>
+    <li>Read the <strong>Big Picture</strong> tab once.</li>
+    <li>Skim <strong>Core Concepts</strong> and <strong>Architecture</strong> — don't memorize, just register that these things exist.</li>
+    <li>Spin up a k3d cluster on your laptop, install <code>k9s</code>, and do Phase 1 above.</li>
+    <li>Come back to the <strong>k3s Deep Dive</strong> tab when you're ready to write the Ansible role.</li>
+    <li>Use the <strong>Reproducibility</strong> tab as your checklist when committing the migration to git.</li>
+  </ol>
+  <p>Everything else in this guide is reference — bookmark it and revisit one tab at a time as you encounter the concepts in real work. <em>Don't try to read the whole thing in one sitting.</em></p>
+</div>
+</div>
+
+<script>
+function showTab(name) {
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  event.target.classList.add('active');
+  window.scrollTo(0, 0);
+}
+</script>
+
+</body>
+</html>
