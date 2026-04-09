@@ -2462,6 +2462,121 @@ kubeseal --controller-name sealed-secrets-controller \
       <strong>For our project: k3s is the answer.</strong> It's production-grade, lightweight enough to share an EC2 with Spring Boot/Kong/Ollama, fits our Ansible workflow, and uses the real upstream K8s API so anything we learn transfers anywhere. The next tab goes deep on it.
     </div>
   </div>
+
+  <div class="h2">Install commands — copy/paste reference</div>
+  <p>How you'd actually bring up each distro for a quick test.</p>
+
+  <div class="h3">k3s (single node, on any Linux)</div>
+  <pre>curl -sfL https://get.k3s.io | \
+  INSTALL_K3S_VERSION="v1.30.2+k3s1" \
+  sh -
+
+# kubeconfig is at /etc/rancher/k3s/k3s.yaml
+sudo cat /etc/rancher/k3s/k3s.yaml &gt; ~/.kube/config
+sudo chown $USER ~/.kube/config
+
+kubectl get nodes</pre>
+
+  <div class="h3">k3d (k3s in Docker, on your laptop)</div>
+  <pre># Install k3d
+curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash
+
+# Create a 3-node cluster
+k3d cluster create demo \
+  --servers 1 --agents 2 \
+  --image rancher/k3s:v1.30.2-k3s1 \
+  --port "8080:80@loadbalancer"
+
+kubectl config use-context k3d-demo
+kubectl get nodes
+# Cluster is gone with: k3d cluster delete demo</pre>
+
+  <div class="h3">minikube</div>
+  <pre># Install (Linux)
+curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+sudo install minikube-linux-amd64 /usr/local/bin/minikube
+
+minikube start --kubernetes-version=v1.30.2 \
+  --driver=docker \
+  --cpus=4 --memory=8g
+
+minikube addons enable ingress
+minikube addons enable metrics-server
+kubectl get nodes</pre>
+
+  <div class="h3">kind</div>
+  <pre># Install
+go install sigs.k8s.io/kind@v0.23.0   # or download a release binary
+
+# Create a multi-node cluster from a config
+cat &lt;&lt;EOF | kind create cluster --name demo --config -
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+- role: control-plane
+- role: worker
+- role: worker
+EOF
+
+kubectl cluster-info --context kind-demo</pre>
+
+  <div class="h3">microk8s</div>
+  <pre># Install (Ubuntu)
+sudo snap install microk8s --classic --channel=1.30/stable
+
+# Wait for it to be ready
+sudo microk8s status --wait-ready
+
+# Enable common addons
+sudo microk8s enable dns ingress storage metrics-server
+
+# Get a kubeconfig
+sudo microk8s config &gt; ~/.kube/config
+microk8s kubectl get nodes</pre>
+
+  <div class="h3">kubeadm (vanilla, multi-step)</div>
+  <pre># 1. Install containerd, kubeadm, kubelet, kubectl on every node
+sudo apt-get update
+sudo apt-get install -y containerd
+# (configure containerd CRI...)
+sudo apt-get install -y \
+  kubelet=1.30.2-00 kubeadm=1.30.2-00 kubectl=1.30.2-00
+sudo apt-mark hold kubelet kubeadm kubectl
+
+# 2. On the control plane node:
+sudo kubeadm init \
+  --kubernetes-version=v1.30.2 \
+  --pod-network-cidr=10.244.0.0/16
+
+# 3. Set up kubectl as a regular user
+mkdir -p $HOME/.kube
+sudo cp /etc/kubernetes/admin.conf $HOME/.kube/config
+sudo chown $(id -u):$(id -g) $HOME/.kube/config
+
+# 4. Install a CNI (Calico in this example)
+kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.27.2/manifests/calico.yaml
+
+# 5. (Optional) Join workers — kubeadm init prints the command
+sudo kubeadm join &lt;control-plane-ip&gt;:6443 \
+  --token &lt;token&gt; \
+  --discovery-token-ca-cert-hash sha256:&lt;hash&gt;</pre>
+
+  <div class="h2">Pick by scenario</div>
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <thead><tr><th>Scenario</th><th>Pick</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>Tutorials on kubernetes.io</td><td>minikube</td><td>Most tutorials assume it</td></tr>
+        <tr><td>CI pipeline ephemeral cluster</td><td>kind</td><td>Fastest, most upstream-faithful, scriptable</td></tr>
+        <tr><td>Local dev that mirrors prod (k3s on EC2)</td><td>k3d</td><td>Identical distro to k3s</td></tr>
+        <tr><td>Small production cluster on a few VMs</td><td>k3s</td><td>Lightweight, batteries included, real distro</td></tr>
+        <tr><td>Learning K8s internals</td><td>kubeadm</td><td>All components visible</td></tr>
+        <tr><td>Running prod workloads on AWS without operating control plane</td><td>EKS</td><td>Managed, deep cloud integration</td></tr>
+        <tr><td>Multi-cluster fleet management</td><td>Rancher (over k3s/RKE2)</td><td>Built for it</td></tr>
+        <tr><td>Big enterprise with full platform needs</td><td>OpenShift</td><td>Opinionated, integrated, supported</td></tr>
+      </tbody>
+    </table>
+  </div>
 </div>
 </div>
 
@@ -2872,28 +2987,151 @@ spec:
 
   <div class="h2">Phase 1 — Get hands on a cluster</div>
   <p>Goal: kubectl commands stop feeling foreign. You can deploy a thing and find out why it broke.</p>
-  <ol>
-    <li>Spin up a local k3d cluster: <code>k3d cluster create learn --agents 2</code> (or use the project's k3s once it exists).</li>
-    <li>Walk through <code>kubectl get nodes</code>, <code>kubectl get pods -A</code>, <code>kubectl describe node</code>. Read what you see.</li>
-    <li>Apply your first manifest: a Deployment running nginx. Then a Service. Then port-forward to it.</li>
-    <li>Break it deliberately: <code>kubectl delete pod &lt;name&gt;</code> and watch the ReplicaSet recreate it.</li>
-    <li>Run <code>kubectl explain pod.spec</code> and read the output. Then <code>kubectl explain deployment.spec.strategy</code>. The API is self-documenting.</li>
-    <li>Install <code>k9s</code> and use it to browse the cluster.</li>
-  </ol>
-  <p><strong>Checkpoint:</strong> you can deploy a stateless web app, expose it via a Service, and explain (out loud) the difference between a Deployment, ReplicaSet, and Pod.</p>
+
+  <div class="h3">Exercise 1.1: bring up a cluster</div>
+  <pre>k3d cluster create learn --servers 1 --agents 2
+kubectl get nodes
+# Expected: 3 nodes — 1 control-plane and 2 workers, all Ready</pre>
+
+  <div class="h3">Exercise 1.2: explore what's already running</div>
+  <pre>kubectl get pods -A
+# Expected: pods in kube-system — coredns, local-path-provisioner,
+#           metrics-server, traefik (if not disabled), svclb-traefik
+
+kubectl describe node k3d-learn-server-0 | head -40
+# Read: Capacity, Allocatable, Labels, Taints, Conditions</pre>
+
+  <div class="h3">Exercise 1.3: deploy your first app</div>
+  <pre>cat &lt;&lt;EOF | kubectl apply -f -
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hello
+spec:
+  replicas: 3
+  selector: { matchLabels: { app: hello } }
+  template:
+    metadata: { labels: { app: hello } }
+    spec:
+      containers:
+      - name: web
+        image: nginx:1.27.0
+        ports: [{ containerPort: 80 }]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hello
+spec:
+  selector: { app: hello }
+  ports: [{ port: 80, targetPort: 80 }]
+EOF
+
+kubectl get pods -l app=hello
+kubectl get svc hello
+kubectl port-forward svc/hello 8080:80
+# Open http://localhost:8080 in your browser → nginx welcome page</pre>
+
+  <div class="h3">Exercise 1.4: break things and watch them heal</div>
+  <pre># Kill a pod and watch the ReplicaSet make a new one
+kubectl get pods -l app=hello -w &amp;
+kubectl delete pod -l app=hello --field-selector status.phase=Running --wait=false
+# Expected: a pod terminates, a new one appears within seconds</pre>
+
+  <div class="h3">Exercise 1.5: read the self-documenting API</div>
+  <pre>kubectl explain deployment
+kubectl explain deployment.spec
+kubectl explain deployment.spec.strategy
+kubectl explain deployment.spec.template.spec.containers.resources --recursive
+# Spend 10 minutes drilling. The K8s API documents itself.</pre>
+
+  <p><strong>Checkpoint:</strong> you can deploy a stateless web app, expose it via a Service, and explain (out loud) the difference between a Deployment, ReplicaSet, and Pod. You can find the API docs for any field without leaving the terminal.</p>
 
   <div class="h2">Phase 2 — The object model</div>
   <p>Goal: you've met all the major object types and know which one to reach for.</p>
-  <ol>
-    <li>Add a ConfigMap to your nginx deployment — mount a custom <code>nginx.conf</code>.</li>
-    <li>Add a Secret holding a fake API key, mount it as an env var.</li>
-    <li>Add a PVC with the local-path StorageClass; mount it; write a file; delete the pod; watch the file persist on the new pod.</li>
-    <li>Create a second namespace, deploy the same app there, observe namespace isolation.</li>
-    <li>Create a second Deployment with a different label, then a Service that selects both via shared labels. Understand how selectors work.</li>
-    <li>Create a Job that runs <code>echo "hello"</code>. Then a CronJob that runs it every minute.</li>
-    <li>Create a DaemonSet that runs <code>busybox sleep infinity</code> on every node.</li>
-  </ol>
-  <p><strong>Checkpoint:</strong> for any new piece of software, you know whether to model it as a Deployment, StatefulSet, DaemonSet, or Job.</p>
+
+  <div class="h3">Exercise 2.1: ConfigMap and how it's mounted</div>
+  <pre>kubectl create configmap nginx-conf --from-literal=index.html='&lt;h1&gt;Hello from ConfigMap&lt;/h1&gt;'
+# Mount it into the hello deployment by editing it (or kubectl patch)
+# Then port-forward and verify the page changed.</pre>
+
+  <div class="h3">Exercise 2.2: Secret as env var</div>
+  <pre>kubectl create secret generic api-keys --from-literal=API_KEY=fake-12345
+# Add envFrom to your Deployment
+# kubectl exec into a pod and run `env | grep API_KEY` to verify</pre>
+
+  <div class="h3">Exercise 2.3: persistent storage</div>
+  <pre>cat &lt;&lt;EOF | kubectl apply -f -
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: { name: data }
+spec:
+  accessModes: [ReadWriteOnce]
+  resources: { requests: { storage: 1Gi } }
+---
+apiVersion: v1
+kind: Pod
+metadata: { name: writer }
+spec:
+  containers:
+  - name: w
+    image: busybox
+    command: ['sh', '-c', 'date &gt;&gt; /data/log; sleep 3600']
+    volumeMounts: [{ name: data, mountPath: /data }]
+  volumes:
+  - name: data
+    persistentVolumeClaim: { claimName: data }
+EOF
+
+kubectl exec writer -- cat /data/log
+kubectl delete pod writer
+# Recreate the same pod, verify the data is still there
+kubectl apply -f writer-pod.yaml
+kubectl exec writer -- cat /data/log    # previous date is preserved</pre>
+
+  <div class="h3">Exercise 2.4: namespaces and isolation</div>
+  <pre>kubectl create namespace dev
+kubectl create namespace staging
+# Deploy hello to both
+kubectl apply -f hello.yaml -n dev
+kubectl apply -f hello.yaml -n staging
+# Try to reach across namespaces from inside a pod:
+kubectl exec -n dev hello-xxxxx -- wget -qO- hello.staging.svc.cluster.local
+# Notice that pod IPs differ but service names are stable</pre>
+
+  <div class="h3">Exercise 2.5: Job and CronJob</div>
+  <pre>kubectl create job hello-once --image=busybox -- echo "hello from a job"
+kubectl logs job/hello-once
+
+kubectl create cronjob hello-cron --image=busybox --schedule="*/1 * * * *" -- date
+# Wait 2-3 minutes, then:
+kubectl get jobs
+kubectl get pods --selector=job-name --sort-by=.metadata.creationTimestamp</pre>
+
+  <div class="h3">Exercise 2.6: DaemonSet</div>
+  <pre>cat &lt;&lt;EOF | kubectl apply -f -
+apiVersion: apps/v1
+kind: DaemonSet
+metadata: { name: pinger }
+spec:
+  selector: { matchLabels: { app: pinger } }
+  template:
+    metadata: { labels: { app: pinger } }
+    spec:
+      containers:
+      - name: p
+        image: busybox
+        command: ['sh', '-c', 'while true; do echo "alive on \$NODE_NAME"; sleep 10; done']
+        env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef: { fieldPath: spec.nodeName }
+EOF
+
+kubectl get pods -l app=pinger -o wide
+# Expected: one pod per node. Add a node → another pod appears.</pre>
+
+  <p><strong>Checkpoint:</strong> for any new piece of software, you know whether to model it as a Deployment, StatefulSet, DaemonSet, or Job. You've used the downward API (<code>fieldRef</code>) to inject node info into a pod.</p>
 
   <div class="h2">Phase 3 — Networking &amp; configuration depth</div>
   <p>Goal: you can debug "why can't service A talk to service B" without panicking.</p>
