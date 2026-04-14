@@ -1,0 +1,2114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sprint 2 Extension Guide — K8s Migration + AI Hardening</title>
+<style>
+  :root {
+    --bg: #0f1117; --card: #1a1d27; --card2: #1e2130; --border: #2a2d3a;
+    --text: #e0e0e0; --muted: #8890a0;
+    --accent-blue: #4ea8de; --accent-green: #6bcf7f; --accent-orange: #f0a050;
+    --accent-purple: #b07ee8; --accent-red: #e06070; --accent-cyan: #40d0d0;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Inter','Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); min-height:100vh; line-height:1.7; }
+  .topbar { display:flex; align-items:center; justify-content:space-between; padding:14px 32px; background:#13151e; border-bottom:1px solid var(--border); }
+  .topbar-left { display:flex; align-items:center; gap:16px; }
+  .back-link { color:var(--muted); text-decoration:none; font-size:13px; display:flex; align-items:center; gap:6px; transition:color .2s; }
+  .back-link:hover { color:var(--text); }
+  .topbar h1 { font-size:16px; font-weight:700; }
+
+  .tabs { display:flex; border-bottom:2px solid var(--border); padding:0 32px; background:#13151e; gap:4px; overflow-x:auto; }
+  .tab { padding:13px 22px; cursor:pointer; font-size:13px; font-weight:600; color:var(--muted); border-bottom:3px solid transparent; margin-bottom:-2px; transition:all .2s; white-space:nowrap; }
+  .tab:hover { color:var(--text); }
+  .tab.active { color:var(--accent-blue); border-bottom-color:var(--accent-blue); }
+  .tab-content { display:none; padding:32px; max-width:1100px; margin:0 auto; }
+  .tab-content.active { display:block; }
+
+  h2 { font-size:20px; font-weight:700; margin:28px 0 14px; color:var(--accent-blue); }
+  h3 { font-size:16px; font-weight:700; margin:22px 0 10px; color:var(--accent-green); }
+  h4 { font-size:14px; font-weight:700; margin:16px 0 8px; color:var(--accent-orange); }
+  p { margin:8px 0; font-size:14px; color:var(--muted); }
+  ul, ol { margin:8px 0 8px 20px; }
+  li { font-size:13px; color:var(--muted); margin:4px 0; line-height:1.6; }
+  li strong { color:var(--text); }
+  code { font-family:'JetBrains Mono','Fira Code',monospace; font-size:12px; background:rgba(78,168,222,.1); color:var(--accent-cyan); padding:2px 6px; border-radius:3px; }
+  pre { background:#13151e; border:1px solid var(--border); border-radius:8px; padding:16px; overflow-x:auto; margin:12px 0; }
+  pre code { background:none; padding:0; color:var(--text); font-size:12.5px; line-height:1.6; }
+
+  .note { background:rgba(78,168,222,.06); border:1px solid rgba(78,168,222,.2); border-radius:8px; padding:14px 18px; margin:16px 0; font-size:13px; color:var(--muted); }
+  .note strong { color:var(--accent-blue); }
+  .warn { background:rgba(240,160,80,.06); border:1px solid rgba(240,160,80,.2); }
+  .warn strong { color:var(--accent-orange); }
+  .danger { background:rgba(224,96,112,.06); border:1px solid rgba(224,96,112,.2); }
+  .danger strong { color:var(--accent-red); }
+
+  table { width:100%; border-collapse:collapse; margin:12px 0; font-size:13px; }
+  th { text-align:left; padding:10px 14px; background:var(--card); color:var(--accent-blue); font-weight:600; border:1px solid var(--border); }
+  td { padding:10px 14px; border:1px solid var(--border); color:var(--muted); }
+  td code { font-size:11px; }
+
+  .arch-box { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:20px; margin:16px 0; }
+  .arch-box pre { background:var(--card2); border-color:var(--border); }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-left">
+    <a href="index.html" class="back-link">&larr; Back to Index</a>
+    <span style="color:var(--border)">|</span>
+    <h1>Sprint 2 Extension Guide &mdash; K8s Migration + AI Hardening</h1>
+  </div>
+  <div style="display:flex;gap:10px;align-items:center;">
+    <span style="background:rgba(78,168,222,.15);color:var(--accent-blue);padding:4px 10px;border-radius:6px;font-size:12px;font-weight:600;border:1px solid rgba(78,168,222,.3);">Sprint 2 Extension</span>
+    <span style="background:rgba(107,207,127,.12);color:var(--accent-green);padding:4px 10px;border-radius:6px;font-size:12px;font-weight:600;border:1px solid rgba(107,207,127,.3);">Epic 3 + Epic 4</span>
+  </div>
+</div>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('overview')">Overview</div>
+  <div class="tab" onclick="switchTab('terraform')">Terraform Rescope</div>
+  <div class="tab" onclick="switchTab('k3s')">k3s Bootstrap</div>
+  <div class="tab" onclick="switchTab('images')">Container Images</div>
+  <div class="tab" onclick="switchTab('helm')">Helm Charts Deep Dive</div>
+  <div class="tab" onclick="switchTab('otel')">OTel Collector DaemonSet</div>
+  <div class="tab" onclick="switchTab('prometheus')">Prometheus K8s Discovery</div>
+  <div class="tab" onclick="switchTab('alerts')">Alert Rule Migration</div>
+  <div class="tab" onclick="switchTab('aihardening')">AI Hardening</div>
+  <div class="tab" onclick="switchTab('runbook')">Deployment Runbook</div>
+</div>
+
+<!-- ============== TAB 1: OVERVIEW ============== -->
+<div id="tab-overview" class="tab-content active">
+<h2>Sprint 2 Extension Overview</h2>
+
+<p>Sprint 2 was originally scheduled to end April 16, but was <strong>extended to April 23</strong> to accommodate two new epics that significantly change the platform architecture. This document covers every piece of work added during the extension, in enough detail to replicate from scratch.</p>
+
+<h3>What Changed</h3>
+<ul>
+<li><strong>Epic 3: K8s Migration</strong> &mdash; 10 stories, 34 story points. Migrates monitored infrastructure (Spring Boot, Kong, AI pipeline) from per-VM docker-compose to a single-node k3s cluster.</li>
+<li><strong>Epic 4: AI Hardening</strong> &mdash; 3 stories, 8 story points. Adds circuit breaker, JSON schema enforcement, and self-observability metrics to the AI RCA pipeline.</li>
+<li><strong>3 existing stories rescoped:</strong> SCRUM-63 (Terraform) restructured from 4 EC2s to 3; SCRUM-47 (Prometheus targets) gains <code>kubernetes_sd_configs</code>; SCRUM-51 (alert rules) gains Jinja2 conditional selectors.</li>
+<li><strong>2 existing stories superseded:</strong> E1-05 (VM-target E2E validation) replaced by E3-10 (K8s E2E validation); original per-VM OTel Collector story subsumed by E3-07 (DaemonSet).</li>
+</ul>
+
+<h3>New Epics at a Glance</h3>
+<table>
+<tr><th>Epic</th><th>Stories</th><th>Points</th><th>Focus</th></tr>
+<tr><td>Epic 3 &mdash; K8s Migration</td><td>10 (E3-01 through E3-10)</td><td>34</td><td>Move all monitored targets into k3s, update observability pipeline</td></tr>
+<tr><td>Epic 4 &mdash; AI Hardening</td><td>3 (AI-01, AI-02, AI-03)</td><td>8</td><td>Reliability and observability of the AI RCA pipeline</td></tr>
+</table>
+
+<h3>Epic 3 Story Breakdown</h3>
+<table>
+<tr><th>ID</th><th>Story</th><th>Points</th><th>Depends On</th></tr>
+<tr><td>E3-01</td><td>Bootstrap k3s on EC2 via Ansible</td><td>3</td><td>Terraform rescope</td></tr>
+<tr><td>E3-02</td><td>Image build + k3s containerd import</td><td>3</td><td>E3-01</td></tr>
+<tr><td>E3-03</td><td>Helm chart &mdash; Spring Boot</td><td>3</td><td>E3-01</td></tr>
+<tr><td>E3-04</td><td>Helm chart &mdash; Kong (upstream)</td><td>3</td><td>E3-01, E3-03</td></tr>
+<tr><td>E3-05</td><td>Helm chart &mdash; AI stack</td><td>5</td><td>E3-01, E3-02, E3-06</td></tr>
+<tr><td>E3-06</td><td>NVIDIA device plugin + GPU verification</td><td>5</td><td>E3-01</td></tr>
+<tr><td>E3-07</td><td>In-cluster OTel Collector DaemonSet</td><td>3</td><td>E3-01 through E3-05</td></tr>
+<tr><td>E3-08</td><td>Prometheus <code>kubernetes_sd_configs</code></td><td>3</td><td>E3-01</td></tr>
+<tr><td>E3-09</td><td>Migrate 17 Grafana alert rules</td><td>3</td><td>E3-03 through E3-05, E3-08</td></tr>
+<tr><td>E3-10</td><td>End-to-end K8s validation</td><td>3</td><td>All above</td></tr>
+</table>
+
+<h3>Epic 4 Story Breakdown</h3>
+<table>
+<tr><th>ID</th><th>Story</th><th>Points</th><th>Focus</th></tr>
+<tr><td>AI-01</td><td>Circuit breaker for Ollama calls</td><td>3</td><td>Prevent cascading failures when Ollama is down or slow</td></tr>
+<tr><td>AI-02</td><td>JSON schema enforcement for LLM output</td><td>3</td><td>Ensure structured, parseable responses from Ollama</td></tr>
+<tr><td>AI-03</td><td>Self-observability metrics</td><td>2</td><td>Prometheus metrics for circuit breaker state, queue depth, fallback rate</td></tr>
+</table>
+
+<h3>Architecture Before vs After</h3>
+
+<div class="arch-box">
+<h4>BEFORE (Sprint 2 Original &mdash; 4 VMs)</h4>
+<pre><code>
+  +------------------+     +------------------+     +------------------+     +------------------+
+  |  Monitoring VM   |     |   Backend VM     |     |   Network VM     |     |     AI VM        |
+  |  (t3.large)      |     |  (t3.medium)     |     |  (t3.medium)     |     |  (g4dn.xlarge)   |
+  |                  |     |                  |     |                  |     |                  |
+  |  Prometheus      |---->|  Spring Boot     |     |  Kong            |     |  Triage Service  |
+  |  Grafana         |     |  (docker-compose)|     |  (docker-compose)|     |  5x MCP Servers  |
+  |  Loki            |     |  OTel Collector  |     |  OTel Collector  |     |  Ollama (GPU)    |
+  |  Jaeger          |     |                  |     |                  |     |  OTel Collector  |
+  |  OTel Collector  |     +------------------+     +------------------+     +------------------+
+  +------------------+
+        Static scrape targets per VM, manual IP configuration
+</code></pre>
+</div>
+
+<div class="arch-box">
+<h4>AFTER (Sprint 2 Extension &mdash; 2-3 Instances)</h4>
+<pre><code>
+  +------------------+         +-----------------------------------------------+
+  |  Monitoring VM   |         |  k3s Cluster (single-node, t3.xlarge)         |
+  |  (t3.large)      |         |                                               |
+  |                  |         |  namespace: app        namespace: network      |
+  |  Prometheus  ----+-k8s_sd->|  +-------------+     +-------------+          |
+  |  Grafana         |         |  | Spring Boot |     |    Kong      |          |
+  |  Loki       <----+-OTLP----|  | + OTel Agent|<----| NodePort     |          |
+  |  Jaeger     <----+-OTLP----|  +-------------+     | :30080       |          |
+  |  OTel Collector  |         |                      +-------------+          |
+  |                  |         |  namespace: ai        namespace: observability |
+  +------------------+         |  +-------------+     +------------------+     |
+                               |  |Triage Svc   |     | OTel Collector   |     |
+  +------------------+         |  |5x MCP Srvrs |     | DaemonSet        |     |
+  |  GPU EC2         |         |  |Ollama (GPU) |     +------------------+     |
+  |  (g4dn.xlarge)   |         |  +-------------+                              |
+  |  (optional, for  |         +-----------------------------------------------+
+  |   separate GPU)  |
+  +------------------+         External: RDS MySQL, S3 + CloudFront
+</code></pre>
+</div>
+
+<div class="note"><strong>Key decision:</strong> The monitoring stack (Prometheus, Grafana, Loki, Jaeger) stays on its own VM. Only the monitored targets move to Kubernetes. This prevents circular dependencies &mdash; monitoring must not depend on the cluster it monitors.</div>
+</div>
+
+<!-- ============== TAB 2: TERRAFORM RESCOPE ============== -->
+<div id="tab-terraform" class="tab-content">
+<h2>Terraform Rescope (SCRUM-63)</h2>
+
+<h3>What Changed</h3>
+<p>The original Terraform provisioned <strong>4 separate EC2 instances</strong> (monitoring, backend, network, ai). The rescoped version provisions <strong>3 instances</strong>:</p>
+<ul>
+<li><strong>1 monitoring EC2</strong> &mdash; unchanged, <code>t3.large</code>. Runs Prometheus, Grafana, Loki, Jaeger.</li>
+<li><strong>1 k3s EC2</strong> &mdash; new, <code>t3.xlarge</code> (4 vCPU, 16GB RAM). Runs the single-node k3s cluster with Spring Boot, Kong, AI stack, OTel Collector.</li>
+<li><strong>1 GPU EC2</strong> &mdash; renamed from "ai", <code>g4dn.xlarge</code>. For Ollama if a separate GPU node is needed (optional &mdash; can colocate on k3s node if it has a GPU).</li>
+</ul>
+
+<h3>Changes to ec2.tf</h3>
+<p>The old <code>backend</code>, <code>network</code>, and <code>ai</code> resources are removed. Two new resources replace them:</p>
+<pre><code># OLD (removed):
+# resource "aws_instance" "backend" { ... }
+# resource "aws_instance" "network" { ... }
+# resource "aws_instance" "ai"      { ... }
+
+# NEW: k3s cluster node
+resource "aws_instance" "k3s" {
+  ami                    = var.ubuntu_ami_id != "" ? var.ubuntu_ami_id : data.aws_ami.ubuntu.id
+  instance_type          = var.k3s_instance_type
+  key_name               = aws_key_pair.deploy.key_name
+  subnet_id              = aws_subnet.private.id
+  vpc_security_group_ids = [aws_security_group.k3s.id]
+
+  root_block_device {
+    volume_size = 60
+    volume_type = "gp3"
+  }
+
+  tags = {
+    Name = "${var.project_name}-k3s"
+    Role = "k3s"
+  }
+}
+
+# NEW: GPU node (optional, for Ollama)
+resource "aws_instance" "gpu" {
+  ami                    = var.ubuntu_ami_id != "" ? var.ubuntu_ami_id : data.aws_ami.ubuntu_gpu.id
+  instance_type          = var.gpu_instance_type
+  key_name               = aws_key_pair.deploy.key_name
+  subnet_id              = aws_subnet.private.id
+  vpc_security_group_ids = [aws_security_group.gpu.id]
+
+  root_block_device {
+    volume_size = 80
+    volume_type = "gp3"
+  }
+
+  tags = {
+    Name = "${var.project_name}-gpu"
+    Role = "gpu"
+  }
+}</code></pre>
+
+<h3>Changes to security-groups.tf</h3>
+<p>The old <code>sg-backend</code>, <code>sg-network</code>, and <code>sg-ai</code> are replaced by <code>sg-k3s</code> and <code>sg-gpu</code>.</p>
+
+<h4>New k3s Security Group Rules</h4>
+<table>
+<tr><th>Port</th><th>Protocol</th><th>Source</th><th>Purpose</th></tr>
+<tr><td>6443</td><td>TCP</td><td>Monitoring SG + k3s SG</td><td>Kubernetes API server (needed for <code>kubernetes_sd_configs</code> and <code>kubectl</code>)</td></tr>
+<tr><td>10250</td><td>TCP</td><td>Monitoring SG + k3s SG</td><td>Kubelet API (needed for Prometheus pod metrics scraping)</td></tr>
+<tr><td>30000-32767</td><td>TCP</td><td>0.0.0.0/0 (or VPC CIDR)</td><td>NodePort range (Kong exposed on :30080, services on :30xxx)</td></tr>
+<tr><td>80</td><td>TCP</td><td>0.0.0.0/0</td><td>HTTP (if using Ingress)</td></tr>
+<tr><td>443</td><td>TCP</td><td>0.0.0.0/0</td><td>HTTPS (if using Ingress)</td></tr>
+<tr><td>8472</td><td>UDP</td><td>k3s SG</td><td>Flannel VXLAN (multi-node only, but included for future use)</td></tr>
+<tr><td>22</td><td>TCP</td><td>Bastion SG</td><td>SSH access</td></tr>
+</table>
+
+<pre><code>resource "aws_security_group" "k3s" {
+  name_prefix = "${var.project_name}-k3s-"
+  vpc_id      = aws_vpc.main.id
+
+  # K8s API server
+  ingress {
+    from_port       = 6443
+    to_port         = 6443
+    protocol        = "tcp"
+    security_groups = [aws_security_group.monitoring.id]
+    self            = true
+  }
+
+  # Kubelet
+  ingress {
+    from_port       = 10250
+    to_port         = 10250
+    protocol        = "tcp"
+    security_groups = [aws_security_group.monitoring.id]
+    self            = true
+  }
+
+  # NodePort range
+  ingress {
+    from_port   = 30000
+    to_port     = 32767
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  # Flannel VXLAN (multi-node future-proofing)
+  ingress {
+    from_port = 8472
+    to_port   = 8472
+    protocol  = "udp"
+    self      = true
+  }
+
+  # SSH
+  ingress {
+    from_port       = 22
+    to_port         = 22
+    protocol        = "tcp"
+    security_groups = [aws_security_group.bastion.id]
+  }
+
+  # Allow all outbound
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = { Name = "${var.project_name}-k3s" }
+}
+
+resource "aws_security_group" "gpu" {
+  name_prefix = "${var.project_name}-gpu-"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    from_port       = 11434
+    to_port         = 11434
+    protocol        = "tcp"
+    security_groups = [aws_security_group.k3s.id]
+    description     = "Ollama API"
+  }
+
+  ingress {
+    from_port       = 9100
+    to_port         = 9100
+    protocol        = "tcp"
+    security_groups = [aws_security_group.monitoring.id]
+    description     = "Node exporter"
+  }
+
+  ingress {
+    from_port       = 22
+    to_port         = 22
+    protocol        = "tcp"
+    security_groups = [aws_security_group.bastion.id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = { Name = "${var.project_name}-gpu" }
+}</code></pre>
+
+<h3>Changes to variables.tf</h3>
+<pre><code># NEW variables added:
+variable "k3s_instance_type" {
+  description = "EC2 instance type for the k3s cluster node"
+  type        = string
+  default     = "t3.xlarge"   # 4 vCPU, 16GB RAM
+}
+
+variable "gpu_instance_type" {
+  description = "EC2 instance type for the GPU node"
+  type        = string
+  default     = "g4dn.xlarge" # NVIDIA T4 GPU
+}
+
+variable "ubuntu_ami_id" {
+  description = "Pin a specific Ubuntu AMI ID. Empty string = use latest."
+  type        = string
+  default     = ""
+}
+
+# REMOVED variables:
+# variable "backend_instance_type" { ... }
+# variable "network_instance_type" { ... }
+# variable "ai_instance_type"      { ... }</code></pre>
+
+<h3>Changes to outputs.tf</h3>
+<pre><code># REMOVED outputs:
+# output "backend_public_ip"  { ... }
+# output "network_public_ip"  { ... }
+# output "ai_public_ip"       { ... }
+
+# NEW outputs:
+output "k3s_private_ip" {
+  description = "Private IP of the k3s cluster node"
+  value       = aws_instance.k3s.private_ip
+}
+
+output "k3s_public_ip" {
+  description = "Public IP of the k3s cluster node"
+  value       = aws_instance.k3s.public_ip
+}
+
+output "gpu_private_ip" {
+  description = "Private IP of the GPU node"
+  value       = aws_instance.gpu.private_ip
+}
+
+output "gpu_public_ip" {
+  description = "Public IP of the GPU node"
+  value       = aws_instance.gpu.public_ip
+}</code></pre>
+
+<h3>AMI Pinning Explanation</h3>
+<p>By default, the <code>ubuntu_ami_id</code> variable is empty, which causes Terraform to look up the <strong>latest Ubuntu 22.04 LTS AMI</strong> via a <code>data.aws_ami</code> data source. This is convenient for development but risky for production &mdash; a new AMI might introduce breaking changes.</p>
+<p>To pin a specific AMI (recommended for reproducible builds):</p>
+<pre><code># In terraform.tfvars:
+ubuntu_ami_id = "ami-0abcdef1234567890"
+
+# This skips the data source lookup and uses the exact AMI.
+# Find your AMI with:
+aws ec2 describe-images \
+  --owners 099720109477 \
+  --filters "Name=name,Values=ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*" \
+  --query 'sort_by(Images, &CreationDate)[-1].ImageId' \
+  --output text</code></pre>
+
+<h3>Step-by-Step: Running Terraform After Changes</h3>
+<pre><code># 1. Initialize (download providers if needed)
+cd terraform/
+terraform init
+
+# 2. Preview changes (ALWAYS do this before apply)
+terraform plan -out=plan.tfplan
+
+# You should see:
+#   - 3 resources to destroy (old backend, network, ai instances)
+#   - 2 resources to create (k3s, gpu instances)
+#   - Security group changes
+
+# 3. Apply
+terraform apply plan.tfplan
+
+# 4. Verify outputs
+terraform output k3s_public_ip
+terraform output gpu_public_ip
+
+# 5. Test SSH access
+ssh -i ~/.ssh/deploy.pem ubuntu@$(terraform output -raw k3s_public_ip)</code></pre>
+
+<h3>Common Issues</h3>
+<table>
+<tr><th>Issue</th><th>Cause</th><th>Fix</th></tr>
+<tr><td><code>Error: No AMI found</code></td><td>AMI ID is pinned to a region-specific ID and you are in a different region, or the AMI has been deprecated</td><td>Clear <code>ubuntu_ami_id</code> to use the data source lookup, or find the correct AMI for your region</td></tr>
+<tr><td><code>Error: InvalidGroup.Duplicate</code></td><td>Old security groups still exist from a previous apply with a different name prefix</td><td>Run <code>terraform state list</code> and remove orphaned resources, or use <code>terraform destroy</code> and re-apply</td></tr>
+<tr><td><code>Error: InsufficientInstanceCapacity</code></td><td>The requested instance type (especially <code>g4dn.xlarge</code>) is not available in your AZ</td><td>Try a different AZ by changing the subnet, or use a different GPU instance type</td></tr>
+<tr><td>Old instances still running</td><td><code>terraform apply</code> was interrupted</td><td>Run <code>terraform apply</code> again &mdash; it is idempotent and will finish the job</td></tr>
+</table>
+
+<div class="warn note"><strong>Warning:</strong> Running <code>terraform apply</code> after the rescope will <strong>destroy the old backend, network, and AI instances</strong>. Make sure you have backed up any data or configuration from them first. The monitoring VM is untouched.</div>
+</div>
+
+<!-- ============== TAB 3: K3S BOOTSTRAP ============== -->
+<div id="tab-k3s" class="tab-content">
+<h2>k3s Bootstrap (E3-01)</h2>
+
+<h3>What is xanmanning.k3s?</h3>
+<p>The <code>xanmanning.k3s</code> Ansible role (version 3.4.4) is a community-maintained role that fully automates the k3s lifecycle. It handles:</p>
+<ul>
+<li><strong>Installation:</strong> Downloads the k3s binary, creates the systemd service, starts k3s</li>
+<li><strong>Configuration:</strong> Applies server flags (disable Traefik, set kubeconfig permissions, etc.)</li>
+<li><strong>Multi-node:</strong> Supports adding agent nodes to a server (not used yet, but ready for scale-out)</li>
+<li><strong>Upgrade:</strong> Can pin a specific k3s version and upgrade in place</li>
+<li><strong>Uninstall:</strong> Cleans up k3s completely (<code>k3s-uninstall.sh</code>)</li>
+</ul>
+
+<h3>How requirements.yml Was Updated</h3>
+<pre><code># requirements.yml (add this entry under the roles section)
+roles:
+  # ... existing roles ...
+  - name: xanmanning.k3s
+    version: "v3.4.4"
+
+# Install the role:
+ansible-galaxy install -r requirements.yml --force</code></pre>
+
+<div class="note"><strong>Note:</strong> The <code>--force</code> flag re-downloads even if the role exists. Use it when upgrading versions. Without it, an already-installed role is skipped.</div>
+
+<h3>The k3s_cluster Inventory Group</h3>
+<p>A new inventory group <code>k3s_cluster</code> is created. The <code>k3s_control_node: true</code> variable tells the xanmanning role this host is a server (not an agent).</p>
+<pre><code># inventory/production.yml
+all:
+  children:
+    monitoring:
+      hosts:
+        monitoring-vm:
+          ansible_host: "{{ monitoring_ip }}"   # from Terraform output or generate-inventory.sh
+          ansible_user: ubuntu
+
+    k3s_cluster:
+      hosts:
+        k3s-node:
+          ansible_host: "{{ k3s_ip }}"          # from Terraform output
+          ansible_user: ubuntu
+          k3s_control_node: true                # this host runs the k3s server
+
+    gpu:
+      hosts:
+        gpu-vm:
+          ansible_host: "{{ gpu_ip }}"          # from Terraform output
+          ansible_user: ubuntu</code></pre>
+
+<h3>Group Variables for k3s_cluster</h3>
+<pre><code># inventory/group_vars/k3s_cluster.yml
+---
+# k3s version to install (pinned for reproducibility)
+k3s_release_version: "v1.30.6+k3s1"
+
+# k3s server configuration
+k3s_server:
+  disable:
+    - traefik                  # We use Kong as our API gateway instead
+  write-kubeconfig-mode: "0644"  # Allow non-root to read kubeconfig
+
+# Docker image tag used by Helm charts
+image_tag: "latest"
+
+# Feature flags
+k3s_sd_enabled: false            # Set to true after E3-08 is complete</code></pre>
+
+<h3>The k3s.yml Playbook Step by Step</h3>
+<pre><code># playbooks/k3s.yml
+---
+- name: Bootstrap k3s cluster
+  hosts: k3s_cluster
+  become: true
+  roles:
+    - role: xanmanning.k3s      # Installs and configures k3s
+
+  post_tasks:
+    # Fetch the kubeconfig to the Ansible controller
+    - name: Fetch kubeconfig from k3s node
+      fetch:
+        src: /etc/rancher/k3s/k3s.yaml
+        dest: "{{ playbook_dir }}/../kubeconfig"
+        flat: true
+
+    # Rewrite the kubeconfig to use the node's real IP (not 127.0.0.1)
+    - name: Update kubeconfig server address
+      delegate_to: localhost
+      become: false
+      replace:
+        path: "{{ playbook_dir }}/../kubeconfig"
+        regexp: 'https://127\.0\.0\.1:6443'
+        replace: "https://{{ ansible_host }}:6443"
+
+    # Install Helm on the k3s node
+    - name: Install Helm
+      shell: |
+        curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+      args:
+        creates: /usr/local/bin/helm</code></pre>
+
+<h4>What the Kubeconfig Fetch Does</h4>
+<p>k3s writes its kubeconfig to <code>/etc/rancher/k3s/k3s.yaml</code> on the server node. This file contains the cluster CA certificate, a client certificate, and points to <code>https://127.0.0.1:6443</code>. The playbook:</p>
+<ol>
+<li><strong>Fetches</strong> the file to the Ansible controller at <code>./kubeconfig</code></li>
+<li><strong>Rewrites</strong> the server address from <code>127.0.0.1</code> to the node's actual IP so you can use <code>kubectl</code> remotely</li>
+<li>You can then do: <code>export KUBECONFIG=$(pwd)/kubeconfig</code> and run <code>kubectl</code> from your local machine</li>
+</ol>
+
+<h3>How to Verify</h3>
+<pre><code># On the k3s node directly:
+sudo k3s kubectl get nodes
+
+# Expected output:
+# NAME       STATUS   ROLES                  AGE   VERSION
+# k3s-node   Ready    control-plane,master   1m    v1.30.6+k3s1
+
+# From your local machine (after kubeconfig fetch):
+export KUBECONFIG=$(pwd)/kubeconfig
+kubectl get nodes
+kubectl get pods -A       # shows kube-system pods (coredns, local-path-provisioner, metrics-server)</code></pre>
+
+<h3>Key k3s Commands</h3>
+<table>
+<tr><th>Command</th><th>What It Does</th></tr>
+<tr><td><code>sudo k3s kubectl get nodes</code></td><td>Built-in kubectl &mdash; works without separate kubectl install</td></tr>
+<tr><td><code>sudo k3s kubectl get pods -A</code></td><td>List all pods across all namespaces</td></tr>
+<tr><td><code>sudo k3s crictl ps</code></td><td>List running containers (like <code>docker ps</code> but for containerd)</td></tr>
+<tr><td><code>sudo k3s crictl images</code></td><td>List images in containerd (like <code>docker images</code>)</td></tr>
+<tr><td><code>sudo k3s ctr images import /tmp/image.tar</code></td><td>Import a Docker-saved tarball into containerd</td></tr>
+<tr><td><code>sudo systemctl status k3s</code></td><td>Check k3s service status</td></tr>
+<tr><td><code>sudo journalctl -u k3s -f</code></td><td>Tail k3s logs</td></tr>
+<tr><td><code>k3s check-config</code></td><td>Verify the host kernel meets k3s requirements</td></tr>
+</table>
+
+<div class="warn note"><strong>Important:</strong> k3s uses <strong>containerd</strong> directly, not Docker. The <code>docker</code> CLI does not exist on the k3s node unless you install Docker separately (which you should only do for building images, not running them).</div>
+</div>
+
+<!-- ============== TAB 4: CONTAINER IMAGES ============== -->
+<div id="tab-images" class="tab-content">
+<h2>Container Images (E3-02)</h2>
+
+<h3>Why We Do Not Use a Registry</h3>
+<p>In a typical Kubernetes setup, container images live in a registry (Docker Hub, ECR, GCR). Pods pull images from the registry at deploy time. However, for our single-node k3s cluster with 1-2 contributors, a registry adds unnecessary complexity:</p>
+<ul>
+<li><strong>ECR:</strong> Requires IAM credentials, push/pull policies, lifecycle rules, and costs money</li>
+<li><strong>Self-hosted registry:</strong> Another service to maintain, secure, and back up</li>
+<li><strong>Docker Hub:</strong> Rate limits on pulls, public exposure of images</li>
+</ul>
+<p>Instead, we <strong>build images locally with Docker, save them as tarballs, and import them directly into k3s's containerd</strong>. This is fast, simple, and works perfectly for single-node.</p>
+
+<h3>The k3s_images Ansible Role</h3>
+<p>The <code>k3s_images</code> Ansible role automates the entire image pipeline. It is structured as follows:</p>
+<pre><code>roles/k3s_images/
+  tasks/
+    main.yml          # Orchestrates the build + import flow
+  defaults/
+    main.yml          # Default image names and tags
+  files/              # (empty, source repos synced at runtime)</code></pre>
+
+<h4>How synchronize Sends Source Repos to the k3s Host</h4>
+<p>Each first-party service (triage-service, mcp-prometheus, etc.) lives in a source repository on the Ansible controller. The role uses Ansible's <code>synchronize</code> module (which wraps <code>rsync</code>) to push the source code to the k3s node:</p>
+<pre><code># Inside roles/k3s_images/tasks/main.yml
+- name: Sync source code for {{ item.name }}
+  synchronize:
+    src: "{{ item.src_path }}/"
+    dest: "/tmp/build/{{ item.name }}/"
+    delete: true
+    rsync_opts:
+      - "--exclude=.git"
+      - "--exclude=node_modules"
+      - "--exclude=__pycache__"
+  loop: "{{ first_party_images }}"
+
+# first_party_images is defined in defaults/main.yml:
+# first_party_images:
+#   - name: triage-service
+#     src_path: "{{ playbook_dir }}/../services/triage-service"
+#     image: cires/triage-service
+#   - name: mcp-prometheus
+#     src_path: "{{ playbook_dir }}/../services/mcp-prometheus"
+#     image: cires/mcp-prometheus
+#   ... (one entry per first-party image)</code></pre>
+
+<h3>The Build Flow: docker build, docker save, k3s ctr images import</h3>
+<p>After syncing the source, the role executes three steps per image:</p>
+
+<pre><code># Step 1: Build the Docker image on the k3s host
+# (Docker must be installed alongside k3s for building)
+- name: Build image {{ item.image }}:{{ image_tag }}
+  community.docker.docker_image:
+    name: "{{ item.image }}"
+    tag: "{{ image_tag }}"
+    source: build
+    build:
+      path: "/tmp/build/{{ item.name }}"
+    force_source: true
+  loop: "{{ first_party_images }}"
+
+# Step 2: Save the image to a tarball
+- name: Save image to tarball
+  command: >
+    docker save {{ item.image }}:{{ image_tag }}
+    -o /tmp/{{ item.name }}.tar
+  loop: "{{ first_party_images }}"
+
+# Step 3: Import into k3s containerd
+- name: Import image into k3s
+  command: >
+    k3s ctr images import /tmp/{{ item.name }}.tar
+  loop: "{{ first_party_images }}"
+
+# Step 4: Cleanup tarballs
+- name: Remove tarballs
+  file:
+    path: "/tmp/{{ item.name }}.tar"
+    state: absent
+  loop: "{{ first_party_images }}"</code></pre>
+
+<div class="note"><strong>Why Docker + k3s ctr?</strong> k3s uses containerd, which cannot build images. Docker can build images but k3s does not use Docker's image store. So we build with Docker, export to a tarball, and import into containerd. This is the standard pattern for air-gapped or registryless k3s deployments.</div>
+
+<h3>How to Verify</h3>
+<pre><code># List all images in k3s containerd:
+sudo k3s crictl images
+
+# Expected output includes:
+# REPOSITORY                  TAG       IMAGE ID       SIZE
+# docker.io/cires/triage-service   latest    abc123...    250MB
+# docker.io/cires/mcp-prometheus   latest    def456...    180MB
+# docker.io/cires/mcp-loki         latest    ...          ...
+# docker.io/cires/mcp-jaeger       latest    ...          ...
+# docker.io/cires/mcp-alertmanager latest    ...          ...
+# docker.io/cires/mcp-grafana      latest    ...          ...
+
+# If an image is missing, re-run just the image tasks:
+ansible-playbook playbooks/k3s.yml --tags images</code></pre>
+
+<div class="warn note"><strong>Critical:</strong> Helm charts must set <code>imagePullPolicy: IfNotPresent</code> (not <code>Always</code>). If set to <code>Always</code>, k3s will try to pull from a registry and fail with <code>ImagePullBackOff</code> because these images do not exist in any registry.</div>
+
+<h3>Upgrade Path to ECR (Multi-Node)</h3>
+<p>When the project moves to multi-node k3s or EKS, the image strategy must change because images imported on one node are not visible to other nodes. The upgrade path:</p>
+<ol>
+<li><strong>Create an ECR repository</strong> per image (<code>aws ecr create-repository --repository-name cires/triage-service</code>)</li>
+<li><strong>Authenticate Docker to ECR:</strong> <code>aws ecr get-login-password | docker login --username AWS --password-stdin ECR_URL</code></li>
+<li><strong>Push images:</strong> <code>docker tag cires/triage-service:latest ECR_URL/cires/triage-service:latest && docker push ...</code></li>
+<li><strong>Update Helm charts</strong> to use the ECR URL as the image repository</li>
+<li><strong>Add an ECR pull secret</strong> to each namespace (<code>kubectl create secret docker-registry ...</code>)</li>
+<li><strong>Remove</strong> the <code>k3s_images</code> role from the playbook (no longer needed)</li>
+</ol>
+</div>
+
+<!-- ============== TAB 5: HELM CHARTS DEEP DIVE ============== -->
+<div id="tab-helm" class="tab-content">
+<h2>Helm Charts Deep Dive (E3-03, E3-04, E3-05)</h2>
+
+<h3>Chart Structure Explained</h3>
+<p>Every Helm chart follows the same directory layout:</p>
+<pre><code>charts/&lt;chart-name&gt;/
+  Chart.yaml          # Chart metadata: name, version, appVersion, description
+  values.yaml         # Default configuration values (overridable with --set or -f)
+  templates/          # Kubernetes manifest templates using Go template syntax
+    _helpers.tpl      # Reusable template functions (name, fullname, labels, selectors)
+    deployment.yaml   # Deployment resource template
+    service.yaml      # Service resource template
+    configmap.yaml    # ConfigMap template (if needed)
+    secret.yaml       # Secret template (if needed)
+    serviceaccount.yaml
+    NOTES.txt         # Post-install help text shown to user
+  .helmignore         # Files to exclude from chart packaging</code></pre>
+
+<h4>_helpers.tpl Explained</h4>
+<p>The <code>_helpers.tpl</code> file defines named templates that are reused across all manifests. This avoids repetition:</p>
+<pre><code>{{/* Generate the full name: release-name + chart-name, truncated to 63 chars */}}
+{{- define "spring-boot.fullname" -}}
+{{- printf "%s-%s" .Release.Name .Chart.Name | trunc 63 | trimSuffix "-" }}
+{{- end }}
+
+{{/* Common labels applied to every resource */}}
+{{- define "spring-boot.labels" -}}
+helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version }}
+app.kubernetes.io/name: {{ .Chart.Name }}
+app.kubernetes.io/instance: {{ .Release.Name }}
+app.kubernetes.io/managed-by: {{ .Release.Service }}
+{{- end }}
+
+{{/* Selector labels (used in matchLabels and service selectors) */}}
+{{- define "spring-boot.selectorLabels" -}}
+app.kubernetes.io/name: {{ .Chart.Name }}
+app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end }}</code></pre>
+
+<!-- ===== SPRING BOOT CHART ===== -->
+<h3>Spring Boot Chart (E3-03)</h3>
+<p>Location: <code>charts/spring-boot/</code></p>
+
+<h4>Chart.yaml</h4>
+<pre><code>apiVersion: v2
+name: spring-boot
+description: CIRES Spring Boot backend with OTel Java Agent
+type: application
+version: 0.1.0
+appVersion: "1.0.0"</code></pre>
+
+<h4>values.yaml (defaults)</h4>
+<pre><code>replicaCount: 1
+
+image:
+  repository: cires/spring-boot-app
+  tag: "latest"
+  pullPolicy: IfNotPresent      # MUST be IfNotPresent for registryless
+
+service:
+  type: ClusterIP
+  port: 8080
+
+database:
+  url: "jdbc:mysql://localhost:3306/app_db"
+  username: "app_user"
+  password: ""                   # Override with --set at install time
+
+otel:
+  enabled: true
+  collectorEndpoint: "http://otel-collector.observability.svc:4317"
+  agentVersion: "1.32.1"
+
+probes:
+  liveness:
+    path: /actuator/health/liveness
+    initialDelaySeconds: 30
+    periodSeconds: 10
+  readiness:
+    path: /actuator/health/readiness
+    initialDelaySeconds: 15
+    periodSeconds: 5
+
+resources:
+  requests:
+    memory: "512Mi"
+    cpu: "250m"
+  limits:
+    memory: "1Gi"
+    cpu: "1000m"
+
+prometheus:
+  scrape: true
+  port: 8080
+  path: /actuator/prometheus</code></pre>
+
+<h4>templates/deployment.yaml &mdash; Every Section Explained</h4>
+<pre><code>apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "spring-boot.fullname" . }}
+  labels:
+    {{- include "spring-boot.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "spring-boot.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "spring-boot.selectorLabels" . | nindent 8 }}
+      annotations:
+        {{- if .Values.prometheus.scrape }}
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "{{ .Values.prometheus.port }}"
+        prometheus.io/path: "{{ .Values.prometheus.path }}"
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "spring-boot.fullname" . }}
+
+      # OTel Java Agent init container: downloads the agent JAR before the app starts
+      {{- if .Values.otel.enabled }}
+      initContainers:
+        - name: otel-agent
+          image: ghcr.io/open-telemetry/opentelemetry-java-instrumentation:{{ .Values.otel.agentVersion }}
+          command: ["cp", "/javaagent.jar", "/otel-agent/opentelemetry-javaagent.jar"]
+          volumeMounts:
+            - name: otel-agent
+              mountPath: /otel-agent
+      {{- end }}
+
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.service.port }}
+              protocol: TCP
+
+          env:
+            - name: SPRING_DATASOURCE_URL
+              value: "{{ .Values.database.url }}"
+            - name: SPRING_DATASOURCE_USERNAME
+              value: "{{ .Values.database.username }}"
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "spring-boot.fullname" . }}
+                  key: db-password
+            {{- if .Values.otel.enabled }}
+            - name: JAVA_TOOL_OPTIONS
+              value: "-javaagent:/otel-agent/opentelemetry-javaagent.jar"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "{{ .Values.otel.collectorEndpoint }}"
+            - name: OTEL_SERVICE_NAME
+              value: "spring-boot"
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: "service.namespace=app,deployment.environment=production"
+            {{- end }}
+
+          {{- if .Values.otel.enabled }}
+          volumeMounts:
+            - name: otel-agent
+              mountPath: /otel-agent
+              readOnly: true
+          {{- end }}
+
+          # Probes: K8s uses these to know when the pod is healthy
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.probes.liveness.path }}
+              port: {{ .Values.service.port }}
+            initialDelaySeconds: {{ .Values.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.liveness.periodSeconds }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.probes.readiness.path }}
+              port: {{ .Values.service.port }}
+            initialDelaySeconds: {{ .Values.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
+
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+
+      {{- if .Values.otel.enabled }}
+      volumes:
+        - name: otel-agent
+          emptyDir: {}
+      {{- end }}</code></pre>
+
+<div class="note"><strong>OTel Java Agent Init Container:</strong> The init container runs first, copies the Java agent JAR to a shared <code>emptyDir</code> volume. The main container mounts this volume and uses <code>JAVA_TOOL_OPTIONS=-javaagent:/otel-agent/opentelemetry-javaagent.jar</code> to attach the agent at JVM startup. This auto-instruments all Spring Boot HTTP endpoints, JDBC queries, and outgoing HTTP calls &mdash; producing traces and metrics without any code changes.</div>
+
+<h4>templates/service.yaml</h4>
+<pre><code>apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "spring-boot.fullname" . }}
+  labels:
+    {{- include "spring-boot.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: {{ .Values.service.port }}
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "spring-boot.selectorLabels" . | nindent 4 }}</code></pre>
+
+<h4>templates/secret.yaml</h4>
+<pre><code>apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ include "spring-boot.fullname" . }}
+  labels:
+    {{- include "spring-boot.labels" . | nindent 4 }}
+type: Opaque
+data:
+  db-password: {{ .Values.database.password | b64enc | quote }}</code></pre>
+
+<!-- ===== KONG CHART ===== -->
+<h3>Kong Chart (E3-04)</h3>
+<p>Location: <code>charts/kong/</code></p>
+
+<h4>Why Use the Upstream Chart?</h4>
+<p>Kong provides an official Helm chart at <code>https://charts.konghq.com</code>. Writing our own would mean maintaining hundreds of lines of K8s manifests for a well-tested component. Instead, we:</p>
+<ol>
+<li>Add the Kong Helm repo: <code>helm repo add kong https://charts.konghq.com</code></li>
+<li>Write a <code>values-k3s.yaml</code> file that overrides only what we need</li>
+<li>Apply a <code>kong-config.yaml</code> ConfigMap that configures Kong's declarative routing</li>
+</ol>
+
+<h4>How the Values Overlay Works</h4>
+<p>The upstream chart has hundreds of values. Our <code>values-k3s.yaml</code> overrides only the relevant ones:</p>
+<pre><code># charts/kong/values-k3s.yaml
+image:
+  repository: kong
+  tag: "3.6"
+
+env:
+  database: "off"                        # DB-less (declarative) mode
+  declarative_config: "/kong-config/kong.yml"
+  plugins: "bundled,opentelemetry"       # Enable OTel plugin
+
+proxy:
+  type: NodePort
+  http:
+    nodePort: 30080                      # Fixed NodePort for external access
+  tls:
+    enabled: false                       # TLS termination handled elsewhere
+
+ingressController:
+  enabled: false                         # We use declarative config, not CRDs
+
+resources:
+  requests:
+    memory: "256Mi"
+    cpu: "200m"
+  limits:
+    memory: "512Mi"
+    cpu: "500m"
+
+# Mount the declarative config from a ConfigMap
+extraVolumes:
+  - name: kong-config
+    configMap:
+      name: kong-config
+
+extraVolumeMounts:
+  - name: kong-config
+    mountPath: /kong-config
+    readOnly: true</code></pre>
+
+<h4>kong-config.yaml ConfigMap</h4>
+<p>This ConfigMap contains Kong's declarative routing configuration. It uses <strong>Kubernetes service DNS names</strong> (not IPs) to route traffic:</p>
+<pre><code># charts/kong/kong-config.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kong-config
+  namespace: network
+data:
+  kong.yml: |
+    _format_version: "3.0"
+    services:
+      - name: spring-boot
+        url: http://spring-boot-spring-boot.app.svc.cluster.local:8080
+        routes:
+          - name: spring-boot-route
+            paths:
+              - /api
+            strip_path: true
+        plugins:
+          - name: opentelemetry
+            config:
+              endpoint: http://otel-collector.observability.svc.cluster.local:4318/v1/traces
+              resource_attributes:
+                service.name: kong
+
+      - name: triage-service
+        url: http://triage-service.ai.svc.cluster.local:8000
+        routes:
+          - name: triage-route
+            paths:
+              - /triage
+            strip_path: true</code></pre>
+
+<div class="note"><strong>Service DNS format:</strong> <code>&lt;service-name&gt;.&lt;namespace&gt;.svc.cluster.local</code>. This is how pods in one namespace talk to services in another namespace. CoreDNS (built into k3s) resolves these names.</div>
+
+<!-- ===== AI STACK CHART ===== -->
+<h3>AI Stack Chart (E3-05)</h3>
+<p>Location: <code>charts/ai-stack/</code></p>
+<p>This is the most complex chart. It deploys <strong>7 components</strong> into the <code>ai</code> namespace:</p>
+
+<h4>All 7 Deployments</h4>
+<table>
+<tr><th>Deployment</th><th>Image</th><th>Port</th><th>Purpose</th></tr>
+<tr><td><code>triage-service</code></td><td><code>cires/triage-service</code></td><td>8000</td><td>Orchestrator: receives Grafana webhooks, calls MCP servers, calls Ollama, sends emails</td></tr>
+<tr><td><code>mcp-prometheus</code></td><td><code>cires/mcp-prometheus</code></td><td>8001</td><td>MCP server: queries Prometheus for metric context</td></tr>
+<tr><td><code>mcp-loki</code></td><td><code>cires/mcp-loki</code></td><td>8002</td><td>MCP server: queries Loki for log context</td></tr>
+<tr><td><code>mcp-jaeger</code></td><td><code>cires/mcp-jaeger</code></td><td>8003</td><td>MCP server: queries Jaeger for trace context</td></tr>
+<tr><td><code>mcp-alertmanager</code></td><td><code>cires/mcp-alertmanager</code></td><td>8004</td><td>MCP server: queries Alertmanager for alert history</td></tr>
+<tr><td><code>mcp-grafana</code></td><td><code>cires/mcp-grafana</code></td><td>8005</td><td>MCP server: queries Grafana for dashboard context</td></tr>
+<tr><td><code>ollama</code></td><td><code>ollama/ollama</code></td><td>11434</td><td>LLM inference server (llama3.1:8b), runs on GPU</td></tr>
+</table>
+
+<h4>PersistentVolumeClaims</h4>
+<pre><code># Ollama needs persistent storage for downloaded model weights
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ollama-models
+  namespace: ai
+spec:
+  accessModes: [ "ReadWriteOnce" ]
+  storageClassName: local-path      # k3s built-in storage class
+  resources:
+    requests:
+      storage: 20Gi                  # llama3.1:8b is ~4.7GB, room for other models</code></pre>
+
+<h4>Secrets</h4>
+<pre><code># templates/secret.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ai-stack-secrets
+  namespace: ai
+type: Opaque
+data:
+  smtp-user: {{ .Values.smtp.user | b64enc | quote }}
+  smtp-password: {{ .Values.smtp.password | b64enc | quote }}
+  # Triage service reads these as environment variables</code></pre>
+
+<h4>Ollama GPU Resource Request</h4>
+<p>Ollama's deployment includes a GPU resource request. The NVIDIA device plugin (E3-06) exposes <code>nvidia.com/gpu</code> as a schedulable resource. The Kubernetes scheduler places the Ollama pod on a node that has a GPU available.</p>
+<pre><code># Inside templates/ollama-deployment.yaml
+containers:
+  - name: ollama
+    image: ollama/ollama:latest
+    ports:
+      - containerPort: 11434
+    resources:
+      limits:
+        nvidia.com/gpu: 1            # Request exactly 1 GPU
+      requests:
+        memory: "4Gi"
+        cpu: "2000m"
+    volumeMounts:
+      - name: ollama-models
+        mountPath: /root/.ollama      # Ollama stores models here
+volumes:
+  - name: ollama-models
+    persistentVolumeClaim:
+      claimName: ollama-models</code></pre>
+
+<div class="warn note"><strong>If no GPU is available:</strong> Remove the <code>nvidia.com/gpu: 1</code> limit. Ollama will fall back to CPU inference. It still works, but responses take 30-60 seconds instead of 3-5 seconds.</div>
+
+<h4>drain3.ini ConfigMap</h4>
+<p>The triage service uses Drain3 for log pattern clustering. Its configuration is mounted as a ConfigMap:</p>
+<pre><code># templates/drain3-configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: drain3-config
+  namespace: ai
+data:
+  drain3.ini: |
+    [SNAPSHOT]
+    snapshot_interval_minutes = 10
+    compress_state = True
+
+    [DRAIN]
+    sim_th = 0.4
+    depth = 4
+    max_children = 100
+    max_clusters = 1024
+    extra_delimiters = ["_"]
+
+    [MASKING]
+    masking = [
+      {"regex_pattern":"((?&lt;=[^A-Za-z0-9])|^)(\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3})((?=[^A-Za-z0-9])|$)", "mask_with": "IP"},
+      {"regex_pattern":"((?&lt;=[^A-Za-z0-9])|^)([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})((?=[^A-Za-z0-9])|$)", "mask_with": "UUID"},
+      {"regex_pattern":"((?&lt;=[^A-Za-z0-9])|^)(\\d+)((?=[^A-Za-z0-9])|$)", "mask_with": "NUM"}
+    ]</code></pre>
+
+<h3>How to Install Each Chart</h3>
+<pre><code># 1. Spring Boot
+helm install spring-boot charts/spring-boot/ \
+  -n app --create-namespace \
+  --set database.url="jdbc:mysql://RDS_ENDPOINT:3306/app_db" \
+  --set database.username="app_user" \
+  --set database.password="YOUR_DB_PASSWORD"
+
+# 2. Kong (apply ConfigMap FIRST, then install chart)
+kubectl create namespace network
+kubectl apply -f charts/kong/kong-config.yaml
+helm repo add kong https://charts.konghq.com
+helm repo update
+helm install kong kong/kong \
+  --version 2.38.0 \
+  -f charts/kong/values-k3s.yaml \
+  -n network
+
+# 3. AI Stack
+helm install ai-stack charts/ai-stack/ \
+  -n ai --create-namespace \
+  --set monitoring.prometheusUrl="http://MONITORING_IP:9090" \
+  --set monitoring.lokiUrl="http://MONITORING_IP:3100" \
+  --set monitoring.jaegerUrl="http://MONITORING_IP:16686" \
+  --set smtp.user="your@gmail.com" \
+  --set smtp.password="app-password"</code></pre>
+
+<h3>How to Debug Helm Installations</h3>
+<pre><code># Dry-run: see what K8s manifests Helm would create, without actually applying
+helm install --dry-run --debug spring-boot charts/spring-boot/ \
+  -n app --create-namespace \
+  --set database.password="test"
+
+# If a pod is not starting, check events:
+kubectl describe pod -n app spring-boot-xxx
+
+# Check container logs:
+kubectl logs -n app deploy/spring-boot -f
+
+# Check all resources created by a Helm release:
+helm get manifest spring-boot -n app | kubectl get -f -
+
+# List all Helm releases across namespaces:
+helm list -A
+
+# Rollback to a previous revision:
+helm rollback spring-boot 1 -n app
+
+# Uninstall (removes all resources the chart created):
+helm uninstall spring-boot -n app</code></pre>
+</div>
+
+<!-- ============== TAB 6: OTEL COLLECTOR DAEMONSET ============== -->
+<div id="tab-otel" class="tab-content">
+<h2>OTel Collector DaemonSet (E3-07)</h2>
+
+<h3>What is a DaemonSet and Why?</h3>
+<p>A <strong>DaemonSet</strong> is a Kubernetes resource that ensures <strong>one pod runs on every node</strong> in the cluster. When a new node is added, a DaemonSet pod is automatically scheduled on it. When a node is removed, the pod is garbage-collected.</p>
+<p>We use a DaemonSet for the OTel Collector because:</p>
+<ul>
+<li>It needs access to <code>/var/log/pods/</code> on each node to read container logs</li>
+<li>It needs to run on every node to collect logs and receive traces from all pods</li>
+<li>If we add more k3s nodes later, the DaemonSet automatically scales with the cluster</li>
+</ul>
+
+<h3>The OTel Collector Config Explained</h3>
+<p>The Collector is configured via a ConfigMap. It has three sections: <strong>receivers</strong> (how data enters), <strong>processors</strong> (how data is enriched), and <strong>exporters</strong> (where data goes).</p>
+
+<pre><code># manifests/otel-collector/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-collector-config
+  namespace: observability
+data:
+  otel-collector-config.yaml: |
+    receivers:
+      # === FILELOG RECEIVER ===
+      # Reads container logs from the node filesystem
+      filelog:
+        include:
+          - /var/log/pods/*/*/*.log
+        start_at: beginning
+        include_file_path: true
+        include_file_name: false
+        operators:
+          # Parse the container runtime log format (containerd uses CRI format)
+          - type: regex_parser
+            regex: '^(?P&lt;time&gt;[^ ]+) (?P&lt;stream&gt;stdout|stderr) (?P&lt;logtag&gt;[^ ]*) ?(?P&lt;log&gt;.*)$'
+            timestamp:
+              parse_from: attributes.time
+              layout: '%Y-%m-%dT%H:%M:%S.%LZ'
+          # Extract K8s metadata from the file path
+          # Path format: /var/log/pods/NAMESPACE_PODNAME_UID/CONTAINER/0.log
+          - type: regex_parser
+            regex: '^.*\/(?P&lt;namespace&gt;[^_]+)_(?P&lt;pod&gt;[^_]+)_(?P&lt;uid&gt;[^\/]+)\/(?P&lt;container&gt;[^\/]+)\/'
+            parse_from: attributes["log.file.path"]
+
+      # === OTLP RECEIVER ===
+      # Receives traces and metrics from application pods via gRPC and HTTP
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+
+    processors:
+      # === K8S ATTRIBUTES PROCESSOR ===
+      # Enriches telemetry with K8s metadata (pod name, namespace, node, labels)
+      k8sattributes:
+        auth_type: "serviceAccount"
+        passthrough: false
+        extract:
+          metadata:
+            - k8s.pod.name
+            - k8s.pod.uid
+            - k8s.namespace.name
+            - k8s.node.name
+            - k8s.deployment.name
+          labels:
+            - tag_name: app
+              key: app.kubernetes.io/name
+              from: pod
+        pod_association:
+          - sources:
+              - from: resource_attribute
+                name: k8s.pod.ip
+
+      # === BATCH PROCESSOR ===
+      # Batches telemetry for efficient export
+      batch:
+        timeout: 5s
+        send_batch_size: 1024
+
+    exporters:
+      # === LOKI EXPORTER ===
+      # Sends logs to Loki on the monitoring VM
+      loki:
+        endpoint: "http://{{ monitoring_ip }}:3100/loki/api/v1/push"
+        labels:
+          attributes:
+            k8s.namespace.name: "namespace"
+            k8s.pod.name: "pod"
+            k8s.container.name: "container"
+            app: "app"
+
+      # === OTLP EXPORTER ===
+      # Sends traces to OTel Collector on the monitoring VM, which forwards to Jaeger
+      otlp:
+        endpoint: "http://{{ monitoring_ip }}:4317"
+        tls:
+          insecure: true
+
+    service:
+      pipelines:
+        logs:
+          receivers: [filelog]
+          processors: [k8sattributes, batch]
+          exporters: [loki]
+        traces:
+          receivers: [otlp]
+          processors: [k8sattributes, batch]
+          exporters: [otlp]</code></pre>
+
+<h3>RBAC: Why ServiceAccount + ClusterRole Are Needed</h3>
+<p>The <code>k8sattributes</code> processor queries the Kubernetes API to enrich telemetry with pod metadata. Without RBAC, the Collector pod gets a <code>403 Forbidden</code> when it tries to list pods.</p>
+
+<pre><code># manifests/otel-collector/rbac.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: otel-collector
+  namespace: observability
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: otel-collector
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "namespaces", "nodes"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["replicasets", "deployments"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: otel-collector
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: otel-collector
+subjects:
+  - kind: ServiceAccount
+    name: otel-collector
+    namespace: observability</code></pre>
+
+<h3>The DaemonSet Manifest</h3>
+<pre><code># manifests/otel-collector/daemonset.yaml
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: otel-collector
+  namespace: observability
+  labels:
+    app.kubernetes.io/name: otel-collector
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: otel-collector
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: otel-collector
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8888"
+    spec:
+      serviceAccountName: otel-collector
+      containers:
+        - name: otel-collector
+          image: otel/opentelemetry-collector-contrib:0.96.0
+          args: ["--config=/etc/otel/otel-collector-config.yaml"]
+          ports:
+            - containerPort: 4317   # OTLP gRPC
+            - containerPort: 4318   # OTLP HTTP
+            - containerPort: 8888   # Prometheus metrics (self-monitoring)
+          volumeMounts:
+            - name: config
+              mountPath: /etc/otel
+            - name: varlogpods
+              mountPath: /var/log/pods
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: otel-collector-config
+        - name: varlogpods
+          hostPath:
+            path: /var/log/pods</code></pre>
+
+<h3>How to Apply the Manifests</h3>
+<pre><code># Apply in order (namespace first, then RBAC, then config, then DaemonSet):
+kubectl apply -f manifests/otel-collector/namespace.yaml
+kubectl apply -f manifests/otel-collector/rbac.yaml
+kubectl apply -f manifests/otel-collector/configmap.yaml
+kubectl apply -f manifests/otel-collector/daemonset.yaml
+
+# Or apply all at once:
+kubectl apply -f manifests/otel-collector/</code></pre>
+
+<h3>How to Verify Logs Are Flowing to Loki</h3>
+<pre><code># 1. Check the OTel Collector pod is running
+kubectl get pods -n observability
+# NAME                    READY   STATUS    RESTARTS   AGE
+# otel-collector-xxxxx    1/1     Running   0          5m
+
+# 2. Check OTel Collector logs for export success
+kubectl logs -n observability -l app.kubernetes.io/name=otel-collector | grep "loki"
+# Should see: "Exporting logs..." messages without errors
+
+# 3. Query Loki directly to verify K8s logs exist
+curl -s "http://MONITORING_IP:3100/loki/api/v1/query?query={namespace=\"app\"}" | jq '.data.result | length'
+# Should return > 0
+
+# 4. In Grafana, go to Explore > Loki and query:
+#    {namespace="app", pod=~"spring-boot.*"}
+#    Should see Spring Boot logs with K8s labels</code></pre>
+
+<h3>How to Verify Traces Are Flowing to Jaeger</h3>
+<pre><code># 1. Generate some traffic through Kong
+curl http://K3S_IP:30080/api/health
+
+# 2. Check Jaeger UI
+#    Open http://MONITORING_IP:16686
+#    Select service "spring-boot" or "kong"
+#    Should see traces with spans
+
+# 3. Verify via Jaeger API
+curl -s "http://MONITORING_IP:16686/api/services" | jq '.data'
+# Should list: "spring-boot", "kong"</code></pre>
+</div>
+
+<!-- ============== TAB 7: PROMETHEUS K8S DISCOVERY ============== -->
+<div id="tab-prometheus" class="tab-content">
+<h2>Prometheus K8s Discovery (E3-08)</h2>
+
+<h3>What is kubernetes_sd_configs?</h3>
+<p><code>kubernetes_sd_configs</code> is a Prometheus service discovery mechanism that automatically finds scrape targets by querying the Kubernetes API. Instead of maintaining a static list of IPs and ports in <code>prometheus.yml</code>, Prometheus asks K8s: "give me all pods that have the annotation <code>prometheus.io/scrape: true</code>."</p>
+
+<h4>Why It Replaces Static Targets</h4>
+<ul>
+<li><strong>Pods are ephemeral:</strong> A pod's IP changes every time it restarts. Static targets would break constantly.</li>
+<li><strong>Auto-discovery:</strong> Deploy a new service with the right annotations and Prometheus picks it up automatically &mdash; no config change needed.</li>
+<li><strong>Rich metadata:</strong> K8s SD provides labels like pod name, namespace, node name, and all pod labels/annotations, which become Prometheus labels for filtering and grouping.</li>
+</ul>
+
+<h3>The RBAC Needed</h3>
+<p>Prometheus runs on the monitoring VM (outside the cluster), so it authenticates to the K8s API using a <strong>ServiceAccount token</strong>. This requires RBAC resources <em>inside</em> the k3s cluster:</p>
+
+<pre><code># manifests/prometheus-rbac/rbac.yaml
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: observability
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: prometheus-scraper
+  namespace: observability
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: prometheus-scraper
+rules:
+  - apiGroups: [""]
+    resources: ["nodes", "nodes/proxy", "services", "endpoints", "pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["extensions", "networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["get", "list", "watch"]
+  - nonResourceURLs: ["/metrics"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: prometheus-scraper
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: prometheus-scraper
+subjects:
+  - kind: ServiceAccount
+    name: prometheus-scraper
+    namespace: observability
+---
+# Create a long-lived token Secret (required for K8s 1.24+)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: prometheus-scraper-token
+  namespace: observability
+  annotations:
+    kubernetes.io/service-account.name: prometheus-scraper
+type: kubernetes.io/service-account-token</code></pre>
+
+<h3>How to Extract and Place the Token</h3>
+<pre><code># 1. Apply the RBAC manifests on the k3s cluster
+kubectl apply -f manifests/prometheus-rbac/rbac.yaml
+
+# 2. Wait for the token to be populated (usually instant)
+kubectl get secret prometheus-scraper-token -n observability
+
+# 3. Extract the token value (base64-decoded)
+kubectl get secret prometheus-scraper-token -n observability \
+  -o jsonpath='{.data.token}' | base64 -d > /tmp/k3s-token
+
+# 4. Copy to the monitoring VM
+scp /tmp/k3s-token ubuntu@MONITORING_IP:/etc/prometheus/k3s-token
+
+# 5. Set correct permissions on the monitoring VM
+ssh ubuntu@MONITORING_IP 'sudo chown prometheus:prometheus /etc/prometheus/k3s-token && sudo chmod 600 /etc/prometheus/k3s-token'</code></pre>
+
+<h3>The prometheus.yml.j2 Changes</h3>
+<p>The Prometheus config is a Jinja2 template. When <code>k3s_sd_enabled</code> is true, a new <code>kubernetes-pods</code> scrape job is added:</p>
+
+<pre><code># templates/prometheus.yml.j2 (relevant section)
+
+{% if k3s_sd_enabled | default(false) %}
+  # ============ KUBERNETES SERVICE DISCOVERY ============
+  - job_name: 'kubernetes-pods'
+    kubernetes_sd_configs:
+      - api_server: 'https://{{ k3s_api_server }}:6443'
+        role: pod
+        bearer_token_file: /etc/prometheus/k3s-token
+        tls_config:
+          insecure_skip_verify: true    # k3s uses self-signed certs
+
+    # --- RELABEL CONFIGS (explained line by line) ---
+    relabel_configs:
+
+      # 1. Only scrape pods that have prometheus.io/scrape = "true"
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+        action: keep
+        regex: true
+
+      # 2. Override the metrics path if the pod specifies one
+      #    e.g., prometheus.io/path: "/actuator/prometheus"
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+        action: replace
+        target_label: __metrics_path__
+        regex: (.+)
+
+      # 3. Override the port if the pod specifies one
+      #    e.g., prometheus.io/port: "8080"
+      #    Constructs the target address as pod_ip:custom_port
+      - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+        action: replace
+        regex: ([^:]+)(?::\d+)?;(\d+)
+        replacement: $1:$2
+        target_label: __address__
+
+      # 4. Add the pod's namespace as a "namespace" label
+      - source_labels: [__meta_kubernetes_namespace]
+        action: replace
+        target_label: namespace
+
+      # 5. Add the pod name as a "pod" label
+      - source_labels: [__meta_kubernetes_pod_name]
+        action: replace
+        target_label: pod
+
+      # 6. Add the app.kubernetes.io/name label as "app"
+      #    This is set by our Helm charts and is the primary selector for alerts
+      - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+        action: replace
+        target_label: app
+
+      # 7. Keep the node name for troubleshooting
+      - source_labels: [__meta_kubernetes_pod_node_name]
+        action: replace
+        target_label: node
+{% endif %}</code></pre>
+
+<div class="note"><strong>Relabel configs in plain English:</strong> Relabel configs transform labels before scraping. They act as a pipeline: each rule takes source labels, applies a regex, and either keeps/drops the target or replaces a label value. Rules 1 acts as a filter (only scrape annotated pods). Rules 2-3 configure how Prometheus reaches the pod. Rules 4-7 add metadata labels to every scraped metric.</div>
+
+<h3>The k3s_sd_enabled Toggle</h3>
+<p>This is a boolean variable in <code>inventory/group_vars/monitoring.yml</code>:</p>
+<pre><code># inventory/group_vars/monitoring.yml
+k3s_sd_enabled: true              # Set to true after E3-08 RBAC is in place
+k3s_api_server: "10.0.2.y"        # Private IP of the k3s node
+
+# When false: Prometheus uses static targets only (original VM-based config)
+# When true:  Prometheus adds the kubernetes-pods scrape job
+# The old static targets remain active (for the monitoring VM itself)</code></pre>
+
+<p>After changing the toggle, re-run the monitoring playbook:</p>
+<pre><code>ansible-playbook playbooks/monitoring.yml --tags prometheus</code></pre>
+
+<h3>How to Verify</h3>
+<pre><code># 1. Check Prometheus config was applied
+curl -s http://MONITORING_IP:9090/api/v1/status/config | jq -r '.data.yaml' | grep kubernetes_sd
+
+# 2. Check the targets page for K8s pods
+curl -s http://MONITORING_IP:9090/api/v1/targets | \
+  jq '.data.activeTargets[] | select(.discoveredLabels.__meta_kubernetes_pod_name != null) | {pod: .labels.pod, namespace: .labels.namespace, health: .health}'
+
+# Expected: should list spring-boot, kong, triage-service, otel-collector pods as "up"
+
+# 3. In the Prometheus UI (http://MONITORING_IP:9090):
+#    Go to Status > Targets
+#    Look for the "kubernetes-pods" job
+#    All targets should show state "UP"
+
+# 4. Query a K8s-sourced metric
+curl -s 'http://MONITORING_IP:9090/api/v1/query?query=up{namespace="app"}' | jq '.data.result'</code></pre>
+
+<div class="danger note"><strong>Common failure:</strong> If the monitoring VM cannot reach the k3s node on port 6443, Prometheus will show the kubernetes-pods job as "DOWN" with connection refused. Check the security group rules (monitoring SG must be allowed ingress on k3s SG port 6443).</div>
+</div>
+
+<!-- ============== TAB 8: ALERT RULE MIGRATION ============== -->
+<div id="tab-alerts" class="tab-content">
+<h2>Alert Rule Migration (E3-09)</h2>
+
+<h3>The Jinja2 Conditional Approach</h3>
+<p>The 17 Grafana alert rules are defined in an Ansible template (<code>alert-rules.yml.j2</code>). Rather than maintaining two separate rule files, we use Jinja2 conditionals to switch selectors based on <code>k3s_sd_enabled</code>:</p>
+
+<pre><code># In the Jinja2 template:
+{% if k3s_sd_enabled | default(false) %}
+{% set app_selector = 'app="spring-boot"' %}
+{% set otel_selector = 'app="otel-collector"' %}
+{% set triage_selector = 'app="triage-service"' %}
+{% set kong_selector = 'app="kong"' %}
+{% else %}
+{% set app_selector = 'job="app-spring-actuator"' %}
+{% set otel_selector = 'job="otel-collector"' %}
+{% set triage_selector = 'job="ai-triage"' %}
+{% set kong_selector = 'job="network-kong"' %}
+{% endif %}
+
+# Then in each rule:
+- alert: HighRequestLatency
+  expr: histogram_quantile(0.99, rate(http_server_requests_seconds_bucket{ {{ app_selector }} }[5m])) > 2
+  for: 5m
+  labels:
+    severity: warning
+  annotations:
+    summary: "P99 latency above 2s for Spring Boot"</code></pre>
+
+<h3>Old Selectors vs New Selectors</h3>
+<table>
+<tr><th>Rule Category</th><th>Old Selector (VM mode)</th><th>New Selector (K8s mode)</th><th>Why It Changed</th></tr>
+<tr><td>Spring Boot metrics</td><td><code>job="app-spring-actuator"</code></td><td><code>app="spring-boot"</code></td><td>K8s SD uses the <code>app</code> label from pod metadata, not the job name</td></tr>
+<tr><td>OTel Collector metrics</td><td><code>job="otel-collector"</code></td><td><code>app="otel-collector"</code></td><td>Same reason: label source changes</td></tr>
+<tr><td>Triage service metrics</td><td><code>job="ai-triage"</code></td><td><code>app="triage-service"</code></td><td>Same reason</td></tr>
+<tr><td>Kong metrics</td><td><code>job="network-kong"</code></td><td><code>app="kong"</code></td><td>Same reason</td></tr>
+<tr><td>Monitoring VM metrics</td><td><code>job="mon-node-exporter"</code></td><td><code>job="mon-node-exporter"</code></td><td><strong>No change</strong> &mdash; monitoring VM still uses static targets</td></tr>
+<tr><td>Loki metrics</td><td><code>job="mon-loki"</code></td><td><code>job="mon-loki"</code></td><td><strong>No change</strong> &mdash; Loki stays on monitoring VM</td></tr>
+<tr><td>Prometheus self-metrics</td><td><code>job="prometheus"</code></td><td><code>job="prometheus"</code></td><td><strong>No change</strong> &mdash; Prometheus monitors itself directly</td></tr>
+</table>
+
+<h3>How to Test Each Rule Fires Correctly</h3>
+<ol>
+<li><strong>Deploy the rules:</strong> <code>ansible-playbook playbooks/monitoring.yml --tags grafana-alerts</code></li>
+<li><strong>Check the Grafana Alerting page:</strong> Navigate to Alerting > Alert Rules. Each rule should show "OK" (green) or "Pending" (yellow), not "No Data" (gray).</li>
+<li><strong>"No Data" means the selector is wrong</strong> &mdash; the metric exists but the label filter does not match any time series.</li>
+<li><strong>Test individual rules by querying the expression:</strong></li>
+</ol>
+
+<pre><code># For each rule expression, test it directly in Prometheus:
+# If it returns empty, the selector is wrong.
+
+# Example: test the Spring Boot high latency rule
+curl -s 'http://MONITORING_IP:9090/api/v1/query?query=histogram_quantile(0.99,rate(http_server_requests_seconds_bucket{app="spring-boot"}[5m]))' | jq '.data.result | length'
+# If this returns 0, the app="spring-boot" selector doesn't match anything
+
+# Debug: see what labels actually exist on the metric
+curl -s 'http://MONITORING_IP:9090/api/v1/label/app/values' | jq '.data'
+# Shows all values of the "app" label across all metrics</code></pre>
+
+<h3>Full List of Alert Rules and Their Selectors</h3>
+<table>
+<tr><th>#</th><th>Alert Name</th><th>K8s Selector Used</th><th>Expression Summary</th></tr>
+<tr><td>1</td><td>HighRequestLatency</td><td><code>app="spring-boot"</code></td><td>P99 latency &gt; 2s</td></tr>
+<tr><td>2</td><td>HighErrorRate</td><td><code>app="spring-boot"</code></td><td>5xx rate &gt; 5%</td></tr>
+<tr><td>3</td><td>HighMemoryUsage</td><td><code>app="spring-boot"</code></td><td>JVM heap &gt; 85%</td></tr>
+<tr><td>4</td><td>PodCrashLooping</td><td><code>namespace=~"app|ai|network"</code></td><td>Restart count increasing</td></tr>
+<tr><td>5</td><td>PodNotReady</td><td><code>namespace=~"app|ai|network"</code></td><td>Pod not ready for &gt; 5m</td></tr>
+<tr><td>6</td><td>KongHighLatency</td><td><code>app="kong"</code></td><td>Kong upstream latency &gt; 3s</td></tr>
+<tr><td>7</td><td>KongHighErrorRate</td><td><code>app="kong"</code></td><td>Kong 5xx &gt; 5%</td></tr>
+<tr><td>8</td><td>OTelCollectorDropping</td><td><code>app="otel-collector"</code></td><td>Exporter send failures &gt; 0</td></tr>
+<tr><td>9</td><td>OTelCollectorQueueFull</td><td><code>app="otel-collector"</code></td><td>Exporter queue &gt; 80%</td></tr>
+<tr><td>10</td><td>TriageServiceDown</td><td><code>app="triage-service"</code></td><td>up == 0 for &gt; 2m</td></tr>
+<tr><td>11</td><td>OllamaDown</td><td><code>app="ollama"</code></td><td>up == 0 for &gt; 2m</td></tr>
+<tr><td>12</td><td>HighCPUUsage</td><td><code>job="mon-node-exporter"</code></td><td>CPU &gt; 85% (monitoring VM)</td></tr>
+<tr><td>13</td><td>HighDiskUsage</td><td><code>job="mon-node-exporter"</code></td><td>Disk &gt; 85% (monitoring VM)</td></tr>
+<tr><td>14</td><td>PrometheusDown</td><td><code>job="prometheus"</code></td><td>Self-monitoring: up == 0</td></tr>
+<tr><td>15</td><td>LokiDown</td><td><code>job="mon-loki"</code></td><td>up == 0 for &gt; 2m</td></tr>
+<tr><td>16</td><td>GrafanaDown</td><td><code>job="mon-grafana"</code></td><td>up == 0 for &gt; 2m</td></tr>
+<tr><td>17</td><td>JaegerDown</td><td><code>job="mon-jaeger"</code></td><td>up == 0 for &gt; 2m</td></tr>
+</table>
+
+<div class="danger note"><strong>Risk: Silent failure.</strong> If a selector is wrong (e.g., <code>app="springboot"</code> instead of <code>app="spring-boot"</code>), the rule evaluates to empty and <strong>never fires</strong>. There is no built-in alert for "this rule matched zero time series." Always verify each rule shows data in the Grafana alert rule editor after deployment.</div>
+</div>
+
+<!-- ============== TAB 9: AI HARDENING ============== -->
+<div id="tab-aihardening" class="tab-content">
+<h2>AI Hardening (Epic 4)</h2>
+
+<p>Epic 4 makes the AI RCA (Root Cause Analysis) pipeline more reliable and observable. The triage service calls Ollama (an LLM) to analyze alerts, and LLMs are inherently unpredictable. These three stories add guardrails.</p>
+
+<!-- AI-01 -->
+<h3>AI-01: Circuit Breaker for Ollama Calls</h3>
+
+<h4>What is a Circuit Breaker?</h4>
+<p>A circuit breaker is a software pattern borrowed from electrical engineering. It prevents a failing dependency from being called repeatedly, which would waste resources and cascade failures. It has three states:</p>
+
+<table>
+<tr><th>State</th><th>Behavior</th><th>Transitions To</th></tr>
+<tr><td><strong>CLOSED</strong> (normal)</td><td>Requests pass through to Ollama normally. Failures are counted.</td><td>OPEN (when failure count reaches threshold)</td></tr>
+<tr><td><strong>OPEN</strong> (tripped)</td><td>All requests are immediately rejected without calling Ollama. Returns a fallback response.</td><td>HALF_OPEN (after a cooldown period expires)</td></tr>
+<tr><td><strong>HALF_OPEN</strong> (testing)</td><td>One test request is allowed through. If it succeeds, the breaker resets. If it fails, it trips again.</td><td>CLOSED (on success) or OPEN (on failure)</td></tr>
+</table>
+
+<h4>The CircuitBreaker Class Flow</h4>
+<pre><code>class CircuitBreaker:
+    """
+    States: CLOSED -> OPEN -> HALF_OPEN -> CLOSED (or back to OPEN)
+
+    Configuration:
+      failure_threshold: 3       # Trip after 3 consecutive failures
+      recovery_timeout: 60       # Wait 60s before trying HALF_OPEN
+      half_open_max_calls: 1     # Allow 1 test call in HALF_OPEN
+    """
+
+    def __init__(self, failure_threshold=3, recovery_timeout=60):
+        self.state = "CLOSED"
+        self.failure_count = 0
+        self.last_failure_time = None
+        self.failure_threshold = failure_threshold
+        self.recovery_timeout = recovery_timeout
+
+    async def call(self, func, *args, **kwargs):
+        # --- OPEN state: reject immediately ---
+        if self.state == "OPEN":
+            if self._cooldown_expired():
+                self.state = "HALF_OPEN"      # Try one request
+            else:
+                raise CircuitBreakerOpenError("Circuit breaker is OPEN")
+
+        try:
+            result = await func(*args, **kwargs)
+
+            # Success: reset counters
+            if self.state == "HALF_OPEN":
+                self.state = "CLOSED"          # Recovery confirmed
+            self.failure_count = 0
+            return result
+
+        except Exception as e:
+            self.failure_count += 1
+            self.last_failure_time = time.time()
+
+            if self.failure_count >= self.failure_threshold:
+                self.state = "OPEN"            # Trip the breaker
+                self._emit_metric("circuit_breaker_tripped_total")
+
+            raise
+
+    def _cooldown_expired(self):
+        return (time.time() - self.last_failure_time) > self.recovery_timeout</code></pre>
+
+<h4>When NEEDS_HUMAN_REVIEW Fires</h4>
+<p>When the circuit breaker is OPEN and a new alert arrives, the triage service cannot call Ollama for AI analysis. Instead:</p>
+<ol>
+<li>The circuit breaker raises <code>CircuitBreakerOpenError</code></li>
+<li>The triage service catches this and sets the verdict to <code>NEEDS_HUMAN_REVIEW</code></li>
+<li>The email sent to the on-call engineer includes: the raw alert data, the MCP context (metrics/logs/traces), and a note that AI analysis was unavailable</li>
+<li>A Prometheus metric <code>triage_needs_human_review_total</code> is incremented</li>
+<li>When the circuit breaker transitions back to CLOSED, AI analysis resumes automatically</li>
+</ol>
+
+<h4>Retry with Exponential Backoff</h4>
+<p>Before the circuit breaker trips, each individual Ollama call uses retry with exponential backoff:</p>
+<pre><code>async def call_ollama_with_retry(prompt, max_retries=3):
+    """
+    Retry pattern: 1s, 2s, 4s (exponential backoff)
+    Each failure counts toward the circuit breaker threshold.
+    """
+    for attempt in range(max_retries):
+        try:
+            return await circuit_breaker.call(ollama_client.generate, prompt)
+        except CircuitBreakerOpenError:
+            raise  # Don't retry if circuit is open
+        except Exception as e:
+            if attempt == max_retries - 1:
+                raise  # Final attempt failed
+            delay = 2 ** attempt  # 1s, 2s, 4s
+            logger.warning(f"Ollama call failed (attempt {attempt+1}), retrying in {delay}s: {e}")
+            await asyncio.sleep(delay)</code></pre>
+
+<div class="note"><strong>Interaction between retry and circuit breaker:</strong> Each failed attempt increments the circuit breaker's failure counter. With 3 retries per call and a failure threshold of 3, a single completely-failed call is enough to trip the breaker. This is intentional &mdash; if Ollama is down, we want to fail fast on subsequent calls.</div>
+
+<!-- AI-02 -->
+<h3>AI-02: JSON Schema Enforcement for LLM Output</h3>
+
+<h4>Why format:json Matters</h4>
+<p>LLMs produce free-form text by default. The triage service needs <strong>structured output</strong>: a severity, a root cause, and recommended actions. Without enforcement, the LLM might return prose, markdown, or malformed JSON, causing parse failures.</p>
+<p>Ollama supports <code>format: "json"</code> in the API request, which constrains the model's output to valid JSON. But valid JSON is not enough &mdash; we also need the right <em>schema</em>.</p>
+
+<h4>The Pydantic Schema</h4>
+<pre><code>from pydantic import BaseModel, Field
+from typing import List, Optional
+from enum import Enum
+
+class Severity(str, Enum):
+    CRITICAL = "critical"
+    WARNING = "warning"
+    INFO = "info"
+
+class Verdict(str, Enum):
+    ROOT_CAUSE_FOUND = "root_cause_found"
+    INCONCLUSIVE = "inconclusive"
+    FALSE_POSITIVE = "false_positive"
+
+class TriageResult(BaseModel):
+    """Schema for LLM triage output. Validated with Pydantic after every Ollama call."""
+    verdict: Verdict = Field(description="The triage verdict")
+    severity: Severity = Field(description="Assessed severity level")
+    root_cause: str = Field(description="Identified root cause or best hypothesis")
+    evidence: List[str] = Field(description="Supporting evidence from metrics/logs/traces")
+    recommended_actions: List[str] = Field(description="Concrete steps to remediate")
+    confidence: float = Field(ge=0.0, le=1.0, description="Confidence score 0-1")
+    summary: str = Field(description="One-sentence summary for email subject")</code></pre>
+
+<h4>Validation Flow</h4>
+<pre><code>async def analyze_alert(alert_data, mcp_context):
+    prompt = build_prompt(alert_data, mcp_context)
+
+    # Call Ollama with JSON format enforcement
+    response = await call_ollama_with_retry(
+        prompt=prompt,
+        format="json"                    # Ollama constrains output to valid JSON
+    )
+
+    # Parse and validate against Pydantic schema
+    try:
+        result = TriageResult.model_validate_json(response)
+    except ValidationError as e:
+        logger.warning(f"LLM output failed schema validation: {e}")
+        # Retry once with a more explicit prompt
+        retry_prompt = f"{prompt}\n\nYou MUST respond with valid JSON matching this schema:\n{TriageResult.model_json_schema()}"
+        response = await call_ollama_with_retry(prompt=retry_prompt, format="json")
+
+        try:
+            result = TriageResult.model_validate_json(response)
+        except ValidationError:
+            # Double failure: return INCONCLUSIVE
+            return build_inconclusive_result(alert_data, mcp_context)
+
+    return result</code></pre>
+
+<h4>INCONCLUSIVE Verdict Handling</h4>
+<p>When the LLM fails to produce a valid schema-conforming response after two attempts, the system returns an <code>INCONCLUSIVE</code> verdict:</p>
+<ul>
+<li>The email still goes out with all available MCP context (metrics, logs, traces)</li>
+<li>The email subject is prefixed with <code>[INCONCLUSIVE]</code></li>
+<li>The body includes a note: "AI analysis could not produce a structured result. Manual review required."</li>
+<li>A metric <code>triage_inconclusive_total</code> is incremented</li>
+</ul>
+
+<h4>Double-Failure Fallback</h4>
+<pre><code>def build_inconclusive_result(alert_data, mcp_context):
+    """Fallback when LLM output fails validation twice."""
+    return TriageResult(
+        verdict=Verdict.INCONCLUSIVE,
+        severity=Severity.WARNING,
+        root_cause="AI analysis failed to produce structured output",
+        evidence=["LLM response did not conform to expected schema after 2 attempts"],
+        recommended_actions=[
+            "Review the alert manually using the attached MCP context",
+            "Check Ollama health: kubectl logs -n ai deploy/ollama",
+            "Check triage service logs for the full LLM response"
+        ],
+        confidence=0.0,
+        summary=f"[INCONCLUSIVE] Alert: {alert_data.get('alertname', 'unknown')}"
+    )</code></pre>
+
+<!-- AI-03 -->
+<h3>AI-03: Self-Observability Metrics</h3>
+
+<p>The triage service exposes Prometheus metrics at <code>/metrics</code> to make the AI pipeline observable. These metrics are automatically scraped by Prometheus via <code>kubernetes_sd_configs</code> (the pod has the <code>prometheus.io/scrape: "true"</code> annotation).</p>
+
+<h4>Complete Metrics List</h4>
+<table>
+<tr><th>Metric Name</th><th>Type</th><th>What It Measures</th></tr>
+<tr><td><code>triage_requests_total</code></td><td>Counter</td><td>Total number of triage requests received (alert webhooks)</td></tr>
+<tr><td><code>triage_requests_duration_seconds</code></td><td>Histogram</td><td>End-to-end triage latency (from webhook received to email sent)</td></tr>
+<tr><td><code>triage_verdict_total{verdict="..."}</code></td><td>Counter</td><td>Count of each verdict type (root_cause_found, inconclusive, false_positive)</td></tr>
+<tr><td><code>triage_needs_human_review_total</code></td><td>Counter</td><td>Times AI was unavailable (circuit breaker open) and fell back to human review</td></tr>
+<tr><td><code>triage_inconclusive_total</code></td><td>Counter</td><td>Times LLM output failed schema validation (double failure)</td></tr>
+<tr><td><code>circuit_breaker_state</code></td><td>Gauge</td><td>Current circuit breaker state: 0=CLOSED, 1=OPEN, 2=HALF_OPEN</td></tr>
+<tr><td><code>circuit_breaker_tripped_total</code></td><td>Counter</td><td>Number of times the circuit breaker transitioned to OPEN</td></tr>
+<tr><td><code>circuit_breaker_recovery_total</code></td><td>Counter</td><td>Number of times the circuit breaker transitioned from HALF_OPEN to CLOSED</td></tr>
+<tr><td><code>ollama_request_duration_seconds</code></td><td>Histogram</td><td>Latency of individual Ollama API calls (excluding retries)</td></tr>
+<tr><td><code>ollama_request_errors_total</code></td><td>Counter</td><td>Failed Ollama calls (timeouts, connection errors, HTTP errors)</td></tr>
+<tr><td><code>triage_queue_depth</code></td><td>Gauge</td><td>Number of triage requests currently queued (waiting for processing)</td></tr>
+<tr><td><code>triage_queue_wait_seconds</code></td><td>Histogram</td><td>Time requests spend in the queue before processing starts</td></tr>
+<tr><td><code>mcp_request_duration_seconds{server="..."}</code></td><td>Histogram</td><td>Latency of MCP server calls (per server: prometheus, loki, jaeger, alertmanager, grafana)</td></tr>
+<tr><td><code>mcp_request_errors_total{server="..."}</code></td><td>Counter</td><td>Failed MCP server calls (per server)</td></tr>
+<tr><td><code>mcp_context_size_bytes{server="..."}</code></td><td>Histogram</td><td>Size of context returned by each MCP server</td></tr>
+<tr><td><code>triage_fallback_total{reason="..."}</code></td><td>Counter</td><td>Fallback events by reason: "circuit_breaker_open", "schema_validation_failed", "timeout"</td></tr>
+<tr><td><code>triage_email_sent_total{status="..."}</code></td><td>Counter</td><td>Emails sent, labeled by status: "success" or "failed"</td></tr>
+</table>
+
+<h4>Queue Depth Tracking</h4>
+<p>The triage service processes one alert at a time (serial Ollama calls to avoid GPU contention). When alerts arrive faster than they can be processed, they queue up. The <code>triage_queue_depth</code> gauge shows the current queue size:</p>
+<pre><code># Alert on queue buildup:
+- alert: TriageQueueBacklog
+  expr: triage_queue_depth > 5
+  for: 5m
+  labels:
+    severity: warning
+  annotations:
+    summary: "Triage queue has {{ $value }} pending requests"</code></pre>
+
+<h4>MCP Tracking</h4>
+<p>Each MCP server call is individually tracked. This lets you identify which context source is slow or failing:</p>
+<pre><code># Example Grafana query: MCP server latency comparison
+histogram_quantile(0.95, rate(mcp_request_duration_seconds_bucket[5m]))</code></pre>
+
+<h4>Fallback Tracking</h4>
+<p>The <code>triage_fallback_total</code> metric tracks every time the system falls back from the happy path. High fallback rates indicate a systemic issue:</p>
+<pre><code># Fallback rate over the last hour:
+sum(increase(triage_fallback_total[1h])) by (reason)
+
+# Example output:
+# {reason="circuit_breaker_open"}     12
+# {reason="schema_validation_failed"}  3
+# {reason="timeout"}                   1</code></pre>
+</div>
+
+<!-- ============== TAB 10: DEPLOYMENT RUNBOOK ============== -->
+<div id="tab-runbook" class="tab-content">
+<h2>Deployment Runbook</h2>
+<p>Complete step-by-step instructions to go from zero to a fully running system. Follow these steps in exact order.</p>
+
+<h3>Prerequisites</h3>
+<ul>
+<li>AWS account with permissions for EC2, VPC, RDS, S3, CloudFront</li>
+<li>Terraform >= 1.5 installed locally</li>
+<li>Ansible >= 2.15 installed locally</li>
+<li>Helm >= 3.13 installed locally (or it will be installed on the k3s node)</li>
+<li><code>kubectl</code> installed locally</li>
+<li>SSH key pair for EC2 access</li>
+<li>SMTP credentials for triage email alerts</li>
+</ul>
+
+<h3>Step 1: Terraform Apply</h3>
+<pre><code># Initialize and apply Terraform
+cd terraform/
+terraform init
+terraform plan -out=plan.tfplan
+terraform apply plan.tfplan
+
+# Save the outputs (you'll need these IPs throughout)
+terraform output -json > ../terraform-outputs.json
+
+# Key outputs:
+terraform output monitoring_public_ip
+terraform output k3s_public_ip
+terraform output gpu_public_ip</code></pre>
+
+<h3>Step 2: Generate Ansible Inventory</h3>
+<pre><code># The generate-inventory.sh script reads Terraform outputs
+# and produces the Ansible inventory file
+cd ..
+./scripts/generate-inventory.sh
+
+# Verify the inventory
+cat inventory/production.yml
+# Should show monitoring, k3s_cluster, and gpu host groups with correct IPs
+
+# Test connectivity
+ansible all -i inventory/production.yml -m ping</code></pre>
+
+<h3>Step 3: Install Ansible Roles</h3>
+<pre><code># Download all Ansible Galaxy roles (including xanmanning.k3s)
+ansible-galaxy install -r requirements.yml --force
+
+# Verify
+ansible-galaxy list | grep k3s
+# Should show: xanmanning.k3s, v3.4.4</code></pre>
+
+<h3>Step 4: Deploy Monitoring Stack</h3>
+<pre><code># This installs Prometheus, Grafana, Loki, Jaeger, OTel Collector on the monitoring VM
+ansible-playbook playbooks/monitoring.yml
+
+# Verify
+curl http://MONITORING_IP:9090/-/healthy        # Prometheus
+curl http://MONITORING_IP:3000/api/health        # Grafana
+curl http://MONITORING_IP:3100/ready             # Loki
+curl http://MONITORING_IP:16686/                 # Jaeger UI</code></pre>
+
+<h3>Step 5: Bootstrap k3s Cluster</h3>
+<pre><code># This installs k3s, fetches kubeconfig, installs Helm
+ansible-playbook playbooks/k3s.yml
+
+# Set up local kubeconfig
+export KUBECONFIG=$(pwd)/kubeconfig
+
+# Verify
+kubectl get nodes
+# NAME       STATUS   ROLES                  AGE   VERSION
+# k3s-node   Ready    control-plane,master   1m    v1.30.6+k3s1</code></pre>
+
+<h3>Step 6: Apply K8s Manifests (RBAC, OTel, NVIDIA)</h3>
+<pre><code># This applies all raw K8s manifests: namespaces, RBAC, OTel Collector DaemonSet,
+# Prometheus RBAC, NVIDIA device plugin
+ansible-playbook playbooks/k8s-manifests.yml
+
+# Verify OTel Collector is running
+kubectl get pods -n observability
+
+# Verify NVIDIA device plugin (if GPU node exists)
+kubectl get pods -n kube-system -l app.kubernetes.io/name=nvidia-device-plugin</code></pre>
+
+<h3>Step 7: Helm Install -- Spring Boot</h3>
+<pre><code>helm install spring-boot charts/spring-boot/ \
+  -n app --create-namespace \
+  --set database.url="jdbc:mysql://RDS_ENDPOINT:3306/app_db" \
+  --set database.username="app_user" \
+  --set database.password="YOUR_DB_PASSWORD"
+
+# Verify
+kubectl get pods -n app
+kubectl logs -n app deploy/spring-boot -f
+# Wait for: "Started Application in X seconds"</code></pre>
+
+<h3>Step 8: Helm Install -- Kong</h3>
+<pre><code># Apply the declarative config first
+kubectl create namespace network
+kubectl apply -f charts/kong/kong-config.yaml
+
+# Install upstream Kong chart
+helm repo add kong https://charts.konghq.com
+helm repo update
+helm install kong kong/kong \
+  --version 2.38.0 \
+  -f charts/kong/values-k3s.yaml \
+  -n network
+
+# Verify
+kubectl get pods -n network
+curl http://K3S_IP:30080/api/health    # Should reach Spring Boot through Kong</code></pre>
+
+<h3>Step 9: Helm Install -- AI Stack</h3>
+<pre><code>helm install ai-stack charts/ai-stack/ \
+  -n ai --create-namespace \
+  --set monitoring.prometheusUrl="http://MONITORING_IP:9090" \
+  --set monitoring.lokiUrl="http://MONITORING_IP:3100" \
+  --set monitoring.jaegerUrl="http://MONITORING_IP:16686" \
+  --set smtp.user="your@gmail.com" \
+  --set smtp.password="app-password"
+
+# Verify all 7 pods are running
+kubectl get pods -n ai
+# NAME                              READY   STATUS    RESTARTS   AGE
+# triage-service-xxx                1/1     Running   0          1m
+# mcp-prometheus-xxx                1/1     Running   0          1m
+# mcp-loki-xxx                      1/1     Running   0          1m
+# mcp-jaeger-xxx                    1/1     Running   0          1m
+# mcp-alertmanager-xxx              1/1     Running   0          1m
+# mcp-grafana-xxx                   1/1     Running   0          1m
+# ollama-xxx                        1/1     Running   0          1m
+
+# Pull the Ollama model (first time only)
+kubectl exec -n ai deploy/ollama -- ollama pull llama3.1:8b</code></pre>
+
+<h3>Step 10: Enable Prometheus K8s Service Discovery</h3>
+<pre><code># Extract the Prometheus SA token from the k3s cluster
+kubectl get secret prometheus-scraper-token -n observability \
+  -o jsonpath='{.data.token}' | base64 -d > /tmp/k3s-token
+
+# Copy to monitoring VM
+scp /tmp/k3s-token ubuntu@MONITORING_IP:/etc/prometheus/k3s-token
+
+# Set permissions
+ssh ubuntu@MONITORING_IP 'sudo chown prometheus:prometheus /etc/prometheus/k3s-token && sudo chmod 600 /etc/prometheus/k3s-token'
+
+# Enable the toggle and re-run monitoring playbook
+# Edit inventory/group_vars/monitoring.yml:
+#   k3s_sd_enabled: true
+#   k3s_api_server: "K3S_PRIVATE_IP"
+ansible-playbook playbooks/monitoring.yml --tags prometheus
+
+# Verify: check Prometheus targets page
+curl -s http://MONITORING_IP:9090/api/v1/targets | jq '.data.activeTargets[] | select(.labels.job=="kubernetes-pods") | .labels.pod'</code></pre>
+
+<h3>Step 11: Run E2E Validation</h3>
+<pre><code># The integration-k8s playbook runs the full validation suite
+ansible-playbook playbooks/integration-k8s.yml
+
+# This verifies:
+#  1. k3s node is Ready
+#  2. All workload pods are Running
+#  3. Monitoring VM services are healthy
+#  4. Prometheus is scraping K8s targets
+#  5. Traffic flows through Kong to Spring Boot
+#  6. Metrics appear in Prometheus
+#  7. Logs appear in Loki with K8s labels
+#  8. Traces appear in Jaeger
+#  9. Triage service responds to health checks
+# 10. Ollama has a loaded model</code></pre>
+
+<h3>Teardown</h3>
+<pre><code># 1. Uninstall Helm releases (in reverse order)
+helm uninstall ai-stack -n ai
+helm uninstall kong -n network
+helm uninstall spring-boot -n app
+
+# 2. Remove raw K8s manifests
+kubectl delete -f manifests/otel-collector/
+kubectl delete -f manifests/prometheus-rbac/
+kubectl delete -f manifests/nvidia-device-plugin/
+
+# 3. Remove namespaces (cleans up any remaining resources)
+kubectl delete namespace app network ai observability
+
+# 4. Destroy all AWS infrastructure
+cd terraform/
+terraform destroy
+
+# Type "yes" to confirm. This destroys ALL EC2 instances, VPCs, security groups, etc.
+# RDS and S3/CloudFront are managed separately -- check their Terraform modules.</code></pre>
+
+<div class="danger note"><strong>Caution:</strong> <code>terraform destroy</code> is irreversible. All EC2 instances, their EBS volumes, and all data on them will be permanently deleted. Back up any important data (Ollama models, Grafana dashboards, Prometheus data) before running this command.</div>
+
+<h3>Quick Reference: Full Command Sequence</h3>
+<pre><code># One-liner reference for the full deploy sequence:
+cd terraform && terraform init && terraform apply -auto-approve && cd ..
+./scripts/generate-inventory.sh
+ansible-galaxy install -r requirements.yml --force
+ansible-playbook playbooks/monitoring.yml
+ansible-playbook playbooks/k3s.yml
+ansible-playbook playbooks/k8s-manifests.yml
+export KUBECONFIG=$(pwd)/kubeconfig
+helm install spring-boot charts/spring-boot/ -n app --create-namespace --set database.url="..." --set database.password="..."
+kubectl apply -f charts/kong/kong-config.yaml -n network
+helm install kong kong/kong --version 2.38.0 -f charts/kong/values-k3s.yaml -n network --create-namespace
+helm install ai-stack charts/ai-stack/ -n ai --create-namespace --set monitoring.prometheusUrl="..." --set smtp.user="..." --set smtp.password="..."
+kubectl exec -n ai deploy/ollama -- ollama pull llama3.1:8b
+# ... copy token, enable k3s_sd_enabled, re-run monitoring ...
+ansible-playbook playbooks/integration-k8s.yml</code></pre>
+</div>
+
+<script>
+function switchTab(name) {
+  var names = ['overview','terraform','k3s','images','helm','otel','prometheus','alerts','aihardening','runbook'];
+  document.querySelectorAll('.tab').forEach(function(t, i) {
+    t.classList.toggle('active', names[i] === name);
+  });
+  document.querySelectorAll('.tab-content').forEach(function(c) {
+    c.classList.remove('active');
+  });
+  document.getElementById('tab-' + name).classList.add('active');
+}
+</script>
+</body>
+</html>

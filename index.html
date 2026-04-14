@@ -107,6 +107,8 @@
   <a href="architecture.html" class="navlink navlink-arch">🏗️ Architecture</a>
   <a href="sprint2-backlog.html" class="navlink navlink-sprint">🚀 Sprint 2 Backlog</a>
   <a href="kubernetes-guide.html" class="navlink navlink-k8s">☸️ Kubernetes Guide</a>
+  <a href="k3s-migration-guide.html" class="navlink" style="color:var(--accent-green);">🚀 k3s Migration</a>
+  <a href="sprint2-extension-guide.html" class="navlink" style="color:var(--accent-orange);">📋 Sprint 2 Extension</a>
 </div>
 
 <div class="hero">
@@ -213,12 +215,48 @@
     </div>
   </a>
 
+  <a href="k3s-migration-guide.html" class="card" style="border-color:rgba(107,207,127,.3);">
+    <div class="card-header">
+      <div class="card-icon" style="background:rgba(107,207,127,.1);">🚀</div>
+      <div class="card-header-text">
+        <h2>k3s Migration Guide</h2>
+        <p>Step-by-step guide for migrating from per-VM docker-compose to k3s + Helm charts. Covers Terraform rescope, Ansible k3s bootstrap, Helm chart creation, GPU setup, OTel DaemonSet, Prometheus k8s_sd, and alert rule migration.</p>
+      </div>
+    </div>
+    <div class="card-footer">
+      <div class="card-tags">
+        <span class="tag tag-green">Epic 3</span>
+        <span class="tag tag-cyan">k3s</span>
+        <span class="tag tag-blue">Helm</span>
+      </div>
+      <div class="card-arrow">→</div>
+    </div>
+  </a>
+
+  <a href="sprint2-extension-guide.html" class="card" style="border-color:rgba(240,160,80,.3);">
+    <div class="card-header">
+      <div class="card-icon" style="background:rgba(240,160,80,.1);">📋</div>
+      <div class="card-header-text">
+        <h2>Sprint 2 Extension — Complete Reference</h2>
+        <p>Comprehensive documentation of the Sprint 2 extension work: Terraform rescope, k3s bootstrap, Helm charts deep dive, OTel DaemonSet, Prometheus K8s discovery, alert migration, AI hardening (circuit breaker, JSON schema, observability), and full deployment runbook.</p>
+      </div>
+    </div>
+    <div class="card-footer">
+      <div class="card-tags">
+        <span class="tag tag-green">Epic 3</span>
+        <span class="tag tag-purple">Epic 4</span>
+        <span class="tag tag-orange">Runbook</span>
+      </div>
+      <div class="card-arrow">→</div>
+    </div>
+  </a>
+
 </div>
 
 <div class="status-row">
   <div class="status-item"><div class="status-dot dot-done"></div>Sprint 1 complete — local observability stack</div>
-  <div class="status-item"><div class="status-dot dot-active"></div>Sprint 2 in progress — AWS demo env + AI RCA</div>
-  <div class="status-item"><div class="status-dot dot-pending"></div>Sprint 3 planned — private cloud deployment, Jaeger MCP, prompt tuning</div>
+  <div class="status-item"><div class="status-dot dot-active"></div>Sprint 2 extended to Apr 23 — AI RCA + K8s migration + AI hardening</div>
+  <div class="status-item"><div class="status-dot dot-pending"></div>Sprint 3 planned — private cloud deployment, prompt tuning, HA</div>
 </div>
 
 </body>

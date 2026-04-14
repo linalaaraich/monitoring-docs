@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>k3s Migration Guide — Observability Platform</title>
+<style>
+  :root {
+    --bg: #0f1117; --card: #1a1d27; --card2: #1e2130; --border: #2a2d3a;
+    --text: #e0e0e0; --muted: #8890a0;
+    --accent-blue: #4ea8de; --accent-green: #6bcf7f; --accent-orange: #f0a050;
+    --accent-purple: #b07ee8; --accent-red: #e06070; --accent-cyan: #40d0d0;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Inter','Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); min-height:100vh; line-height:1.7; }
+  .topbar { display:flex; align-items:center; justify-content:space-between; padding:14px 32px; background:#13151e; border-bottom:1px solid var(--border); }
+  .topbar-left { display:flex; align-items:center; gap:16px; }
+  .back-link { color:var(--muted); text-decoration:none; font-size:13px; display:flex; align-items:center; gap:6px; transition:color .2s; }
+  .back-link:hover { color:var(--text); }
+  .topbar h1 { font-size:16px; font-weight:700; }
+
+  .tabs { display:flex; border-bottom:2px solid var(--border); padding:0 32px; background:#13151e; gap:4px; overflow-x:auto; }
+  .tab { padding:13px 22px; cursor:pointer; font-size:13px; font-weight:600; color:var(--muted); border-bottom:3px solid transparent; margin-bottom:-2px; transition:all .2s; white-space:nowrap; }
+  .tab:hover { color:var(--text); }
+  .tab.active { color:var(--accent-blue); border-bottom-color:var(--accent-blue); }
+  .tab-content { display:none; padding:32px; max-width:1100px; margin:0 auto; }
+  .tab-content.active { display:block; }
+
+  h2 { font-size:20px; font-weight:700; margin:28px 0 14px; color:var(--accent-blue); }
+  h3 { font-size:16px; font-weight:700; margin:22px 0 10px; color:var(--accent-green); }
+  h4 { font-size:14px; font-weight:700; margin:16px 0 8px; color:var(--accent-orange); }
+  p { margin:8px 0; font-size:14px; color:var(--muted); }
+  ul, ol { margin:8px 0 8px 20px; }
+  li { font-size:13px; color:var(--muted); margin:4px 0; line-height:1.6; }
+  li strong { color:var(--text); }
+  code { font-family:'JetBrains Mono','Fira Code',monospace; font-size:12px; background:rgba(78,168,222,.1); color:var(--accent-cyan); padding:2px 6px; border-radius:3px; }
+  pre { background:#13151e; border:1px solid var(--border); border-radius:8px; padding:16px; overflow-x:auto; margin:12px 0; }
+  pre code { background:none; padding:0; color:var(--text); font-size:12.5px; line-height:1.6; }
+
+  .note { background:rgba(78,168,222,.06); border:1px solid rgba(78,168,222,.2); border-radius:8px; padding:14px 18px; margin:16px 0; font-size:13px; color:var(--muted); }
+  .note strong { color:var(--accent-blue); }
+  .warn { background:rgba(240,160,80,.06); border:1px solid rgba(240,160,80,.2); }
+  .warn strong { color:var(--accent-orange); }
+  .danger { background:rgba(224,96,112,.06); border:1px solid rgba(224,96,112,.2); }
+  .danger strong { color:var(--accent-red); }
+
+  table { width:100%; border-collapse:collapse; margin:12px 0; font-size:13px; }
+  th { text-align:left; padding:10px 14px; background:var(--card); color:var(--accent-blue); font-weight:600; border:1px solid var(--border); }
+  td { padding:10px 14px; border:1px solid var(--border); color:var(--muted); }
+  td code { font-size:11px; }
+
+  .arch-box { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:20px; margin:16px 0; }
+  .arch-box pre { background:var(--card2); border-color:var(--border); }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-left">
+    <a href="index.html" class="back-link">&larr; Back to Index</a>
+    <span style="color:var(--border)">|</span>
+    <h1>k3s Migration Guide</h1>
+  </div>
+  <div style="display:flex;gap:10px;align-items:center;">
+    <span style="background:rgba(78,168,222,.15);color:var(--accent-blue);padding:4px 10px;border-radius:6px;font-size:12px;font-weight:600;border:1px solid rgba(78,168,222,.3);">Sprint 2 Extension</span>
+    <span style="background:rgba(107,207,127,.12);color:var(--accent-green);padding:4px 10px;border-radius:6px;font-size:12px;font-weight:600;border:1px solid rgba(107,207,127,.3);">Epic 3</span>
+  </div>
+</div>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('overview')">Overview</div>
+  <div class="tab" onclick="switchTab('whyk3s')">Why k3s</div>
+  <div class="tab" onclick="switchTab('architecture')">Architecture</div>
+  <div class="tab" onclick="switchTab('terraform')">Terraform Changes</div>
+  <div class="tab" onclick="switchTab('ansible')">Ansible &amp; k3s</div>
+  <div class="tab" onclick="switchTab('helm')">Helm Charts</div>
+  <div class="tab" onclick="switchTab('observability')">Observability</div>
+  <div class="tab" onclick="switchTab('gpu')">GPU &amp; NVIDIA</div>
+  <div class="tab" onclick="switchTab('validation')">Validation</div>
+  <div class="tab" onclick="switchTab('troubleshooting')">Troubleshooting</div>
+</div>
+
+<!-- ============== OVERVIEW ============== -->
+<div id="tab-overview" class="tab-content active">
+<h2>What Changed and Why</h2>
+<p>Sprint 2 was extended to April 23 with a new epic: migrate the <strong>monitored infrastructure</strong> (Spring Boot, Kong, AI RCA pipeline, Ollama) from per-VM docker-compose to a <strong>single-node k3s cluster</strong> on EC2.</p>
+
+<div class="note"><strong>Key decision:</strong> The monitoring stack (Prometheus, Grafana, Loki, Jaeger) stays on its own VM. Only the <em>monitored targets</em> move to Kubernetes. This keeps complexity manageable and avoids circular dependencies (you don't want your monitoring to go down because your cluster has issues).</div>
+
+<h3>Before vs After</h3>
+<table>
+<tr><th>Before (Sprint 2 original)</th><th>After (Sprint 2 extension)</th></tr>
+<tr><td>4 VMs: monitoring, backend, network, ai</td><td>2-3 instances: monitoring VM + k3s EC2 + optional GPU EC2</td></tr>
+<tr><td>Spring Boot on backend VM via docker-compose</td><td>Spring Boot in k3s via Helm chart</td></tr>
+<tr><td>Kong on network VM via docker-compose</td><td>Kong in k3s via upstream Helm chart</td></tr>
+<tr><td>AI stack on ai VM via docker-compose</td><td>AI stack in k3s via Helm chart</td></tr>
+<tr><td>Per-VM OTel Collectors for log/trace shipping</td><td>In-cluster OTel Collector DaemonSet</td></tr>
+<tr><td>Static Prometheus scrape targets</td><td>Prometheus <code>kubernetes_sd_configs</code></td></tr>
+<tr><td>Docker images pulled from Docker Hub</td><td>First-party images built + imported into k3s containerd</td></tr>
+</table>
+
+<h3>What Stays the Same</h3>
+<ul>
+<li>Monitoring VM: Prometheus, Grafana, Loki, Jaeger, OTel Collector (untouched)</li>
+<li>RDS MySQL database (managed by AWS)</li>
+<li>S3 + CloudFront for React frontend</li>
+<li>Grafana dashboards and datasources</li>
+<li>17 alert rules (selectors updated for K8s labels)</li>
+<li>Triage service webhook flow (Grafana &rarr; triage &rarr; Ollama &rarr; email)</li>
+</ul>
+
+<h3>Stories in Epic 3</h3>
+<table>
+<tr><th>ID</th><th>Story</th><th>Points</th><th>Depends On</th></tr>
+<tr><td>E3-01</td><td>Bootstrap k3s on EC2 via Ansible</td><td>3</td><td>Terraform rescope</td></tr>
+<tr><td>E3-02</td><td>Image build + k3s containerd import</td><td>3</td><td>E3-01</td></tr>
+<tr><td>E3-03</td><td>Helm chart &mdash; Spring Boot</td><td>3</td><td>E3-01</td></tr>
+<tr><td>E3-04</td><td>Helm chart &mdash; Kong (upstream)</td><td>3</td><td>E3-01, E3-03</td></tr>
+<tr><td>E3-05</td><td>Helm chart &mdash; AI stack</td><td>5</td><td>E3-01, E3-02, E3-06</td></tr>
+<tr><td>E3-06</td><td>NVIDIA device plugin + GPU verification</td><td>5</td><td>E3-01</td></tr>
+<tr><td>E3-07</td><td>In-cluster OTel Collector DaemonSet</td><td>3</td><td>E3-01..05</td></tr>
+<tr><td>E3-08</td><td>Prometheus <code>kubernetes_sd_configs</code></td><td>3</td><td>E3-01</td></tr>
+<tr><td>E3-09</td><td>Migrate 17 Grafana alert rules</td><td>3</td><td>E3-03..05, E3-08</td></tr>
+<tr><td>E3-10</td><td>End-to-end K8s validation</td><td>3</td><td>All above</td></tr>
+</table>
+</div>
+
+<!-- ============== WHY K3S ============== -->
+<div id="tab-whyk3s" class="tab-content">
+<h2>Why k3s (not full K8s, not Docker Swarm, not Nomad)</h2>
+
+<h3>What is k3s?</h3>
+<p>k3s is a <strong>lightweight, certified Kubernetes distribution</strong> built by Rancher (now SUSE). It packages the entire Kubernetes control plane into a single ~70MB binary. It's fully conformant &mdash; anything that works on vanilla K8s works on k3s.</p>
+
+<h3>Why we chose it</h3>
+<table>
+<tr><th>Criterion</th><th>k3s</th><th>kubeadm (full K8s)</th><th>Docker Swarm</th></tr>
+<tr><td>Install complexity</td><td>Single binary, 30 seconds</td><td>Multiple components, 30+ min</td><td>Built into Docker</td></tr>
+<tr><td>Resource overhead</td><td>~512MB RAM for control plane</td><td>~2GB RAM minimum</td><td>~200MB</td></tr>
+<tr><td>Certified K8s</td><td>Yes (CNCF conformant)</td><td>Yes</td><td>No (different API)</td></tr>
+<tr><td>Helm support</td><td>Yes (via helm binary)</td><td>Yes</td><td>No</td></tr>
+<tr><td>GPU support</td><td>Yes (NVIDIA device plugin)</td><td>Yes</td><td>Yes (--gpus flag)</td></tr>
+<tr><td>Ansible automation</td><td>Yes (xanmanning.k3s role)</td><td>Yes (kubespray)</td><td>Yes (manual)</td></tr>
+<tr><td>Production path</td><td>Same K8s API &rarr; EKS/GKE later</td><td>Already full K8s</td><td>Dead end (Docker deprecated Swarm)</td></tr>
+</table>
+
+<div class="note"><strong>Bottom line:</strong> k3s gives us real Kubernetes with minimal overhead. When we move to CIRES private cloud, we can upgrade to a multi-node k3s cluster or move to kubeadm/EKS &mdash; the Helm charts work everywhere.</div>
+
+<h3>What k3s Includes (built-in)</h3>
+<ul>
+<li><strong>containerd</strong> &mdash; container runtime (replaces Docker)</li>
+<li><strong>CoreDNS</strong> &mdash; cluster DNS</li>
+<li><strong>Flannel</strong> &mdash; CNI networking</li>
+<li><strong>local-path-provisioner</strong> &mdash; PersistentVolume storage</li>
+<li><strong>Traefik</strong> &mdash; ingress controller (we disable this because we use Kong)</li>
+<li><strong>ServiceLB</strong> &mdash; basic load balancer</li>
+<li><strong>Metrics Server</strong> &mdash; resource metrics for HPA</li>
+</ul>
+
+<h3>What k3s Does NOT Include</h3>
+<ul>
+<li>Docker (uses containerd directly &mdash; <code>docker</code> CLI doesn't work on the k3s node)</li>
+<li>Dashboard (install separately if needed)</li>
+<li>Monitoring (that's our monitoring VM)</li>
+<li>NVIDIA GPU support (added via device plugin in E3-06)</li>
+</ul>
+
+<h3>Key Commands</h3>
+<pre><code># kubectl is aliased by k3s
+sudo k3s kubectl get nodes
+
+# Or use the fetched kubeconfig
+export KUBECONFIG=~/.kube/config
+kubectl get nodes
+
+# Container runtime commands (not docker!)
+sudo k3s crictl ps         # list containers
+sudo k3s crictl images     # list images
+sudo k3s ctr images import /tmp/image.tar  # import tarball
+
+# Service management
+sudo systemctl status k3s
+sudo journalctl -u k3s -f  # follow logs
+</code></pre>
+</div>
+
+<!-- ============== ARCHITECTURE ============== -->
+<div id="tab-architecture" class="tab-content">
+<h2>Architecture After Migration</h2>
+
+<div class="arch-box">
+<pre><code>
+   &boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;
+   &boxv; Monitoring VM (t3.large, unchanged)           &boxv;
+   &boxv; &boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;  &boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;  &boxdr;&boxh;&boxh;&boxh;&boxh;&boxdl;  &boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl; &boxv;
+   &boxv; &boxv;Prometheus &boxv;  &boxv;Grafana&boxv;  &boxv;Loki&boxv;  &boxv;Jaeger&boxv; &boxv;
+   &boxv; &boxv;  :9090    &boxv;  &boxv; :3000 &boxv;  &boxv;:3100&boxv;  &boxv;:16686&boxv; &boxv;
+   &boxv; &boxur;&boxh;&boxh;&boxh;&boxh;&boxh;┬&boxh;&boxh;&boxh;&boxh;&boxh;&boxul;  &boxur;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxul;  &boxur;&boxh;&boxh;&boxh;&boxh;&boxul;  &boxur;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxul; &boxv;
+   &boxur;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;│&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxul;
+              │  scrapes via k8s_sd + receives OTLP
+              │
+   &boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;┴&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;
+   &boxv; k3s Cluster (single-node EC2)                          &boxv;
+   &boxv;                                                        &boxv;
+   &boxv;  namespace: app           namespace: network           &boxv;
+   &boxv;  &boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;       &boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;          &boxv;
+   &boxv;  &boxv; Spring Boot &boxv;       &boxv;    Kong      &boxv;          &boxv;
+   &boxv;  &boxv; + OTel Agent&boxv;&larr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxv; NodePort    &boxv;          &boxv;
+   &boxv;  &boxur;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxul;       &boxv; :30080      &boxv;          &boxv;
+   &boxv;       │                   &boxur;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxul;          &boxv;
+   &boxv;       │ connects to RDS                               &boxv;
+   &boxv;                                                        &boxv;
+   &boxv;  namespace: ai            namespace: observability     &boxv;
+   &boxv;  &boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;       &boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;          &boxv;
+   &boxv;  &boxv;Triage Svc  &boxv;       &boxv;OTel Collector&boxv;          &boxv;
+   &boxv;  &boxv;5x MCP Svrs &boxv;       &boxv; DaemonSet   &boxv;          &boxv;
+   &boxv;  &boxv;Ollama (GPU)&boxv;       &boxur;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxul;          &boxv;
+   &boxv;  &boxur;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxul;                               &boxv;
+   &boxur;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxul;
+
+   External Services:
+   &boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;    &boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;
+   &boxv;RDS MySQL&boxv;    &boxv;S3 + CloudFront&boxv;
+   &boxur;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxul;    &boxur;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxul;
+</code></pre>
+</div>
+
+<h3>Namespaces</h3>
+<table>
+<tr><th>Namespace</th><th>Contents</th><th>Helm Chart</th></tr>
+<tr><td><code>app</code></td><td>Spring Boot backend</td><td><code>charts/spring-boot</code></td></tr>
+<tr><td><code>network</code></td><td>Kong API Gateway</td><td>Upstream <code>kong/kong</code></td></tr>
+<tr><td><code>ai</code></td><td>Triage service, 5 MCP servers, Ollama</td><td><code>charts/ai-stack</code></td></tr>
+<tr><td><code>observability</code></td><td>OTel Collector DaemonSet, Prometheus RBAC</td><td>Raw manifests</td></tr>
+<tr><td><code>kube-system</code></td><td>k3s internals, NVIDIA device plugin</td><td>Raw manifests</td></tr>
+</table>
+
+<h3>How Data Flows (K8s Version)</h3>
+<ol>
+<li><strong>Metrics:</strong> Prometheus on monitoring VM discovers K8s pods via <code>kubernetes_sd_configs</code>. Pods annotated with <code>prometheus.io/scrape: "true"</code> are automatically scraped.</li>
+<li><strong>Logs:</strong> OTel Collector DaemonSet reads <code>/var/log/pods/</code>, enriches with K8s metadata (pod, namespace, container), forwards to Loki on monitoring VM.</li>
+<li><strong>Traces:</strong> OTel Java Agent (Spring Boot) and Kong OTel plugin send OTLP to in-cluster OTel Collector DaemonSet, which forwards to monitoring VM OTel Collector &rarr; Jaeger.</li>
+<li><strong>Alerts:</strong> Grafana evaluates rules (now using K8s pod selectors), fires webhook to triage service (reached via NodePort or internal service DNS).</li>
+</ol>
+</div>
+
+<!-- ============== TERRAFORM ============== -->
+<div id="tab-terraform" class="tab-content">
+<h2>Terraform Changes (SCRUM-63 Rescope)</h2>
+
+<h3>What Changed</h3>
+<p>The original Terraform provisioned 4 separate EC2 instances. The rescoped version provisions:</p>
+<ul>
+<li><strong>1 monitoring EC2</strong> (unchanged, t3.large)</li>
+<li><strong>1 k3s EC2</strong> (new, t3.xlarge &mdash; runs Spring Boot + Kong + AI stack)</li>
+<li><strong>1 GPU EC2</strong> (renamed from "ai", g4dn.xlarge &mdash; for Ollama if separate node needed)</li>
+</ul>
+
+<h3>Security Group Changes</h3>
+<table>
+<tr><th>Old SG</th><th>New SG</th><th>Key Ports</th></tr>
+<tr><td>sg-backend, sg-network, sg-ai</td><td><code>sg-k3s</code></td><td>:6443 (K8s API), :10250 (kubelet), :30000-32767 (NodePort), :80, :443</td></tr>
+<tr><td>sg-ai</td><td><code>sg-gpu</code></td><td>:11434 (Ollama), :9100 (node exporter)</td></tr>
+<tr><td>sg-monitoring</td><td>sg-monitoring (unchanged)</td><td>Same as before</td></tr>
+</table>
+
+<div class="warn"><strong>Critical:</strong> The monitoring VM must be able to reach the k3s API server on <code>:6443</code> and kubelet on <code>:10250</code> for Prometheus <code>kubernetes_sd_configs</code> to work.</div>
+
+<h3>New Variables</h3>
+<pre><code># variables.tf additions
+variable "k3s_instance_type" {
+  default = "t3.xlarge"  # 4 vCPU, 16GB RAM
+}
+
+variable "gpu_instance_type" {
+  default = "g4dn.xlarge"  # T4 GPU
+}
+
+variable "ubuntu_ami_id" {
+  default = ""  # Empty = use latest; set for pinning
+}
+</code></pre>
+
+<h3>New Outputs</h3>
+<pre><code># outputs.tf
+output "k3s_private_ip" { ... }
+output "k3s_public_ip" { ... }
+output "gpu_private_ip" { ... }
+output "gpu_public_ip" { ... }
+</code></pre>
+</div>
+
+<!-- ============== ANSIBLE ============== -->
+<div id="tab-ansible" class="tab-content">
+<h2>Ansible &amp; k3s Bootstrap (E3-01)</h2>
+
+<h3>How k3s is Installed</h3>
+<p>We use the <code>xanmanning.k3s</code> Ansible role (v3.4.4) which handles the full k3s lifecycle: install, configure, upgrade, and uninstall.</p>
+
+<h4>Step 1: Install the Role</h4>
+<pre><code># requirements.yml
+roles:
+  - name: xanmanning.k3s
+    version: "v3.4.4"
+
+# Install
+ansible-galaxy install -r requirements.yml</code></pre>
+
+<h4>Step 2: Configure Inventory</h4>
+<pre><code># inventory/production.yml
+all:
+  children:
+    monitoring:
+      hosts:
+        monitoring-vm:
+          ansible_host: 10.0.2.x  # from Terraform
+    k3s_cluster:
+      hosts:
+        k3s-node:
+          ansible_host: 10.0.2.y  # from Terraform
+          k3s_control_node: true
+    gpu:
+      hosts:
+        gpu-vm:
+          ansible_host: 10.0.2.z  # from Terraform</code></pre>
+
+<h4>Step 3: Group Variables</h4>
+<pre><code># inventory/group_vars/k3s_cluster.yml
+k3s_release_version: "v1.30.6+k3s1"
+k3s_server:
+  disable:
+    - traefik   # We use Kong instead
+  write-kubeconfig-mode: "0644"
+image_tag: "latest"</code></pre>
+
+<h4>Step 4: Run the Playbook</h4>
+<pre><code># Bootstrap k3s
+ansible-playbook playbooks/k3s.yml
+
+# Verify
+kubectl get nodes
+# NAME       STATUS   ROLES                  AGE   VERSION
+# k3s-node   Ready    control-plane,master   1m    v1.30.6+k3s1</code></pre>
+
+<h3>Image Build &amp; Import (E3-02)</h3>
+<p>Since we have a single-node k3s cluster with 1-2 contributors, we don't need a Docker registry. Instead, we build images with Docker and import them directly into k3s's containerd.</p>
+
+<pre><code># The flow for each first-party image:
+docker build -t cires/triage-service:latest .
+docker save cires/triage-service:latest -o /tmp/triage.tar
+sudo k3s ctr images import /tmp/triage.tar
+
+# Verify
+sudo k3s crictl images | grep cires</code></pre>
+
+<div class="note"><strong>Why not a registry?</strong> ECR + GitHub Actions adds operational complexity we don't need for a single-node demo. When we go multi-node, we'll add ECR. The upgrade path is documented in the role README.</div>
+</div>
+
+<!-- ============== HELM ============== -->
+<div id="tab-helm" class="tab-content">
+<h2>Helm Charts (E3-03, E3-04, E3-05)</h2>
+
+<h3>What is Helm?</h3>
+<p>Helm is the <strong>package manager for Kubernetes</strong>. A Helm chart is a collection of YAML templates that define Kubernetes resources (Deployments, Services, ConfigMaps, Secrets). You install a chart with <code>helm install</code> and it creates all the resources.</p>
+
+<h3>Our Three Charts</h3>
+<table>
+<tr><th>Chart</th><th>Location</th><th>Type</th><th>Installs</th></tr>
+<tr><td>Spring Boot</td><td><code>charts/spring-boot/</code></td><td>Custom (in-house)</td><td>Deployment, Service, ConfigMap, Secret, ServiceAccount</td></tr>
+<tr><td>Kong</td><td><code>charts/kong/</code></td><td>Upstream values</td><td>Uses kong/kong chart with our values.yaml</td></tr>
+<tr><td>AI Stack</td><td><code>charts/ai-stack/</code></td><td>Custom (in-house)</td><td>7 Deployments, 7 Services, PVCs, Secrets, ConfigMap</td></tr>
+</table>
+
+<h4>Installing the Charts</h4>
+<pre><code># 1. Spring Boot
+helm install spring-boot charts/spring-boot/ \
+  -n app --create-namespace \
+  --set database.url="jdbc:mysql://RDS_ENDPOINT:3306/app_db" \
+  --set database.password="YOUR_DB_PASSWORD"
+
+# 2. Kong (apply ConfigMap first)
+kubectl apply -f charts/kong/kong-config.yaml
+helm repo add kong https://charts.konghq.com
+helm install kong kong/kong \
+  --version 2.38.0 \
+  -f charts/kong/values-k3s.yaml \
+  -n network --create-namespace
+
+# 3. AI Stack
+helm install ai-stack charts/ai-stack/ \
+  -n ai --create-namespace \
+  --set monitoring.prometheusUrl="http://MONITORING_IP:9090" \
+  --set monitoring.lokiUrl="http://MONITORING_IP:3100" \
+  --set monitoring.jaegerUrl="http://MONITORING_IP:16686" \
+  --set smtp.user="your@gmail.com" \
+  --set smtp.password="app-password"</code></pre>
+
+<h4>Helm Key Concepts</h4>
+<ul>
+<li><strong>Chart.yaml</strong> &mdash; chart metadata (name, version)</li>
+<li><strong>values.yaml</strong> &mdash; default configuration (override with <code>--set</code> or <code>-f</code>)</li>
+<li><strong>templates/</strong> &mdash; Kubernetes YAML with Go template syntax (<code>{{ .Values.xxx }}</code>)</li>
+<li><strong>_helpers.tpl</strong> &mdash; reusable template functions (name, labels, etc.)</li>
+<li><strong><code>helm install</code></strong> &mdash; deploy a chart</li>
+<li><strong><code>helm upgrade</code></strong> &mdash; update a deployed chart</li>
+<li><strong><code>helm rollback</code></strong> &mdash; revert to a previous version</li>
+<li><strong><code>helm uninstall</code></strong> &mdash; remove everything the chart created</li>
+</ul>
+
+<h4>Debugging Tips</h4>
+<pre><code># Preview what Helm will create (dry run)
+helm install --dry-run --debug spring-boot charts/spring-boot/
+
+# See what's deployed
+helm list -A
+
+# See the actual K8s resources
+kubectl get all -n app
+
+# Check pod logs
+kubectl logs -n app deploy/spring-boot -f
+
+# Describe a failing pod
+kubectl describe pod -n app spring-boot-xxx</code></pre>
+</div>
+
+<!-- ============== OBSERVABILITY ============== -->
+<div id="tab-observability" class="tab-content">
+<h2>Observability Integration (E3-07, E3-08, E3-09)</h2>
+
+<h3>OTel Collector DaemonSet (E3-07)</h3>
+<p>A DaemonSet runs one pod per node. Our OTel Collector DaemonSet:</p>
+<ul>
+<li>Reads container logs from <code>/var/log/pods/</code></li>
+<li>Enriches with K8s metadata (pod name, namespace, container) via <code>k8sattributes</code> processor</li>
+<li>Receives OTLP traces from application pods</li>
+<li>Forwards logs to Loki on monitoring VM</li>
+<li>Forwards traces to OTel Collector on monitoring VM &rarr; Jaeger</li>
+</ul>
+
+<pre><code># Apply the OTel Collector manifests
+kubectl apply -f manifests/otel-collector/namespace.yaml
+kubectl apply -f manifests/otel-collector/rbac.yaml
+kubectl apply -f manifests/otel-collector/configmap.yaml
+kubectl apply -f manifests/otel-collector/daemonset.yaml
+
+# Verify
+kubectl get pods -n observability
+kubectl logs -n observability -l app.kubernetes.io/name=otel-collector</code></pre>
+
+<h3>Prometheus kubernetes_sd_configs (E3-08)</h3>
+<p>Instead of manually listing scrape targets, Prometheus discovers K8s pods automatically. Pods opt-in with annotations:</p>
+<pre><code>metadata:
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8080"
+    prometheus.io/path: "/actuator/prometheus"</code></pre>
+
+<h4>Setup Steps</h4>
+<ol>
+<li>Apply RBAC manifests to create the ServiceAccount + ClusterRole in the k3s cluster</li>
+<li>Extract the SA token</li>
+<li>Place the token file on the monitoring VM at <code>/etc/prometheus/k3s-token</code></li>
+<li>Set <code>k3s_sd_enabled: true</code> in <code>monitoring.yml</code> group_vars</li>
+<li>Re-run <code>ansible-playbook playbooks/monitoring.yml</code></li>
+</ol>
+
+<pre><code># Apply RBAC
+kubectl apply -f manifests/prometheus-rbac/rbac.yaml
+
+# Extract token
+kubectl get secret prometheus-scraper-token -n observability \
+  -o jsonpath='{.data.token}' | base64 -d > /tmp/k3s-token
+
+# Copy to monitoring VM
+scp /tmp/k3s-token deploy@monitoring-vm:/etc/prometheus/k3s-token</code></pre>
+
+<h3>Grafana Alert Rule Migration (E3-09)</h3>
+<p>The 17 alert rules are updated to use K8s-compatible selectors when <code>k3s_sd_enabled</code> is true. The Jinja2 template switches between VM job labels and K8s pod labels automatically.</p>
+
+<table>
+<tr><th>Old Selector (VM mode)</th><th>New Selector (K8s mode)</th></tr>
+<tr><td><code>job="app-spring-actuator"</code></td><td><code>app="spring-boot"</code></td></tr>
+<tr><td><code>job="otel-collector"</code></td><td><code>app="otel-collector"</code></td></tr>
+<tr><td><code>job="mon-node-exporter"</code></td><td><code>job="mon-node-exporter"</code> (unchanged &mdash; monitoring VM stays)</td></tr>
+</table>
+
+<div class="danger"><strong>Risk:</strong> If any alert rule selector is wrong, the rule silently stops firing. Test each rule individually after migration.</div>
+</div>
+
+<!-- ============== GPU ============== -->
+<div id="tab-gpu" class="tab-content">
+<h2>GPU &amp; NVIDIA Setup (E3-06)</h2>
+
+<h3>Why GPU?</h3>
+<p>Ollama runs LLM inference (llama3.1:8b). Without GPU, inference takes 30-60 seconds per query. With T4 GPU, it takes 3-5 seconds. The AI RCA pipeline has a 5-minute timeout, so GPU is strongly preferred.</p>
+
+<h3>The Stack</h3>
+<ol>
+<li><strong>NVIDIA host driver</strong> &mdash; installed on the EC2 host (nvidia_docker Ansible role)</li>
+<li><strong>NVIDIA Container Toolkit</strong> &mdash; configures containerd with nvidia runtime</li>
+<li><strong>NVIDIA k8s Device Plugin</strong> &mdash; DaemonSet that registers <code>nvidia.com/gpu</code> as a schedulable resource</li>
+<li><strong>Ollama pod</strong> &mdash; requests <code>nvidia.com/gpu: 1</code> in its resource limits</li>
+</ol>
+
+<h3>Setup Steps</h3>
+<pre><code># 1. Install NVIDIA driver (via Ansible)
+ansible-playbook playbooks/k3s.yml --tags nvidia
+
+# 2. Verify on the host
+ssh deploy@gpu-vm nvidia-smi
+
+# 3. Deploy device plugin
+kubectl apply -f manifests/nvidia-device-plugin/daemonset.yaml
+
+# 4. Test GPU access
+kubectl apply -f manifests/nvidia-device-plugin/test-gpu-pod.yaml
+kubectl logs gpu-test
+# Should show nvidia-smi output with T4 GPU info
+
+# 5. Clean up test
+kubectl delete pod gpu-test</code></pre>
+
+<h3>Troubleshooting GPU Issues</h3>
+<table>
+<tr><th>Symptom</th><th>Cause</th><th>Fix</th></tr>
+<tr><td><code>nvidia-smi</code> not found on host</td><td>Driver not installed</td><td>Re-run nvidia_docker role</td></tr>
+<tr><td>Device plugin CrashLoopBackOff</td><td>containerd not configured with nvidia runtime</td><td>Check <code>/etc/containerd/config.toml</code> has nvidia runtime</td></tr>
+<tr><td>Pod stuck in Pending</td><td>No GPU resources available</td><td>Check <code>kubectl describe node</code> for <code>nvidia.com/gpu</code> allocatable</td></tr>
+<tr><td>Ollama falls back to CPU</td><td>GPU not visible inside container</td><td>Verify device plugin logs: <code>kubectl logs -n kube-system -l app.kubernetes.io/name=nvidia-device-plugin</code></td></tr>
+</table>
+
+<div class="warn"><strong>Spike warning:</strong> GPU setup on k3s can be fiddly. Budget 1-1.5 days. If it takes longer, fall back to CPU-only Ollama for the demo (slower but functional).</div>
+</div>
+
+<!-- ============== VALIDATION ============== -->
+<div id="tab-validation" class="tab-content">
+<h2>End-to-End Validation (E3-10)</h2>
+
+<h3>The Validation Playbook</h3>
+<pre><code>ansible-playbook playbooks/integration-k8s.yml</code></pre>
+
+<h3>10-Step Test Sequence</h3>
+<ol>
+<li>Verify k3s node is Ready</li>
+<li>Verify all workload pods are Running (Spring Boot, Kong, Triage, Ollama)</li>
+<li>Verify monitoring VM services (Prometheus, Grafana, Loki, Jaeger)</li>
+<li>Verify Prometheus K8s targets are being scraped</li>
+<li>Generate load through Kong NodePort</li>
+<li>Verify Spring Boot metrics appear in Prometheus</li>
+<li>Verify logs appear in Loki with K8s labels</li>
+<li>Verify traces appear in Jaeger</li>
+<li>Verify triage service is healthy</li>
+<li>Verify Ollama is responding with loaded models</li>
+</ol>
+
+<div class="note"><strong>This replaces E1-05</strong> (the original VM-target E2E validation). The K8s validation is the new ground truth.</div>
+</div>
+
+<!-- ============== TROUBLESHOOTING ============== -->
+<div id="tab-troubleshooting" class="tab-content">
+<h2>Troubleshooting</h2>
+
+<h3>Common Issues</h3>
+
+<h4>Pod in ImagePullBackOff</h4>
+<pre><code># First-party images must be imported into k3s containerd
+# They are NOT pulled from Docker Hub
+sudo k3s crictl images | grep cires
+
+# If missing, re-run the image import
+ansible-playbook playbooks/k3s.yml --tags images
+
+# Ensure imagePullPolicy is IfNotPresent (not Always)
+kubectl get deploy -n ai triage-service -o yaml | grep imagePullPolicy</code></pre>
+
+<h4>Pod in CrashLoopBackOff</h4>
+<pre><code># Check pod logs
+kubectl logs -n ai deploy/triage-service --previous
+
+# Check events
+kubectl describe pod -n ai triage-service-xxx
+
+# Common causes:
+# - Missing environment variables
+# - Database connection refused (RDS security group)
+# - Config file not mounted</code></pre>
+
+<h4>Prometheus Not Scraping K8s Targets</h4>
+<pre><code># Check Prometheus targets page
+curl http://monitoring-vm:9090/api/v1/targets | jq '.data.activeTargets[] | select(.labels.job=="kubernetes-pods")'
+
+# Common causes:
+# - k3s-token not on monitoring VM
+# - Security group blocks :6443 from monitoring VM
+# - Pod missing prometheus.io/scrape annotation
+# - k3s_sd_enabled not set to true in monitoring.yml</code></pre>
+
+<h4>Logs Not Appearing in Loki</h4>
+<pre><code># Check OTel Collector DaemonSet logs
+kubectl logs -n observability -l app.kubernetes.io/name=otel-collector
+
+# Verify OTel Collector can reach Loki
+kubectl exec -n observability otel-collector-xxx -- \
+  curl -s http://MONITORING_VM_IP:3100/ready
+
+# Common causes:
+# - OTel Collector config has wrong monitoring VM IP
+# - Network/security group blocks :3100 from k3s EC2
+# - filelog receiver not matching pod log paths</code></pre>
+
+<h4>k3s Won't Start</h4>
+<pre><code># Check service status
+sudo systemctl status k3s
+
+# Check logs
+sudo journalctl -u k3s --no-pager -n 100
+
+# Common causes:
+# - Port 6443 already in use
+# - Insufficient disk space
+# - DNS resolution issues</code></pre>
+</div>
+
+<script>
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach((t,i) => {
+    const names = ['overview','whyk3s','architecture','terraform','ansible','helm','observability','gpu','validation','troubleshooting'];
+    t.classList.toggle('active', names[i] === name);
+  });
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+}
+</script>
+</body>
+</html>
