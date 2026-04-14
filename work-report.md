@@ -1,7 +1,3 @@
----
-render_with_liquid: false
----
-
 # Work Report — What Was Done & What Needs Manual Action
 
 > **Date:** 2026-04-13 (updated after audit pass)
@@ -230,7 +226,7 @@ After the initial implementation, 4 parallel audit agents scrutinized every file
 | Issue | Severity | Fix |
 |-------|----------|-----|
 | OTel Collector ConfigMap missing `health_check` extension — pods would never become Ready | **Critical** | Added `extensions.health_check` and `service.extensions: [health_check]` to configmap.yaml |
-| Alert rules `mon_node_selector` was a broken Jinja2 self-reference — Loki disk alert rules would have invalid PromQL | **Critical** | Fixed: `{% set mon_node_selector = 'job="mon-node-exporter"' %}` defined once, outside the if/else block |
+| Alert rules `mon_node_selector` was a broken Jinja2 self-reference — Loki disk alert rules would have invalid PromQL | **Critical** | Fixed: {% raw %}`{% set mon_node_selector = 'job="mon-node-exporter"' %}`{% endraw %} defined once, outside the if/else block |
 | `integration-k8s.yml` had `gather_facts: false` but used `ansible_date_time` — Step 6 would fail | **Critical** | Changed to `gather_facts: true` |
 | `requirements.yml` used `>=3.4.0` version range for community.docker collection — `ansible-galaxy` would fail | **Critical** | Changed to exact version `3.13.0` |
 | AI stack Helm chart: RCA History MCP had no volume mount — SQLite data lost on pod restart | **High** | Added shared PVC mount (triage-data) as read-only to rca-history MCP deployment |
