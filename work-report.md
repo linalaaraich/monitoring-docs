@@ -1,3 +1,7 @@
+---
+render_with_liquid: false
+---
+
 # Work Report — What Was Done & What Needs Manual Action
 
 > **Date:** 2026-04-13 (updated after audit pass)
