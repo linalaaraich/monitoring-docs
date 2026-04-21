@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reproducibility Guide — CIRES Observability Platform</title>
+<style>
+  :root {
+    --bg: #0f1117; --card: #1a1d27; --card2: #1e2130; --border: #2a2d3a;
+    --text: #e0e0e0; --muted: #8890a0;
+    --accent-blue: #4ea8de; --accent-green: #6bcf7f; --accent-orange: #f0a050;
+    --accent-purple: #b07ee8; --accent-red: #e06070; --accent-cyan: #40d0d0;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Inter','Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); min-height:100vh; line-height:1.7; }
+  .topbar { display:flex; align-items:center; justify-content:space-between; padding:14px 32px; background:#13151e; border-bottom:1px solid var(--border); }
+  .topbar-left { display:flex; align-items:center; gap:16px; }
+  .back-link { color:var(--muted); text-decoration:none; font-size:13px; display:flex; align-items:center; gap:6px; transition:color .2s; }
+  .back-link:hover { color:var(--text); }
+  .topbar h1 { font-size:16px; font-weight:700; }
+
+  .tabs { display:flex; border-bottom:2px solid var(--border); padding:0 32px; background:#13151e; gap:4px; overflow-x:auto; }
+  .tab { padding:13px 22px; cursor:pointer; font-size:13px; font-weight:600; color:var(--muted); border-bottom:3px solid transparent; margin-bottom:-2px; transition:all .2s; white-space:nowrap; }
+  .tab:hover { color:var(--text); }
+  .tab.active { color:var(--accent-blue); border-bottom-color:var(--accent-blue); }
+  .tab-content { display:none; padding:32px; max-width:1100px; margin:0 auto; }
+  .tab-content.active { display:block; }
+
+  h2 { font-size:22px; font-weight:800; margin:10px 0 14px; color:var(--accent-blue); letter-spacing:-.3px; }
+  h3 { font-size:16px; font-weight:700; margin:26px 0 10px; color:var(--accent-green); }
+  h4 { font-size:14px; font-weight:700; margin:18px 0 8px; color:var(--accent-orange); }
+  p { margin:8px 0; font-size:14px; color:var(--muted); }
+  ul, ol { margin:8px 0 8px 22px; }
+  li { font-size:13.5px; color:var(--muted); margin:5px 0; line-height:1.65; }
+  li strong { color:var(--text); }
+  a { color:var(--accent-blue); text-decoration:none; }
+  a:hover { text-decoration:underline; }
+  code { font-family:'JetBrains Mono','Fira Code',monospace; font-size:12px; background:rgba(78,168,222,.1); color:var(--accent-cyan); padding:2px 6px; border-radius:3px; }
+  pre { background:#13151e; border:1px solid var(--border); border-radius:8px; padding:16px; overflow-x:auto; margin:12px 0; }
+  pre code { background:none; padding:0; color:var(--text); font-size:12.5px; line-height:1.65; }
+
+  .note { background:rgba(78,168,222,.06); border:1px solid rgba(78,168,222,.2); border-radius:8px; padding:14px 18px; margin:16px 0; font-size:13.5px; color:var(--muted); }
+  .note strong { color:var(--accent-blue); }
+  .warn { background:rgba(240,160,80,.06); border:1px solid rgba(240,160,80,.2); }
+  .warn strong { color:var(--accent-orange); }
+  .danger { background:rgba(224,96,112,.06); border:1px solid rgba(224,96,112,.2); }
+  .danger strong { color:var(--accent-red); }
+  .ok { background:rgba(107,207,127,.06); border:1px solid rgba(107,207,127,.2); }
+  .ok strong { color:var(--accent-green); }
+
+  table { width:100%; border-collapse:collapse; margin:14px 0; font-size:13px; }
+  th { text-align:left; padding:10px 14px; background:var(--card); color:var(--accent-blue); font-weight:600; border:1px solid var(--border); }
+  td { padding:10px 14px; border:1px solid var(--border); color:var(--muted); vertical-align:top; }
+  td code { font-size:11.5px; }
+
+  .step { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:20px 24px; margin:18px 0; position:relative; }
+  .step-num { position:absolute; top:-12px; left:20px; background:var(--accent-blue); color:#fff; font-size:12px; font-weight:700; padding:4px 10px; border-radius:12px; letter-spacing:.4px; }
+  .step h3 { margin-top:6px; }
+
+  .kv { display:grid; grid-template-columns:max-content 1fr; gap:6px 18px; font-size:13px; margin:10px 0; }
+  .kv dt { color:var(--text); font-weight:600; }
+  .kv dd { color:var(--muted); }
+
+  .pill { display:inline-block; padding:2px 10px; border-radius:10px; font-size:11px; font-weight:600; margin-left:6px; vertical-align:middle; }
+  .pill-green { background:rgba(107,207,127,.12); color:var(--accent-green); border:1px solid rgba(107,207,127,.3); }
+  .pill-orange { background:rgba(240,160,80,.12); color:var(--accent-orange); border:1px solid rgba(240,160,80,.3); }
+  .pill-red { background:rgba(224,96,112,.12); color:var(--accent-red); border:1px solid rgba(224,96,112,.3); }
+
+  .toc { background:var(--card2); border:1px solid var(--border); border-radius:10px; padding:18px 22px; margin:12px 0 24px; }
+  .toc h4 { color:var(--accent-blue); margin:0 0 10px; }
+  .toc ol { margin-left:18px; }
+  .toc li { font-size:13px; color:var(--text); margin:3px 0; }
+  .toc li a { color:var(--muted); }
+  .toc li a:hover { color:var(--text); }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-left">
+    <a href="index.html" class="back-link">&larr; Back to Index</a>
+    <span style="color:var(--border)">|</span>
+    <h1>Reproducibility Guide</h1>
+  </div>
+  <div style="display:flex;gap:10px;align-items:center;">
+    <span class="pill pill-green">Deploy runbook</span>
+    <span class="pill pill-orange">Sprint 2 extension</span>
+  </div>
+</div>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('overview')">Overview</div>
+  <div class="tab" onclick="switchTab('prereq')">Prerequisites</div>
+  <div class="tab" onclick="switchTab('clone')">1. Clone</div>
+  <div class="tab" onclick="switchTab('terraform')">2. Terraform</div>
+  <div class="tab" onclick="switchTab('monitoring-vm')">3. Monitoring VM</div>
+  <div class="tab" onclick="switchTab('k3s')">4. k3s + Helm</div>
+  <div class="tab" onclick="switchTab('config')">5. Wire it up</div>
+  <div class="tab" onclick="switchTab('validate')">6. Validate</div>
+  <div class="tab" onclick="switchTab('secrets')">Secrets</div>
+  <div class="tab" onclick="switchTab('teardown')">Tear-down</div>
+  <div class="tab" onclick="switchTab('troubleshooting')">Troubleshooting</div>
+</div>
+
+<!-- ============== OVERVIEW ============== -->
+<div id="tab-overview" class="tab-content active">
+<h2>End-to-end reproducibility for the CIRES Observability Platform</h2>
+<p>This page is the single top-to-bottom guide for standing up the platform from scratch — AWS account, Terraform, Ansible, k3s cluster, Helm-deployed workloads, AI triage, and end-to-end validation. It is the operational complement to the architecture, Kubernetes learning, and Sprint 2 extension guides.</p>
+
+<div class="note"><strong>Who this is for:</strong> an operator (future Lina, a teammate, a reviewer) who has the 6 repos and needs to reach a working AWS demo in under a day. Everything below is re-runnable. Every credential is marked. Every side-effect is described.</div>
+
+<h3>What you'll end up with</h3>
+<ul>
+<li><strong>1 monitoring VM</strong> (EC2, Ubuntu 22.04): Prometheus + Grafana + Loki + Jaeger + OTel Collector</li>
+<li><strong>1 k3s EC2</strong> (Ubuntu 22.04): single-node k3s cluster running Spring Boot, Kong, triage service, 5 MCP servers</li>
+<li><strong>1 optional GPU EC2</strong> (g4dn.xlarge): Ollama — can instead be co-located on the k3s node for cost</li>
+<li><strong>1 RDS MySQL</strong> (managed): application database</li>
+<li><strong>S3 + CloudFront</strong>: React frontend hosting</li>
+<li><strong>17 Grafana alert rules</strong> firing through a webhook into the AI triage pipeline</li>
+</ul>
+
+<h3>The 6 repos involved</h3>
+<table>
+<tr><th>Repo</th><th>Role</th><th>Language/Tooling</th></tr>
+<tr><td><code>provisioning-monitoring-infra</code></td><td>AWS infra (VPC, EC2s, RDS, S3, CloudFront, SGs)</td><td>Terraform</td></tr>
+<tr><td><code>monitoring-project</code></td><td>Ansible roles, playbooks, Helm charts, K8s manifests</td><td>Ansible + Helm + YAML</td></tr>
+<tr><td><code>monitoring-triage-service</code></td><td>FastAPI AI triage pipeline (webhook → dedup → MCP fan-out → Ollama → email)</td><td>Python / FastAPI</td></tr>
+<tr><td><code>monitoring-mcp-servers</code></td><td>5 MCP bridge servers (Prometheus, Loki, Jaeger, Drain3, RCA History) giving the LLM read-only observability access</td><td>Python / FastAPI</td></tr>
+<tr><td><code>monitoring-docs</code></td><td>HTML docs site (this page) + downloadable dashboards</td><td>HTML / GitHub Pages</td></tr>
+<tr><td><code>jira</code></td><td>Jira CSV exports + sprint extension metadata</td><td>CSV + Python</td></tr>
+</table>
+
+<h3>Sequence at a glance</h3>
+<pre><code>Terraform apply              (≈8 min, creates VPC + 3 EC2 + RDS + S3/CDN + SGs)
+      │
+      ▼
+Ansible bootstrap monitoring (≈10 min, installs Prom/Grafana/Loki/Jaeger/OTel on VM1)
+      │
+      ▼
+Ansible bootstrap k3s        (≈5 min, single-node k3s via xanmanning.k3s)
+      │
+      ▼
+Build + import images        (≈8 min, 6 cires/* images built locally, ctr-imported)
+      │
+      ▼
+helm install × 3             (spring-boot, kong, ai-stack  —  ~2 min each)
+      │
+      ▼
+Apply K8s manifests          (nvidia-device-plugin + otel-collector DaemonSets)
+      │
+      ▼
+Ollama model pull            (≈5-15 min depending on model size)
+      │
+      ▼
+integration-k8s.yml          (end-to-end smoke test — load-test → alert → triage → email)</code></pre>
+
+<div class="warn"><strong>Rough cost:</strong> in us-east-1 the demo stack runs ~$3-5/day if left on 24×7 (t3.large monitoring + t3.xlarge k3s + g4dn.xlarge GPU + db.t3.micro RDS). Stop the EC2s when not demoing; RDS storage still bills but is small.</div>
+</div>
+
+<!-- ============== PREREQUISITES ============== -->
+<div id="tab-prereq" class="tab-content">
+<h2>Prerequisites</h2>
+
+<h3>Local tools</h3>
+<table>
+<tr><th>Tool</th><th>Tested version</th><th>Install</th></tr>
+<tr><td>Terraform</td><td>1.9.x</td><td><a href="https://developer.hashicorp.com/terraform/install">developer.hashicorp.com/terraform/install</a></td></tr>
+<tr><td>Ansible</td><td>2.16+</td><td><code>pipx install ansible-core</code></td></tr>
+<tr><td>Python</td><td>3.11+</td><td>System package manager</td></tr>
+<tr><td>AWS CLI</td><td>v2</td><td><a href="https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html">aws.amazon.com install docs</a></td></tr>
+<tr><td><code>kubectl</code></td><td>v1.30+</td><td><a href="https://kubernetes.io/docs/tasks/tools/">kubernetes.io/docs/tasks/tools</a></td></tr>
+<tr><td>Helm</td><td>v3.14+</td><td><a href="https://helm.sh/docs/intro/install/">helm.sh install</a></td></tr>
+<tr><td>git &amp; gh</td><td>latest</td><td>System package manager</td></tr>
+</table>
+
+<h3>AWS account</h3>
+<ul>
+<li>An AWS account with admin or near-admin IAM permissions for the demo (VPC, EC2, RDS, S3, CloudFront, IAM for service roles)</li>
+<li>CLI credentials configured: <code>aws configure</code> (or <code>AWS_ACCESS_KEY_ID</code> / <code>AWS_SECRET_ACCESS_KEY</code> env vars)</li>
+<li><strong>Billing alerts turned on</strong> — E1-01 (SCRUM-62) acceptance criterion; configure in Billing → Budgets</li>
+<li>Default region: <code>us-east-1</code> (lowest-cost for the chosen instance types; change in <code>terraform.tfvars</code> if needed)</li>
+</ul>
+
+<h3>SSH key</h3>
+<p>Terraform uploads a public key to AWS as a key pair, used for every EC2. Generate if you don't have one:</p>
+<pre><code>ssh-keygen -t ed25519 -f ~/.ssh/ansible_key -C "ansible-cires-demo"
+# This creates ~/.ssh/ansible_key (private) and ~/.ssh/ansible_key.pub (public)</code></pre>
+
+<h3>Optional: Ollama model prep</h3>
+<p>The AI stack pulls a model on first deploy. <code>llama3.2:3b</code> fits on a t3 class CPU instance in a pinch; <code>llama3.1:8b</code> or <code>llama3.1:70b</code> need the GPU. Model name is set in <code>charts/ai-stack/values.yaml</code> (<code>ollama.model</code>).</p>
+
+<h3>Optional: SMTP for email notifications</h3>
+<p>To send ESCALATE emails, set SMTP credentials (default: Gmail app password). Without these the triage service logs the verdict but skips the email — still useful for demos.</p>
+</div>
+
+<!-- ============== CLONE ============== -->
+<div id="tab-clone" class="tab-content">
+<h2>Step 1 — Clone everything</h2>
+
+<p>All 6 repos sit side-by-side in one parent directory. Several cross-repo operations (image builds for <code>E3-02</code>) assume this layout.</p>
+
+<pre><code># Pick any parent dir
+mkdir -p ~/cires &amp;&amp; cd ~/cires
+
+gh repo clone linalaaraich/provisioning-monitoring-infra
+gh repo clone linalaaraich/monitoring-project
+gh repo clone linalaaraich/monitoring-triage-service
+gh repo clone linalaaraich/monitoring-mcp-servers
+gh repo clone linalaaraich/monitoring-docs
+gh repo clone linalaaraich/jira                 # optional — Jira CSV + sprint metadata
+
+ls
+# provisioning-monitoring-infra  monitoring-triage-service  monitoring-docs
+# monitoring-project             monitoring-mcp-servers     jira</code></pre>
+
+<div class="note"><strong>Why side-by-side:</strong> the k3s image-build Ansible role (<code>roles/k3s_images</code>) and the AI stack Helm chart expect to find the two source repos (<code>monitoring-triage-service</code>, <code>monitoring-mcp-servers</code>) one level up from <code>monitoring-project</code>. You can change the paths in <code>inventory/group_vars/k3s_cluster.yml</code> if you prefer a different layout.</div>
+</div>
+
+<!-- ============== TERRAFORM ============== -->
+<div id="tab-terraform" class="tab-content">
+<h2>Step 2 — Terraform: AWS infrastructure</h2>
+<p>Provisions VPC, 3 EC2s, RDS, S3, CloudFront, 4 security groups, Elastic IPs. Takes ~8 minutes.</p>
+
+<div class="step">
+  <span class="step-num">2.1</span>
+  <h3>Create <code>terraform.tfvars</code></h3>
+  <pre><code>cd provisioning-monitoring-infra
+cp terraform.tfvars.example terraform.tfvars
+$EDITOR terraform.tfvars</code></pre>
+  <p>Fill in these values:</p>
+  <dl class="kv">
+    <dt><code>ubuntu_ami_id</code></dt><dd>Required (E1-02). Look up the current Ubuntu 22.04 LTS AMI for your region at <a href="https://cloud-images.ubuntu.com/locator/ec2/">cloud-images.ubuntu.com/locator/ec2</a>. The example file has a working value for <code>us-east-1</code>.</dd>
+    <dt><code>allowed_ssh_cidrs</code></dt><dd>Your public IP in CIDR form (<code>YOUR_IP/32</code>). Do <strong>not</strong> leave the <code>0.0.0.0/0</code> default for real deployments.</dd>
+    <dt><code>ssh_public_key_path</code></dt><dd>Path to your public key (default <code>~/.ssh/ansible_key.pub</code>).</dd>
+    <dt><code>db_password</code></dt><dd>Strong RDS master password. Minimum 8 chars, no <code>/</code> <code>@</code> <code>"</code> per RDS rules.</dd>
+    <dt><code>s3_bucket_name</code></dt><dd>Must be globally unique — append a random suffix (e.g. <code>cires-observability-demo-a1b2</code>).</dd>
+  </dl>
+</div>
+
+<div class="step">
+  <span class="step-num">2.2</span>
+  <h3>Init, plan, apply</h3>
+  <pre><code>terraform init
+terraform validate
+terraform plan -out=plan.out
+terraform apply plan.out
+# ≈ 8 minutes — RDS creation is the long pole</code></pre>
+
+  <div class="warn"><strong>AMI pinning (E1-02 rescope):</strong> <code>ubuntu_ami_id</code> is a required input with no default. This prevents silent AMI drift between applies. When Ubuntu publishes a new Jammy image, decide to adopt it intentionally by changing the value; don't let Terraform pick it for you.</div>
+</div>
+
+<div class="step">
+  <span class="step-num">2.3</span>
+  <h3>Generate the Ansible inventory</h3>
+  <p>Terraform outputs feed straight into Ansible:</p>
+  <pre><code>./generate-inventory.sh
+# Writes ../monitoring-project/inventory/production.yml
+# with the 3 EIPs, RDS endpoint, S3 bucket, CloudFront domain</code></pre>
+</div>
+
+<h3>Resources created</h3>
+<table>
+<tr><th>Resource</th><th>Size</th><th>Purpose</th></tr>
+<tr><td>VPC (10.0.0.0/16) + public/private subnets + NAT GW</td><td>—</td><td>Network isolation</td></tr>
+<tr><td>EC2 <code>monitoring</code> (t3.large)</td><td>50 GB gp3</td><td>Prometheus, Grafana, Loki, Jaeger, OTel Collector</td></tr>
+<tr><td>EC2 <code>k3s</code> (t3.xlarge)</td><td>50 GB gp3</td><td>Spring Boot, Kong, triage, 5 MCP servers</td></tr>
+<tr><td>EC2 <code>gpu</code> (g4dn.xlarge)</td><td>50 GB gp3</td><td>Ollama LLM inference (NVIDIA T4)</td></tr>
+<tr><td>RDS MySQL (db.t3.micro)</td><td>20 GB</td><td>Application database</td></tr>
+<tr><td>S3 bucket + CloudFront</td><td>—</td><td>React frontend static hosting</td></tr>
+<tr><td>4 SGs (monitoring, k3s, gpu, rds)</td><td>—</td><td>Tight ingress, all egress open</td></tr>
+</table>
+
+<div class="note"><strong>Key SG rules (E1-02 rescope):</strong> k3s SG allows ingress on :6443 (K8s API) and :10250 (kubelet) <em>only from</em> the monitoring SG — this is what lets Prometheus scrape via <code>kubernetes_sd_configs</code>. RDS SG allows :3306 only from the k3s SG. GPU SG allows :8090 (triage webhook) only from monitoring SG.</div>
+</div>
+
+<!-- ============== MONITORING VM ============== -->
+<div id="tab-monitoring-vm" class="tab-content">
+<h2>Step 3 — Bootstrap the monitoring VM (Ansible)</h2>
+<p>Installs and configures the full observability stack on VM1. This is the <em>unchanged-from-Sprint-1</em> pillar; it runs in parallel with the k3s work.</p>
+
+<div class="step">
+  <span class="step-num">3.1</span>
+  <h3>Install Ansible roles &amp; collections</h3>
+  <pre><code>cd monitoring-project
+ansible-galaxy install -r requirements.yml
+# Pulls xanmanning.k3s (used later) and community.docker</code></pre>
+</div>
+
+<div class="step">
+  <span class="step-num">3.2</span>
+  <h3>Smoke test connectivity</h3>
+  <pre><code>ansible all -m ping
+# Expect green SUCCESS for monitoring-vm (and k3s + gpu later)</code></pre>
+  <div class="warn">If SSH fails: (a) your <code>allowed_ssh_cidrs</code> may exclude your current IP, (b) <code>deploy</code> user was created on first boot via user-data — wait ~90s after <code>terraform apply</code> finishes, (c) <code>ansible.cfg</code> points at <code>~/.ssh/ansible_key</code> — make sure that's the private key Terraform uploaded.</div>
+</div>
+
+<div class="step">
+  <span class="step-num">3.3</span>
+  <h3>Deploy the monitoring stack</h3>
+  <pre><code>ansible-playbook playbooks/monitoring.yml</code></pre>
+  <p>This applies, in order:</p>
+  <ol>
+    <li><code>common</code> — timezone, base packages, UFW firewall</li>
+    <li><code>docker</code> — Docker CE + compose plugin</li>
+    <li><code>prometheus</code> — config, scrape targets, Grafana-Alerting ready</li>
+    <li><code>loki</code> — TSDB storage, 7-day retention</li>
+    <li><code>jaeger</code> — Jaeger v2 (Badger storage) + UI (ports remapped: 4327/4328)</li>
+    <li><code>otel-collector</code> — OTLP receivers + batch + Jaeger exporter</li>
+    <li><code>grafana</code> — datasources + 3 dashboards + <strong>17 alert rules + webhook contact point + notification policy</strong> (E2-01). Drops the Alertmanager role entirely.</li>
+    <li><code>node_exporter</code>, <code>cadvisor</code> — system + container metrics</li>
+  </ol>
+</div>
+
+<div class="step">
+  <span class="step-num">3.4</span>
+  <h3>Verify</h3>
+  <pre><code># Grafana — log in with admin / (grafana_admin_password from group_vars)
+open https://&lt;monitoring_eip&gt;:3000
+
+# All 4 datasources should show Connected:
+#   Prometheus, Loki, Jaeger, (+ built-in TestData for sanity)
+
+# Prometheus targets — all green:
+open http://&lt;monitoring_eip&gt;:9090/targets</code></pre>
+</div>
+
+<div class="note"><strong>Grafana alerting (E2-01):</strong> The Grafana role provisions a webhook contact point pointed at <code>http://&lt;k3s_eip&gt;:30090/webhook/grafana</code> and a notification policy that routes everything to it. The 17 alert rules are in <code>roles/grafana/templates/alertrules.yml.j2</code>.</div>
+
+<h3>Dashboard inventory (4 total after drop-in)</h3>
+<table>
+<tr><th>Dashboard</th><th>Source</th><th>Purpose</th></tr>
+<tr><td><code>unified-overview</code></td><td>Committed in <code>roles/grafana/files/dashboards/</code></td><td>RED metrics for Spring + Kong + triage</td></tr>
+<tr><td><code>tracing-overview</code></td><td>Committed in same dir</td><td>Trace latency &amp; volume</td></tr>
+<tr><td><code>otel-collector-health</code></td><td>Committed in same dir</td><td>OTel collector pipeline health</td></tr>
+<tr><td><code>triage-service-health</code> <span class="pill pill-green">NEW (AI-03)</span></td><td><a href="dashboards/triage-service-health.json">dashboards/triage-service-health.json</a> in this repo</td><td>AI triage self-observability: throughput, latency, MCP errors, circuit-breaker, token counts, fallback rate, email outcomes</td></tr>
+</table>
+
+<h4>Drop-in the new dashboard</h4>
+<pre><code>cp monitoring-docs/dashboards/triage-service-health.json \
+   monitoring-project/roles/grafana/files/dashboards/
+cd monitoring-project
+ansible-playbook playbooks/monitoring.yml --tags grafana</code></pre>
+</div>
+
+<!-- ============== K3S ============== -->
+<div id="tab-k3s" class="tab-content">
+<h2>Step 4 — k3s cluster + Helm workloads</h2>
+<p>This is Epic 3: E3-01 through E3-10. All orchestrated from the single-command playbook chain below.</p>
+
+<div class="step">
+  <span class="step-num">4.1</span>
+  <h3>Bootstrap k3s (E3-01)</h3>
+  <pre><code>ansible-playbook playbooks/k3s.yml --tags bootstrap</code></pre>
+  <p>Installs k3s via the <code>xanmanning.k3s</code> role (pinned to v3.4.4 in <code>requirements.yml</code>) with <code>v1.30.x+k3s1</code> and Traefik disabled. Fetches kubeconfig to <code>~/.kube/config</code> on the control machine with the server URL rewritten to the EC2 EIP.</p>
+  <pre><code># Verify
+kubectl get nodes
+# NAME    STATUS  ROLES                  AGE  VERSION
+# k3s-01  Ready   control-plane,master   90s  v1.30.x+k3s1</code></pre>
+</div>
+
+<div class="step">
+  <span class="step-num">4.2</span>
+  <h3>Build + import images (E3-02)</h3>
+  <pre><code>ansible-playbook playbooks/k3s.yml --tags images</code></pre>
+  <p>For each of the 6 first-party services (triage + 5 MCPs), the <code>k3s_images</code> role does:</p>
+  <ol>
+    <li><code>docker build -t cires/&lt;name&gt;:&lt;image_tag&gt; &lt;source_repo&gt;</code> on the k3s host</li>
+    <li><code>docker save cires/&lt;name&gt;:&lt;image_tag&gt; -o /tmp/&lt;name&gt;.tar</code></li>
+    <li><code>sudo k3s ctr images import /tmp/&lt;name&gt;.tar</code></li>
+  </ol>
+  <p>Image tag is driven by the single <code>image_tag</code> variable in <code>inventory/group_vars/k3s_cluster.yml</code> — bump it to force a rebuild.</p>
+  <pre><code># Verify
+ssh ubuntu@&lt;k3s_eip&gt; 'sudo k3s crictl images | grep cires'
+# Should list all 6 cires/* images</code></pre>
+  <div class="note"><strong>Why no registry:</strong> single-node k3s with one or two contributors doesn't justify ECR + CI. The <code>crictl import</code> route is officially supported by k3s and sidesteps the whole network-pull path. The upgrade path to ECR+CI is documented in <code>charts/ai-stack/README.md</code> for the day you add a second node.</div>
+</div>
+
+<div class="step">
+  <span class="step-num">4.3</span>
+  <h3>Apply K8s manifests — GPU + OTel (E3-06, E3-07)</h3>
+  <pre><code># One playbook applies both DaemonSets (plus Prometheus RBAC for E3-08)
+ansible-playbook playbooks/k8s-manifests.yml
+
+# Or scope it:
+ansible-playbook playbooks/k8s-manifests.yml --tags nvidia        # GPU only
+ansible-playbook playbooks/k8s-manifests.yml --tags otel          # Logs/traces only
+ansible-playbook playbooks/k8s-manifests.yml --tags prometheus    # RBAC only</code></pre>
+  <p>Applies:</p>
+  <ul>
+    <li><code>observability</code> namespace + OTel Collector DaemonSet (filelog receiver on <code>/var/log/pods</code>, k8sattributes processor, OTLP exporter to <code>monitoring_vm_ip:4317</code>)</li>
+    <li>NVIDIA device plugin DaemonSet (<code>k8s-device-plugin v0.15.0</code>) in <code>kube-system</code></li>
+    <li>Prometheus scraper ServiceAccount + ClusterRole + ClusterRoleBinding (for <code>kubernetes_sd_configs</code> access from the external monitoring VM)</li>
+  </ul>
+  <div class="warn"><strong>E3-06 is a spike:</strong> GPU passthrough on k3s is the highest-risk item in the sprint. If the device plugin pod goes <code>CrashLoopBackOff</code>, see the <em>Troubleshooting</em> tab. In the worst case, set <code>ollama.gpu.enabled: false</code> in <code>charts/ai-stack/values.yaml</code> to run CPU-only for a demo.</div>
+</div>
+
+<div class="step">
+  <span class="step-num">4.4</span>
+  <h3>Helm install × 3 (E3-03, E3-04, E3-05)</h3>
+  <pre><code># Spring Boot backend (E3-03)
+helm install spring-boot charts/spring-boot/ \
+  -n app --create-namespace \
+  --set db.host=&lt;rds_endpoint&gt; \
+  --set db.password=&lt;db_password&gt; \
+  --set image.tag=&lt;image_tag&gt;
+
+# Kong API gateway (E3-04) — upstream chart + our values
+helm repo add kong https://charts.konghq.com
+helm install kong kong/kong \
+  --version 2.38.0 \
+  -n network --create-namespace \
+  -f charts/kong/values-k3s.yaml
+
+# AI stack (E3-05) — triage + 5 MCP servers + Ollama
+helm install ai-stack charts/ai-stack/ \
+  -n ai --create-namespace \
+  --set smtp.user=&lt;smtp_user&gt; \
+  --set smtp.password=&lt;smtp_password&gt; \
+  --set image.tag=&lt;image_tag&gt;</code></pre>
+  <p>Every chart pins images by tag (no <code>:latest</code>), sets <code>imagePullPolicy: IfNotPresent</code>, declares liveness + readiness probes, and sets resource requests + limits.</p>
+</div>
+
+<div class="step">
+  <span class="step-num">4.5</span>
+  <h3>Verify the cluster</h3>
+  <pre><code>kubectl get pods -A
+# kube-system    nvidia-device-plugin-daemonset-xxxxx    1/1 Running
+# observability  otel-collector-xxxxx                    1/1 Running
+# app            spring-boot-xxxxx                       1/1 Running
+# network        kong-xxxxx                              2/2 Running
+# ai             triage-service-xxxxx                    1/1 Running
+# ai             mcp-prometheus-xxxxx                    1/1 Running
+# ai             mcp-loki-xxxxx                          1/1 Running
+# ai             mcp-jaeger-xxxxx                        1/1 Running
+# ai             mcp-drain3-xxxxx                        1/1 Running
+# ai             mcp-rca-history-xxxxx                   1/1 Running
+# ai             ollama-xxxxx                            1/1 Running
+
+# Trigger the Ollama model pull if not already done
+kubectl exec -n ai deploy/ollama -- ollama pull llama3.1:8b</code></pre>
+</div>
+</div>
+
+<!-- ============== CONFIG ============== -->
+<div id="tab-config" class="tab-content">
+<h2>Step 5 — Wire everything together</h2>
+
+<div class="step">
+  <span class="step-num">5.1</span>
+  <h3>Prometheus kubernetes_sd_configs (E3-08)</h3>
+  <p>The <code>prometheus</code> Ansible role already includes three <code>kubernetes_sd_configs</code> scrape jobs (<code>kubernetes-pods</code>, <code>kubernetes-nodes</code>, <code>kubernetes-cadvisor</code>). Each reads the bearer token from <code>/etc/prometheus/k3s-token</code>, talks to <code>&lt;k3s_eip&gt;:6443</code>, and uses annotation-based relabeling (<code>prometheus.io/scrape=true</code>, <code>prometheus.io/port</code>, <code>prometheus.io/path</code>).</p>
+  <pre><code># Run on the control machine — extracts the k3s SA token and deploys it
+# as an Ansible vault secret to the monitoring VM, then redeploys Prometheus.
+ansible-playbook playbooks/monitoring.yml --tags prometheus</code></pre>
+  <p>Check <code>http://&lt;monitoring_eip&gt;:9090/targets</code> — all <code>kubernetes-*</code> jobs should be <em>up</em>.</p>
+</div>
+
+<div class="step">
+  <span class="step-num">5.2</span>
+  <h3>Migrate the 17 Grafana alert rules to K8s selectors (E3-09)</h3>
+  <p>The rules already live in <code>roles/grafana/templates/alertrules.yml.j2</code> with selectors rewritten from VM IPs to K8s pod labels:</p>
+  <pre><code>Old:  instance = "application_vm_ip:8080"
+New:  pod =~ "spring-boot.*", namespace = "app"
+
+Old:  instance = "network_vm_ip:8000"
+New:  pod =~ "kong.*",        namespace = "network"
+
+Old:  instance = "ai_vm_ip:8090"
+New:  pod =~ "triage.*",      namespace = "ai"</code></pre>
+  <p>Apply via <code>ansible-playbook playbooks/monitoring.yml --tags grafana</code>, then test each rule individually — silent failure is the biggest risk here.</p>
+  <pre><code># Trigger each alert and confirm the triage webhook received it
+kubectl logs -n ai deploy/triage-service --tail=100 -f
+# In another shell, run load-test.sh or manually force a rule to fire
+./load-test.sh</code></pre>
+</div>
+
+<div class="step">
+  <span class="step-num">5.3</span>
+  <h3>Expose Kong externally</h3>
+  <p>Kong is installed as a <code>NodePort</code> in the chart defaults — it listens on <code>:30080</code> of the k3s EC2. Point traffic to the k3s EIP:</p>
+  <pre><code>curl http://&lt;k3s_eip&gt;:30080/api/actuator/health
+# {"status":"UP","components":{...}}</code></pre>
+  <p>If you want a proper external LB, set <code>kong.proxy.type=LoadBalancer</code> in the Helm values and install an <code>aws-load-balancer-controller</code> — deferred to Sprint 3.</p>
+</div>
+
+<div class="step">
+  <span class="step-num">5.4</span>
+  <h3>Publish the React frontend to S3 + CloudFront</h3>
+  <pre><code>cd &lt;react-repo&gt;    # per README, `mukundmadhav/react-springboot-mysql`
+npm ci &amp;&amp; npm run build
+aws s3 sync build/ s3://&lt;s3_bucket_name&gt;/ --delete
+aws cloudfront create-invalidation --distribution-id &lt;cloudfront_id&gt; --paths "/*"</code></pre>
+</div>
+</div>
+
+<!-- ============== VALIDATE ============== -->
+<div id="tab-validate" class="tab-content">
+<h2>Step 6 — End-to-end validation (E3-10)</h2>
+<p>One playbook runs the full 10-step smoke test. This is <em>also</em> the replacement for the old E1-05 (SCRUM-66) VM-target validation, which is superseded by this K8s-target one.</p>
+
+<pre><code>ansible-playbook playbooks/integration-k8s.yml
+# Exit code 0 = all 10 steps pass</code></pre>
+
+<h3>What the 10-step test covers</h3>
+<table>
+<tr><th>#</th><th>Check</th><th>Green if…</th></tr>
+<tr><td>1</td><td><code>load-test.sh</code> against Kong's external endpoint</td><td>9000 requests return 2xx/3xx</td></tr>
+<tr><td>2</td><td>Spring Boot RED metrics in Prometheus</td><td><code>http_server_requests_seconds_count{pod=~"spring-boot.*"}</code> &gt; 0</td></tr>
+<tr><td>3</td><td>Spring Boot logs in Loki with <code>trace_id</code> label</td><td><code>{pod=~"spring-boot.*"} |= "trace_id"</code> has results</td></tr>
+<tr><td>4</td><td>Trace in Jaeger: Kong → Spring → RDS</td><td>3-span trace in Jaeger UI</td></tr>
+<tr><td>5</td><td>High-latency alert fires in Grafana</td><td>Grafana shows state <em>Firing</em></td></tr>
+<tr><td>6</td><td>Webhook POST reaches triage service</td><td>Triage logs show 202 &amp; <code>alert_id</code></td></tr>
+<tr><td>7</td><td>Triage produces a verdict</td><td><code>/decisions</code> returns a new row with ESCALATE/DISMISS/INCONCLUSIVE</td></tr>
+<tr><td>8</td><td>LLM returned valid JSON</td><td>Pydantic validation pass (<code>triage_fallback_total{reason="parse_failure"}</code> unchanged)</td></tr>
+<tr><td>9</td><td>Circuit breaker healthy</td><td><code>ollama_circuit_state == 0</code></td></tr>
+<tr><td>10</td><td>Email sent (or correctly skipped)</td><td><code>triage_email_sent_total{status="sent"}</code> incremented, or <code>skipped</code> if SMTP not configured</td></tr>
+</table>
+
+<div class="ok"><strong>If you're seeing all 10 green:</strong> you have a fully reproducible AI-observability platform. Congratulations — the grading rubric is met.</div>
+
+<h3>Spot-checks on the Grafana dashboard</h3>
+<p>Open the new <strong>Triage Service Health</strong> dashboard and confirm, during/after <code>load-test.sh</code>:</p>
+<ul>
+<li>Decision throughput has a visible bump by verdict</li>
+<li>Pipeline p95 latency &lt; 60s (LLM investigation is the long pole)</li>
+<li>MCP p95 latency &lt; 2s per server</li>
+<li>Ollama circuit state stays <em>closed</em></li>
+<li>LLM token counts (prompt vs completion) show non-zero p95</li>
+<li>Email dispatch outcomes show at least one <em>sent</em> or <em>skipped</em></li>
+</ul>
+</div>
+
+<!-- ============== SECRETS ============== -->
+<div id="tab-secrets" class="tab-content">
+<h2>Secrets &amp; credentials</h2>
+<p>The platform has several credential boundaries. Keep them straight — the security review in Sprint 3 will ask about this.</p>
+
+<h3>Where every credential lives</h3>
+<table>
+<tr><th>Credential</th><th>Stored as</th><th>Consumed by</th><th>Default / rotation</th></tr>
+<tr><td>AWS API access</td><td><code>~/.aws/credentials</code> or env vars on your laptop</td><td>Terraform, AWS CLI</td><td>IAM user — rotate ≥ every 90 days</td></tr>
+<tr><td>SSH private key</td><td><code>~/.ssh/ansible_key</code></td><td>Ansible, manual SSH</td><td><code>ed25519</code> — regenerate per machine</td></tr>
+<tr><td><code>db_password</code></td><td><code>terraform.tfvars</code> (gitignored) + AWS RDS</td><td>Spring Boot via Secret</td><td>Rotate via <code>terraform apply</code></td></tr>
+<tr><td><code>grafana_admin_password</code></td><td><code>inventory/group_vars/monitoring.yml</code></td><td>Grafana</td><td>Change from the weak dev default before any deploy beyond demo</td></tr>
+<tr><td><code>smtp_user</code> / <code>smtp_password</code></td><td>Helm chart values (passed to K8s Secret)</td><td>Triage notifier</td><td>Gmail app password; revoke via Google Account UI</td></tr>
+<tr><td>k3s SA token (Prometheus scraper)</td><td>Ansible Vault on monitoring VM at <code>/etc/prometheus/k3s-token</code></td><td>Prometheus <code>bearer_token_file</code></td><td>Re-extract after any cluster rebuild</td></tr>
+<tr><td>kubeconfig</td><td><code>~/.kube/config</code> on control machine (fetched by Ansible)</td><td><code>kubectl</code>, <code>helm</code></td><td>Regenerate via <code>ansible-playbook playbooks/k3s.yml --tags bootstrap</code></td></tr>
+</table>
+
+<h3>What <em>not</em> to commit</h3>
+<ul>
+<li><code>terraform.tfvars</code>, <code>*.tfstate</code>, <code>*.auto.tfvars</code> — already in <code>provisioning-monitoring-infra/.gitignore</code></li>
+<li>SSH private keys, <code>.pem</code>, <code>id_*</code></li>
+<li>Any <code>.env</code>, <code>secrets.yml</code>, or Ansible Vault file in cleartext</li>
+</ul>
+
+<div class="danger"><strong>Production-only:</strong> the three weak defaults (<code>grafana_admin_password</code>, <code>mysql_password</code>, <code>mysql_root_password</code>) are fine for the demo but must change before any deployment that's reachable from outside a VPN. The Sprint 3 security-review skill will flag these.</div>
+</div>
+
+<!-- ============== TEARDOWN ============== -->
+<div id="tab-teardown" class="tab-content">
+<h2>Tear-down</h2>
+<p>Clean teardown is as important as clean build. Skip a step and AWS will keep charging.</p>
+
+<div class="step">
+  <span class="step-num">T.1</span>
+  <h3>Drain workloads (optional, for clean logs)</h3>
+  <pre><code>helm uninstall ai-stack -n ai
+helm uninstall kong -n network
+helm uninstall spring-boot -n app</code></pre>
+</div>
+
+<div class="step">
+  <span class="step-num">T.2</span>
+  <h3>Remove Terraform-managed AWS resources</h3>
+  <pre><code>cd provisioning-monitoring-infra
+terraform destroy
+# Prompts to confirm — destroys VPC, all 3 EC2s, RDS, S3, CloudFront</code></pre>
+  <div class="warn"><strong>RDS final snapshot:</strong> the RDS resource may be set with <code>skip_final_snapshot</code>. Check before destroy — if false, the destroy will try to create a final snapshot (takes ~5 min and leaves a snapshot billed until you delete it).</div>
+</div>
+
+<div class="step">
+  <span class="step-num">T.3</span>
+  <h3>Verify nothing is left</h3>
+  <pre><code>aws ec2 describe-instances \
+  --filters "Name=tag:Name,Values=observability-rca-*" \
+  --query 'Reservations[].Instances[].[InstanceId,State.Name]'
+# Expect: [] or all "terminated"
+
+aws s3 ls | grep cires
+# Expect: no bucket remaining
+
+aws rds describe-db-instances \
+  --query 'DBInstances[?starts_with(DBInstanceIdentifier,`observability`)].[DBInstanceIdentifier,DBInstanceStatus]'
+# Expect: [] or "deleting"</code></pre>
+</div>
+
+<div class="step">
+  <span class="step-num">T.4</span>
+  <h3>Local cleanup</h3>
+  <pre><code>rm -rf ~/.kube/config   # or delete the cluster context
+unset KUBECONFIG</code></pre>
+</div>
+</div>
+
+<!-- ============== TROUBLESHOOTING ============== -->
+<div id="tab-troubleshooting" class="tab-content">
+<h2>Troubleshooting</h2>
+
+<h3>Terraform</h3>
+<table>
+<tr><th>Symptom</th><th>Likely cause / fix</th></tr>
+<tr><td><code>Error: validation failed: ubuntu_ami_id must be a valid AMI ID</code></td><td>You didn't set <code>ubuntu_ami_id</code> in <code>terraform.tfvars</code>. That's intentional (E1-02 rescope — no silent AMI drift). Look up an AMI for your region and set it.</td></tr>
+<tr><td><code>S3 bucket already exists</code></td><td>Bucket names are globally unique. Append a random suffix to <code>s3_bucket_name</code>.</td></tr>
+<tr><td>Plan repeatedly wants to recreate <code>aws_key_pair</code></td><td>Your <code>ssh_public_key_path</code> changed (whitespace, regenerated key). The public key content is what gets hashed.</td></tr>
+</table>
+
+<h3>Ansible &amp; SSH</h3>
+<table>
+<tr><th>Symptom</th><th>Fix</th></tr>
+<tr><td><code>Permission denied (publickey)</code> on first connect</td><td>User-data script still running — wait 60-90s after EC2 shows as <code>running</code>. The <code>deploy</code> user is created by user-data, not by AWS.</td></tr>
+<tr><td>Ansible picks the wrong key</td><td><code>ansible.cfg</code> pins <code>private_key_file = ~/.ssh/ansible_key</code>. Check it matches what Terraform uploaded.</td></tr>
+<tr><td><code>unreachable = true</code> on <code>ansible all -m ping</code></td><td>Your public IP changed. Re-run <code>terraform apply</code> with the updated <code>allowed_ssh_cidrs</code>.</td></tr>
+</table>
+
+<h3>k3s &amp; Helm</h3>
+<table>
+<tr><th>Symptom</th><th>Fix</th></tr>
+<tr><td><code>kubectl get nodes</code> returns empty or <code>NotReady</code></td><td>k3s service not yet up. <code>ssh ubuntu@&lt;k3s_eip&gt; 'sudo systemctl status k3s'</code>. Expected 90-120s to become Ready.</td></tr>
+<tr><td>Helm <code>ImagePullBackOff</code> on AI stack pods</td><td>Images weren't imported into the k3s containerd cache. Re-run <code>ansible-playbook playbooks/k3s.yml --tags images</code> and verify with <code>sudo k3s crictl images | grep cires</code>.</td></tr>
+<tr><td>Kubeconfig points at <code>127.0.0.1:6443</code></td><td>k3s.yml playbook didn't rewrite the server URL. Re-run the bootstrap playbook, or manually edit <code>~/.kube/config</code> to point at the k3s EIP.</td></tr>
+</table>
+
+<h3>GPU (E3-06 spike)</h3>
+<table>
+<tr><th>Symptom</th><th>Fix</th></tr>
+<tr><td>NVIDIA device plugin pod in <code>CrashLoopBackOff</code></td><td>Most common: NVIDIA Container Toolkit not configured on the host, or containerd config missing the <code>nvidia</code> runtime. <code>ssh</code> in, run <code>nvidia-smi</code> on the host (must succeed), then <code>cat /etc/rancher/k3s/config.yaml.d/nvidia.yaml</code> (must set the runtime).</td></tr>
+<tr><td>Ollama pod scheduled but no GPU visible</td><td>Check <code>kubectl describe node &lt;k3s-node&gt;</code> for <code>nvidia.com/gpu: 1</code> under Allocatable. If zero, the device plugin isn't registering — check its logs.</td></tr>
+<tr><td>Ollama OOM on llama3.1:8b</td><td>g4dn.xlarge has 16 GB GPU memory — enough for 8B. For 70B you need a larger instance. As a fallback set <code>ollama.gpu.enabled: false</code> and use a smaller CPU model like <code>llama3.2:3b</code>.</td></tr>
+</table>
+
+<h3>Triage pipeline</h3>
+<table>
+<tr><th>Symptom</th><th>Fix</th></tr>
+<tr><td>Alerts arrive but no verdict appears at <code>/decisions</code></td><td>(a) Ollama circuit open — check <code>ollama_circuit_state</code> metric. (b) Pipeline timeout — check <code>triage_pipeline_timeouts_total</code>. Usually Ollama is slow or the model isn't pulled yet.</td></tr>
+<tr><td>All verdicts fall back to <code>NEEDS_HUMAN_REVIEW</code></td><td>Check <code>triage_fallback_total</code> breakdown by reason. <code>parse_failure</code> = LLM output doesn't match schema (usually solved by smaller/more-instruction-tuned model). <code>retries_exhausted</code> = Ollama keeps failing — see circuit-breaker logs. <code>circuit_open</code> = give it 60s cooldown.</td></tr>
+<tr><td>Emails never sent</td><td>Check <code>triage_email_sent_total</code>. <code>skipped</code> = SMTP creds not configured (expected in local dev). <code>failed</code> = Gmail app password wrong / expired / 2FA not enabled on account.</td></tr>
+<tr><td>INCONCLUSIVE shown in dashboard but emails still fire</td><td>Current behavior: <code>INCONCLUSIVE</code> is coerced to <code>ESCALATE</code> for human review (safer default). See <code>app/llm_client.py::investigate</code>. Change if you want a separate notification channel.</td></tr>
+</table>
+
+<div class="note"><strong>Escalation path:</strong> for anything not covered here, open an issue on the relevant repo or check the Sprint 2 extension guide's troubleshooting tab. The Jira board (<code>linalaaraich/jira</code>) has story-level acceptance criteria that describe the expected behavior of each component.</div>
+</div>
+
+<script>
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  event.target.classList.add('active');
+  document.getElementById('tab-' + name).classList.add('active');
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+</script>
+
+</body>
+</html>
