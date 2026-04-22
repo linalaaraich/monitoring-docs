@@ -29,6 +29,28 @@
 
 ## 1. Executive Summary
 
+### Demo-day Readiness — 2026-04-22 snapshot
+
+Everything below this table is the story of how Sprint 2 got here; this table is what *actually works in production right now*, one day before the presentation.
+
+| System | State | Evidence |
+|---|---|---|
+| **AWS infra** (Terraform) | ✅ applied | VPC + 3 EC2s (monitoring t3.large, k3s t3.xlarge, GPU disabled pending quota) + RDS MySQL + S3. SG opens 3000/9090/3100/16686/30080 to operator IP. |
+| **Monitoring VM** (docker-compose) | ✅ running | Prometheus, Grafana, Loki, Jaeger, OTel Collector all up. Grafana `admin/*` login works at http://52.202.21.192:3000. |
+| **k3s cluster** | ✅ 1 node Ready | v1.30.6+k3s1, 12 workload pods `1/1 Running` across app/network/ai/observability namespaces. |
+| **Kong ingress** | ✅ 1/1 Running | Routes `/` + `/api/*` + `/actuator/*` to Spring Boot. HTTP 200 from public internet on `:30080`. |
+| **Spring Boot** | ✅ 1/1 Running | Built locally from source (`cires/spring-boot:latest`), connected to RDS. 1600+ employees written via the load test. |
+| **Prometheus targets** | ✅ 16/16 up (100%) | After wiring `kubernetes_sd_configs` with `pods/proxy` RBAC + adding `/metrics` to every MCP server. |
+| **OTel pipeline** | ✅ traces + logs flowing | Traces in Jaeger as `spring-boot` service; logs in Loki with `{k8s_namespace_name, k8s_pod_name, service_name}` labels. |
+| **Drain3** | ✅ 133+ clusters | Baseline mined from 5,000+ real app log lines — healthy template tree for anomaly detection. |
+| **Triage pipeline** | ✅ proven end-to-end | Real LLM verdict produced in 141s (`HighRequestLatency_Real` alert). Circuit breaker closed, 0 fallbacks on warm path. |
+| **AI hardening** (Epic 4) | ✅ code complete | Circuit breaker + JSON-mode + 70+ self-obs metrics live. |
+
+Deliberate known gaps (not blockers):
+- **GPU quota at 0** on the AWS account → Ollama runs CPU-only. Real verdict latency ~2–3 min with full prompts; this is documented.
+- **Triage service exposed as ClusterIP** (not NodePort); Grafana webhook flow uses `kubectl port-forward` or a direct `curl` for the demo. Kong route for `/triage/*` deferred to Sprint 3.
+- **Drain3 scheduled S3 baseline snapshot** — functions exist, scheduler does not. See [`sprint3-backlog.md`](sprint3-backlog.md) §1.
+
 ### Key Discovery: Sprint 2 Was Extended
 
 The sprint2-backlog.html in monitoring-docs was the **initial** Sprint 2 plan (2 epics, 22 stories, 99 pts, due Apr 9). The actual Jira (exported CSV in `linalaaraich/jira` repo) shows Sprint 2 was **extended to April 23** with **2 new epics added** and **3 existing tickets rescoped + 2 superseded**.
