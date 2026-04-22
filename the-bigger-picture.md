@@ -763,3 +763,12 @@ AI-01, AI-02, AI-03 ──► independent, run anytime in parallel
 
 ### Done Stories (not in CSV, ~9 stories, ~36 pts)
 Likely includes: E2-02 (Prometheus MCP), E2-03 (Loki MCP), E2-16 (Jaeger MCP), E2-17 (Cross-pillar correlation), and ~5 others completed earlier in the sprint.
+
+---
+
+## Appendix B: Sprint 3 Backlog
+
+Sprint 3 follow-ups surfaced during Sprint 2 work live in [`sprint3-backlog.md`](sprint3-backlog.md). That file is the durable home for "do this next sprint" items — add to it as things come up, commit, and push.
+
+Current Sprint 3 items:
+- **Drain3 — Scheduled healthy-baseline lifecycle** (S3 snapshot scheduling, boot-time restore, operator HTTP endpoints, Grafana visibility). All S3 functions exist in `drain_analyzer.py`; they just aren't wired to a scheduler or config. See `sprint3-backlog.md` §1 for full acceptance criteria.
