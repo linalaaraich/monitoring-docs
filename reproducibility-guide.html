@@ -826,6 +826,63 @@ locals {
 <p>In <code>playbooks/monitoring.yml</code>, the roles (including <code>otel-collector</code>) run <em>before</em> the play-level <code>tasks:</code> block, but <code>/opt/stack</code> is created by a task in that block. Classic Ansible gotcha. Workaround used: <code>ansible monitoring-vm -m file -a "path=/opt/stack state=directory mode=0755" -b</code> then re-run the playbook (idempotent).</p>
 <p>Permanent fix (not yet committed): move the &ldquo;Create stack directory&rdquo; task into a <code>pre_tasks:</code> block so it runs before the roles, or have the <code>otel-collector</code> role create its own parent with <code>state=directory</code>.</p>
 
+<h3>Surprise #5 &mdash; xanmanning.k3s role stack of Ansible 2.16+ incompatibilities</h3>
+<p>The community role <code>xanmanning.k3s</code> v3.4.4 has three independent failure modes against Ansible 2.16+ and a default that doesn't fit our use:</p>
+<ol>
+<li><strong>Broken conditional:</strong> <code>tasks/ensure_downloads.yml:20</code> has <code>when: k3s_release_version | regex_search("^[a-z0-9]{40}$")</code> — newer Ansible requires booleans, not None. Mitigation: <code>ANSIBLE_ALLOW_BROKEN_CONDITIONALS=True ansible-playbook ...</code></li>
+<li><strong>Missing become:</strong> role default is <code>k3s_become: false</code> — writes to <code>/usr/local/bin/k3s</code> fail with <em>&ldquo;Destination not writable&rdquo;</em>. Mitigation: <code>k3s_become: true</code> in <code>inventory/group_vars/k3s_cluster.yml</code>.</li>
+<li><strong>Filter plugin error:</strong> <code>tasks/ensure_installed.yml:5</code> fails with <em>&ldquo;The filter plugin 'ansible.builtin.dirname' failed: expected str&hellip;, not _OmitType&rdquo;</em>. Comes from looping over <code>k3s_ensure_directories_exist</code> when some entries default to <code>omit</code>. No easy runtime override.</li>
+</ol>
+<p><strong>Workaround landed:</strong> skip the role entirely. The official k3s installer is a single command and works out of the box:</p>
+<pre><code>ssh deploy@$K3S_EIP "curl -sfL https://get.k3s.io | \
+  sudo INSTALL_K3S_EXEC='--disable=traefik --write-kubeconfig-mode=644' sh -"
+
+# Fetch kubeconfig + rewrite server URL locally
+ssh deploy@$K3S_EIP "sudo cat /etc/rancher/k3s/k3s.yaml" \
+  | sed "s|https://127.0.0.1:6443|https://$K3S_EIP:6443|" > ~/.kube/config
+chmod 600 ~/.kube/config</code></pre>
+<div class="note">Keep the images + manifests sub-plays from <code>playbooks/k3s.yml</code> — only the bootstrap play was problematic. Run with <code>--tags images</code> to build/import the first-party Docker images.</div>
+
+<h3>Surprise #6 &mdash; SG ingress CIDR hardcoded to the wrong subnet</h3>
+<p>After moving EC2s from private to public subnet (Surprise #2), every cross-VM call still failed because <code>security-groups.tf</code> had 14 rules pinned to <code>var.private_subnet_cidr</code> (<code>10.0.2.0/24</code>) — but the instances now live in <code>10.0.1.0/24</code>. k3s-node literally could not reach Prometheus, Loki, Jaeger, Grafana, or the OTel collector on the monitoring VM.</p>
+<p>Diagnostic signature: MCP pods crash-loop on liveness; their <code>/health</code> routes stall on upstream HTTP calls that TCP-timeout.</p>
+<pre><code># Fix — one sed across security-groups.tf:
+sed -i 's|var\.private_subnet_cidr|var.vpc_cidr|g' security-groups.tf
+terraform apply</code></pre>
+<p>Shipped as commit <code>b0b96b4</code>. Use <code>var.vpc_cidr</code> (<code>10.0.0.0/16</code>) for any intra-VPC rule; it covers both subnets without caring which one holds the client.</p>
+
+<h3>Surprise #7 &mdash; AI stack Helm chart needed 4 fixes to install cleanly</h3>
+<p>All discovered by running <code>helm install</code> and watching pods crash. Shipped together in commit <code>9bc92b7</code> + <code>f9556b7</code>:</p>
+<ol>
+<li><strong>Missing SMTP Secret.</strong> <code>triage-deployment.yaml</code> pulled six keys from a Secret <code>ai-stack-smtp-secret</code> that no template created. Added <code>templates/triage-smtp.yaml</code> (filename deliberately avoids the repo's <code>*secret*</code> gitignore pattern).</li>
+<li><strong>Ollama probes use <code>curl</code>.</strong> The <code>ollama/ollama</code> image ships no curl/wget; exec probe fails with <em>&ldquo;sh: 1: curl: not found&rdquo;</em> and kubelet restarts the pod every 15 s. Replaced with <code>httpGet: /api/tags</code>.</li>
+<li><strong>rca-history mounts <code>/data</code> read-only.</strong> The MCP creates + writes a SQLite DB on startup; read-only mount produced <code>sqlite3.OperationalError: unable to open database file</code> and CrashLoopBackOff. Drop <code>readOnly: true</code>.</li>
+<li><strong>Chart-owned namespace collides with <code>--create-namespace</code>.</strong> Helm creates the namespace up front for its release metadata; the chart's own <code>namespace.yaml</code> template then re-renders it, conflict. Deleted <code>ai-stack/templates/namespace.yaml</code> and <code>frontend/templates/namespace.yaml</code>; the helm flag is enough.</li>
+</ol>
+
+<h3>Surprise #8 &mdash; Spring Boot image doesn't exist on Docker Hub</h3>
+<p><code>charts/spring-boot/values.yaml</code> references <code>mukundmadhav/react-springboot-mysql:latest</code>. On the first pull:</p>
+<pre><code>Failed to pull image ...: pull access denied, repository does not exist
+or may require authorization: server message: insufficient_scope</code></pre>
+<p>For tonight's smoke test we skipped Spring Boot and POSTed synthetic Grafana webhooks directly to the triage service to exercise the AI pipeline. For reproducing the full demo path you need either (a) a real Spring Boot + actuator image pushed somewhere the cluster can pull from, or (b) build from source via <code>roles/spring_backend/templates/Dockerfile.j2</code>.</p>
+
+<h3>Surprise #9 &mdash; k3s API :6443 reachable via SSH tunnel, not SG</h3>
+<p>The k3s SG opens <code>6443</code> only from the <em>monitoring</em> SG (so Prometheus can scrape the API). Our operator box is outside the VPC, so direct <code>kubectl</code> from this laptop returns <em>connection refused</em>. Don't widen the SG for this — <code>kubectl</code> is a maintenance-time tool, not a production access path. Use a tunnel:</p>
+<pre><code>ssh -N -L 6443:localhost:6443 -i ~/.ssh/ansible_key deploy@$K3S_EIP &amp;
+# Now ~/.kube/config server URL can stay as https://127.0.0.1:6443
+# (which is what k3s writes by default, no rewrite needed)</code></pre>
+
+<h3>Smoke test result</h3>
+<p>With all of the above applied, a synthetic <code>POST /webhook/grafana</code> to the triage service drove the full pipeline end-to-end on first fire:</p>
+<pre><code>Received Grafana webhook: status=firing alerts=1
+  -&gt; New alert: BackendHigh5xxRate — starting dedup window
+  -&gt; Context gathered: prometheus=24ms loki=33ms jaeger=err total=35ms sources=2
+  -&gt; Ollama 3&times; timeout (cold model load + CPU inference)
+  -&gt; LLM verdict: ESCALATE (fallback reasoning, 93 s total)
+  -&gt; Email sent: [ALERT] warning: BackendHigh5xxRate — spring-boot
+  -&gt; Saved RCA decision 297de606-...</code></pre>
+<div class="note"><strong>CPU Ollama timing:</strong> the triage service's 30 s per-attempt timeout is tight for cold-starting <code>llama3.2:3b</code> on CPU. After 3 attempts the circuit breaker opens and the pipeline falls back to deterministic ESCALATE — which is the correct failure mode (never drop a real alert on LLM latency). On a GPU node the same path should complete in 2&ndash;3 s; don't chase this until GPU quota lands.</div>
+
 <h3>Time budget that actually happened (alt-account path)</h3>
 <table>
 <tr><th>Phase</th><th>Wall clock</th><th>Notes</th></tr>
@@ -834,8 +891,12 @@ locals {
 <tr><td>Diagnose &amp; fix subnet bug</td><td>~10 min</td><td>Console-log investigation + route-table check</td></tr>
 <tr><td>Re-apply (subnet fix)</td><td>~3 min</td><td>Only EC2s + EIP associations replaced</td></tr>
 <tr><td>Ansible monitoring playbook</td><td>~6 min (+re-run)</td><td>Failed on /opt/stack, re-ran after mkdir</td></tr>
-<tr><td>Ansible k3s playbook</td><td>~8&ndash;10 min</td><td>SSH CIDR rotated mid-run; widen + retry</td></tr>
-<tr><td>Image builds + Helm + smoke test</td><td>~20 min</td><td>See next section</td></tr>
+<tr><td>xanmanning.k3s whack-a-mole + curl|sh fallback</td><td>~15 min</td><td>Three Ansible incompat issues surfaced serially</td></tr>
+<tr><td>SG CIDR diagnosis + terraform apply</td><td>~5 min</td><td>All cross-VM traffic blocked, pods crash-looping</td></tr>
+<tr><td>Image builds + Helm installs</td><td>~12 min</td><td>6 first-party images, 4 Helm releases</td></tr>
+<tr><td>Chart fix iterations (Secret, probes, mounts)</td><td>~10 min</td><td>4 chart bugs, each found by pod describe output</td></tr>
+<tr><td>End-to-end smoke test</td><td>~3 min</td><td>Webhook &rarr; triage &rarr; Ollama &rarr; email, 2 alerts fired</td></tr>
+<tr><th>Total</th><th>~1h20m</th><th>First successful end-to-end run</th></tr>
 </table>
 
 <h3>Lessons for the next operator (updated)</h3>
