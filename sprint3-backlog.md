@@ -76,7 +76,101 @@ In `monitoring-triage-service/app/drain_analyzer.py`:
 
 ---
 
-## 2. (placeholder — add next item as it's surfaced)
+## 2. Deeper LLM correlation — playbook templates + LLM-driven MCP tool calling <!-- SPRINT-3-LLM-DEEP-RCA -->
+
+**Priority:** High · **Estimated effort:** 8 pts (split into 3a + 3b + 3c) · **Owner:** Lina
+**Surfaced on:** 2026-04-22, evening Sprint 2 demo-prep session. Lina observed that LLM verdicts read like "insufficient evidence, please investigate" rather than the sharp root-cause narrative she expects, and asked whether the LLM can actually correlate logs ↔ traces ↔ metrics for the alert's timeframe.
+
+### Why this matters
+
+Current (post-Sprint-2) behaviour:
+
+- All three pillars share the same time window and same service filter — basic correlation exists.
+- Sprint 2 also landed the "anchor context to alert.startsAt" change, so the window covers the incident's timeframe, not the LLM's wake-up moment.
+- Evidence bundle size raised from 5 log lines / 1 trace / 3 min to 50 / 10 / 10 min — the LLM has material to reason over.
+
+Still missing (and this is what a "sharp RCA" really needs):
+
+- **No trace-ID linkage.** We pull "recent traces for the service," not "the specific traces whose trace_ids appear in the anomalous log lines." An LLM reasoning about an error log in most cases can't connect it to the actual failing span — Jaeger returns whatever's most recent.
+- **No LLM-driven MCP calls.** The triage service pre-fetches one bundle; the LLM can't ask for more data ("show me the spans between 10:00 and 10:02 where status=error"). Our MCP servers are a security boundary + HTTP abstraction, not a tool harness the LLM drives. This is deliberate — llama3.2:3b has weak tool-calling — but it caps how deep any single verdict can go.
+- **No structured reasoning playbook.** The system prompt is "you are an SRE, check all three pillars, output JSON." No decision tree for common incident shapes (HTTP 500 surge, DB connection leak, deploy regression, noisy-neighbor latency). The model has to rediscover the SRE playbook for every alert.
+
+### 2a — Trace-ID linkage from log anomalies (low risk, pure ADD)
+
+**Effort:** 2 pts
+
+When `DrainAnalyzer.annotate_lines()` tags a line `[ANOMALY]`, extract any `trace_id=<32hex>` embedded in the line body. For each unique trace_id extracted, issue a targeted Jaeger MCP call (`/tools/get_trace?trace_id=...`) and include those specific traces in `GatheredContext.traces` — **in addition to** the existing service-wide sample. The LLM then sees both "here's 10 random recent traces" and "here's the 3 traces that contain the exact log anomalies you're looking at."
+
+Acceptance:
+
+- [ ] Add `extract_trace_ids(lines)` helper in `drain_analyzer.py` (regex `trace_id=([a-f0-9]{32})`).
+- [ ] Add `/tools/get_trace` endpoint to `jaeger_mcp` (exists in the Jaeger HTTP API as `/api/traces/<id>`).
+- [ ] In `pipeline.py` between Drain3 annotation and LLM call, resolve each extracted trace_id and merge into `ctx.traces` (dedup by trace_id).
+- [ ] Prompt: add a section `"Traces linked to anomalous log lines:"` so the LLM knows which ones to reason over specifically.
+- [ ] Test: synthetic alert with a single malformed-JSON POST produces a decision whose `evidence` field references the specific traceID from the log, not a random one.
+
+### 2b — RCA playbook templates (decision-tree skeletons for common shapes)
+
+**Effort:** 3 pts
+
+Lina's original framing: *"give it a bunch of templates with decision trees for what to do that are basically plans to follow or at least build a plan from to get sharpest RCA possible."*
+
+Maintain a small library of **alert-shape → checklist** playbooks. Each playbook is a short structured checklist the LLM should walk before writing its RCA. The triage service picks the closest-matching playbook based on alert labels/name and injects it into the system prompt as *"Here is the RCA checklist for this class of alert; walk it before concluding."*
+
+Concrete shapes to start with (expand iteratively):
+
+1. **HTTP 5xx surge** → check Spring Boot deploy status → DB pool exhaustion? → upstream dependency health → recent deploys → regression window.
+2. **HTTP 4xx surge** → client-side payload validation → recent client deploys → rate-limit / auth misconfig → noisy bot.
+3. **Latency P95 spike** → DB query plans → GC pressure (JVM metrics) → downstream slow dep → noisy neighbor / CPU throttling.
+4. **DB connection pool exhaustion** → leak (active > idle over time) → sudden traffic spike → RDS health → pool size misconfig.
+5. **Trace drop / missing spans** → OTel collector health → agent version mismatch → propagator misconfig → batch processor queue size.
+
+Each playbook = ~5–10 bullet SRE-style questions. Total ~50–100 lines of markdown.
+
+Acceptance:
+
+- [ ] New file `monitoring-triage-service/app/playbooks/` with one `.md` per alert shape and a `registry.py` mapping `alertname` regex → playbook path.
+- [ ] `llm_client._build_prompt()` selects the best-matching playbook and injects it as a system-prompt section.
+- [ ] If no playbook matches, fall back to a generic "check all three pillars" prompt (current behaviour).
+- [ ] Log which playbook was selected per invocation (surface as `triage_playbook_selected_total{playbook=...}` counter).
+- [ ] Test: at least 3 different alert shapes select 3 different playbooks; a garbage alertname selects the default.
+
+### 2c — Actual LLM-driven MCP tool calling (bigger lift, needs model upgrade)
+
+**Effort:** 3 pts + requires a cloud LLM path
+
+Replace the single-shot prompt with a tool-calling loop. The LLM drives the investigation: it issues MCP queries ("find_traces service=spring-boot start=... end=..."), reads the results, issues follow-ups, then emits the final verdict. This is the "real MCP" shape.
+
+**Blockers to address first:**
+
+- `llama3.2:3b` tool-calling is unreliable — hallucinates tools, invents params, forgets to close loops. We need either (a) Anthropic's Claude via API, (b) a local model with solid tool support (`qwen3:7b-instruct` or similar), or (c) ollama's function-calling mode validated on a larger model.
+- Each tool round-trip is one inference. On CPU that multiplies latency by (rounds+1). We need GPU (AWS quota) or a cloud API path for this to be responsive.
+- MCP servers need a tools-manifest endpoint the LLM can see (standard MCP `/tools/list` / `/tools/call` shape).
+
+Acceptance:
+
+- [ ] Decide the model: either add `anthropic.api_key` support to `llm_client.py` or validate a larger local model end-to-end.
+- [ ] Implement a tool-calling loop in `llm_client.py` (max 5 iterations, hard timeout per iteration).
+- [ ] Expose a `/tools/list` endpoint on each MCP server describing its tools in the JSON-schema format the LLM expects.
+- [ ] Add `triage_llm_tool_calls_total{tool=...}` + `triage_llm_tool_call_duration_seconds` metrics.
+- [ ] Test: run the hourly synthetic alert through the new path, confirm the LLM calls at least 2 distinct MCP tools and the verdict references data obtained via those calls.
+
+### Sequencing recommendation
+
+Do 2a first (smallest, highest immediate value — makes current verdicts sharper). Then 2b (playbooks — pure system-prompt work, no model change). Save 2c for after the GPU quota lands or once we adopt a cloud LLM path.
+
+### Related files
+
+- `monitoring-triage-service/app/context.py` — add trace-linkage step (2a).
+- `monitoring-triage-service/app/drain_analyzer.py` — add `extract_trace_ids` (2a).
+- `monitoring-mcp-servers/jaeger_mcp/main.py` — add `/tools/get_trace` + `/tools/list` (2a, 2c).
+- `monitoring-triage-service/app/llm_client.py` — playbook injection (2b), tool-calling loop (2c).
+- `monitoring-triage-service/app/playbooks/` — new directory (2b).
+- `monitoring-triage-service/app/config.py` — model selector (2c).
+
+---
+
+## 3. (placeholder — add next item as it's surfaced)
 
 ---
 
