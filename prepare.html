@@ -9,8 +9,10 @@
     --bg: #0f1117;
     --card: #1a1d27;
     --card2: #1e2130;
+    --card3: #232634;
     --border: #2a2d3a;
-    --text: #e0e0e0;
+    --border-hi: #3a3f50;
+    --text: #e8e8e8;
     --muted: #8890a0;
     --accent-blue: #4ea8de;
     --accent-green: #6bcf7f;
@@ -27,185 +29,248 @@
     background: var(--bg); color: var(--text);
     line-height: 1.65;
     display: grid;
-    grid-template-columns: 280px 1fr;
+    grid-template-columns: 300px 1fr;
     min-height: 100vh;
   }
 
-  /* --- Sidebar ToC --- */
+  /* ---------------- Sidebar ToC ---------------- */
   aside {
     background: #13151e;
     border-right: 1px solid var(--border);
-    padding: 24px 20px;
+    padding: 22px 16px 40px 22px;
     position: sticky;
     top: 0;
     height: 100vh;
     overflow-y: auto;
     font-size: 13px;
   }
+  aside::-webkit-scrollbar { width: 6px; }
+  aside::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
   aside .brand {
-    font-size: 11px; font-weight: 700; letter-spacing: 1.5px;
-    text-transform: uppercase; color: var(--muted); margin-bottom: 8px;
+    font-size: 10.5px; font-weight: 700; letter-spacing: 1.8px;
+    text-transform: uppercase; color: var(--muted); margin-bottom: 6px;
   }
   aside h1 {
-    font-size: 18px; font-weight: 800; color: var(--text);
+    font-size: 17px; font-weight: 800; color: var(--text);
     margin-bottom: 14px; line-height: 1.3;
   }
   aside h1 span { color: var(--accent-purple); }
   aside .back-link {
-    display: inline-block; margin-bottom: 20px;
+    display: inline-block; margin-bottom: 18px;
     color: var(--accent-blue); text-decoration: none; font-size: 12px;
   }
   aside .back-link:hover { text-decoration: underline; }
-  aside nav ol {
-    list-style: none; counter-reset: section; padding: 0;
-  }
-  aside nav li {
-    counter-increment: section; margin: 4px 0;
+
+  aside .nav-group {
+    margin: 14px 0 6px;
+    font-size: 10.5px; font-weight: 800; letter-spacing: 1.4px;
+    text-transform: uppercase; color: var(--accent-purple);
+    padding: 0 10px;
   }
   aside nav a {
-    display: block; padding: 6px 10px; border-radius: 6px;
+    display: block; padding: 5px 10px; border-radius: 6px;
     color: var(--muted); text-decoration: none;
     border-left: 2px solid transparent;
     transition: all .15s;
+    font-size: 12.5px;
   }
   aside nav a:hover { color: var(--text); background: rgba(176,126,232,.08); }
-  aside nav a::before {
-    content: counter(section) ". ";
-    color: var(--accent-purple); font-weight: 600; font-variant-numeric: tabular-nums;
+  aside nav a .n {
+    display: inline-block; width: 24px;
+    color: var(--accent-purple); font-weight: 600;
+    font-variant-numeric: tabular-nums;
   }
-  aside nav .sub { padding-left: 20px; font-size: 12px; }
-  aside nav .sub a::before { content: ""; }
 
-  /* --- Main content --- */
-  main { padding: 40px 48px 80px; max-width: 960px; }
-  main > section { margin-bottom: 56px; }
+  /* ---------------- Main ---------------- */
+  main { padding: 36px 44px 80px; max-width: 1000px; }
+  main > section { margin-bottom: 52px; scroll-margin-top: 20px; }
+
   main h2 {
-    font-size: 24px; font-weight: 800; margin-bottom: 8px;
+    font-size: 24px; font-weight: 800; margin-bottom: 6px;
     color: var(--accent-purple); letter-spacing: -.3px;
     border-bottom: 1px solid var(--border); padding-bottom: 8px;
   }
   main h2 .num {
-    display: inline-block; margin-right: 10px;
+    display: inline-block; margin-right: 12px;
     color: var(--muted); font-weight: 600;
   }
   main h3 {
-    font-size: 17px; font-weight: 700; margin: 28px 0 10px;
+    font-size: 16.5px; font-weight: 700; margin: 26px 0 8px;
     color: var(--accent-blue);
   }
   main h4 {
-    font-size: 14px; font-weight: 700; margin: 18px 0 8px;
-    color: var(--accent-green);
+    font-size: 13.5px; font-weight: 700; margin: 18px 0 6px;
+    color: var(--accent-green); letter-spacing: .2px;
   }
-  main p { margin: 10px 0; font-size: 14px; color: #c0c5d0; }
-  main ul, main ol { margin: 8px 0 12px 24px; }
-  main li { font-size: 14px; margin: 4px 0; color: #c0c5d0; }
+  main p { margin: 8px 0; font-size: 14px; color: #c5cad5; }
+  main ul, main ol { margin: 6px 0 10px 22px; }
+  main li { font-size: 13.5px; margin: 3px 0; color: #c5cad5; }
   main li strong { color: var(--text); }
 
-  /* --- Lead / intro --- */
+  /* "At a glance" summary card at top of section */
+  .glance {
+    background: linear-gradient(180deg, rgba(107,207,127,.07), rgba(107,207,127,0));
+    border: 1px solid rgba(107,207,127,.28);
+    border-radius: 10px; padding: 14px 18px; margin: 10px 0 18px;
+  }
+  .glance::before {
+    content: "AT A GLANCE";
+    display: block;
+    font-size: 10px; font-weight: 800; letter-spacing: 1.4px;
+    color: var(--accent-green); margin-bottom: 6px;
+  }
+  .glance p { font-size: 14px; color: var(--text); margin: 4px 0; }
+  .glance strong { color: var(--text); }
+
+  /* Lead — big pitch box */
   .lead {
     font-size: 15px; color: var(--text);
     background: linear-gradient(180deg, rgba(176,126,232,.08), rgba(176,126,232,0));
-    border: 1px solid rgba(176,126,232,.2);
-    border-radius: 10px; padding: 18px 22px; margin: 12px 0 24px;
+    border: 1px solid rgba(176,126,232,.28);
+    border-radius: 10px; padding: 18px 22px; margin: 10px 0 20px;
   }
 
-  /* --- Code / pre --- */
   code {
     font-family: 'JetBrains Mono','Fira Code',monospace; font-size: 12px;
-    background: rgba(78,168,222,.08); color: var(--accent-cyan);
-    padding: 1px 6px; border-radius: 3px;
+    background: rgba(78,168,222,.1); color: var(--accent-cyan);
+    padding: 1px 6px; border-radius: 3px; word-break: break-word;
   }
   pre {
     background: var(--card2); border: 1px solid var(--border);
     border-radius: 8px; padding: 14px 16px; overflow-x: auto;
-    margin: 12px 0; font-size: 12.5px; line-height: 1.55;
+    margin: 10px 0; font-size: 12.5px; line-height: 1.55;
   }
-  pre code {
-    background: none; padding: 0; color: var(--text);
-  }
+  pre code { background: none; padding: 0; color: var(--text); }
+  pre::-webkit-scrollbar { height: 6px; }
+  pre::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
-  /* --- Callout boxes --- */
+  /* Callout boxes */
   .box {
-    border-radius: 8px; padding: 14px 18px; margin: 16px 0;
-    font-size: 13.5px; color: #c0c5d0; border: 1px solid;
+    border-radius: 8px; padding: 12px 18px; margin: 14px 0;
+    font-size: 13.5px; color: #d0d5e0; border: 1px solid;
   }
   .box strong { color: var(--text); }
-  .box.why {
-    background: rgba(107,207,127,.05);
-    border-color: rgba(107,207,127,.25);
-  }
-  .box.why::before { content: "💡 Why: "; color: var(--accent-green); font-weight: 700; }
-  .box.warn {
-    background: rgba(240,160,80,.05);
-    border-color: rgba(240,160,80,.25);
-  }
-  .box.warn::before { content: "⚠ "; color: var(--accent-orange); font-weight: 700; }
-  .box.qa {
-    background: rgba(78,168,222,.05);
-    border-color: rgba(78,168,222,.25);
-  }
-  .box.demo {
-    background: rgba(64,208,208,.05);
-    border-color: rgba(64,208,208,.25);
-  }
-  .box.decision {
-    background: rgba(176,126,232,.05);
-    border-color: rgba(176,126,232,.25);
-  }
+  .box.why   { background: rgba(107,207,127,.05); border-color: rgba(107,207,127,.25); }
+  .box.why::before   { content: "💡 Why: "; color: var(--accent-green); font-weight: 700; }
+  .box.warn  { background: rgba(240,160,80,.05); border-color: rgba(240,160,80,.25); }
+  .box.warn::before  { content: "⚠ "; color: var(--accent-orange); font-weight: 700; }
+  .box.demo  { background: rgba(64,208,208,.05); border-color: rgba(64,208,208,.25); }
+  .box.decision { background: rgba(176,126,232,.05); border-color: rgba(176,126,232,.25); }
+  .box.tip   { background: rgba(78,168,222,.05); border-color: rgba(78,168,222,.25); }
+  .box.tip::before   { content: "🔑 "; color: var(--accent-blue); font-weight: 700; }
+  .box.note  { background: rgba(232,232,232,.03); border-color: var(--border-hi); }
 
-  /* --- Tables --- */
+  /* Tables */
   table {
-    width: 100%; border-collapse: collapse; margin: 12px 0;
-    font-size: 13px;
+    width: 100%; border-collapse: collapse; margin: 10px 0;
+    font-size: 12.5px;
   }
   th {
-    text-align: left; padding: 8px 12px;
+    text-align: left; padding: 7px 10px;
     background: var(--card); color: var(--accent-blue);
     font-weight: 600; border: 1px solid var(--border);
   }
   td {
-    padding: 8px 12px; border: 1px solid var(--border);
-    color: #c0c5d0; vertical-align: top;
+    padding: 7px 10px; border: 1px solid var(--border);
+    color: #c5cad5; vertical-align: top;
   }
-  td code { font-size: 11px; }
+  td code { font-size: 11.5px; }
+  tr:nth-child(even) td { background: rgba(255,255,255,.015); }
 
-  /* --- ASCII diagram --- */
+  /* ASCII diagram */
   .diagram {
     background: var(--card2); border: 1px solid var(--border);
-    border-radius: 10px; padding: 18px 20px; margin: 16px 0;
+    border-radius: 10px; padding: 18px 20px; margin: 14px 0;
     overflow-x: auto;
   }
   .diagram pre {
     background: none; border: none; padding: 0; margin: 0;
-    color: var(--text); font-size: 11.5px; line-height: 1.4;
+    color: var(--text); font-size: 11px; line-height: 1.38;
   }
 
-  /* --- Q&A --- */
-  .qa-pair {
+  /* Drill-down details */
+  details {
     background: var(--card); border: 1px solid var(--border);
-    border-radius: 8px; padding: 12px 16px; margin: 10px 0;
+    border-radius: 8px; padding: 0; margin: 10px 0;
+    overflow: hidden;
   }
-  .qa-pair .q {
-    font-weight: 700; color: var(--accent-orange); margin-bottom: 4px;
+  details[open] { border-color: var(--border-hi); }
+  details > summary {
+    list-style: none;
+    padding: 10px 14px;
+    cursor: pointer;
+    font-size: 13.5px; font-weight: 600; color: var(--text);
+    user-select: none;
+    display: flex; align-items: center; gap: 10px;
+    background: var(--card);
+    transition: background .15s;
   }
-  .qa-pair .a {
-    font-size: 13.5px; color: #c0c5d0;
+  details > summary::-webkit-details-marker { display: none; }
+  details > summary::before {
+    content: "▸";
+    color: var(--accent-purple);
+    font-size: 11px;
+    transition: transform .15s;
+    display: inline-block; width: 12px;
   }
+  details[open] > summary::before { transform: rotate(90deg); }
+  details > summary:hover { background: var(--card3); }
+  details > summary .pill-inline {
+    margin-left: auto; font-size: 10.5px;
+    color: var(--muted); font-weight: 500;
+  }
+  details > div.inner { padding: 4px 18px 14px; }
+  details > div.inner > :first-child { margin-top: 6px; }
 
-  /* --- Status pills --- */
+  /* Q&A pair */
+  .qa {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 16px; margin: 8px 0;
+  }
+  .qa .q {
+    font-weight: 700; color: var(--accent-orange); margin-bottom: 4px;
+    font-size: 13.5px;
+  }
+  .qa .a { font-size: 13.5px; color: #c5cad5; }
+
+  /* Status pills */
   .pill {
     display: inline-block; padding: 2px 8px; border-radius: 4px;
-    font-size: 11px; font-weight: 600; margin: 0 2px;
+    font-size: 10.5px; font-weight: 700; margin: 0 2px;
+    letter-spacing: .3px; text-transform: uppercase;
   }
-  .pill-done   { background: rgba(107,207,127,.12); color: var(--accent-green); }
-  .pill-active { background: rgba(240,160,80,.12);  color: var(--accent-orange); }
-  .pill-todo   { background: rgba(224,96,112,.12);  color: var(--accent-red); }
+  .pill-done   { background: rgba(107,207,127,.14); color: var(--accent-green); }
+  .pill-active { background: rgba(240,160,80,.14);  color: var(--accent-orange); }
+  .pill-todo   { background: rgba(224,96,112,.14);  color: var(--accent-red); }
+  .pill-new    { background: rgba(64,208,208,.14);  color: var(--accent-cyan); }
 
-  /* --- Responsive --- */
-  @media (max-width: 900px) {
+  /* Chip grid for browsing */
+  .chips {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 10px; margin: 14px 0;
+  }
+  .chip {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 8px; padding: 12px 14px;
+  }
+  .chip h5 {
+    font-size: 13px; font-weight: 700; color: var(--text);
+    margin-bottom: 4px;
+  }
+  .chip p { font-size: 12.5px; color: var(--muted); margin: 0; }
+  .chip code { font-size: 11px; }
+
+  /* Two-column layout for tables side by side */
+  .cols2 {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+  }
+
+  @media (max-width: 960px) {
     body { grid-template-columns: 1fr; }
     aside { position: static; height: auto; border-right: none; border-bottom: 1px solid var(--border); }
-    main { padding: 24px; }
+    main { padding: 22px; }
+    .cols2 { grid-template-columns: 1fr; }
   }
 </style>
 </head>
@@ -216,102 +281,165 @@
   <h1>Prepare <span>·</span> Presentation Notes</h1>
   <a href="index.html" class="back-link">← All docs</a>
   <nav>
-    <ol>
-      <li><a href="#tldr">How to use this page</a></li>
-      <li><a href="#pitch">Elevator pitch</a></li>
-      <li><a href="#scope">Sprint 2 scope &amp; status (Apr 23)</a></li>
-      <li><a href="#arch">Architecture — big picture</a></li>
-      <li><a href="#repos">The 6 repositories</a></li>
-      <li><a href="#terraform">Terraform layer</a></li>
-      <li><a href="#ansible">Ansible layer</a></li>
-      <li><a href="#k3s">k3s &amp; Helm layer</a></li>
-      <li><a href="#observability">Observability data planes</a></li>
-      <li><a href="#mcp">MCP — concept &amp; execution</a></li>
-      <li><a href="#triage">Triage service deep dive</a></li>
-      <li><a href="#hardening">Epic 4 — AI hardening</a></li>
-      <li><a href="#decisions">Decisions &amp; trade-offs</a></li>
-      <li><a href="#evolution">Evolution path</a></li>
-      <li><a href="#retro">What I'd do differently</a></li>
-      <li><a href="#qa">Q&amp;A prep</a></li>
-      <li><a href="#demo">Demo / fallback script</a></li>
-    </ol>
+    <div class="nav-group">Get Oriented</div>
+    <a href="#tldr"><span class="n">0</span> How to use this page</a>
+    <a href="#pitch"><span class="n">1</span> Elevator pitch</a>
+    <a href="#scope"><span class="n">2</span> Sprint 2 scope &amp; status</a>
+    <a href="#arch"><span class="n">3</span> Architecture — big picture</a>
+    <a href="#repos"><span class="n">4</span> The 6 repositories</a>
+
+    <div class="nav-group">The Stack</div>
+    <a href="#terraform"><span class="n">5</span> Terraform layer</a>
+    <a href="#ansible"><span class="n">6</span> Ansible layer</a>
+    <a href="#k3s"><span class="n">7</span> k3s &amp; Helm</a>
+    <a href="#observability"><span class="n">8</span> Observability data planes</a>
+
+    <div class="nav-group">Quick Reference</div>
+    <a href="#ports"><span class="n">9</span> Service ports &amp; DNS</a>
+    <a href="#dashboards"><span class="n">10</span> Grafana dashboards</a>
+    <a href="#alerts"><span class="n">11</span> Alert rules</a>
+    <a href="#secrets"><span class="n">12</span> Secrets &amp; env vars</a>
+
+    <div class="nav-group">The AI Part</div>
+    <a href="#mcp"><span class="n">13</span> MCP — concept &amp; execution</a>
+    <a href="#triage"><span class="n">14</span> Triage service deep dive</a>
+    <a href="#hardening"><span class="n">15</span> Epic 4 — AI hardening</a>
+
+    <div class="nav-group">Operations</div>
+    <a href="#runbook"><span class="n">16</span> Deployment runbook</a>
+    <a href="#validation"><span class="n">17</span> Validation checklist</a>
+    <a href="#troubleshooting"><span class="n">18</span> Troubleshooting</a>
+    <a href="#snippets"><span class="n">19</span> Config snippets</a>
+
+    <div class="nav-group">Narrative</div>
+    <a href="#decisions"><span class="n">20</span> Decisions &amp; trade-offs</a>
+    <a href="#evolution"><span class="n">21</span> Evolution path</a>
+    <a href="#retro"><span class="n">22</span> What I'd do differently</a>
+    <a href="#qa"><span class="n">23</span> Q&amp;A prep</a>
+    <a href="#demo"><span class="n">24</span> Demo / fallback</a>
   </nav>
 </aside>
 
 <main>
 
-<!-- ============================================================ -->
+<!-- =========================================================================== -->
 <section id="tldr">
 <h2><span class="num">0.</span>How to use this page</h2>
-<p class="lead">This is a single-page prep doc ordered from <strong>biggest picture → smallest implementation detail</strong>. Everything due by <strong>Apr 23</strong> is here: what shipped, what's in flight, and why the choices were made the way they were.</p>
 
-<p>Suggested reading order for tomorrow morning:</p>
-<ol>
-  <li>Read sections <strong>1–3</strong> once out loud — that's your opening.</li>
-  <li>Trace the architecture diagram in <strong>§4</strong> with your finger until you can draw it from memory (monitoring VM · k3s node · GPU · AWS managed services).</li>
-  <li>Read <strong>§5–§8</strong> carefully: these are the four layers you'll be quizzed on (repos, Terraform, Ansible, k3s/Helm).</li>
-  <li>Internalize <strong>§9–§11</strong>: observability pipeline, MCP, triage — this is the novel AI part and where the team will lean in.</li>
-  <li>Skim <strong>§12 decisions</strong> — every bullet is a question you might get asked.</li>
-  <li>Read <strong>§16 Q&amp;A prep</strong> last, just before the meeting.</li>
-</ol>
-<p>If you only have 15 minutes: <strong>§2</strong> (pitch) + <strong>§4</strong> (diagram) + <strong>§12</strong> (decisions) + <strong>§16</strong> (Q&amp;A).</p>
+<p class="lead">This page is <strong>fully self-contained</strong> — everything you need for tomorrow is here. Browse it one section at a time. Anywhere you see <code>▸</code> is a <strong>drill-down</strong> — click to expand the deeper detail. Default to <em>skimming</em> the top of each section; expand only where you want more.</p>
+
+<h3>Suggested reading plans</h3>
+<div class="chips">
+  <div class="chip">
+    <h5>🏃 15 minutes — emergency</h5>
+    <p>§1 pitch · §3 architecture · §20 decisions · §23 Q&amp;A</p>
+  </div>
+  <div class="chip">
+    <h5>🚶 1 hour — confident</h5>
+    <p>§1–§4 oriented · §5–§8 stack (skim drill-downs) · §13–§15 AI · §23 Q&amp;A</p>
+  </div>
+  <div class="chip">
+    <h5>🧠 2+ hours — bulletproof</h5>
+    <p>Everything, expanding every <code>▸</code>. Practice the demo script in §24.</p>
+  </div>
+</div>
+
+<h3>Navigation tips</h3>
+<ul>
+  <li>Left sidebar sticks to your scroll — jump anywhere.</li>
+  <li><kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>F</kbd> works on the whole page (including inside closed <code>▸</code> sections on most browsers — expand first to be safe).</li>
+  <li>Every section opens with an <strong>At a glance</strong> card — the 20-second version.</li>
+  <li>Tables are preferred over prose wherever possible.</li>
+</ul>
 </section>
 
-<!-- ============================================================ -->
+<!-- =========================================================================== -->
 <section id="pitch">
-<h2><span class="num">1.</span>Elevator pitch (memorize this)</h2>
+<h2><span class="num">1.</span>Elevator pitch</h2>
 
 <div class="lead">
 <p>"Sprint 2 delivers the <strong>CIRES AI Observability Platform</strong>: a full-stack monitoring pipeline for the <code>react-springboot-mysql</code> application, plus an <strong>AI triage service</strong> that reacts to Grafana alerts, pulls context from metrics, logs and traces over <strong>MCP</strong>, asks an <strong>Ollama-hosted LLM</strong> for a root-cause verdict, and either sends a structured email to oncall or suppresses the alert — so we stop paging humans for noise.</p>
 <p>Underneath, the infrastructure moved from per-VM docker-compose to a <strong>single-node k3s cluster</strong> deployed via <strong>Terraform + Ansible + Helm</strong>, while the monitoring plane (Prometheus, Grafana, Loki, Jaeger) stays on a dedicated VM — so a cluster failure doesn't blind us to its own failure."</p>
 </div>
 
-<h3>Three one-liners for the demo</h3>
-<ul>
-  <li><strong>Infra one-liner:</strong> "<code>terraform apply</code> provisions the VPC, monitoring VM, k3s VM, RDS and S3/CloudFront. <code>ansible-playbook site.yml</code> then brings up the monitoring stack, bootstraps k3s, builds images into containerd, and deploys the K8s manifests. Three Helm installs finish the workloads."</li>
-  <li><strong>AI one-liner:</strong> "When Grafana fires, the triage service dedups, fans out to 5 MCP servers in parallel for fresh metrics/logs/traces, Drain3-annotates the logs, and hands the LLM a structured prompt. The LLM returns JSON: <code>ESCALATE</code>, <code>DISMISS</code>, or <code>INCONCLUSIVE</code>. A circuit breaker guarantees we never wedge on a bad Ollama."</li>
-  <li><strong>Why it's a big deal:</strong> "It's real Kubernetes, real OpenTelemetry, real LLM tool-use — all reproducible from a fresh AWS account in under a day."</li>
-</ul>
+<h3>Three one-liners to memorize</h3>
+<div class="chips">
+  <div class="chip">
+    <h5>Infra</h5>
+    <p><code>terraform apply</code> provisions VPC + monitoring VM + k3s VM + RDS + S3/CloudFront. <code>ansible-playbook site.yml</code> brings up the stack and bootstraps k3s. Three <code>helm install</code>s finish the workloads.</p>
+  </div>
+  <div class="chip">
+    <h5>AI</h5>
+    <p>Grafana fires → dedup → 5 MCP servers fan out for metrics/logs/traces → Drain3 annotates logs → LLM returns JSON: ESCALATE / DISMISS / INCONCLUSIVE. A circuit breaker guarantees we never wedge.</p>
+  </div>
+  <div class="chip">
+    <h5>Why it matters</h5>
+    <p>Real Kubernetes, real OpenTelemetry, real LLM tool-use — all reproducible from a fresh AWS account in under a day.</p>
+  </div>
+</div>
 </section>
 
-<!-- ============================================================ -->
+<!-- =========================================================================== -->
 <section id="scope">
-<h2><span class="num">2.</span>Sprint 2 scope &amp; status as of Apr 23</h2>
+<h2><span class="num">2.</span>Sprint 2 scope &amp; status <span style="font-size:13px;font-weight:400;color:var(--muted)">(everything due Apr 23)</span></h2>
 
-<p>Sprint 2 was originally due Apr 9 (Epics 1–2) and was <strong>extended to Apr 23</strong> with two additional epics (3–4). Every item below is inside the sprint boundary that closes tomorrow.</p>
+<div class="glance">
+<p>Sprint 2 was originally due <strong>Apr 9</strong> (Epics 1–2) and was <strong>extended to Apr 23</strong> with two new epics (3–4). Epics 1, 2 and 4 are <strong>code-complete</strong>. Epic 3 (K8s migration) is the active work — playbooks and Helm charts exist; remaining risk is live end-to-end validation on AWS with CPU-only Ollama (GPU quota still 0).</p>
+</div>
 
 <table>
 <tr><th>Epic</th><th>Title</th><th>Stories</th><th>Pts</th><th>Status</th></tr>
 <tr><td>1</td><td>AWS Infrastructure (Terraform)</td><td>5</td><td>~15</td><td><span class="pill pill-done">code done</span> Jira needs rescope housekeeping</td></tr>
 <tr><td>2</td><td>AI RCA System MVP (Python + MCP)</td><td>17</td><td>~71</td><td><span class="pill pill-done">code done</span> Jira statuses lag reality</td></tr>
-<tr><td>3</td><td>Kubernetes Migration (k3s + Helm)</td><td>10</td><td>34</td><td><span class="pill pill-active">in flight</span> playbooks + charts written</td></tr>
-<tr><td>4</td><td>AI Triage Hardening (circuit breaker, JSON schema, self-obs)</td><td>3</td><td>8</td><td><span class="pill pill-done">code done</span></td></tr>
+<tr><td>3</td><td>Kubernetes Migration (k3s + Helm)</td><td>10</td><td>34</td><td><span class="pill pill-active">in flight</span> code written, live validation pending</td></tr>
+<tr><td>4</td><td>AI Triage Hardening</td><td>3</td><td>8</td><td><span class="pill pill-done">code done</span></td></tr>
 </table>
 
-<div class="box decision"><strong>What to say if asked "what's your actual completion?"</strong><br>
-Epics 1, 2 and 4 are <strong>code-complete</strong>. Epic 3 is the active migration — Terraform is rescoped to 3 EC2s, Ansible has a <code>k3s.yml</code> playbook, a <code>k3s_images</code> role, and <code>k8s-manifests.yml</code> for OTel DaemonSet / NVIDIA plugin / Prometheus RBAC, and three Helm charts exist (<code>spring-boot</code>, <code>kong</code>, <code>ai-stack</code>). The remaining risk is <strong>live end-to-end validation on AWS</strong>: GPU vCPU quota is still 0 so Ollama runs CPU-only for the demo.</div>
-
-<h3>What changed under the extension (key rescopes)</h3>
+<details>
+<summary>Rescopes under the extension <span class="pill-inline">5 tickets</span></summary>
+<div class="inner">
 <ul>
-  <li><strong>SCRUM-63 (Terraform):</strong> 3+1 EC2s → <strong>1 k3s EC2</strong> + <strong>1 monitoring EC2</strong> + <strong>1 GPU EC2</strong> (conditional). Points 8 → 5.</li>
-  <li><strong>SCRUM-64 (Ansible deploy):</strong> narrows to monitoring VM only; Spring Boot / Kong / AI stack move to Helm. Points 5 → 3.</li>
-  <li><strong>SCRUM-65 (Ollama + NVIDIA):</strong> splits — host-level NVIDIA driver stays here, container runtime moves to E3-06. Points 5 → 2.</li>
-  <li><strong>SCRUM-66 (E2E cloud validation):</strong> superseded by E3-10 (K8s validation).</li>
-  <li><strong>SCRUM-82 (docker-compose AI stack):</strong> superseded by E3-05 (Helm chart).</li>
+  <li><strong>SCRUM-63</strong> (Terraform): 3+1 EC2s → <strong>1 k3s EC2</strong> + <strong>1 monitoring EC2</strong> + <strong>1 GPU EC2</strong> (conditional). 8 → 5 pts.</li>
+  <li><strong>SCRUM-64</strong> (Ansible deploy): narrows to monitoring VM only; Spring/Kong/AI move to Helm. 5 → 3 pts.</li>
+  <li><strong>SCRUM-65</strong> (Ollama + NVIDIA): splits — host NVIDIA driver stays here; container runtime moves to E3-06. 5 → 2 pts.</li>
+  <li><strong>SCRUM-66</strong> (E2E cloud validation): <strong>superseded</strong> by E3-10 (K8s validation).</li>
+  <li><strong>SCRUM-82</strong> (docker-compose AI stack): <strong>superseded</strong> by E3-05 (Helm chart).</li>
 </ul>
+</div>
+</details>
+
+<details>
+<summary>Epic 3 — 10 stories, critical path <span class="pill-inline">all To Do in Jira</span></summary>
+<div class="inner">
+<table>
+<tr><th>ID</th><th>Story</th><th>Pts</th><th>Blocked by</th></tr>
+<tr><td>E3-01</td><td>Bootstrap k3s on EC2 via Ansible (<code>xanmanning.k3s</code>)</td><td>3</td><td>SCRUM-63</td></tr>
+<tr><td>E3-02</td><td>Image build + k3s containerd import (no registry)</td><td>3</td><td>E3-01</td></tr>
+<tr><td>E3-03</td><td>Helm chart — Spring Boot</td><td>3</td><td>E3-01</td></tr>
+<tr><td>E3-04</td><td>Helm chart — Kong (upstream)</td><td>3</td><td>E3-01, E3-03</td></tr>
+<tr><td>E3-05</td><td>Helm chart — AI stack</td><td>5</td><td>E3-01, E3-02, E3-06</td></tr>
+<tr><td>E3-06</td><td>NVIDIA device plugin + GPU verification (SPIKE)</td><td>5</td><td>E3-01</td></tr>
+<tr><td>E3-07</td><td>In-cluster OTel Collector DaemonSet</td><td>3</td><td>E3-01..05</td></tr>
+<tr><td>E3-08</td><td>Prometheus <code>kubernetes_sd_configs</code> + RBAC</td><td>3</td><td>E3-01</td></tr>
+<tr><td>E3-09</td><td>Migrate 17 Grafana alert rules to K8s selectors</td><td>3</td><td>E3-03..05, E3-08</td></tr>
+<tr><td>E3-10</td><td>End-to-end K8s validation playbook</td><td>3</td><td>all above</td></tr>
+</table>
+</div>
+</details>
 </section>
 
-<!-- ============================================================ -->
+<!-- =========================================================================== -->
 <section id="arch">
 <h2><span class="num">3.</span>Architecture — big picture</h2>
 
-<p>The platform is split across <strong>three compute planes</strong> plus AWS managed services. Memorize this diagram:</p>
+<div class="glance">
+<p>Three compute planes + AWS managed services. <strong>Monitoring plane</strong> (own VM) observes the <strong>workload plane</strong> (k3s cluster) via Prometheus scrape + OTLP push. <strong>Data plane</strong> (RDS + S3/CloudFront) is AWS-managed so we don't own stateful infra for a demo.</p>
+</div>
 
 <div class="diagram">
 <pre>
              ┌────────────────────────────────────────────────────────────────┐
              │                        AWS us-east-1                           │
-             │                                                                │
              │  VPC 10.0.0.0/16                                               │
              │  ┌────────────────────────────────────────────────────────┐    │
              │  │  Public subnet 10.0.1.0/24   (NAT GW, IGW)             │    │
@@ -337,8 +465,8 @@ Epics 1, 2 and 4 are <strong>code-complete</strong>. Epic 3 is the active migrat
              │  │                         └───────────────────────────┘  │    │
              │  │                                                        │    │
              │  │  ┌─────────────────┐                                   │    │
-             │  │  │ GPU VM          │  (optional, separate g4dn.xlarge) │    │
-             │  │  │ Ollama / NVIDIA │   - pending GPU vCPU quota        │    │
+             │  │  │ GPU VM          │  (optional, g4dn.xlarge)          │    │
+             │  │  │ Ollama / NVIDIA │   — pending GPU vCPU quota        │    │
              │  │  └─────────────────┘                                   │    │
              │  └────────────────────────────────────────────────────────┘    │
              │                                                                │
@@ -350,20 +478,24 @@ Epics 1, 2 and 4 are <strong>code-complete</strong>. Epic 3 is the active migrat
 </pre>
 </div>
 
-<h3>Three planes, three responsibilities</h3>
+<h3>Three planes, three jobs</h3>
 <table>
-<tr><th>Plane</th><th>Runs on</th><th>What lives here</th><th>Why it's separate</th></tr>
-<tr><td><strong>Monitoring plane</strong></td><td>monitoring VM (docker-compose)</td><td>Prometheus, Grafana, Loki, Jaeger, OTel Collector (central)</td><td>Must survive cluster failure → not colocated with workloads</td></tr>
-<tr><td><strong>Workload plane</strong></td><td>k3s VM (k3s cluster)</td><td>Spring Boot, Kong, triage + 5 MCP servers, Ollama, in-cluster OTel DaemonSet</td><td>K8s gives us declarative deploy, health checks, rolling updates, service DNS</td></tr>
-<tr><td><strong>Data plane</strong></td><td>AWS managed</td><td>RDS MySQL, S3 + CloudFront</td><td>Avoid owning stateful infra for a demo; free tier eligible</td></tr>
+<tr><th>Plane</th><th>Runs on</th><th>What lives here</th><th>Why separate</th></tr>
+<tr><td><strong>Monitoring</strong></td><td>monitoring VM (docker-compose)</td><td>Prometheus, Grafana, Loki, Jaeger, OTel Collector (central)</td><td>Survives cluster failure — not colocated with workloads</td></tr>
+<tr><td><strong>Workload</strong></td><td>k3s VM (k3s cluster)</td><td>Spring Boot, Kong, triage + 5 MCP servers, Ollama, in-cluster OTel DS</td><td>K8s: declarative deploy, probes, rolling updates, service DNS</td></tr>
+<tr><td><strong>Data</strong></td><td>AWS managed</td><td>RDS MySQL, S3 + CloudFront</td><td>Free-tier, no stateful ops for demo</td></tr>
 </table>
 
-<div class="box why">Keeping the monitoring plane off the cluster it observes avoids a circular dependency. If k3s goes down, Prometheus still reports "k3s is down" — otherwise Prometheus would go down <em>with</em> k3s and you'd learn about the outage from customers.</div>
+<div class="box why">Keeping the monitoring plane off the cluster it observes avoids a circular dependency. If k3s goes down, Prometheus still reports "k3s is down" — otherwise Prometheus would go down <em>with</em> k3s and we'd learn about the outage from users.</div>
 </section>
 
-<!-- ============================================================ -->
+<!-- =========================================================================== -->
 <section id="repos">
 <h2><span class="num">4.</span>The 6 repositories — what lives where</h2>
+
+<div class="glance">
+<p>One repo per <em>concern</em>, not per technology. Independently versioned; glued together by Ansible.</p>
+</div>
 
 <table>
 <tr><th>Repo</th><th>Contents</th><th>Local clone</th></tr>
@@ -374,85 +506,123 @@ Epics 1, 2 and 4 are <strong>code-complete</strong>. Epic 3 is the active migrat
 <tr><td><code>monitoring-docs</code></td><td>HTML docs site + sprint tracker (<code>the-bigger-picture.md</code>)</td><td><code>/root/monitoring-docs</code></td></tr>
 <tr><td><code>jira</code></td><td>Jira CSV exports (source of truth when UI isn't accessible)</td><td>not cloned locally</td></tr>
 </table>
-
-<div class="box why">One repo per <em>concern</em>, not per technology. Terraform has its own repo because its lifecycle (<code>apply</code>/<code>destroy</code>) is decoupled from application code. The triage service and MCP servers are separate repos because they're independently versioned container images. Ansible glues it all together.</div>
 </section>
 
-<!-- ============================================================ -->
+<!-- =========================================================================== -->
 <section id="terraform">
 <h2><span class="num">5.</span>Terraform layer — provisioning AWS</h2>
 
-<p>Entry point: <code>provisioning-monitoring-infra/</code>. This is vanilla HCL with flat <code>.tf</code> files (no modules) because the blast radius is small and modules would hurt readability.</p>
+<div class="glance">
+<p>Vanilla HCL, flat <code>.tf</code> files (no modules). Entry point <code>provisioning-monitoring-infra/</code>. <code>terraform apply</code> → <code>./generate-inventory.sh</code> → outputs feed Ansible.</p>
+</div>
 
-<h3>File tree &amp; responsibility</h3>
+<h3>File tree</h3>
 <pre><code>provisioning-monitoring-infra/
-├── providers.tf         # aws provider pinned ~> 5.82, region via var
-├── variables.tf         # all inputs + required ubuntu_ami_id (pinned)
-├── vpc.tf               # VPC, 3 subnets, IGW, NAT, route tables
-├── key-pair.tf          # aws_key_pair (reads ~/.ssh/ansible_key.pub)
-├── security-groups.tf   # 4 SGs: monitoring, k3s, gpu, rds
-├── ec2.tf               # 3 instances + EIPs (all behind count flags)
-├── rds.tf               # MySQL 8.0 db.t3.micro, subnet group, SG
-├── s3-cloudfront.tf     # private S3 + OAC CloudFront (SPA fallback)
-├── outputs.tf           # 15 outputs consumed by generate-inventory.sh
-├── generate-inventory.sh# writes outputs → Ansible group_vars/inventory
-├── terraform.tfvars.example  # template — copy to terraform.tfvars
-└── .terraform.lock.hcl  # provider lock (committed)</code></pre>
-
-<h3>What gets created, in order</h3>
-<ol>
-  <li>VPC <code>10.0.0.0/16</code> with DNS support + hostnames.</li>
-  <li>One public subnet (<code>10.0.1.0/24</code>, us-east-1a) → houses NAT GW + IGW.</li>
-  <li>Two private subnets (<code>10.0.2.0/24</code> us-east-1a for EC2; <code>10.0.3.0/24</code> us-east-1b to satisfy RDS's 2-AZ subnet-group requirement — no EC2 there).</li>
-  <li>Route tables: public → IGW, private → NAT GW.</li>
-  <li>Key pair from <code>~/.ssh/ansible_key.pub</code>.</li>
-  <li>4 security groups (details below).</li>
-  <li>3 EC2 instances — each in the private subnet, each with its own Elastic IP so we can SSH without a bastion.</li>
-  <li>RDS MySQL 8.0, single-AZ, not publicly accessible, SG-restricted to k3s.</li>
-  <li>S3 bucket (private, all public-access blocked) + CloudFront with Origin Access Control + SPA error-redirect rules.</li>
-</ol>
+├── providers.tf          # aws provider pinned ~> 5.82
+├── variables.tf          # inputs + required ubuntu_ami_id (no default)
+├── vpc.tf                # VPC, 3 subnets, IGW, NAT, route tables
+├── key-pair.tf           # aws_key_pair from ~/.ssh/ansible_key.pub
+├── security-groups.tf    # 4 SGs: monitoring, k3s, gpu, rds
+├── ec2.tf                # 3 instances + EIPs (count flags)
+├── rds.tf                # MySQL 8.0 db.t3.micro, subnet group, SG
+├── s3-cloudfront.tf      # private S3 + OAC CloudFront (SPA fallback)
+├── outputs.tf            # 15 outputs consumed by generate-inventory.sh
+├── generate-inventory.sh # writes outputs → Ansible inventory
+├── terraform.tfvars.example
+└── .terraform.lock.hcl   # provider lock (committed)</code></pre>
 
 <h3>EC2 sizing</h3>
 <table>
-<tr><th>Instance</th><th>Type</th><th>Cores</th><th>Count flag</th><th>Purpose</th></tr>
+<tr><th>Instance</th><th>Type</th><th>vCPUs</th><th>Count flag</th><th>Purpose</th></tr>
 <tr><td>monitoring</td><td><code>t3.large</code></td><td>2</td><td>always</td><td>Docker-compose stack: Prom, Grafana, Loki, Jaeger, OTel</td></tr>
 <tr><td>k3s</td><td><code>t3.xlarge</code></td><td>4</td><td><code>enable_k3s</code></td><td>Single-node k3s: Spring Boot, Kong, AI stack</td></tr>
-<tr><td>gpu</td><td><code>g4dn.xlarge</code></td><td>4 + T4</td><td><code>enable_gpu</code></td><td>Ollama inference (currently blocked by GPU vCPU quota)</td></tr>
+<tr><td>gpu</td><td><code>g4dn.xlarge</code></td><td>4 + T4</td><td><code>enable_gpu</code></td><td>Ollama inference (currently blocked by GPU vCPU quota = 0)</td></tr>
 </table>
 
-<div class="box warn">The <code>enable_k3s</code> / <code>enable_gpu</code> / <code>enable_cloudfront</code> flags are <strong>staged-deploy guards</strong> for brand-new AWS accounts. Our account currently has 8 standard vCPUs (partial grant of 16) and <strong>0 GPU vCPUs</strong>. For the demo, the plan is to keep Ollama CPU-only and set <code>enable_gpu=false</code>.</div>
-
-<h3>Security groups (the question most likely to come up)</h3>
+<h3>Security groups (most likely question)</h3>
 <table>
 <tr><th>SG</th><th>Key inbound rules</th></tr>
-<tr><td><code>monitoring</code></td><td>22 from <code>allowed_ssh_cidrs</code>; 9090, 3000, 3100, 16686 from private subnet; 4317/4318 from private subnet</td></tr>
-<tr><td><code>k3s</code></td><td>22 from SSH CIDRs; <strong>6443 + 10250 from sg-monitoring</strong> (Prom scraping the kubelet); 30000–32767 NodePorts; 4317/4318 from sg-monitoring</td></tr>
+<tr><td><code>monitoring</code></td><td>22 from <code>allowed_ssh_cidrs</code>; 9090, 3000, 3100, 16686, 4317/4318 from private subnet</td></tr>
+<tr><td><code>k3s</code></td><td>22 from SSH CIDRs; <strong>6443 + 10250 from sg-monitoring</strong> (Prom scrape path); 30000–32767 NodePorts; 4317/4318 from sg-monitoring</td></tr>
 <tr><td><code>gpu</code></td><td>22 from SSH CIDRs; 11434 (Ollama) from private subnet; 8090 (triage webhook) from sg-monitoring</td></tr>
 <tr><td><code>rds</code></td><td>3306 from <strong>sg-k3s only</strong> (SG reference, not CIDR)</td></tr>
 </table>
 
-<h3>The flow from Terraform to Ansible</h3>
+<details>
+<summary>Provisioning order — what gets created, in sequence</summary>
+<div class="inner">
 <ol>
-  <li><code>terraform apply</code> writes outputs (private IPs, EIPs, RDS endpoint, CF domain).</li>
-  <li><code>./generate-inventory.sh</code> reads those outputs and <strong>rewrites</strong> <code>monitoring-project/inventory/group_vars/all.yml</code> and <code>inventory/production.yml</code>.</li>
-  <li>Ansible now has concrete IPs and endpoints — no manual copy-paste.</li>
+  <li>VPC <code>10.0.0.0/16</code> with DNS support + hostnames.</li>
+  <li>One public subnet (<code>10.0.1.0/24</code>, us-east-1a) → houses NAT GW + IGW.</li>
+  <li>Two private subnets (<code>10.0.2.0/24</code> us-east-1a for EC2; <code>10.0.3.0/24</code> us-east-1b only to satisfy RDS's 2-AZ subnet-group requirement).</li>
+  <li>Route tables: public → IGW, private → NAT GW.</li>
+  <li>Key pair from <code>~/.ssh/ansible_key.pub</code>.</li>
+  <li>4 security groups.</li>
+  <li>3 EC2s — each in private subnet, each with its own Elastic IP so we can SSH without a bastion.</li>
+  <li>RDS MySQL 8.0, single-AZ, not publicly accessible, SG-restricted to k3s.</li>
+  <li>Private S3 bucket + CloudFront with Origin Access Control + SPA error-redirect rules.</li>
 </ol>
+</div>
+</details>
 
-<h3>Things to know that aren't obvious</h3>
+<details>
+<summary>Staged-deploy flags (<code>enable_k3s</code> / <code>enable_gpu</code> / <code>enable_cloudfront</code>)</summary>
+<div class="inner">
+<p>Brand-new AWS accounts start with quotas that block some resources. The flags let you bring the platform up in <em>stages</em>:</p>
 <ul>
-  <li><strong><code>ubuntu_ami_id</code> is required, no default.</strong> We deliberately don't use <code>data "aws_ami" "most_recent"</code> because a silent AMI swap between <code>plan</code> and <code>apply</code> would mean re-testing everything.</li>
-  <li><strong>EIPs on private-subnet instances</strong> let us SSH directly (no bastion). Trade-off: each EIP is a tiny recurring cost + surface area. Acceptable for a demo env.</li>
-  <li><strong>Single-AZ</strong>: everything is in us-east-1a. Subnet B (10.0.3.0/24) exists only because RDS forces you to declare a subnet group across 2 AZs.</li>
-  <li><strong>SG rules use standalone resources</strong> (<code>aws_vpc_security_group_ingress_rule</code>) instead of inline rules — avoids Terraform's well-known drift issue with inline SG rules.</li>
-  <li><strong><code>terraform.tfstate</code> is currently committed to git</strong> (we need to fix this post-sprint — it contains the RDS password). Production workflow: remote backend (S3 + DynamoDB lock).</li>
+  <li><code>enable_k3s = false</code> — skip the k3s EC2 (for quota-blocked standard vCPU).</li>
+  <li><code>enable_gpu = false</code> — skip the GPU EC2 (for GPU vCPU quota = 0; our current state).</li>
+  <li><code>enable_cloudfront = false</code> — skip CloudFront distribution (for unverified accounts); S3 bucket still created for Drain3 snapshots.</li>
 </ul>
+<p>Our account currently: 8 standard vCPUs (partial grant of requested 16), <strong>0 GPU vCPUs</strong>. Plan: set <code>enable_gpu=false</code>, run Ollama CPU-only.</p>
+</div>
+</details>
+
+<details>
+<summary>Gotchas that aren't obvious</summary>
+<div class="inner">
+<ul>
+  <li><strong><code>ubuntu_ami_id</code> is required, no default.</strong> We deliberately don't use <code>data "aws_ami" "most_recent"</code> — a silent AMI swap between <code>plan</code> and <code>apply</code> would mean re-testing everything.</li>
+  <li><strong>EIPs on private-subnet instances</strong> let us SSH directly (no bastion). Tiny recurring cost; acceptable for demo.</li>
+  <li><strong>Single-AZ</strong>: everything is in us-east-1a. Subnet B exists <em>only</em> to satisfy RDS subnet-group 2-AZ rule.</li>
+  <li><strong>SG rules use standalone resources</strong> (<code>aws_vpc_security_group_ingress_rule</code>) instead of inline rules — avoids Terraform drift issues with inline rules.</li>
+  <li><strong><code>terraform.tfstate</code> is currently committed to git</strong> — contains the RDS password. Post-sprint fix: S3 + DynamoDB remote backend.</li>
+  <li><strong><code>skip_final_snapshot = true</code> on RDS</strong> — a <code>terraform destroy</code> drops the database with no recovery. Flip for production.</li>
+</ul>
+</div>
+</details>
+
+<details>
+<summary>terraform.tfvars.example — what you need to fill in</summary>
+<div class="inner">
+<pre><code># Required
+ubuntu_ami_id        = "ami-0e86e20dae9224db8"   # Ubuntu 22.04 LTS for us-east-1
+allowed_ssh_cidrs    = ["YOUR_IP/32"]            # restrict!
+ssh_public_key_path  = "~/.ssh/ansible_key.pub"
+db_password          = "CHANGE_ME_strong_password"
+s3_bucket_name       = "cires-observability-demo-UNIQUE_SUFFIX"
+
+# Staged-deploy guards
+enable_k3s         = true
+enable_gpu         = false
+enable_cloudfront  = false
+
+# Sensible defaults (override if needed)
+aws_region              = "us-east-1"
+monitoring_instance_type = "t3.large"
+k3s_instance_type        = "t3.xlarge"
+gpu_instance_type        = "g4dn.xlarge"</code></pre>
+</div>
+</details>
 </section>
 
-<!-- ============================================================ -->
+<!-- =========================================================================== -->
 <section id="ansible">
 <h2><span class="num">6.</span>Ansible layer — configuration &amp; orchestration</h2>
 
-<p>Entry point: <code>monitoring-project/</code>. This is where all the "make it run" logic lives — both the current (k3s-based) path and the legacy (per-VM docker-compose) path, the latter commented out but preserved for reference.</p>
+<div class="glance">
+<p>Entry point <code>monitoring-project/</code>. Ansible glues everything: host setup (Docker, k3s, kubeconfig, secrets) on bare OS, then hands off to Helm for K8s objects. The repo contains both the current (k3s-based) path and the legacy (per-VM docker-compose) path, the latter commented out but preserved.</p>
+</div>
 
 <h3>Folder layout</h3>
 <pre><code>monitoring-project/
@@ -464,55 +634,57 @@ Epics 1, 2 and 4 are <strong>code-complete</strong>. Epic 3 is the active migrat
 │       ├── all.yml      # stack_dir, VM IPs, OTel version, common packages
 │       ├── monitoring.yml   # Grafana port, Prom scrape targets, SMTP
 │       ├── k3s_cluster.yml  # k3s_release_version, disable Traefik, image_tag
-│       ├── application.yml  # (legacy) Spring DB URL, OTel Java agent
-│       ├── network.yml      # (legacy) Kong ports, plugins
-│       └── ai.yml           # (legacy) Ollama model, triage + MCP ports
+│       └── (legacy) application.yml, network.yml, ai.yml
 ├── playbooks/
-│   ├── site.yml                # master orchestrator (monitoring → k3s → k8s-manifests)
+│   ├── site.yml                # orchestrator (monitoring → k3s → k8s-manifests)
 │   ├── monitoring.yml          # Prom/Grafana/Loki/Jaeger stack via docker-compose
 │   ├── k3s.yml                 # bootstrap k3s + build-and-import images
-│   ├── k8s-manifests.yml       # OTel DaemonSet, NVIDIA plugin, Prom RBAC
+│   ├── k8s-manifests.yml       # OTel DS, NVIDIA plugin, Prom RBAC
 │   ├── integration-k8s.yml     # 10-step end-to-end validation
-│   ├── application.yml / network.yml / ai.yml / integration.yml   # LEGACY
-│   └── templates/              # 4 compose Jinja templates (only monitoring is active)
-├── roles/           # 20 roles, detail below
+│   └── (legacy) application.yml, network.yml, ai.yml, integration.yml
+├── roles/           # 20 roles (see table below)
 ├── charts/          # Helm: spring-boot/, kong/, ai-stack/, frontend/
 └── manifests/       # raw K8s: otel-collector/, nvidia-device-plugin/, prometheus-rbac/</code></pre>
 
-<h3>Ansible components — the terminology cheat sheet</h3>
+<h3>Ansible terminology cheat sheet</h3>
 <table>
-<tr><th>Component</th><th>What it is</th><th>Where it lives here</th></tr>
-<tr><td><strong>Inventory</strong></td><td>The list of hosts + their groups. Determines "who runs this."</td><td><code>inventory/production.yml</code></td></tr>
-<tr><td><strong>Group vars</strong></td><td>Variables scoped to a group of hosts, layered from <code>all</code> down.</td><td><code>inventory/group_vars/*.yml</code></td></tr>
-<tr><td><strong>Playbook</strong></td><td>YAML file mapping <em>hosts → roles/tasks</em>. What gets run.</td><td><code>playbooks/*.yml</code></td></tr>
-<tr><td><strong>Role</strong></td><td>Reusable unit with <code>tasks/</code>, <code>templates/</code>, <code>files/</code>, <code>handlers/</code>, <code>defaults/</code>, <code>vars/</code>.</td><td><code>roles/&lt;name&gt;/</code></td></tr>
-<tr><td><strong>Template</strong></td><td>Jinja2 <code>.j2</code> file rendered with variables at runtime.</td><td><code>roles/*/templates/*.j2</code> + <code>playbooks/templates/*.j2</code></td></tr>
-<tr><td><strong>Handler</strong></td><td>Task that only runs if notified (e.g. "restart docker" on config change).</td><td><code>roles/*/handlers/main.yml</code></td></tr>
-<tr><td><strong>Galaxy role/collection</strong></td><td>External dependency pulled from Ansible Galaxy.</td><td><code>requirements.yml</code></td></tr>
-<tr><td><strong>become</strong></td><td>Privilege escalation (sudo). Set globally in <code>ansible.cfg</code>.</td><td><code>ansible.cfg</code></td></tr>
+<tr><th>Term</th><th>What it is</th><th>Here</th></tr>
+<tr><td><strong>Inventory</strong></td><td>List of hosts + groups</td><td><code>inventory/production.yml</code></td></tr>
+<tr><td><strong>Group vars</strong></td><td>Variables scoped to a group, layered from <code>all</code> down</td><td><code>inventory/group_vars/*.yml</code></td></tr>
+<tr><td><strong>Playbook</strong></td><td>YAML mapping hosts → roles/tasks</td><td><code>playbooks/*.yml</code></td></tr>
+<tr><td><strong>Role</strong></td><td>Reusable unit: <code>tasks/ templates/ files/ handlers/ defaults/</code></td><td><code>roles/&lt;name&gt;/</code></td></tr>
+<tr><td><strong>Template</strong></td><td>Jinja2 <code>.j2</code> rendered with variables</td><td><code>roles/*/templates/*.j2</code></td></tr>
+<tr><td><strong>Handler</strong></td><td>Task that runs only if notified (e.g. restart docker on config change)</td><td><code>roles/*/handlers/main.yml</code></td></tr>
+<tr><td><strong>Galaxy role</strong></td><td>External dependency (Ansible Galaxy)</td><td><code>requirements.yml</code></td></tr>
+<tr><td><strong>become</strong></td><td>Privilege escalation (sudo)</td><td>global in <code>ansible.cfg</code></td></tr>
 </table>
 
-<h3>The 20 roles (current vs legacy)</h3>
-
+<details>
+<summary>The 20 roles — active vs legacy <span class="pill-inline">12 active · 8 legacy</span></summary>
+<div class="inner">
 <h4>Active today</h4>
 <table>
 <tr><th>Role</th><th>What it does</th></tr>
 <tr><td><code>common</code></td><td>Base packages, timezone, NTP</td></tr>
-<tr><td><code>docker</code></td><td>Install Docker CE + compose plugin (needed on both monitoring VM and k3s host to build images)</td></tr>
-<tr><td><code>prometheus</code></td><td>Creates <code>/etc/prometheus</code> + templates <code>prometheus.yml.j2</code> (12 static targets + optional <code>kubernetes_sd_configs</code>)</td></tr>
+<tr><td><code>docker</code></td><td>Install Docker CE + compose plugin (on both monitoring VM and k3s host)</td></tr>
+<tr><td><code>prometheus</code></td><td>Creates <code>/etc/prometheus</code>; templates <code>prometheus.yml.j2</code> (static targets + optional <code>kubernetes_sd_configs</code>)</td></tr>
 <tr><td><code>loki</code></td><td>TSDB config, 24h index period</td></tr>
-<tr><td><code>jaeger</code></td><td>v2 with Badger storage (168h TTL). Host OTLP ports remapped to 4327/4328 to avoid collision with the OTel Collector on 4317/4318</td></tr>
-<tr><td><code>otel-collector</code></td><td>Central collector on the monitoring VM (OTLP in → Jaeger/Loki out)</td></tr>
-<tr><td><code>grafana</code></td><td>Datasources, dashboards, contact points (SMTP), alert rules, routing policies</td></tr>
-<tr><td><code>xanmanning.k3s</code></td><td>Galaxy role — installs k3s v1.30.6+k3s1, disables Traefik (Kong is our ingress)</td></tr>
-<tr><td><code>k3s_images</code></td><td>⭐ Custom role: builds 6 first-party Docker images on the k3s host, then imports OCI tarballs into containerd via <code>k3s ctr images import</code> — no registry needed</td></tr>
-<tr><td><code>cadvisor</code> / <code>node_exporter</code></td><td>Stub roles — actual services run inside the unified compose</td></tr>
+<tr><td><code>jaeger</code></td><td>v2 with Badger storage (168h TTL); host OTLP ports remapped 4317→4327 / 4318→4328 to avoid collision with OTel Collector</td></tr>
+<tr><td><code>otel-collector</code></td><td>Central collector on monitoring VM (OTLP in → Jaeger/Loki out)</td></tr>
+<tr><td><code>grafana</code></td><td>Datasources, 4 dashboards, SMTP contact points, alert rules, routing</td></tr>
+<tr><td><code>xanmanning.k3s</code></td><td>Galaxy role — installs k3s v1.30.6+k3s1, disables Traefik (Kong is ingress)</td></tr>
+<tr><td><code>k3s_images</code></td><td>⭐ <strong>Custom</strong> role: builds 6 first-party images on k3s host, imports to containerd via <code>k3s ctr images import</code> — no registry</td></tr>
+<tr><td><code>cadvisor</code> / <code>node_exporter</code></td><td>Stub roles — actual services run in unified compose</td></tr>
+<tr><td><code>nvidia_docker</code></td><td>Conditional (<code>nvidia_runtime_enabled: true</code>) — currently inactive; sets up NVIDIA Container Toolkit</td></tr>
 </table>
-
 <h4>Legacy (superseded by Helm)</h4>
-<p><code>spring_backend</code>, <code>kong</code>, <code>triage_service</code>, <code>mcp_servers</code>, <code>ollama</code>, <code>mysql</code>, <code>react_frontend</code>, <code>promtail</code>, <code>nvidia_docker</code>. Kept in the tree because <code>application.yml</code>/<code>network.yml</code>/<code>ai.yml</code> still reference them if you un-comment the legacy path.</p>
+<p><code>spring_backend</code>, <code>kong</code>, <code>triage_service</code>, <code>mcp_servers</code>, <code>ollama</code>, <code>mysql</code>, <code>react_frontend</code>, <code>promtail</code>. Kept in the tree because <code>application.yml</code>/<code>network.yml</code>/<code>ai.yml</code> still reference them if you un-comment the legacy path.</p>
+</div>
+</details>
 
-<h3>site.yml — the master orchestration</h3>
+<details>
+<summary><code>site.yml</code> — the master orchestration</summary>
+<div class="inner">
 <pre><code># Active path
 - import_playbook: monitoring.yml    # Docker-compose stack on monitoring VM
 - import_playbook: k3s.yml           # Bootstrap k3s + build/import images
@@ -523,11 +695,14 @@ Epics 1, 2 and 4 are <strong>code-complete</strong>. Epic 3 is the active migrat
 # kubectl apply -f charts/kong/kong-config.yaml
 # helm install kong kong/kong --version 2.38.0 -f charts/kong/values-k3s.yaml -n network --create-namespace
 # helm install ai-stack charts/ai-stack/ -n ai --create-namespace</code></pre>
+<div class="box why">Helm installs are <em>outside</em> <code>site.yml</code> deliberately: they depend on images being present in containerd, so you run them after <code>k3s.yml</code> is green. Scripting them in Ansible adds failure modes (Helm release state) for little benefit on a single-node cluster.</div>
+</div>
+</details>
 
-<div class="box why">Helm installs are outside <code>site.yml</code> deliberately: they depend on images being present in containerd, so you run them <em>after</em> <code>k3s.yml</code> is green. Scripting them in Ansible is possible but adds failure modes (Helm release state) for very little benefit on a single-node cluster.</div>
-
-<h3>Variable precedence (the gotcha that bites Ansible newcomers)</h3>
-<p>Highest-priority wins. From lowest to highest:</p>
+<details>
+<summary>Variable precedence — the gotcha for newcomers</summary>
+<div class="inner">
+<p>Highest priority wins. From lowest to highest:</p>
 <ol>
   <li>Role defaults (<code>roles/&lt;r&gt;/defaults/main.yml</code>)</li>
   <li><code>group_vars/all.yml</code></li>
@@ -536,105 +711,195 @@ Epics 1, 2 and 4 are <strong>code-complete</strong>. Epic 3 is the active migrat
   <li>Play <code>vars:</code></li>
   <li><code>-e</code> CLI extra vars</li>
 </ol>
-<p>So when you set <code>monitoring_vm_ip</code> in <code>all.yml</code> and override in <code>group_vars/k3s_cluster.yml</code>, the k3s-group hosts see the k3s_cluster value and everyone else sees the all value.</p>
+<p>So <code>monitoring_vm_ip</code> set in <code>all.yml</code> is visible everywhere; overridden in <code>group_vars/k3s_cluster.yml</code> only for k3s hosts.</p>
+</div>
+</details>
 
-<h3>Prerequisites to run any playbook (say these if asked)</h3>
+<details>
+<summary>Prerequisites to run any playbook</summary>
+<div class="inner">
 <ol>
   <li><code>ansible-galaxy install -r requirements.yml</code> — pulls the Galaxy role + collection.</li>
   <li>Private key at <code>~/.ssh/ansible_key</code>, matching the public key in <code>terraform.tfvars</code>.</li>
-  <li><code>deploy</code> user on every host with passwordless sudo (provisioned by EC2 user-data script).</li>
+  <li><code>deploy</code> user on every host with passwordless sudo (provisioned by EC2 user-data).</li>
   <li><code>inventory/production.yml</code> populated with real IPs — run <code>generate-inventory.sh</code> after <code>terraform apply</code>.</li>
+  <li>Verify with <code>ansible all -m ping</code> before running any playbook.</li>
 </ol>
+</div>
+</details>
 </section>
 
-<!-- ============================================================ -->
+<!-- =========================================================================== -->
 <section id="k3s">
-<h2><span class="num">7.</span>k3s &amp; Helm layer — workload plane</h2>
+<h2><span class="num">7.</span>k3s &amp; Helm — workload plane</h2>
 
-<h3>Why k3s (not full K8s, not Swarm, not Nomad)</h3>
+<div class="glance">
+<p>k3s is a full CNCF-conformant Kubernetes distribution packaged into a single binary. We use it because everything that works on k3s works on full K8s later — no lock-in. We disable the built-in Traefik because <strong>Kong is our ingress</strong>.</p>
+</div>
+
+<h3>Why k3s (comparison)</h3>
+<table>
+<tr><th>Criterion</th><th>k3s</th><th>kubeadm (full K8s)</th><th>Docker Swarm</th><th>Nomad</th></tr>
+<tr><td>Install</td><td>single binary, 30s</td><td>multi-component, 30+ min</td><td>built into Docker</td><td>single binary</td></tr>
+<tr><td>Control plane RAM</td><td>~512 MB</td><td>~2 GB</td><td>~200 MB</td><td>~200 MB</td></tr>
+<tr><td>CNCF conformant</td><td>✅</td><td>✅</td><td>❌ (different API)</td><td>❌ (HCL, not K8s)</td></tr>
+<tr><td>Helm ecosystem</td><td>✅</td><td>✅</td><td>❌</td><td>❌</td></tr>
+<tr><td>Production path</td><td>→ multi-node k3s → EKS/GKE (same API)</td><td>already full K8s</td><td>dead-end (deprecated)</td><td>niche</td></tr>
+</table>
+
+<h3>What k3s bundles (and what we disable)</h3>
+<div class="cols2">
+<div>
+<h4>Built-in</h4>
 <ul>
-  <li>Single 70 MB binary, single systemd service — install in ~30 seconds via <code>xanmanning.k3s</code>.</li>
-  <li>CNCF-conformant: <em>anything</em> that runs on vanilla K8s runs on k3s. No API differences.</li>
-  <li>Ships with a complete control plane <strong>and</strong> batteries included: containerd, CoreDNS, Flannel CNI, local-path-provisioner, metrics-server.</li>
-  <li>Upgrade path is trivial: multi-node k3s → kubespray/kubeadm → EKS/GKE, all using the same Helm charts.</li>
+  <li>containerd (container runtime — no Docker CLI on node)</li>
+  <li>CoreDNS (cluster DNS)</li>
+  <li>Flannel (CNI networking)</li>
+  <li>local-path-provisioner (PVC storage)</li>
+  <li>ServiceLB (basic load balancer)</li>
+  <li>Metrics Server (HPA source)</li>
+  <li><strong>Traefik</strong> (ingress — ❌ we disable this)</li>
 </ul>
+</div>
+<div>
+<h4>Not included (we add)</h4>
+<ul>
+  <li>Kong (ingress, via upstream Helm chart)</li>
+  <li>NVIDIA device plugin (DaemonSet, for GPU)</li>
+  <li>OTel Collector (DaemonSet)</li>
+</ul>
+</div>
+</div>
 
-<div class="box decision">We disable the built-in <strong>Traefik</strong> ingress controller in <code>group_vars/k3s_cluster.yml</code> because <strong>Kong is our gateway</strong>. Two ingress controllers would fight over port 80/443.</div>
-
-<h3>Bootstrap (<code>playbooks/k3s.yml</code>)</h3>
+<details>
+<summary>Bootstrap (<code>playbooks/k3s.yml</code>) — step by step</summary>
+<div class="inner">
 <ol>
-  <li><strong>Common + Docker + xanmanning.k3s</strong> apply to <code>k3s_cluster</code> hosts.</li>
+  <li><strong>common + docker + xanmanning.k3s</strong> apply to <code>k3s_cluster</code> hosts.</li>
   <li>Post-task: <code>k3s kubectl get nodes</code> with until-loop until "Ready" (30 × 10s retries).</li>
   <li>Fetch <code>/etc/rancher/k3s/k3s.yaml</code> to control machine → rewrite <code>127.0.0.1:6443</code> → <code>&lt;ec2-ip&gt;:6443</code> → install at <code>~/.kube/config</code>.</li>
   <li>Install Helm CLI on control machine if missing.</li>
-  <li><strong>Second play</strong>: <code>k3s_images</code> role builds + imports images (see next subsection).</li>
+  <li><strong>Second play</strong>: <code>k3s_images</code> role builds + imports images.</li>
 </ol>
+</div>
+</details>
 
-<h3>The registry-less image pipeline (<code>k3s_images</code> role)</h3>
-<p>This is the part the team will ask about. We do <strong>not</strong> use Docker Hub, ECR, or GHCR. Instead:</p>
+<details>
+<summary>The registry-less image pipeline (<code>k3s_images</code> role)</summary>
+<div class="inner">
+<p>We do <strong>not</strong> use Docker Hub, ECR, or GHCR. Instead:</p>
 <ol>
   <li>rsync the triage-service + mcp-servers repos from control machine → <code>/opt/image-build/</code> on the k3s host.</li>
   <li>On the k3s host: <code>docker build -t cires/triage-service:latest .</code> (×6 images).</li>
   <li><code>docker save cires/triage-service:latest -o /tmp/triage.tar</code>.</li>
   <li><code>k3s ctr images import /tmp/triage.tar</code> — containerd now has the image.</li>
-  <li>Helm charts use <code>imagePullPolicy: IfNotPresent</code> → Kubernetes finds the image locally, doesn't try to pull.</li>
+  <li>Helm charts use <code>imagePullPolicy: IfNotPresent</code> → K8s finds the image locally, doesn't try to pull.</li>
 </ol>
-<div class="box why">No registry means no secrets to manage, no rate limits, no external dep, and offline-deployable. Cost: if we scale to multi-node, each node needs the images imported separately — acceptable trade-off for a single-node cluster.</div>
+<p><strong>Six images built:</strong> <code>cires/triage-service</code>, <code>cires/mcp-prometheus</code>, <code>cires/mcp-loki</code>, <code>cires/mcp-jaeger</code>, <code>cires/mcp-drain3</code>, <code>cires/mcp-rca-history</code>.</p>
+<div class="box why">No registry = no credential management, no rate limits, no external dep, offline-deployable. Cost: if we scale to multi-node, each node needs the images imported separately — acceptable trade-off for a single-node cluster.</div>
+</div>
+</details>
 
-<h3>Helm charts — what each one does</h3>
+<h3>The four Helm charts</h3>
+<div class="chips">
+  <div class="chip">
+    <h5>spring-boot → <code>ns=app</code></h5>
+    <p>Deployment + Service (ClusterIP 80→8080) + ConfigMap + ServiceAccount. InitContainer downloads OTel Java agent into a shared emptyDir; main container loads via <code>JAVA_TOOL_OPTIONS</code>.</p>
+  </div>
+  <div class="chip">
+    <h5>kong → <code>ns=network</code></h5>
+    <p>Upstream <code>kong/kong</code> v2.38.0 with <code>values-k3s.yaml</code> override. DB-less via ConfigMap. NodePort 30080 external.</p>
+  </div>
+  <div class="chip">
+    <h5>ai-stack → <code>ns=ai</code></h5>
+    <p>One umbrella chart with 7 Deployments (triage + 5 MCPs + Ollama), 2 PVCs (Ollama model 20Gi, triage state), Secrets for SMTP. <code>nvidia.com/gpu: 1</code> resource when GPU enabled.</p>
+  </div>
+  <div class="chip">
+    <h5>frontend</h5>
+    <p>Mostly unused — React build served by Spring container or S3+CloudFront.</p>
+  </div>
+</div>
 
-<h4>1. <code>charts/spring-boot/</code> → namespace <code>app</code></h4>
-<ul>
-  <li>Deployment with <strong>initContainer</strong> that downloads the OpenTelemetry Java agent JAR into a shared emptyDir; main container loads it via <code>JAVA_TOOL_OPTIONS=-javaagent:/otel/agent.jar</code>.</li>
-  <li>Service ClusterIP 80 → targetPort 8080.</li>
-  <li>ConfigMap holds DB URL / OTel exporter endpoint (<code>otel-collector.observability.svc.cluster.local:4317</code>).</li>
-  <li>Prometheus scrape annotations on the pod so k8s-SD picks up <code>/actuator/prometheus</code>.</li>
-</ul>
+<details>
+<summary>Spring Boot chart — probes &amp; OTel injection detail</summary>
+<div class="inner">
+<pre><code>livenessProbe:
+  httpGet: { path: /actuator/health/liveness, port: 8080 }
+  initialDelaySeconds: 30
+  periodSeconds: 10
+readinessProbe:
+  httpGet: { path: /actuator/health/readiness, port: 8080 }
+  initialDelaySeconds: 20
+  periodSeconds: 5
+env:
+  - name: JAVA_TOOL_OPTIONS
+    value: "-javaagent:/opt/otel-javaagent.jar"
+  - name: OTEL_EXPORTER_OTLP_ENDPOINT
+    value: "http://otel-collector.observability.svc.cluster.local:4317"
+  - name: OTEL_RESOURCE_ATTRIBUTES
+    value: "service.name=spring-boot"</code></pre>
+</div>
+</details>
 
-<h4>2. <code>charts/kong/</code> → namespace <code>network</code></h4>
-<ul>
-  <li>Uses the <strong>upstream</strong> <code>kong/kong</code> Helm chart (v2.38.0), with a custom <code>values-k3s.yaml</code> override.</li>
-  <li>DB-less mode: <code>kong.yml</code> declarative config is supplied via a ConfigMap (<code>kong-config.yaml</code>).</li>
-  <li>Upstream URL rewritten from VM IPs to service DNS: <code>spring-boot.app.svc.cluster.local:80</code>.</li>
-  <li>Exposed externally via NodePort 30080.</li>
-  <li>Kong OTel plugin → in-cluster collector; Prometheus plugin for Kong-level metrics.</li>
-</ul>
+<details>
+<summary>Kong chart — values-k3s.yaml</summary>
+<div class="inner">
+<pre><code>image:
+  repository: kong
+  tag: "3.9"
+env:
+  database: "off"
+  declarative_config: /kong/config/kong.yml
+dblessConfig:
+  configMap: kong-config      # contains kong.yml (the declarative routes/services/plugins)
+proxy:
+  type: NodePort
+  http: { nodePort: 30080 }
+  tls:  { enabled: false }
+admin:
+  type: ClusterIP
+  http: { enabled: true }
+resources:
+  requests: { cpu: 200m, memory: 256Mi }
+  limits:   { cpu: "1",  memory: 512Mi }</code></pre>
+<p>The <code>kong.yml</code> declarative config is applied separately as a ConfigMap (<code>kong-config.yaml</code>) before <code>helm install</code>. Upstream URLs rewritten from VM IPs to K8s service DNS: <code>spring-boot.app.svc.cluster.local:80</code>.</p>
+</div>
+</details>
 
-<h4>3. <code>charts/ai-stack/</code> → namespace <code>ai</code></h4>
-<ul>
-  <li>One umbrella chart with <strong>multiple Deployments</strong>: <code>triage-deployment.yaml</code>, <code>mcp-deployments.yaml</code> (generates 5 deployments from <code>values.yaml</code>), <code>ollama-deployment.yaml</code>.</li>
-  <li><code>ollama-pvc.yaml</code> — 20Gi PersistentVolumeClaim for model storage (so we don't re-pull <code>llama3.2:3b</code> on every restart).</li>
-  <li>Ollama Deployment has <code>resources.limits.nvidia.com/gpu: 1</code> when GPU is enabled — CPU-only for now.</li>
-  <li>Triage has its own PVC for the SQLite RCA store + Drain3 state file.</li>
-  <li>Secrets for SMTP creds mounted as env vars.</li>
-  <li>All inter-service refs use in-cluster DNS: <code>prometheus-mcp.ai.svc.cluster.local:8091</code> etc.</li>
-</ul>
-
-<h4>4. <code>charts/frontend/</code></h4>
-<p>Mostly unused — the React build is either served by the Spring Boot container (bundled) or by CloudFront + S3 (preferred). Kept as a placeholder.</p>
+<details>
+<summary>AI-stack chart — structure</summary>
+<div class="inner">
+<pre><code>charts/ai-stack/templates/
+├── namespace.yaml
+├── _helpers.tpl
+├── triage-deployment.yaml       # triage-service Deployment
+├── triage-service.yaml          # ClusterIP Service :8090
+├── triage-configmap.yaml        # env config
+├── triage-pvc.yaml              # SQLite RCA store + Drain3 state
+├── mcp-deployments.yaml         # 5 Deployments generated from values.yaml
+├── mcp-services.yaml            # 5 ClusterIP Services
+├── ollama-deployment.yaml       # Ollama container, GPU resource request (conditional)
+├── ollama-service.yaml          # ClusterIP :11434
+└── ollama-pvc.yaml              # 20Gi for model storage</code></pre>
+</div>
+</details>
 
 <h3>Raw K8s manifests (<code>manifests/</code>)</h3>
-
-<h4>OTel Collector DaemonSet (<code>observability</code> ns)</h4>
-<ul>
-  <li>Runs on <strong>every</strong> node (DaemonSet). Exposes 4317 (gRPC), 4318 (HTTP), 8888 (metrics), 13133 (health) as hostPorts.</li>
-  <li>Receivers: <code>filelog</code> reading <code>/var/log/pods/*</code> (mounted read-only) + <code>otlp</code> gRPC/HTTP.</li>
-  <li>Processors: <code>k8sattributes</code> (enriches with pod/namespace/deployment/node via the ServiceAccount — that's what the RBAC is for) + <code>resource</code> (adds <code>k8s.cluster.name</code>) + <code>batch</code>.</li>
-  <li>Exporters: <code>otlp</code> → monitoring-VM-IP:4317 (traces to Jaeger) and <code>loki</code> → monitoring-VM-IP:3100.</li>
-</ul>
-
-<h4>NVIDIA device plugin DaemonSet (<code>kube-system</code> ns)</h4>
-<p>NVIDIA's <code>k8s-device-plugin:v0.15.0</code> with a toleration for <code>nvidia.com/gpu</code> taint. Exposes <code>nvidia.com/gpu: N</code> as an allocatable resource so pods can request GPUs. Currently inactive because GPU vCPU quota is 0.</p>
-
-<h4>Prometheus RBAC (<code>observability</code> ns)</h4>
-<p>Creates ServiceAccount <code>prometheus-scraper</code>, a ClusterRole granting read on nodes/pods/services + <code>/metrics</code> + <code>/metrics/cadvisor</code>, and a static Secret for the token (K8s 1.24+ no longer auto-creates tokens). The extracted token is <strong>manually copied</strong> to the monitoring VM at <code>/etc/prometheus/k3s-token</code>; Prometheus then uses it as a bearer token for <code>kubernetes_sd_configs</code>.</p>
+<table>
+<tr><th>Manifest</th><th>Namespace</th><th>What it does</th></tr>
+<tr><td><strong>OTel Collector DaemonSet</strong></td><td><code>observability</code></td><td>Runs on every node. Receivers: <code>filelog</code> (<code>/var/log/pods/*</code>) + <code>otlp</code>. Processors: <code>k8sattributes</code> + <code>resource</code> + <code>batch</code>. Exporters: <code>otlp</code>→Jaeger + <code>loki</code>→Loki (both on monitoring VM).</td></tr>
+<tr><td><strong>NVIDIA device plugin DaemonSet</strong></td><td><code>kube-system</code></td><td><code>k8s-device-plugin:v0.15.0</code> with NoSchedule toleration for <code>nvidia.com/gpu</code>. Exposes <code>nvidia.com/gpu: N</code> as allocatable resource.</td></tr>
+<tr><td><strong>Prometheus RBAC</strong></td><td><code>observability</code></td><td>ServiceAccount + ClusterRole + ClusterRoleBinding + static token Secret. Token extracted → copied to monitoring VM <code>/etc/prometheus/k3s-token</code> → used as bearer token for <code>kubernetes_sd_configs</code>.</td></tr>
+</table>
 </section>
 
-<!-- ============================================================ -->
+<!-- =========================================================================== -->
 <section id="observability">
 <h2><span class="num">8.</span>Observability data planes</h2>
 
-<p>Three pillars, three paths, one correlation key (<code>trace_id</code>).</p>
+<div class="glance">
+<p>Three pillars, three paths, one correlation key (<code>trace_id</code>). The single biggest UX win: Loki logs contain <code>trace_id=...</code>, and a Grafana <em>derived field</em> turns it into a clickable link to the Jaeger trace.</p>
+</div>
 
 <div class="diagram">
 <pre>
@@ -645,16 +910,16 @@ Epics 1, 2 and 4 are <strong>code-complete</strong>. Epic 3 is the active migrat
     │   │ OTLP gRPC      │                               │   scrapes via     │
     │   │ (traces, metrics)                              │   kubernetes_sd + │
     │   ▼                │                               │   bearer token    │
-    │ OTel DaemonSet ────┼─── OTLP :4317 ────────────────┼─►  Jaeger         │
+    │ OTel DaemonSet ────┼─── OTLP :4317 ────────────────┼─►  Jaeger :4327   │
     │ (k8sattributes,    │                               │                   │
-    │  filelog)          │                               │  Loki             │
+    │  filelog)          │                               │  Loki :3100       │
     │   │                │                               │                   │
     │   └─ logs          │─── Loki push :3100 ───────────┼─►  (logs)         │
     │                    │                               │                   │
-    └────────────────────┘                               │  Grafana          │
-                                                         │   unified UI      │
-    ┌────────────────────┐                               │                   │
-    │ Kong pod           │── alerts (webhook:8090) ──────│─► Triage Service  │
+    └────────────────────┘                               │  Grafana :3000    │
+                                                         │   unified UI +    │
+    ┌────────────────────┐                               │   log↔trace jump  │
+    │ Kong pod           │── alert (webhook :8090) ──────│─► Triage Service  │
     │ OTel plugin        │                               │                   │
     └────────────────────┘                               └───────────────────┘
 </pre>
@@ -662,41 +927,239 @@ Epics 1, 2 and 4 are <strong>code-complete</strong>. Epic 3 is the active migrat
 
 <h3>Metrics pipeline</h3>
 <ol>
-  <li>Every Spring Boot pod exposes <code>/actuator/prometheus</code> with annotations.</li>
-  <li>Prometheus on the monitoring VM uses <code>kubernetes_sd_configs</code> with a bearer token → discovers pods by annotation → scrapes over the k3s API server (port 6443) and kubelet (port 10250).</li>
-  <li>Node-exporter + cAdvisor on both VMs give us host metrics.</li>
+  <li>Every pod exposes <code>/metrics</code> (Spring Boot: <code>/actuator/prometheus</code>) with annotations.</li>
+  <li>Prometheus on the monitoring VM uses <code>kubernetes_sd_configs</code> with a bearer token → discovers pods by annotation → scrapes over the k3s API server (port 6443) + kubelet (port 10250).</li>
+  <li>Node-exporter + cAdvisor on both VMs give us host/container metrics.</li>
 </ol>
 
 <h3>Traces pipeline</h3>
 <ol>
-  <li>Kong's OTel plugin and the Spring Boot OTel Java agent both emit OTLP to the in-cluster OTel DaemonSet.</li>
+  <li>Kong's OTel plugin and Spring Boot's OTel Java agent emit OTLP to the in-cluster OTel DaemonSet.</li>
   <li>DaemonSet enriches each span with pod/namespace labels (<code>k8sattributes</code> processor).</li>
-  <li>Batched and forwarded OTLP → Jaeger on the monitoring VM (port 4317 on Jaeger's OTLP receiver, but <strong>remapped to host port 4327</strong> because the central OTel Collector on the same VM already owns 4317).</li>
+  <li>Batched and forwarded OTLP → Jaeger on monitoring VM. <strong>Host port remap:</strong> Jaeger's OTLP receiver is 4317 internally but exposed on host port 4327 because the central OTel Collector on the same VM owns 4317.</li>
 </ol>
 
 <h3>Logs pipeline</h3>
 <ol>
-  <li>The DaemonSet's <code>filelog</code> receiver tails <code>/var/log/pods/</code> on each k3s node (mounted read-only from the host).</li>
+  <li>The DaemonSet's <code>filelog</code> receiver tails <code>/var/log/pods/</code> on each k3s node (mounted read-only).</li>
   <li>CRI format parser extracts timestamp + stream + container.</li>
-  <li>A regex parser pulls <code>trace_id</code> out of log body if present (OTel Java agent injects it automatically via MDC).</li>
+  <li>Regex parser pulls <code>trace_id</code> out of the log body (OTel Java agent injects it via MDC).</li>
   <li>Batched → Loki push endpoint on monitoring VM.</li>
 </ol>
 
-<h3>Correlation — Loki → Jaeger jump</h3>
-<p>In the Grafana Loki datasource we configure a <strong>derived field</strong>: when a log line contains <code>trace_id=abc123</code>, Grafana turns it into a clickable link to the Jaeger datasource. One click takes you from "this error log" to "this specific trace" — that's the single biggest usability win of the whole platform.</p>
+<details>
+<summary>Trace propagation — W3C + B3 headers</summary>
+<div class="inner">
+<ul>
+  <li><strong>W3C Trace Context</strong> (<code>traceparent</code>/<code>tracestate</code>) is the OASIS standard — Spring OTel agent + Kong OTel plugin both use it.</li>
+  <li><strong>B3 multi-header</strong> (Zipkin-compatible) is configured alongside for legacy client compatibility.</li>
+  <li>Jaeger understands both natively — no translation layer.</li>
+  <li>Propagators on Spring: <code>tracecontext,b3multi</code>.</li>
+</ul>
+</div>
+</details>
+
+<details>
+<summary>The Loki → Jaeger jump (derived field)</summary>
+<div class="inner">
+<p>In the Grafana Loki datasource config we declare a <em>derived field</em> that regex-matches <code>trace_id=...</code> in a log body and renders it as a clickable link to the Jaeger datasource:</p>
+<pre><code>derivedFields:
+  - name: TraceID
+    datasourceUid: &lt;jaeger-datasource-uid&gt;
+    matcherRegex: "trace_id=([0-9a-f]+)"
+    url: http://jaeger:16686/search?traceID=$${__value.raw}</code></pre>
+<p>Click a log line → Jaeger trace pops up. This is the single biggest usability win of the whole platform.</p>
+</div>
+</details>
+
+<details>
+<summary>Legacy VM-era equivalent (for comparison)</summary>
+<div class="inner">
+<p>In the pre-K8s setup (Sprint 1), <strong>Promtail</strong> on each VM tailed Docker container logs and pushed them to Loki. The OTel Java agent on Spring and the OTel plugin on Kong used per-VM OTel Collectors. The K8s migration replaced both with the in-cluster OTel DaemonSet's <code>filelog</code> + <code>otlp</code> receivers.</p>
+</div>
+</details>
 </section>
 
-<!-- ============================================================ -->
-<section id="mcp">
-<h2><span class="num">9.</span>MCP — the concept and how we use it</h2>
+<!-- =========================================================================== -->
+<section id="ports">
+<h2><span class="num">9.</span>Service ports &amp; DNS — reference</h2>
 
-<h3>What MCP actually is</h3>
-<p>MCP (Model Context Protocol) is Anthropic's open spec for letting an LLM call <strong>tools</strong> provided by an external server — over stdio or HTTP. Each server exposes a set of typed "tools" (input schema + output), and the LLM host (client) can invoke them during a conversation. Think of it as "function calling, but the functions live in a separate process with a standard protocol."</p>
+<div class="glance">
+<p>When someone asks "what port is X on" — answer from this table, don't guess.</p>
+</div>
+
+<h3>Monitoring VM (docker-compose, ports bound on the host)</h3>
+<table>
+<tr><th>Service</th><th>Host port</th><th>Protocol</th><th>Purpose</th></tr>
+<tr><td>Prometheus</td><td>9090</td><td>HTTP</td><td>Scrape + query UI</td></tr>
+<tr><td>Grafana</td><td>3000</td><td>HTTP</td><td>Dashboards + admin</td></tr>
+<tr><td>Loki</td><td>3100</td><td>HTTP</td><td>Log aggregation (TSDB)</td></tr>
+<tr><td>Jaeger UI</td><td>16686</td><td>HTTP</td><td>Trace UI</td></tr>
+<tr><td>Jaeger OTLP</td><td>4327 / 4328</td><td>gRPC / HTTP</td><td>OTel Collector → Jaeger (remapped from 4317/4318)</td></tr>
+<tr><td>OTel Collector OTLP</td><td>4317 / 4318</td><td>gRPC / HTTP</td><td>Trace ingest</td></tr>
+<tr><td>OTel Collector metrics</td><td>8888</td><td>HTTP</td><td>Collector self-metrics</td></tr>
+<tr><td>OTel Collector health</td><td>13133</td><td>HTTP</td><td>Health check</td></tr>
+<tr><td>Node exporter</td><td>9100</td><td>HTTP</td><td>Host metrics</td></tr>
+<tr><td>cAdvisor</td><td>8081</td><td>HTTP</td><td>Container metrics</td></tr>
+</table>
+
+<h3>k3s VM (host-exposed ports)</h3>
+<table>
+<tr><th>Service</th><th>Port</th><th>Purpose</th></tr>
+<tr><td>Kubernetes API</td><td>6443</td><td>Control plane (Prom queries via RBAC)</td></tr>
+<tr><td>kubelet</td><td>10250</td><td>Node metrics (Prom scrape)</td></tr>
+<tr><td>Kong NodePort</td><td>30080</td><td>External entry to the app</td></tr>
+<tr><td>Triage webhook NodePort</td><td>30090 <em>(or 8090 inside cluster)</em></td><td>Grafana alert receiver</td></tr>
+<tr><td>OTel Collector DaemonSet</td><td>4317 / 4318</td><td>In-cluster trace ingest (hostPort)</td></tr>
+</table>
+
+<h3>K8s Service DNS (inside the cluster)</h3>
+<table>
+<tr><th>FQDN</th><th>Port</th><th>Purpose</th></tr>
+<tr><td><code>spring-boot.app.svc.cluster.local</code></td><td>80</td><td>Spring Boot (Kong upstream)</td></tr>
+<tr><td><code>kong.network.svc.cluster.local</code></td><td>80</td><td>Kong proxy (internal)</td></tr>
+<tr><td><code>triage-service.ai.svc.cluster.local</code></td><td>8090</td><td>Triage service</td></tr>
+<tr><td><code>ollama.ai.svc.cluster.local</code></td><td>11434</td><td>LLM inference</td></tr>
+<tr><td><code>prometheus-mcp.ai.svc.cluster.local</code></td><td>8091</td><td>Prometheus MCP</td></tr>
+<tr><td><code>loki-mcp.ai.svc.cluster.local</code></td><td>8092</td><td>Loki MCP</td></tr>
+<tr><td><code>jaeger-mcp.ai.svc.cluster.local</code></td><td>8093</td><td>Jaeger MCP</td></tr>
+<tr><td><code>drain3-mcp.ai.svc.cluster.local</code></td><td>8094</td><td>Drain3 MCP</td></tr>
+<tr><td><code>rca-history-mcp.ai.svc.cluster.local</code></td><td>8095</td><td>RCA History MCP</td></tr>
+<tr><td><code>otel-collector.observability.svc.cluster.local</code></td><td>4317</td><td>In-cluster OTel</td></tr>
+</table>
+</section>
+
+<!-- =========================================================================== -->
+<section id="dashboards">
+<h2><span class="num">10.</span>Grafana dashboards</h2>
+
+<div class="glance">
+<p>Four pre-provisioned dashboards, committed as JSON in <code>roles/grafana/files/dashboards/</code>. Grafana auto-loads them on first boot.</p>
+</div>
+
+<table>
+<tr><th>Dashboard</th><th>Purpose</th><th>Key panels</th></tr>
+<tr><td><strong>unified-overview</strong></td><td>Operations hub (use this for the demo)</td><td>RED metrics (rate/error/P95) for Spring, error log stream, recent traces, cAdvisor container CPU/mem, MySQL query rate + slow queries</td></tr>
+<tr><td><strong>tracing-overview</strong></td><td>Trace explorer &amp; span analysis</td><td>Recent traces table, span duration heatmap, service dependency map, P50/P95/P99 per operation, error span rate</td></tr>
+<tr><td><strong>otel-collector-health</strong></td><td>Early-warning on the collector itself</td><td>Span drop rate, exporter error rate, batch queue depth, receiver acceptance rate</td></tr>
+<tr><td><strong>triage-service-health</strong> <span class="pill pill-new">AI-03</span></td><td>AI self-observability</td><td>Decision throughput by verdict, pipeline p95 latency, MCP latency per server, Ollama circuit state, token counts (prompt/completion), email dispatch outcomes</td></tr>
+</table>
+
+<h3>Grafana datasources</h3>
+<ul>
+  <li><code>http://prometheus:9090</code> (default)</li>
+  <li><code>http://loki:3100</code> — with <strong>derived field</strong> turning <code>trace_id=...</code> in logs into a Jaeger link</li>
+  <li><code>http://jaeger:16686</code></li>
+</ul>
+
+<h3>Grafana login</h3>
+<p><code>admin</code> / <code>grafana_admin_password</code> (set in <code>inventory/group_vars/monitoring.yml</code> — weak default, must change before production).</p>
+</section>
+
+<!-- =========================================================================== -->
+<section id="alerts">
+<h2><span class="num">11.</span>Alert rules</h2>
+
+<div class="glance">
+<p>17 Grafana alert rules → webhook → triage service. Webhook URL: <code>http://&lt;k3s-host&gt;:30090/webhook/grafana</code>. Alert state transitions (firing + resolved) both fire webhook.</p>
+</div>
+
+<h3>Known rules</h3>
+<table>
+<tr><th>#</th><th>Name</th><th>Expression (abbreviated)</th><th>Severity</th><th>Repeat</th></tr>
+<tr><td>1</td><td>HighRequestLatency</td><td><code>histogram_quantile(0.95, rate(http_server_requests_seconds_bucket[5m])) &gt; 2</code></td><td>critical</td><td>10m</td></tr>
+<tr><td>2</td><td>HighSpanDropRate</td><td><code>rate(otelcol_processor_dropped_spans_total[5m]) / rate(otelcol_receiver_accepted_spans_total[5m]) &gt; 0.05</code></td><td>warning</td><td>30m</td></tr>
+<tr><td>3</td><td>OTelCollectorExporterErrors</td><td><code>rate(otelcol_exporter_send_failed_spans_total[5m]) &gt; 0</code></td><td>warning</td><td>15m</td></tr>
+<tr><td>4–17</td><td colspan="4">Mix of Spring error rate, Loki log-error patterns, MySQL query latency, node memory/disk, OTel pipeline health, Kong error rate, triage pipeline health (AI-03). Exact thresholds live in <code>roles/grafana/templates/alertrules.yml.j2</code>.</td></tr>
+</table>
+
+<h3>Alert routing (contact points &amp; policies)</h3>
+<ul>
+  <li><strong>warning</strong> route → Gmail SMTP contact point (single email).</li>
+  <li><strong>critical</strong> route → same email with shorter repeat interval (10m vs 30m).</li>
+  <li>All alerts with label <code>team=triage</code> also route to the triage service webhook on <code>:30090</code>.</li>
+</ul>
+
+<details>
+<summary>The K8s migration — alert selectors (E3-09)</summary>
+<div class="inner">
+<p>The alert rules live in a Jinja2 template. A single flag (<code>k3s_sd_enabled</code>) toggles selectors between VM mode (instance labels) and K8s mode (pod/namespace labels):</p>
+<pre><code>{% raw %}{% if k3s_sd_enabled %}
+# K8s mode: pod/namespace labels
+- alert: HighRequestLatency
+  expr: |
+    histogram_quantile(0.95,
+      rate(http_server_requests_seconds_bucket{pod=~"spring-boot.*", namespace="app"}[5m])
+    ) > 2
+{% else %}
+# VM mode: instance labels
+- alert: HighRequestLatency
+  expr: |
+    histogram_quantile(0.95,
+      rate(http_server_requests_seconds_bucket{instance=~"192.168.127.30:8080"}[5m])
+    ) > 2
+{% endif %}{% endraw %}</code></pre>
+<p>High-risk step — silent failure if any rule is missed. Test each rule individually after migration.</p>
+</div>
+</details>
+</section>
+
+<!-- =========================================================================== -->
+<section id="secrets">
+<h2><span class="num">12.</span>Secrets &amp; env vars — where everything lives</h2>
+
+<div class="glance">
+<p>Secrets are file-based (gitignored) in dev, Ansible-Vault-wrapped in staging, and Kubernetes Secrets in the cluster. <strong>Gmail app password</strong> is the only human-in-the-loop step — requires 2FA enabled.</p>
+</div>
+
+<table>
+<tr><th>Credential</th><th>Stored at</th><th>Consumed by</th></tr>
+<tr><td>AWS API keys</td><td><code>~/.aws/credentials</code> or env vars</td><td>Terraform, AWS CLI</td></tr>
+<tr><td>SSH private key</td><td><code>~/.ssh/ansible_key</code></td><td>Ansible, manual SSH</td></tr>
+<tr><td>RDS master password</td><td><code>terraform.tfvars</code> (gitignored) → RDS</td><td>Spring Boot (via K8s Secret from Helm)</td></tr>
+<tr><td>Grafana admin password</td><td><code>inventory/group_vars/monitoring.yml</code></td><td>Grafana login</td></tr>
+<tr><td>MySQL creds</td><td><code>group_vars/application.yml</code> (legacy) or Helm values</td><td>Spring Boot</td></tr>
+<tr><td>SMTP user / app password</td><td>Helm <code>--set smtp.password=...</code> at install time</td><td>Triage service (email escalation)</td></tr>
+<tr><td>k3s SA token</td><td>Extracted by <code>k8s-manifests.yml</code>, copied to monitoring VM <code>/etc/prometheus/k3s-token</code></td><td>Prometheus <code>bearer_token_file</code></td></tr>
+<tr><td>kubeconfig</td><td>Auto-fetched by Ansible to <code>~/.kube/config</code></td><td>kubectl, helm</td></tr>
+</table>
+
+<details>
+<summary>Gmail app password setup (step by step)</summary>
+<div class="inner">
+<ol>
+  <li>Enable 2-Step Verification on the Gmail account.</li>
+  <li>Visit <code>myaccount.google.com/apppasswords</code>.</li>
+  <li>Select app: "Mail" / device: "Other (CIRES-triage)".</li>
+  <li>Copy the 16-character password (Google shows it once).</li>
+  <li>Store locally and source before Helm install:
+    <pre><code>cat &gt; ~/.cires-demo-env &lt;&lt;'EOF'
+export GRAFANA_SMTP_PASSWORD="xxxxxxxxxxxxxxxx"
+EOF
+chmod 600 ~/.cires-demo-env
+source ~/.cires-demo-env</code></pre>
+  </li>
+  <li><code>helm install ai-stack ... --set smtp.password=$GRAFANA_SMTP_PASSWORD</code></li>
+</ol>
+</div>
+</details>
+</section>
+
+<!-- =========================================================================== -->
+<section id="mcp">
+<h2><span class="num">13.</span>MCP — concept &amp; execution</h2>
+
+<div class="glance">
+<p>MCP (Model Context Protocol) is Anthropic's open spec for letting an LLM call typed tools on an external server. We built <strong>5 HTTP "MCP-style" bridges</strong> — same shape, plain HTTP transport — because HTTP Deployments/Services are native to K8s and trivial to observe. Triage calls them itself (today); a future upgrade lets the LLM call them iteratively.</p>
+</div>
+
+<h3>What MCP is (in plain terms)</h3>
+<p>Think of MCP as "function calling, but the functions live in a separate process with a standard protocol." Each server exposes a set of <em>tools</em> (typed input schema + output), and an LLM host (client) can invoke them during a conversation. Two common transports: stdio (pipes between the LLM host and the server process) and HTTP+SSE.</p>
 
 <h3>What we did, pragmatically</h3>
-<p>We built <strong>5 read-only HTTP bridge servers</strong>, one per data source. They are MCP-<em>style</em> services (not full MCP stdio handshake) — each exposes typed tool endpoints like <code>/tools/query_range</code>, <code>/tools/query_logs</code>, <code>/tools/find_traces</code>. The triage service calls them over HTTP with <code>httpx</code>.</p>
+<p>We built 5 read-only <strong>HTTP bridge servers</strong>, one per data source. They expose typed tool endpoints like <code>/tools/query_range</code>, <code>/tools/query_logs</code>, <code>/tools/find_traces</code>. The triage service calls them over HTTP with <code>httpx</code>.</p>
 
-<div class="box decision">We called it "MCP bridges" because the <em>shape</em> is the same (typed tools, clearly documented, one server per data domain), but the transport is plain HTTP rather than stdio. This is simpler to operate in Kubernetes (each server is just a Deployment + Service), works behind Helm, and is trivial to observe with Prometheus. If/when we add a Claude/GPT integration later, we can swap the transport without changing the tool semantics.</div>
+<div class="box decision">We called it "MCP bridges" because the <strong>shape</strong> is the same (typed tools, clearly documented, one server per domain), but the transport is plain HTTP rather than stdio. This fits Kubernetes natively (each bridge is just a Deployment + Service), works with Helm, and is trivial to observe with Prometheus. If/when we add a Claude-compatible integration, a stdio adapter can sit in front.</div>
 
 <h3>The five servers</h3>
 <table>
@@ -704,276 +1167,646 @@ Epics 1, 2 and 4 are <strong>code-complete</strong>. Epic 3 is the active migrat
 <tr><td><code>prometheus_mcp</code></td><td>8091</td><td>Prometheus HTTP API</td><td><code>query_instant</code>, <code>query_range</code>, <code>get_alerts</code>, <code>list_targets</code></td></tr>
 <tr><td><code>loki_mcp</code></td><td>8092</td><td>Loki HTTP API</td><td><code>query_logs</code>, <code>query_range</code>, <code>list_labels</code>, <code>label_values</code></td></tr>
 <tr><td><code>jaeger_mcp</code></td><td>8093</td><td>Jaeger query API</td><td><code>find_traces</code>, <code>get_trace</code>, <code>get_services</code>, <code>get_operations</code></td></tr>
-<tr><td><code>drain3_mcp</code></td><td>8094</td><td>Drain3 state file + stats endpoint on triage service</td><td><code>get_clusters</code>, <code>get_anomalies</code>, <code>annotate</code>, <code>stats</code></td></tr>
-<tr><td><code>rca_history_mcp</code></td><td>8095</td><td>SQLite RCA store on triage service</td><td><code>get_decisions</code>, <code>get_alert_frequency</code>, <code>search</code>, <code>stats</code></td></tr>
+<tr><td><code>drain3_mcp</code></td><td>8094</td><td>Drain3 state file + triage stats endpoint</td><td><code>get_clusters</code>, <code>get_anomalies</code>, <code>annotate</code>, <code>stats</code></td></tr>
+<tr><td><code>rca_history_mcp</code></td><td>8095</td><td>SQLite RCA store on triage</td><td><code>get_decisions</code>, <code>get_alert_frequency</code>, <code>search</code>, <code>stats</code></td></tr>
 </table>
 
-<h3>How the triage service uses them</h3>
-<p>When an alert fires, <code>context.py</code> fans out <strong>three parallel MCP calls</strong> (Prometheus, Loki, Jaeger) using <code>asyncio.gather</code>, with per-source error isolation — if Jaeger is down, we still use the Prom + Loki results. Each call is wrapped in a latency histogram (<code>triage_mcp_duration_seconds{server}</code>) and a counter (<code>triage_mcp_requests_total{server,status}</code>) so we can alert on MCP slowness or errors. See <code>monitoring-triage-service/app/context.py</code>.</p>
+<details>
+<summary>How the triage service uses them</summary>
+<div class="inner">
+<p>When an alert fires, <code>context.py</code> fans out <strong>three parallel MCP calls</strong> (Prometheus, Loki, Jaeger) using <code>asyncio.gather(..., return_exceptions=True)</code> — if Jaeger is down, we still use Prom + Loki results. Each call is wrapped in a latency histogram (<code>triage_mcp_duration_seconds{server}</code>) and a counter (<code>triage_mcp_requests_total{server,status}</code>).</p>
+<p>Default limits: <code>prometheus_range_minutes=15</code>, <code>loki_log_limit=50</code>, <code>jaeger_trace_limit=20</code>, per-call timeout <code>context_timeout=8s</code>.</p>
+</div>
+</details>
 
-<h3>Important — we're not (yet) doing true LLM tool-calling</h3>
-<p>The triage service calls MCP servers <em>itself</em> to pre-gather context, then ships the resulting data into the prompt. The LLM does <strong>not</strong> make its own MCP calls today. Evolution path: once we have a more capable model and/or Claude with tool use, we'd let the LLM call tools iteratively (investigate → hypothesize → query again). That's part of Sprint 3+.</p>
+<div class="box warn"><strong>Important — we're not doing true LLM tool-calling yet.</strong> The triage service calls MCP servers <em>itself</em> to pre-gather context, then ships the results into the prompt. The LLM does not make its own MCP calls. Evolution: once we're on a more capable model (or Claude with tool use), we let the LLM iterate — see §21.</div>
 </section>
 
-<!-- ============================================================ -->
+<!-- =========================================================================== -->
 <section id="triage">
-<h2><span class="num">10.</span>Triage service — end-to-end deep dive</h2>
+<h2><span class="num">14.</span>Triage service — end-to-end deep dive</h2>
 
-<p>Code lives in <code>monitoring-triage-service/app/</code>. Stack: FastAPI + Pydantic v2 + httpx + asyncio + <code>drain3</code> + <code>aiosmtplib</code> + <code>prometheus_client</code>.</p>
+<div class="glance">
+<p>FastAPI (Python 3.11, asyncio, httpx, Pydantic v2, Prometheus client). Takes a Grafana webhook; dedupes; fans out to 5 MCP servers; Drain3-annotates logs; asks Ollama (JSON-mode, Pydantic-validated); emails or dismisses. Never wedges on a bad LLM thanks to the circuit breaker (§15).</p>
+</div>
 
-<h3>Public endpoints (FastAPI)</h3>
-<ul>
-  <li><code>POST /webhook/grafana</code> — receives Grafana Alerting webhooks. Returns 202 immediately, processes in <code>BackgroundTasks</code>.</li>
-  <li><code>POST /webhook/drain3</code> — synthetic alert source when Drain3 detects an anomaly rate crossing a threshold.</li>
-  <li><code>GET /health</code> — uptime + component readiness.</li>
-  <li><code>GET /decisions</code> — JSON list of past RCA decisions (query params: <code>limit</code>, <code>alert_name</code>).</li>
-  <li><code>GET /dashboard</code> — HTML view of decision history (what you demo).</li>
-  <li><code>GET /drain3/stats</code> — cluster count, anomaly rate, template drift.</li>
-  <li><code>GET /metrics</code> — Prometheus scrape endpoint.</li>
-</ul>
+<h3>Public endpoints</h3>
+<table>
+<tr><th>Method</th><th>Path</th><th>Purpose</th></tr>
+<tr><td>POST</td><td><code>/webhook/grafana</code></td><td>Grafana alert webhook (returns 202, processes in BackgroundTasks)</td></tr>
+<tr><td>POST</td><td><code>/webhook/drain3</code></td><td>Synthetic anomaly alert from Drain3</td></tr>
+<tr><td>GET</td><td><code>/health</code></td><td>Uptime + readiness</td></tr>
+<tr><td>GET</td><td><code>/decisions</code></td><td>JSON decision history (query: <code>limit</code>, <code>alert_name</code>)</td></tr>
+<tr><td>GET</td><td><code>/dashboard</code></td><td>HTML view of decision history (this is what you demo)</td></tr>
+<tr><td>GET</td><td><code>/drain3/stats</code></td><td>Cluster count, anomaly rate, template drift</td></tr>
+<tr><td>GET</td><td><code>/metrics</code></td><td>Prometheus scrape endpoint</td></tr>
+</table>
 
-<h3>The pipeline (<code>pipeline.py</code>)</h3>
+<h3>The pipeline (<code>pipeline.py</code>) — 10 steps</h3>
 <ol>
-  <li><strong>Deduplication</strong> (<code>dedup.py</code>) — key = <code>(alertname, instance, status)</code>, TTL dict with <code>asyncio.Lock</code>, window = 5 min (configurable). Re-fires <em>reset</em> the TTL so rapid repeats don't all get investigated.</li>
-  <li><strong>Queue depth gauge++</strong> (<code>triage_queue_depth</code>), all work wrapped in <code>asyncio.wait_for(..., timeout=pipeline_timeout)</code> — default 300s.</li>
-  <li><strong>Context fan-out</strong> (<code>context.py</code>) — parallel <code>asyncio.gather</code> of 3 MCP calls, with <code>return_exceptions=True</code> so one failure doesn't kill the other two. Per-source latency recorded as <code>context.prometheus_ms / loki_ms / jaeger_ms</code>; failures recorded in <code>context.errors</code>.</li>
-  <li><strong>Drain3 annotation</strong> (<code>drain_analyzer.py</code>) — each log line classified <code>[KNOWN]</code> (matches an existing cluster template) or <code>[ANOMALY]</code> (new template). Cluster stats are a Prometheus gauge; an anomaly counter ticks per line.</li>
-  <li><strong>RCA history lookup</strong> (<code>rca_store.py</code>, SQLite) — "has this alert fired before? when?" feeds into the prompt so the LLM can weigh flappiness.</li>
-  <li><strong>LLM investigate</strong> (<code>llm_client.py</code>) — prompt includes alert, pre-gathered context, annotated logs, Drain3 summary, and history context. Ollama is called with <code>"format": "json"</code>. Response validated against <code>LLMDecision</code> Pydantic model. Fields: <code>decision</code> (ESCALATE/DISMISS/INCONCLUSIVE), <code>severity</code>, <code>confidence</code>, <code>reason</code>, <code>rca</code>, <code>suggested_actions</code>, <code>evidence</code>.</li>
-  <li><strong>Parse-failure retry</strong> — if the LLM's JSON doesn't validate, we append the Pydantic error to the conversation and retry once. Second failure → <code>NEEDS_HUMAN_REVIEW</code> fallback (automatic ESCALATE).</li>
-  <li><strong>Action</strong> — ESCALATE → HTML email via <code>aiosmtplib</code> (<code>notifier.py</code>) with alert details, LLM reasoning, RCA, suggested actions, history. DISMISS → just log it. INCONCLUSIVE → treated as ESCALATE with a prefix note.</li>
-  <li><strong>Persist</strong> — RCA record saved to SQLite (<code>rca_store.save_decision</code>). Visible in <code>/dashboard</code>.</li>
-  <li><strong>Safety timeout</strong> — if the whole pipeline exceeds <code>pipeline_timeout</code> (5 min default), we send a "raw alert" email so oncall still gets paged, and record it as <code>timeout_passthrough / emailed_raw</code>.</li>
+  <li><strong>Dedup</strong> — key <code>(alertname, instance)</code>, TTL dict with <code>asyncio.Lock</code>, default window <strong>300s</strong>. Re-fire after <code>resolved</code> resets the window.</li>
+  <li><strong>Queue depth++</strong>, all work wrapped in <code>asyncio.wait_for(..., timeout=pipeline_timeout)</code> — default <strong>300s</strong>.</li>
+  <li><strong>Context fan-out</strong> — parallel <code>asyncio.gather</code> of 3 MCP calls, per-source error isolation. Per-source latency recorded.</li>
+  <li><strong>Drain3 annotate</strong> — each log line labelled <code>[KNOWN]</code> or <code>[ANOMALY]</code>. Cluster stats → gauge, anomalies → counter.</li>
+  <li><strong>RCA history lookup</strong> — "has this alert fired before?" added to prompt so the LLM can weigh flappiness.</li>
+  <li><strong>LLM investigate</strong> — Ollama called with <code>format=json</code>. Response → <code>LLMDecision</code> Pydantic model.</li>
+  <li><strong>Parse-failure retry</strong> — if JSON fails validation, we append the Pydantic error to the conversation and retry once. Second failure → <code>NEEDS_HUMAN_REVIEW</code> fallback (auto ESCALATE).</li>
+  <li><strong>Action</strong> — ESCALATE → HTML email via <code>aiosmtplib</code>. DISMISS → log only. INCONCLUSIVE → treated as ESCALATE with a prefix note.</li>
+  <li><strong>Persist</strong> — record saved to SQLite (<code>rca_store.save_decision</code>). Visible in <code>/dashboard</code>.</li>
+  <li><strong>Safety timeout</strong> — if the pipeline exceeds 5 min, a "raw alert" email is sent and recorded as <code>timeout_passthrough / emailed_raw</code>. <strong>Oncall always gets paged.</strong></li>
 </ol>
 
-<h3>Why two alert sources (Grafana + Drain3)?</h3>
-<p>Grafana alerts fire on metric thresholds (latency, error rate, resource usage). Drain3 fires when <em>log patterns</em> change — a new template appears or a known template's frequency spikes. Together they catch both "numbers are wrong" and "the app is saying something it never said before."</p>
+<details>
+<summary>LLM decision schema (<code>LLMDecision</code>)</summary>
+<div class="inner">
+<pre><code>{
+  "decision": "ESCALATE" | "DISMISS" | "INCONCLUSIVE",
+  "severity": "critical" | "warning" | "info",
+  "confidence": 0.0–1.0,
+  "reason": "one-line summary",
+  "rca": "2–5 sentence root cause",
+  "anomaly_summary": "Drain3 findings summary",
+  "suggested_actions": ["action1", "action2"],
+  "evidence": ["metric/log/trace line"]
+}</code></pre>
+<p>Alias tolerance: the parser accepts <code>verdict</code>/<code>root_cause</code>/<code>recommended_actions</code> as fallbacks in case the model uses near-synonyms. <code>INCONCLUSIVE</code> is treated as ESCALATE (better to page than miss).</p>
+</div>
+</details>
 
-<h3>Drain3 specifics</h3>
+<details>
+<summary>Why two alert sources (Grafana + Drain3)?</summary>
+<div class="inner">
+<p>Grafana fires on <strong>metric thresholds</strong> (latency, error rate, resource usage). Drain3 fires when <strong>log patterns</strong> change — a new template appears, or a known template's frequency spikes. Together they catch both "numbers are wrong" and "the app is saying something it never said before."</p>
+</div>
+</details>
+
+<details>
+<summary>Drain3 specifics</summary>
+<div class="inner">
 <ul>
   <li>Drain3 is a log template mining algorithm — it clusters log lines by structural similarity and stores the templates.</li>
-  <li>State is persisted to a file (<code>drain3.ini</code> configures the persistence path) so clusters survive restarts.</li>
-  <li>On startup, <code>seed_from_loki()</code> back-fills recent logs into Drain3 so the first few alerts aren't spuriously flagged as anomalies.</li>
-  <li>A background task continues ingesting newly arriving logs so the model stays current.</li>
-  <li>Periodic snapshots are pushed to S3 for durability.</li>
+  <li>State persists to a file (path configured via <code>drain3.ini</code> + <code>drain3_state_dir</code>) so clusters survive restarts.</li>
+  <li>On startup, <code>seed_from_loki()</code> back-fills recent logs so the first few alerts aren't spuriously flagged as anomalies.</li>
+  <li>A background task keeps ingesting newly arriving logs so the model stays current (polling interval <code>drain3_poll_interval=30s</code>).</li>
+  <li>Anomaly threshold: <code>drain3_anomaly_threshold=5</code> new templates in a window.</li>
+  <li>Periodic snapshots pushed to S3 for durability.</li>
 </ul>
+</div>
+</details>
 
-<h3>RCA store</h3>
-<p>SQLite file (<code>rca_store.py</code>), schema: <code>timestamp, alert_name, alert_fingerprint, alert_source, affected_service, severity, triage_decision, llm_verdict, llm_confidence, rca_report, llm_reasoning, action_taken, investigation_duration_ms</code>. Feeds <code>/decisions</code>, <code>/dashboard</code>, and the <code>rca_history_mcp</code> server.</p>
+<details>
+<summary>RCA store — SQLite schema</summary>
+<div class="inner">
+<p>File <code>/var/lib/triage-service/rca_history.db</code>. One table <code>decisions</code>:</p>
+<pre><code>timestamp, alert_name, alert_fingerprint, alert_source,
+affected_service, severity, triage_decision, llm_verdict,
+llm_confidence, rca_report, llm_reasoning, action_taken,
+investigation_duration_ms</code></pre>
+<p>Feeds <code>/decisions</code>, <code>/dashboard</code>, and the <code>rca_history_mcp</code> server.</p>
+</div>
+</details>
+
+<details>
+<summary>Default config (<code>app/config.py</code>)</summary>
+<div class="inner">
+<pre><code>ollama_url: http://ollama:11434
+ollama_model: llama3.1:8b
+ollama_request_timeout: 30
+circuit_breaker_failure_threshold: 5
+circuit_breaker_cooldown_seconds: 60
+context_timeout: 8
+prometheus_range_minutes: 15
+loki_log_limit: 50
+jaeger_trace_limit: 20
+dedup_window_seconds: 300
+pipeline_timeout: 300
+smtp_host: smtp.gmail.com
+smtp_port: 587
+drain3_state_dir: /var/lib/triage-service/drain3_state
+drain3_poll_interval: 30
+drain3_anomaly_threshold: 5</code></pre>
+</div>
+</details>
 </section>
 
-<!-- ============================================================ -->
+<!-- =========================================================================== -->
 <section id="hardening">
-<h2><span class="num">11.</span>Epic 4 — AI triage hardening (all three stories done)</h2>
+<h2><span class="num">15.</span>Epic 4 — AI triage hardening</h2>
 
-<h3>AI-01 Circuit breaker (<code>circuit_breaker.py</code>)</h3>
-<p>Three-state circuit breaker wrapping every Ollama call:</p>
-<ul>
-  <li><strong>CLOSED</strong> — normal operation, failures are counted.</li>
-  <li><strong>OPEN</strong> — after N consecutive failures (<code>failure_threshold</code>, default 5), all requests fail fast for <code>cooldown_seconds</code> (default 60). Fallback returns <code>NEEDS_HUMAN_REVIEW</code> immediately.</li>
-  <li><strong>HALF_OPEN</strong> — after cooldown, one probe is allowed. Success → CLOSED, failure → OPEN again.</li>
-</ul>
-<p>State is exposed as Prometheus gauge <code>ollama_circuit_state</code> (0=closed, 1=open, 2=half_open) so we can alert on it. The retry loop sits <em>inside</em> the circuit breaker: 2 retries with exponential backoff (1s, 2s) on timeouts / connect errors / 5xx. Non-retriable 4xx doesn't count against the breaker (Ollama is healthy; it's us).</p>
+<div class="glance">
+<p>Three small stories that make the AI pipeline reliable and observable. All three are code-complete.</p>
+</div>
 
-<h3>AI-02 JSON schema enforcement (<code>llm_client.py</code>)</h3>
+<h3>AI-01 · Circuit breaker for Ollama calls</h3>
+<p>Three-state breaker wrapping every Ollama call (<code>circuit_breaker.py</code>):</p>
 <ul>
-  <li>Ollama called with <code>"format": "json"</code> → forces JSON-only output at the server level.</li>
-  <li>Response validated with Pydantic <code>LLMDecision</code>. <code>decision</code> must be <code>ESCALATE | DISMISS | INCONCLUSIVE</code>; <code>confidence</code> is <code>0.0–1.0</code>.</li>
-  <li>Alias-tolerance: accepts <code>verdict</code> / <code>root_cause</code> / <code>recommended_actions</code> in case the model uses a near-synonym.</li>
-  <li>On parse failure: one retry with the validation error appended to the conversation.</li>
-  <li>Second failure: <code>NEEDS_HUMAN_REVIEW</code> fallback → ESCALATE path.</li>
+  <li><strong>CLOSED</strong> — normal; failures counted.</li>
+  <li><strong>OPEN</strong> — after <code>failure_threshold=5</code> consecutive failures; fails fast for <code>cooldown=60s</code>. Fallback returns <code>NEEDS_HUMAN_REVIEW</code> immediately.</li>
+  <li><strong>HALF_OPEN</strong> — after cooldown, one probe allowed. Success → CLOSED. Failure → OPEN.</li>
+</ul>
+<p>State exposed as Prometheus gauge <code>ollama_circuit_state</code> (0=closed, 1=open, 2=half_open). Retries sit <em>inside</em> the breaker: 2 retries with exponential backoff (1s, 2s) on timeouts / connect errors / 5xx. Non-retriable 4xx doesn't count against the breaker (Ollama is healthy; it's us).</p>
+
+<h3>AI-02 · JSON schema enforcement</h3>
+<ul>
+  <li>Ollama called with <code>"format": "json"</code> — server-level JSON enforcement.</li>
+  <li>Pydantic v2 validation against <code>LLMDecision</code>.</li>
+  <li>Alias tolerance (<code>verdict</code>/<code>root_cause</code>/etc.).</li>
+  <li>One retry with the validation error appended; second failure → <code>NEEDS_HUMAN_REVIEW</code> fallback.</li>
 </ul>
 
-<h3>AI-03 Self-observability (<code>metrics.py</code>)</h3>
-<p>New metrics added beyond the webhook/pipeline-level counters:</p>
+<h3>AI-03 · Self-observability (metrics)</h3>
+<p>Metrics added beyond the base webhook/pipeline counters:</p>
 <ul>
-  <li><code>triage_queue_depth</code> (gauge) — alerts currently in the pipeline.</li>
-  <li><code>triage_mcp_requests_total{server, status}</code> (counter).</li>
-  <li><code>triage_mcp_duration_seconds{server}</code> (histogram).</li>
-  <li><code>triage_fallback_total{reason}</code> (counter) — reasons: <code>circuit_open</code>, <code>retries_exhausted</code>, <code>parse_failure</code>.</li>
-  <li><code>triage_llm_token_count{type=prompt|completion}</code> (histogram) — pulled from Ollama's <code>prompt_eval_count</code> / <code>eval_count</code> fields.</li>
-  <li><code>ollama_circuit_state</code>, <code>ollama_requests_total{status}</code>, <code>ollama_request_duration_seconds</code>.</li>
+  <li><code>triage_queue_depth</code> (gauge)</li>
+  <li><code>triage_mcp_requests_total{server, status}</code> (counter)</li>
+  <li><code>triage_mcp_duration_seconds{server}</code> (histogram)</li>
+  <li><code>triage_fallback_total{reason}</code> (counter) — <code>circuit_open</code>, <code>retries_exhausted</code>, <code>parse_failure</code></li>
+  <li><code>triage_llm_token_count{type=prompt|completion}</code> (histogram) — from Ollama's <code>prompt_eval_count</code>/<code>eval_count</code></li>
+  <li><code>ollama_circuit_state</code>, <code>ollama_requests_total{status}</code>, <code>ollama_request_duration_seconds</code></li>
 </ul>
-<p>Dedicated Grafana dashboard panel (<code>triage-service-health.json</code>) shows circuit state, fallback rate, queue depth, MCP latencies.</p>
+<p>Dedicated Grafana panel (<code>triage-service-health.json</code>) renders these.</p>
 </section>
 
-<!-- ============================================================ -->
-<section id="decisions">
-<h2><span class="num">12.</span>Decisions &amp; trade-offs — defend these</h2>
+<!-- =========================================================================== -->
+<section id="runbook">
+<h2><span class="num">16.</span>Deployment runbook — fresh AWS to working platform</h2>
 
-<p>Each decision below has the form <em>what we did</em>, <em>why</em>, <em>what we'd do differently at scale</em>. These are the most likely discussion points.</p>
+<div class="glance">
+<p>Under an hour end-to-end from a fresh AWS account. RDS creation is the long pole in Phase 2 (~5 of 8 min). Ollama model pull in Phase 7 (2–5 min).</p>
+</div>
+
+<h3>Phase 1 · Prerequisites</h3>
+<ul>
+  <li>Terraform ≥ 1.9, Ansible ≥ 2.16, Python 3.11+, AWS CLI v2, kubectl v1.30, Helm v3.</li>
+  <li>SSH keypair: <code>ssh-keygen -t ed25519 -f ~/.ssh/ansible_key -C "ansible-cires-demo"</code></li>
+  <li>AWS creds: <code>aws configure</code> or env vars.</li>
+  <li>Gmail app password (see §12).</li>
+  <li>Billing alert in AWS Billing → Budgets.</li>
+</ul>
+
+<h3>Phase 2 · Terraform <span class="pill pill-new">~8 min</span></h3>
+<pre><code>cd provisioning-monitoring-infra
+cp terraform.tfvars.example terraform.tfvars
+# Fill: ubuntu_ami_id, allowed_ssh_cidrs, db_password, s3_bucket_name, enable_* flags
+terraform init
+terraform validate
+terraform plan -out=plan.out
+terraform apply plan.out
+./generate-inventory.sh       # writes ../monitoring-project/inventory/production.yml</code></pre>
+
+<h3>Phase 3 · Monitoring VM <span class="pill pill-new">~10 min</span></h3>
+<pre><code>cd ../monitoring-project
+ansible-galaxy install -r requirements.yml
+ansible all -m ping            # deploy user needs ~90s after EC2 "running"
+ansible-playbook playbooks/monitoring.yml</code></pre>
+
+<h3>Phase 4 · k3s bootstrap <span class="pill pill-new">~5 min</span></h3>
+<pre><code>ansible-playbook playbooks/k3s.yml --tags bootstrap
+kubectl get nodes              # expect: 1 Ready, v1.30.6+k3s1</code></pre>
+
+<h3>Phase 5 · Build &amp; import images <span class="pill pill-new">~8 min</span></h3>
+<pre><code>ansible-playbook playbooks/k3s.yml --tags images
+ssh ubuntu@&lt;k3s_eip&gt; 'sudo k3s crictl images | grep cires'   # expect 6 images</code></pre>
+
+<h3>Phase 6 · K8s manifests (OTel, NVIDIA, Prom RBAC)</h3>
+<pre><code>ansible-playbook playbooks/k8s-manifests.yml</code></pre>
+
+<h3>Phase 7 · Helm installs</h3>
+<pre><code># 1. Spring Boot
+helm install spring-boot charts/spring-boot/ \
+  -n app --create-namespace \
+  --set db.host=&lt;rds_endpoint&gt; --set db.password=&lt;db_password&gt; --set image.tag=latest
+
+# 2. Kong (upstream chart v2.38.0)
+kubectl apply -f charts/kong/kong-config.yaml -n network
+helm repo add kong https://charts.konghq.com
+helm install kong kong/kong --version 2.38.0 \
+  -n network --create-namespace -f charts/kong/values-k3s.yaml
+
+# 3. AI stack
+helm install ai-stack charts/ai-stack/ \
+  -n ai --create-namespace \
+  --set smtp.user=&lt;email&gt; --set smtp.password="$GRAFANA_SMTP_PASSWORD" --set image.tag=latest
+
+# Pull Ollama model
+kubectl exec -n ai deploy/ollama -- ollama pull llama3.1:8b</code></pre>
+
+<h3>Phase 8 · Wire Prometheus to k3s</h3>
+<pre><code># k8s-manifests.yml writes /tmp/k3s-prometheus-token locally
+scp /tmp/k3s-prometheus-token deploy@&lt;monitoring_ip&gt;:/etc/prometheus/k3s-token
+# Flip k3s_sd_enabled: true in group_vars/monitoring.yml, then:
+ansible-playbook playbooks/monitoring.yml --tags prometheus</code></pre>
+
+<h3>Phase 9 · Validate</h3>
+<pre><code>ansible-playbook playbooks/integration-k8s.yml    # exit 0 = all green (§17)</code></pre>
+
+<details>
+<summary>Teardown</summary>
+<div class="inner">
+<pre><code># Helm + k3s workloads
+helm uninstall ai-stack -n ai
+helm uninstall kong -n network
+helm uninstall spring-boot -n app
+kubectl delete ns ai network app observability
+
+# AWS infra
+cd ../provisioning-monitoring-infra
+terraform destroy    # skip_final_snapshot=true on RDS — DATA IS GONE</code></pre>
+</div>
+</details>
+
+<div class="box warn"><strong>Cost estimate:</strong> ~$3–5/day if left running 24×7 (t3.large + t3.xlarge + g4dn.xlarge + db.t3.micro). Stop EC2s when not demoing; RDS storage still bills.</div>
+</section>
+
+<!-- =========================================================================== -->
+<section id="validation">
+<h2><span class="num">17.</span>Validation checklist (what <code>integration-k8s.yml</code> tests)</h2>
+
+<div class="glance">
+<p>10 scripted steps; exit 0 = all pass. Anything red means that layer is broken — see §18 for fixes.</p>
+</div>
+
+<table>
+<tr><th>Step</th><th>Check</th><th>Pass</th></tr>
+<tr><td>0</td><td>k3s node Ready; all expected pods Running</td><td><code>kubectl get nodes</code> shows Ready; no CrashLoopBackOff</td></tr>
+<tr><td>1</td><td>Workload pods Running (Spring, Kong, triage, 5 MCPs, Ollama)</td><td>jsonpath returns <code>Running</code> for each</td></tr>
+<tr><td>2</td><td>Load test via Kong NodePort :30080</td><td>9000 requests, all 2xx/3xx</td></tr>
+<tr><td>3</td><td>Spring RED metrics in Prometheus</td><td><code>http_server_requests_seconds_count{pod=~"spring-boot.*"} &gt; 0</code></td></tr>
+<tr><td>4</td><td>Spring logs in Loki with <code>trace_id</code></td><td><code>{pod=~"spring-boot.*"} |= "trace_id"</code> has results</td></tr>
+<tr><td>5</td><td>Trace in Jaeger (Kong → Spring → RDS)</td><td>3-span trace visible; latencies sane</td></tr>
+<tr><td>6</td><td>High-latency alert fires in Grafana</td><td>alert state = <code>Firing</code></td></tr>
+<tr><td>7</td><td>Webhook reaches triage service</td><td>triage logs show 202 + alert_id</td></tr>
+<tr><td>8</td><td>Triage produces a verdict</td><td><code>GET /decisions</code> returns new row</td></tr>
+<tr><td>9</td><td>LLM JSON was valid + circuit closed</td><td><code>triage_fallback_total{reason="parse_failure"}</code> unchanged; <code>ollama_circuit_state == 0</code></td></tr>
+<tr><td>10</td><td>Email sent (or skipped cleanly in dev)</td><td><code>triage_email_sent_total{status="sent"|"skipped"} &gt; 0</code></td></tr>
+</table>
+
+<h3>Spot-checks during load test (on triage-service-health dashboard)</h3>
+<ul>
+  <li>Decision throughput has a visible bump by verdict.</li>
+  <li>Pipeline p95 latency &lt; 60s (LLM is the long pole).</li>
+  <li>MCP p95 latency &lt; 2s per server.</li>
+  <li>Ollama circuit state stays closed (green).</li>
+  <li>LLM token counts (prompt/completion) non-zero p95.</li>
+</ul>
+</section>
+
+<!-- =========================================================================== -->
+<section id="troubleshooting">
+<h2><span class="num">18.</span>Troubleshooting — symptom → cause → fix</h2>
+
+<div class="glance">
+<p>If something goes red live, find it in this table. Most issues collapse into one of: image not imported, kubeconfig URL, RBAC token missing, Ollama unreachable, SMTP creds not set.</p>
+</div>
+
+<table>
+<tr><th>Symptom</th><th>Root cause</th><th>Fix</th></tr>
+<tr><td>SSH "Permission denied" right after apply</td><td>deploy user not yet created (user-data runs async)</td><td>Wait 60–90s after EC2 shows "running"</td></tr>
+<tr><td><code>helm install</code> ImagePullBackOff on AI stack pods</td><td>First-party images not imported into k3s containerd</td><td><code>ansible-playbook k3s.yml --tags images</code>; verify <code>sudo k3s crictl images | grep cires</code></td></tr>
+<tr><td>kubectl errors "connection refused 127.0.0.1:6443"</td><td>kubeconfig points to k3s internal address, not EIP</td><td>Re-run <code>k3s.yml --tags bootstrap</code> OR manually edit <code>~/.kube/config</code> server URL</td></tr>
+<tr><td>Pod in CrashLoopBackOff</td><td>Missing env, DB refused, config unmounted</td><td><code>kubectl logs -n &lt;ns&gt; deploy/&lt;name&gt; --previous</code> and <code>kubectl describe pod</code></td></tr>
+<tr><td>Prometheus not scraping K8s targets</td><td>token missing, SG blocks 6443/10250, <code>k3s_sd_enabled</code> not true</td><td>Check Prometheus <em>Targets</em> page; verify <code>/etc/prometheus/k3s-token</code>; verify sg-monitoring → sg-k3s on 6443, 10250</td></tr>
+<tr><td>Logs not in Loki</td><td>OTel Collector has wrong MONITORING_VM_IP, SG blocks 3100</td><td><code>kubectl logs -n observability -l app=otel-collector</code>; <code>kubectl exec otel-collector-xxx -- curl http://MONITORING_IP:3100/ready</code></td></tr>
+<tr><td>k3s won't start</td><td>Port 6443 in use, disk full, DNS broken</td><td><code>sudo systemctl status k3s</code> and <code>sudo journalctl -u k3s -n 100</code></td></tr>
+<tr><td>NVIDIA device plugin CrashLoopBackOff</td><td>NVIDIA Container Toolkit not configured</td><td>On k3s host: <code>nvidia-smi</code> must work; check <code>/etc/rancher/k3s/config.yaml.d/nvidia.yaml</code></td></tr>
+<tr><td>Ollama pod Pending (no GPU)</td><td>Device plugin not registering GPU or no GPUs</td><td><code>kubectl describe node</code> → check <code>nvidia.com/gpu</code> Allocatable</td></tr>
+<tr><td>Alerts fire but no triage verdict</td><td>Ollama slow/down, pipeline timeout</td><td>Check <code>ollama_circuit_state</code> and <code>triage_pipeline_timeouts_total</code></td></tr>
+<tr><td>Every verdict is NEEDS_HUMAN_REVIEW</td><td>LLM JSON parse failing</td><td><code>triage_fallback_total{reason="parse_failure"}</code>; try a smaller/instruction-tuned model</td></tr>
+<tr><td>Emails never sent</td><td>SMTP creds unset or app password expired</td><td><code>triage_email_sent_total</code>; verify Gmail 2FA on + app password active</td></tr>
+</table>
+</section>
+
+<!-- =========================================================================== -->
+<section id="snippets">
+<h2><span class="num">19.</span>Config snippets you should recognize</h2>
+
+<div class="glance">
+<p>Small fragments you're likely to be asked about. Each is copy-pastable.</p>
+</div>
+
+<details>
+<summary>OTel Collector <code>filelog</code> receiver — trace_id extraction</summary>
+<div class="inner">
+<pre><code>receivers:
+  filelog:
+    include: [ /var/log/pods/*/*/*.log ]
+    exclude: [ kube-system_*, observability_otel-collector* ]
+    operators:
+      - type: regex_parser   # CRI format
+        regex: '^(?P&lt;time&gt;\S+) (?P&lt;stream&gt;\w+) (?P&lt;logtag&gt;\w) (?P&lt;log&gt;.*)$'
+      - type: regex_parser
+        regex: 'trace_id=(?P&lt;trace_id&gt;[0-9a-f]{32})'
+        parse_to: attributes
+processors:
+  k8sattributes: { auth_type: serviceAccount, extract: { metadata: [pod, namespace, deployment, node] } }
+  batch: { send_batch_size: 1024, timeout: 5s }
+exporters:
+  loki:
+    endpoint: http://${MONITORING_VM_IP}:3100/loki/api/v1/push
+service:
+  pipelines:
+    logs:
+      receivers: [filelog, otlp]
+      processors: [k8sattributes, batch]
+      exporters: [loki]</code></pre>
+</div>
+</details>
+
+<details>
+<summary>Grafana Loki datasource — derived field for log→trace jump</summary>
+<div class="inner">
+<pre><code>datasources:
+  - name: Loki
+    type: loki
+    url: http://loki:3100
+    jsonData:
+      derivedFields:
+        - name: TraceID
+          datasourceUid: jaeger
+          matcherRegex: "trace_id=([0-9a-f]+)"
+          url: "$${__value.raw}"
+          urlDisplayLabel: "View trace"</code></pre>
+</div>
+</details>
+
+<details>
+<summary>Prometheus <code>kubernetes_sd_configs</code> — scrape via k3s API</summary>
+<div class="inner">
+<pre><code>scrape_configs:
+  - job_name: kubernetes-pods
+    kubernetes_sd_configs:
+      - role: pod
+        api_server: https://{{ k3s_host_ip }}:6443
+        tls_config:
+          insecure_skip_verify: true
+        bearer_token_file: /etc/prometheus/k3s-token
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+        action: keep
+        regex: "true"
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_port]
+        action: replace
+        target_label: __param_target
+      - action: labelmap
+        regex: __meta_kubernetes_pod_label_(.+)
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: pod
+      - source_labels: [__meta_kubernetes_namespace]
+        target_label: namespace</code></pre>
+</div>
+</details>
+
+<details>
+<summary>Kong declarative config (<code>kong.yml</code>, DB-less)</summary>
+<div class="inner">
+<pre><code>_format_version: "3.0"
+services:
+  - name: spring-boot
+    url: http://spring-boot.app.svc.cluster.local:80
+    routes:
+      - name: api
+        paths: [ /api ]
+      - name: actuator
+        paths: [ /actuator ]
+      - name: root
+        paths: [ / ]
+plugins:
+  - name: opentelemetry
+    service: spring-boot
+    config:
+      endpoint: http://otel-collector.observability.svc.cluster.local:4318
+      headers: { User-Agent: Kong-OTEL }
+  - name: prometheus
+    config:
+      metrics: [ request_count, request_size, response_size, latency ]</code></pre>
+</div>
+</details>
+
+<details>
+<summary>Spring Boot Helm values — probes + OTel injection</summary>
+<div class="inner">
+<pre><code>livenessProbe:
+  httpGet: { path: /actuator/health/liveness, port: 8080 }
+  initialDelaySeconds: 30
+  periodSeconds: 10
+readinessProbe:
+  httpGet: { path: /actuator/health/readiness, port: 8080 }
+  initialDelaySeconds: 20
+  periodSeconds: 5
+env:
+  - name: JAVA_TOOL_OPTIONS
+    value: "-javaagent:/opt/otel-javaagent.jar"
+  - name: OTEL_EXPORTER_OTLP_ENDPOINT
+    value: "http://otel-collector.observability.svc.cluster.local:4317"
+  - name: OTEL_RESOURCE_ATTRIBUTES
+    value: "service.name=spring-boot,deployment.environment=demo"
+  - name: OTEL_PROPAGATORS
+    value: "tracecontext,b3multi"</code></pre>
+</div>
+</details>
+
+<details>
+<summary>Alert rule selector toggle (Jinja2) — E3-09</summary>
+<div class="inner">
+<pre><code>{% raw %}{% if k3s_sd_enabled %}
+- alert: HighRequestLatency
+  expr: |
+    histogram_quantile(0.95,
+      rate(http_server_requests_seconds_bucket{pod=~"spring-boot.*", namespace="app"}[5m])
+    ) > 2
+  labels: { severity: critical }
+{% else %}
+- alert: HighRequestLatency
+  expr: |
+    histogram_quantile(0.95,
+      rate(http_server_requests_seconds_bucket{instance=~"192.168.127.30:8080"}[5m])
+    ) > 2
+  labels: { severity: critical }
+{% endif %}{% endraw %}</code></pre>
+</div>
+</details>
+</section>
+
+<!-- =========================================================================== -->
+<section id="decisions">
+<h2><span class="num">20.</span>Decisions &amp; trade-offs — defend these</h2>
+
+<div class="glance">
+<p>Each decision has <em>what we did</em>, <em>why</em>, and <em>at scale</em>. Every bullet is a candidate question.</p>
+</div>
 
 <div class="box decision"><strong>1. Monitoring on its own VM, workloads on k3s.</strong><br>
-<em>Why:</em> avoid circular dependency — monitoring must not go down with the cluster it monitors. <em>At scale:</em> HA monitoring (Thanos/Mimir, Loki microservices mode) in a <em>separate</em> cluster dedicated to observability.</div>
+<em>Why:</em> avoid circular dependency — monitoring must not go down with the cluster it monitors. <em>At scale:</em> HA monitoring (Thanos/Mimir, Loki microservices mode) in a <strong>separate</strong> cluster dedicated to observability.</div>
 
 <div class="box decision"><strong>2. Single-node k3s, not multi-node.</strong><br>
-<em>Why:</em> sprint timeline + account quota; k3s is CNCF-conformant so there's no rework when we scale. <em>At scale:</em> add worker nodes (pure config), then migrate to multi-AZ EKS when HA is actually required.</div>
+<em>Why:</em> sprint timeline + account quota; k3s is CNCF-conformant so there's no rework at scale. <em>At scale:</em> add worker nodes (pure config), then migrate to multi-AZ EKS when HA is required.</div>
 
 <div class="box decision"><strong>3. No container registry; images built-and-imported on the node.</strong><br>
-<em>Why:</em> zero credential management, zero external dependencies, offline-capable. <em>At scale:</em> private ECR with OIDC, Helm <code>imagePullSecrets</code> from IRSA.</div>
+<em>Why:</em> zero credential management, no external dep, offline-capable. <em>At scale:</em> private ECR with OIDC, Helm <code>imagePullSecrets</code> from IRSA.</div>
 
 <div class="box decision"><strong>4. Ansible for glue, not for app deploy.</strong><br>
-<em>Why:</em> Ansible excels at host setup (Docker, k3s, kubeconfig, secrets); Helm excels at K8s object lifecycle. Using the right tool for each scope keeps both readable. <em>At scale:</em> ArgoCD/Flux for GitOps-style continuous Helm sync instead of manual <code>helm install</code>.</div>
+<em>Why:</em> Ansible excels at host setup (Docker, k3s, kubeconfig, secrets); Helm excels at K8s object lifecycle. Right tool per scope. <em>At scale:</em> ArgoCD/Flux for GitOps-style continuous Helm sync.</div>
 
 <div class="box decision"><strong>5. HTTP "MCP-style" bridges instead of stdio MCP.</strong><br>
-<em>Why:</em> fits Kubernetes natively (Deployments + Services), each bridge is independently deployable and observable. <em>At scale:</em> add a proper MCP stdio adapter in front of the bridges if/when we adopt Claude tool use.</div>
+<em>Why:</em> K8s-native (Deployments + Services), independently scalable, Prometheus-observable. <em>At scale:</em> add a stdio adapter in front when we adopt Claude tool use.</div>
 
 <div class="box decision"><strong>6. Ollama (local inference) rather than a hosted LLM API.</strong><br>
-<em>Why:</em> data sovereignty (alert content may contain sensitive business info), no per-token cost, works offline on CIRES private cloud later. <em>At scale:</em> bigger model + dedicated GPU node; optionally a router that can call Claude for novel/hard cases and fall back to Ollama for known-shape alerts.</div>
+<em>Why:</em> data sovereignty (alert content may contain sensitive info), zero per-token cost, works offline on CIRES private cloud later. <em>At scale:</em> bigger model + dedicated GPU; optionally a router that sends hard cases to Claude, routine ones to Ollama.</div>
 
-<div class="box decision"><strong>7. Pre-gather context in code, don't let the LLM call tools iteratively (yet).</strong><br>
-<em>Why:</em> bounded latency (we know exactly how long context gathering takes), bounded prompt size, deterministic behavior. <em>At scale:</em> allow 1–2 iterative rounds with a capable model — "look at the top 3 services by error rate, pick one, drill in."</div>
+<div class="box decision"><strong>7. Pre-gather context in code; don't let the LLM call tools iteratively (yet).</strong><br>
+<em>Why:</em> bounded latency, bounded prompt size, deterministic behavior. <em>At scale:</em> 1–2 iterative rounds with a capable model.</div>
 
 <div class="box decision"><strong>8. JSON-mode + Pydantic validation for LLM output.</strong><br>
-<em>Why:</em> free-text parsing was fragile; structured output is auditable and machine-consumable. <em>At scale:</em> also keep a natural-language "reason" field for humans (we already do).</div>
+<em>Why:</em> free-text parsing was fragile; structured output is auditable and machine-consumable. <em>At scale:</em> keep a natural-language "reason" field for humans (we already do).</div>
 
-<div class="box decision"><strong>9. Circuit breaker on LLM calls, fall back to human-review escalation.</strong><br>
-<em>Why:</em> an LLM is a dependency, not a guarantee — if it's slow or broken, oncall must still get paged. <em>At scale:</em> add a secondary LLM endpoint and failover between them before falling back to raw escalation.</div>
+<div class="box decision"><strong>9. Circuit breaker + human-review escalation on LLM failure.</strong><br>
+<em>Why:</em> an LLM is a dependency, not a guarantee. Oncall must always get paged if we can't decide. <em>At scale:</em> secondary LLM endpoint + failover before raw-escalation fallback.</div>
 
 <div class="box decision"><strong>10. Drain3 alongside Grafana alerts, not as a replacement.</strong><br>
-<em>Why:</em> metrics and logs catch different failure modes; Drain3 catches "this app just said something it never said before" which thresholds can't. <em>At scale:</em> add streaming anomaly detection on metrics too (e.g. histogram-based) to cover the third axis.</div>
+<em>Why:</em> metrics and logs catch different failure modes; Drain3 catches "this app just said something new" which thresholds can't. <em>At scale:</em> add streaming anomaly detection on metrics too.</div>
 </section>
 
-<!-- ============================================================ -->
+<!-- =========================================================================== -->
 <section id="evolution">
-<h2><span class="num">13.</span>Evolution path (Sprint 3 and beyond)</h2>
+<h2><span class="num">21.</span>Evolution path (Sprint 3 and beyond)</h2>
 
 <h3>Near-term — Sprint 3 candidates</h3>
 <ul>
-  <li><strong>GitOps</strong>: ArgoCD watching the <code>monitoring-project</code> repo so Helm releases sync automatically on merge.</li>
-  <li><strong>GPU unblocked</strong>: once AWS grants GPU vCPUs, move Ollama to <code>g4dn.xlarge</code>. Try a larger model (8B or 13B) to see whether verdict quality improves enough to justify the cost.</li>
-  <li><strong>Remote Terraform backend</strong>: S3 + DynamoDB lock, remove tfstate from git.</li>
-  <li><strong>HA monitoring</strong>: replicate Prometheus with Thanos sidecar → S3 long-term storage.</li>
-  <li><strong>End-to-end CI</strong>: GitHub Actions that <code>terraform plan</code> on PR, run Helm chart tests, and molecule-test the Ansible roles.</li>
+  <li><strong>GitOps</strong>: ArgoCD watching <code>monitoring-project</code> so Helm releases sync automatically on merge.</li>
+  <li><strong>GPU unblocked</strong>: once AWS grants GPU vCPUs, move Ollama to <code>g4dn.xlarge</code>. Try 8B/13B model to see if verdict quality improves enough to justify.</li>
+  <li><strong>Remote Terraform backend</strong>: S3 + DynamoDB lock; remove tfstate from git.</li>
+  <li><strong>HA monitoring</strong>: Thanos sidecar → S3 long-term storage.</li>
+  <li><strong>CI end-to-end</strong>: GitHub Actions that <code>terraform plan</code> on PR, run Helm chart tests, molecule-test the Ansible roles.</li>
 </ul>
 
 <h3>Medium-term — CIRES private cloud migration</h3>
 <ul>
-  <li>Swap AWS EC2 for on-prem VMs; Terraform AWS provider → <code>vsphere</code>/<code>proxmox</code> provider or pure Ansible provisioning.</li>
+  <li>AWS EC2 → on-prem VMs; AWS Terraform provider → <code>vsphere</code>/<code>proxmox</code> or pure Ansible provisioning.</li>
   <li>Multi-node k3s cluster (1 control + 2 workers) for real HA.</li>
   <li>Private container registry (Harbor) + image signing.</li>
-  <li>Real alert routing: PagerDuty / Opsgenie integration in the notifier.</li>
+  <li>Real alert routing: PagerDuty/Opsgenie integration.</li>
 </ul>
 
-<h3>Long-term — the "colocated AI" vision</h3>
-<p>Eventually the AI triage plane should be <strong>colocated with the monitoring plane</strong>, not a separate workload. The AI is logically part of monitoring (it reacts to alerts, reads observability data) — treating it as "just another monitored app" is the wrong frame. The circular-dependency concern would be addressed by HA monitoring with a separate failure domain, not by keeping them apart.</p>
+<h3>Long-term — colocated AI vision</h3>
+<p>Eventually the AI triage plane should be colocated with the monitoring plane rather than a separate workload. The AI is logically part of monitoring. The circular-dependency concern would be addressed by HA monitoring with a separate failure domain, not by keeping them apart.</p>
 
 <h3>LLM capability upgrades</h3>
 <ul>
-  <li>Iterative tool-calling — LLM issues MCP calls itself, not pre-packaged context.</li>
-  <li>Multi-model router — Claude for hard cases, Ollama for routine ones.</li>
-  <li>Feedback loop — oncall marks escalations as "correct / noise" and we fine-tune a local model monthly.</li>
+  <li>Iterative tool-calling — LLM issues MCP calls itself.</li>
+  <li>Multi-model router — Claude for hard cases, Ollama for routine.</li>
+  <li>Feedback loop — oncall marks escalations "correct / noise"; monthly local fine-tune.</li>
 </ul>
 </section>
 
-<!-- ============================================================ -->
+<!-- =========================================================================== -->
 <section id="retro">
-<h2><span class="num">14.</span>What I'd do differently next time</h2>
+<h2><span class="num">22.</span>What I'd do differently next time</h2>
 
 <ol>
-  <li><strong>Move to Helm earlier.</strong> Epic 2 built everything as docker-compose first, then Epic 3 rewrote it for K8s. Going straight to Helm would have saved ~1 week — the abstractions (Service DNS, ConfigMaps, Secrets) are no harder than compose's.</li>
-  <li><strong>Pick k3s from day 1.</strong> We lost time on "is it worth bothering with Kubernetes at this scale?" The answer is yes: the deployment model is portable, the Helm charts are reusable, the learning compounds. k3s makes the overhead trivial.</li>
-  <li><strong>Enforce JSON output on the LLM from the first call.</strong> Free-text ESCALATE/DISMISS parsing in Epic 2 was brittle. Epic 4 fixed it with <code>format: json</code> + Pydantic. Should have been there from day 1.</li>
-  <li><strong>Keep Jira in sync with code as we go.</strong> We ended the sprint with Jira statuses weeks behind reality, which made planning the extension harder than it should have been. 5 minutes a day moving cards would have avoided a multi-hour audit.</li>
-  <li><strong>Use a remote Terraform backend from the first <code>terraform init</code>.</strong> Committing <code>tfstate</code> to git was a convenience that's now a cleanup task with secrets implications.</li>
-  <li><strong>Spike GPU support before committing to it.</strong> We planned around a GPU; got a 0 quota; had to re-plan for CPU-only. A 30-minute AWS dry-run would have caught this on day 1.</li>
-  <li><strong>Name the compose templates / Helm charts more consistently.</strong> Mixing <code>ai-stack</code>, <code>ai-compose</code>, and the <code>ai</code> group_vars bucket invites confusion.</li>
-  <li><strong>Write the end-to-end validation playbook first</strong> (test-driven infra). We wrote <code>integration-k8s.yml</code> at the end — if it had existed from the start, each epic story would have had a green/red signal.</li>
+  <li><strong>Move to Helm earlier.</strong> Epic 2 built everything as docker-compose first; Epic 3 rewrote for K8s. Going straight to Helm would have saved ~1 week.</li>
+  <li><strong>Pick k3s from day 1.</strong> We lost time on "is it worth bothering with K8s at this scale?" Answer is yes — the learning compounds.</li>
+  <li><strong>JSON output from the first LLM call.</strong> Free-text parsing was brittle; JSON-mode + Pydantic from day 1 would have avoided Epic 4 complexity.</li>
+  <li><strong>Keep Jira in sync with code as we go.</strong> 5 minutes a day would have saved a multi-hour audit at the end.</li>
+  <li><strong>Remote Terraform backend from first <code>init</code>.</strong> Committing tfstate was a convenience that's now a cleanup task with secrets implications.</li>
+  <li><strong>Spike GPU support before planning around it.</strong> 30-minute AWS dry-run would have caught the 0 quota on day 1.</li>
+  <li><strong>Name the compose templates / Helm charts more consistently.</strong> Mixing <code>ai-stack</code>/<code>ai-compose</code>/<code>ai</code> bucket invites confusion.</li>
+  <li><strong>Write the E2E validation playbook first.</strong> <code>integration-k8s.yml</code> came last; having it from the start would have given each story a green/red signal.</li>
 </ol>
 </section>
 
-<!-- ============================================================ -->
+<!-- =========================================================================== -->
 <section id="qa">
-<h2><span class="num">15.</span>Q&amp;A prep — questions you're likely to get</h2>
+<h2><span class="num">23.</span>Q&amp;A prep — likely questions</h2>
 
-<div class="qa-pair"><div class="q">Why k3s over full Kubernetes (kubeadm)?</div>
-<div class="a">Same API, much lower operational overhead (single binary, 70 MB, installs in 30 seconds). For a single-node cluster, kubeadm's extra complexity has no benefit. When we scale, k3s itself supports multi-node — we're not stuck here.</div></div>
+<div class="glance">
+<p>If a question lands outside this list, say "let me pull up the code" or "good Sprint 3 question" — both are better than guessing.</p>
+</div>
 
-<div class="qa-pair"><div class="q">Why not Docker Swarm?</div>
-<div class="a">Dead-end — Docker Inc. has deprecated Swarm in practice. No Helm. No real ecosystem. k3s gives us the same "simplicity" argument <em>plus</em> a supported upgrade path.</div></div>
+<div class="qa"><div class="q">Why k3s over full Kubernetes (kubeadm)?</div>
+<div class="a">Same API, much lower operational overhead (single binary, 70 MB, installs in 30 seconds). For a single-node cluster, kubeadm's extra complexity has no benefit. When we scale, k3s itself supports multi-node — we're not stuck.</div></div>
 
-<div class="qa-pair"><div class="q">Why does monitoring live on a VM and not in the cluster?</div>
-<div class="a">Circular dependency. If Prometheus is <em>inside</em> the thing it's monitoring and the cluster fails, Prometheus fails with it — we learn about the outage from users. In a future HA design we'd run monitoring in a <em>separate</em> cluster or failure domain, but for a single-node demo, a dedicated VM is cleaner.</div></div>
+<div class="qa"><div class="q">Why not Docker Swarm?</div>
+<div class="a">Dead-end — Docker Inc. has deprecated Swarm in practice. No Helm ecosystem. k3s gives us "simplicity" plus a supported upgrade path.</div></div>
 
-<div class="qa-pair"><div class="q">Why build images on the node instead of pulling from a registry?</div>
-<div class="a">No credentials to manage, no external dependency, offline-capable. Trade-off: multi-node scaling needs images imported on each node. Cheap to revisit when we actually have multiple nodes.</div></div>
+<div class="qa"><div class="q">Why does monitoring live on a VM and not in the cluster?</div>
+<div class="a">Circular dependency. If Prometheus is <em>inside</em> the thing it's monitoring and the cluster fails, Prometheus fails with it — we learn from users. In a future HA design we'd run monitoring in a separate cluster/failure domain; for a single-node demo, a dedicated VM is cleaner.</div></div>
 
-<div class="qa-pair"><div class="q">What if Ollama is down?</div>
-<div class="a">Circuit breaker trips after 5 consecutive failures and opens for 60 seconds. While open, every alert gets a <code>NEEDS_HUMAN_REVIEW</code> fallback → automatic ESCALATE with a raw-alert email. Oncall never misses an alert because the AI broke.</div></div>
+<div class="qa"><div class="q">Why build images on the node instead of pulling from a registry?</div>
+<div class="a">No credentials to manage, no external dependency, offline-capable. Trade-off: multi-node scaling needs images imported on each node. Cheap to revisit when we have multiple nodes.</div></div>
 
-<div class="qa-pair"><div class="q">What stops the LLM from hallucinating a verdict?</div>
-<div class="a">Three layers: (1) Ollama <code>format: json</code> forces structured output at the server; (2) Pydantic validates the schema; (3) on validation failure, we retry with the error embedded, and second failure falls back to human review. The LLM also must produce a <code>confidence</code> score and <code>evidence</code> list — if confidence is low we show it in the email.</div></div>
+<div class="qa"><div class="q">What if Ollama is down?</div>
+<div class="a">Circuit breaker trips after 5 consecutive failures and opens for 60s. While open, every alert gets a <code>NEEDS_HUMAN_REVIEW</code> fallback → auto ESCALATE with a raw-alert email. Oncall never misses an alert because the AI broke.</div></div>
 
-<div class="qa-pair"><div class="q">Why HTTP "MCP bridges" instead of real MCP stdio?</div>
-<div class="a">HTTP Deployments + Services are native to K8s, each bridge is independently scalable and observable by Prometheus. Tool shapes are identical to what an MCP stdio server would expose. We can plug a stdio adapter in front when we need real MCP clients.</div></div>
+<div class="qa"><div class="q">What stops the LLM from hallucinating a verdict?</div>
+<div class="a">Three layers: (1) Ollama <code>format: json</code> forces structured output; (2) Pydantic validates the schema; (3) on validation failure we retry with the error embedded, and a second failure falls back to human review. The LLM must also produce a <code>confidence</code> and <code>evidence</code> list — if confidence is low we surface it in the email.</div></div>
 
-<div class="qa-pair"><div class="q">What's the total deploy time from zero to working?</div>
-<div class="a">Under an hour from a fresh AWS account: <code>terraform apply</code> (~6 min) → <code>generate-inventory.sh</code> (seconds) → <code>ansible-playbook site.yml</code> (~20 min for monitoring + k3s + images + manifests) → three <code>helm install</code> commands (~5 min) → first Ollama model pull (the slow step, 2–5 min depending on network).</div></div>
+<div class="qa"><div class="q">Why HTTP "MCP bridges" instead of real MCP stdio?</div>
+<div class="a">HTTP Deployments + Services are native to K8s; each bridge is independently scalable and observable. Tool shapes are identical to what an MCP stdio server would expose. We can plug a stdio adapter in front when we adopt real MCP clients.</div></div>
 
-<div class="qa-pair"><div class="q">Why not run Prometheus as an Operator in k3s?</div>
-<div class="a">Nothing would be wrong with that; Prometheus-Operator is excellent. We didn't because (a) we want Prometheus outside the cluster for the dependency reason; (b) the stack is small enough that operator CRDs are overhead; (c) our existing Ansible role already manages the config cleanly. When monitoring moves into its own cluster, the operator makes sense.</div></div>
+<div class="qa"><div class="q">What's the total deploy time from zero to working?</div>
+<div class="a">Under an hour from a fresh AWS account: <code>terraform apply</code> (~8 min, RDS is the long pole) → <code>generate-inventory.sh</code> (seconds) → <code>ansible-playbook site.yml</code> (~20 min) → three <code>helm install</code> (~5 min) → Ollama model pull (~2–5 min).</div></div>
 
-<div class="qa-pair"><div class="q">How is the Grafana &rarr; triage webhook authenticated?</div>
-<div class="a">Honestly — today it isn't; the triage webhook is SG-restricted to sg-monitoring, so only the monitoring VM can reach it. That's defense-in-depth, not strong auth. Next step: signed webhook with a shared secret (Grafana supports HMAC).</div></div>
+<div class="qa"><div class="q">Why not run Prometheus as an Operator in k3s?</div>
+<div class="a">Prometheus-Operator is excellent; we just chose not to because (a) we want Prometheus outside the cluster for the dependency reason; (b) the stack is small enough that operator CRDs are overhead; (c) our Ansible role already manages config cleanly. When monitoring moves into its own cluster, operator makes sense.</div></div>
 
-<div class="qa-pair"><div class="q">What happens if Grafana fires 1000 alerts at once (flap storm)?</div>
-<div class="a">Dedup drops same-key re-fires within a 5-min window, so the same alert never re-enters the pipeline. Queue depth is exposed as a Prometheus gauge — if it starts climbing, we can alert on that. The pipeline has a 5-min safety timeout that sends the raw alert if investigation isn't done. Worst case we page oncall with raw alerts; we never wedge.</div></div>
+<div class="qa"><div class="q">How is the Grafana → triage webhook authenticated?</div>
+<div class="a">Today: SG-restricted to sg-monitoring — only the monitoring VM can reach it. That's defense-in-depth, not strong auth. Next step: HMAC-signed webhook with a shared secret (Grafana supports it).</div></div>
 
-<div class="qa-pair"><div class="q">What does Drain3 actually add over just reading logs?</div>
-<div class="a">Drain3 builds a <em>template</em> tree of log lines — structurally similar lines collapse into one cluster. Once a template is known, we can tell (a) whether a log line is a known pattern or a brand-new template (=anomaly), and (b) whether the frequency of a known template is drifting. Grafana alerts can't catch either.</div></div>
+<div class="qa"><div class="q">What happens in a flap storm (1000 alerts at once)?</div>
+<div class="a">Dedup drops same-key re-fires within a 5-min window. Queue depth is a Prometheus gauge — we can alert on it. The pipeline has a 5-min safety timeout that sends a raw alert if investigation isn't done. Worst case we page with raw alerts; we never wedge.</div></div>
 
-<div class="qa-pair"><div class="q">Where does state go when the cluster restarts?</div>
-<div class="a">Ollama models: 20Gi PVC backed by local-path-provisioner (re-created if node dies; use a network PV for real HA). RCA SQLite + Drain3 state: triage-service PVC (same caveat). S3 snapshots of Drain3 state give us a coarse backup. RDS is AWS-managed, automated backups on.</div></div>
+<div class="qa"><div class="q">What does Drain3 add over just reading logs?</div>
+<div class="a">Drain3 builds a template tree of log lines — structurally similar lines collapse into one cluster. Once a template is known, we can tell (a) if a line is a known pattern or brand-new (=anomaly), and (b) if the frequency of a known template is drifting. Thresholds in Grafana can't catch either.</div></div>
 
-<div class="qa-pair"><div class="q">What if I need to rollback a bad Helm deploy?</div>
-<div class="a"><code>helm rollback &lt;release&gt; &lt;revision&gt; -n &lt;ns&gt;</code>. Revisions are kept automatically. Kubernetes rolling-update semantics mean the old pod stays until the new one is Ready, so a broken image doesn't take the service down.</div></div>
+<div class="qa"><div class="q">Where does state go when the cluster restarts?</div>
+<div class="a">Ollama models: 20Gi PVC backed by local-path-provisioner (lost if node dies; use network PV for real HA). RCA SQLite + Drain3 state: triage PVC (same caveat). S3 snapshots of Drain3 state give a coarse backup. RDS is AWS-managed with automated backups.</div></div>
 
-<div class="qa-pair"><div class="q">Why don't you use Prometheus-operator's ServiceMonitor CRDs?</div>
+<div class="qa"><div class="q">How do I rollback a bad Helm deploy?</div>
+<div class="a"><code>helm rollback &lt;release&gt; &lt;revision&gt; -n &lt;ns&gt;</code>. Revisions are kept automatically. K8s rolling-update semantics mean the old pod stays until the new one is Ready — a broken image doesn't take the service down.</div></div>
+
+<div class="qa"><div class="q">Why don't you use Prometheus-Operator ServiceMonitor CRDs?</div>
 <div class="a">Prometheus is outside the cluster, so the operator can't configure it. We use <code>kubernetes_sd_configs</code> + annotation-based scraping against the k3s API with a bearer token. Same effect, no operator needed.</div></div>
 
-<div class="qa-pair"><div class="q">What's the blast radius if someone <code>terraform destroy</code>s?</div>
-<div class="a">All AWS resources in the VPC go: EC2s, EIPs, RDS (skip_final_snapshot is true — <em>data is gone</em>), S3 bucket (must be empty first), CloudFront. VPC itself and any external dep is fine. <strong>Production action item:</strong> set <code>skip_final_snapshot = false</code> on RDS and add <code>prevent_destroy</code> lifecycle on the S3 bucket.</div></div>
+<div class="qa"><div class="q">What's the blast radius of <code>terraform destroy</code>?</div>
+<div class="a">All AWS resources in the VPC go: EC2s, EIPs, RDS (<code>skip_final_snapshot=true</code> — <strong>data is gone</strong>), S3 bucket (must be empty first), CloudFront. Production action item: flip <code>skip_final_snapshot=false</code> on RDS and add <code>prevent_destroy</code> on the S3 bucket.</div></div>
 
-<div class="qa-pair"><div class="q">How do we know the platform itself is healthy?</div>
-<div class="a">(a) Prometheus scrapes its own <code>/metrics</code> and the OTel Collector's; (b) 17 alert rules cover API latency, error rate, pod readiness, disk, memory; (c) the triage service emits its own metrics (queue depth, circuit state, fallback rate) so we'd see "triage is failing" as a Grafana alert — which triage would investigate, paging oncall via the safety-timeout path if needed.</div></div>
+<div class="qa"><div class="q">How do we know the platform itself is healthy?</div>
+<div class="a">(a) Prometheus scrapes its own <code>/metrics</code> and the OTel Collector's; (b) 17 alert rules cover API latency, error rate, pod readiness, disk, memory; (c) the triage service emits self-metrics (queue depth, circuit state, fallback rate) so "triage is failing" shows as a Grafana alert — which triage investigates, paging oncall via the safety-timeout path if needed.</div></div>
 </section>
 
-<!-- ============================================================ -->
+<!-- =========================================================================== -->
 <section id="demo">
-<h2><span class="num">16.</span>Demo / fallback script</h2>
+<h2><span class="num">24.</span>Demo / fallback script</h2>
 
 <h3>Happy-path demo (5 min)</h3>
 <ol>
-  <li><strong>Show the architecture page</strong> — walk the team through the diagram in §4.</li>
-  <li><strong>Open Grafana</strong> (<code>:3000</code>) → show the unified dashboard: Spring Boot latency, error rate, trace sampling.</li>
-  <li><strong>Trigger a load test</strong> (<code>monitoring-project/load-test.sh</code>) against Kong NodePort. Show the P95 latency panel climbing.</li>
-  <li><strong>Trigger an alert</strong> — either naturally via load or by temporarily lowering the alert threshold in Grafana.</li>
-  <li><strong>Show the triage service dashboard</strong> (<code>triage:8090/dashboard</code>) — the new RCA row appears with verdict, service, duration.</li>
-  <li><strong>Open the escalation email</strong> — show the LLM's RCA, suggested actions, evidence, history.</li>
-  <li><strong>Show one correlation jump</strong> — from a Loki log line, click the <code>trace_id</code> derived-field link → Jaeger trace opens.</li>
+  <li>Walk the team through the <strong>architecture diagram in §3</strong>.</li>
+  <li>Open <strong>Grafana :3000</strong> → unified dashboard: Spring latency, error rate, trace sampling.</li>
+  <li>Run the <strong>load test</strong>: <code>./load-test.sh</code> against Kong NodePort. Watch the P95 panel climb.</li>
+  <li><strong>Trigger an alert</strong> (or temporarily lower the threshold in Grafana).</li>
+  <li>Open the <strong>triage dashboard</strong> at <code>&lt;k3s-ip&gt;:30090/dashboard</code> — the new RCA row appears with verdict + duration.</li>
+  <li>Open the <strong>escalation email</strong> — show the LLM's RCA, suggested actions, evidence, history.</li>
+  <li>Show one <strong>correlation jump</strong>: Loki log line → click the <code>trace_id</code> derived-field link → Jaeger trace opens.</li>
 </ol>
 
 <h3>Fallbacks if something breaks live</h3>
 <div class="box demo">
-<strong>If Grafana is down:</strong> show the triage dashboard directly (<code>/dashboard</code>) with pre-seeded decisions. The LLM → email flow still works.<br><br>
-<strong>If Ollama is slow/down:</strong> great — show the circuit breaker in <code>/metrics</code> (<code>ollama_circuit_state</code>), show a <code>NEEDS_HUMAN_REVIEW</code> record in <code>/dashboard</code>. The failure <em>is</em> the demo — it proves the hardening works.<br><br>
-<strong>If k3s is unresponsive:</strong> fall back to showing the code path: <code>monitoring-triage-service/app/pipeline.py</code> is readable top-to-bottom in under 200 lines. Walk it live.<br><br>
-<strong>If nothing works:</strong> show the <a href="architecture.html">architecture page</a> + <a href="the-bigger-picture.md">the-bigger-picture.md</a> and narrate the design. The technical story stands on its own.
+<strong>If Grafana is down:</strong> show the triage dashboard directly with pre-seeded decisions. The LLM → email flow still works.<br><br>
+<strong>If Ollama is slow/down:</strong> great — show the circuit breaker in <code>/metrics</code> (<code>ollama_circuit_state</code>), then a <code>NEEDS_HUMAN_REVIEW</code> record in <code>/dashboard</code>. The failure <em>is</em> the demo — it proves the hardening works.<br><br>
+<strong>If k3s is unresponsive:</strong> fall back to the code path — <code>monitoring-triage-service/app/pipeline.py</code> is readable top-to-bottom in under 200 lines. Walk it live.<br><br>
+<strong>If nothing works:</strong> stay on this <code>prepare.html</code>. The design stands on its own.
 </div>
 
-<h3>Things to have open in browser tabs</h3>
+<h3>Tabs to have open</h3>
 <ol>
-  <li>This prepare page (<code>prepare.html</code>) in one tab.</li>
-  <li>Architecture diagram (<code>architecture.html</code>).</li>
-  <li>Sprint 2 extension guide (<code>sprint2-extension-guide.html</code>).</li>
+  <li>This page (<code>prepare.html</code>).</li>
   <li>Grafana (<code>http://&lt;monitoring-ip&gt;:3000</code>).</li>
-  <li>Triage dashboard (<code>http://&lt;k3s-ip&gt;:8090/dashboard</code>).</li>
+  <li>Triage dashboard (<code>http://&lt;k3s-ip&gt;:30090/dashboard</code>).</li>
   <li><code>kubectl get pods -A -w</code> in a terminal.</li>
-  <li>Your escalation email inbox.</li>
+  <li>Escalation email inbox.</li>
 </ol>
 
-<h3>One last thing</h3>
-<div class="box why">You've been sick and delegated heavily — that's fine, and it doesn't change what the team sees tomorrow. The work is real, the design is defensible, and the decisions have reasons. If a question is outside what you know, say "let me pull up the code" or "that's a good Sprint 3 question" — both are better than guessing. Good luck.</div>
+<div class="box why">You've been sick and delegated heavily — that's fine, and it doesn't change what the team sees tomorrow. The work is real, the design is defensible, the decisions have reasons. If a question is outside what you know, say "let me pull up the code" or "that's a good Sprint 3 question" — both beat guessing. Good luck.</div>
 </section>
 
 </main>
