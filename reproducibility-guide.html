@@ -169,8 +169,8 @@ integration-k8s.yml          (end-to-end smoke test — load-test → alert → 
 <tr><td>Ansible</td><td>2.16+</td><td><code>pipx install ansible-core</code></td></tr>
 <tr><td>Python</td><td>3.11+</td><td>System package manager</td></tr>
 <tr><td>AWS CLI</td><td>v2</td><td><a href="https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html">aws.amazon.com install docs</a></td></tr>
-<tr><td><code>kubectl</code></td><td>v1.30+</td><td><a href="https://kubernetes.io/docs/tasks/tools/">kubernetes.io/docs/tasks/tools</a></td></tr>
-<tr><td>Helm</td><td>v3.14+</td><td><a href="https://helm.sh/docs/intro/install/">helm.sh install</a></td></tr>
+<tr><td><code>kubectl</code></td><td>v1.30+</td><td><code>curl -LO https://dl.k8s.io/release/v1.30.5/bin/linux/amd64/kubectl &amp;&amp; install kubectl /usr/local/bin/</code></td></tr>
+<tr><td>Helm</td><td>v3.20+</td><td><code>curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash</code></td></tr>
 <tr><td>git &amp; gh</td><td>latest</td><td>System package manager</td></tr>
 </table>
 
@@ -192,6 +192,20 @@ integration-k8s.yml          (end-to-end smoke test — load-test → alert → 
 
 <h3>Optional: SMTP for email notifications</h3>
 <p>To send ESCALATE emails, set SMTP credentials (default: Gmail app password). Without these the triage service logs the verdict but skips the email — still useful for demos.</p>
+
+<p>Generating a Gmail app password:</p>
+<ol>
+<li>Sign in to the Google account and enable 2-Step Verification if not already on.</li>
+<li>Open <a href="https://myaccount.google.com/apppasswords">myaccount.google.com/apppasswords</a>, name it <code>CIRES-triage</code>, copy the 16-char value (spaces can be dropped).</li>
+<li>Stash locally — <strong>never commit</strong> — and source before Ansible/Helm:
+<pre><code>cat &gt; ~/.cires-demo-env &lt;&lt;'EOF'
+export GRAFANA_SMTP_PASSWORD="xxxxxxxxxxxxxxxx"
+EOF
+chmod 600 ~/.cires-demo-env
+source ~/.cires-demo-env</code></pre>
+</li>
+<li>Ansible <code>inventory/group_vars/ai.yml</code> reads it via <code>lookup('env', 'GRAFANA_SMTP_PASSWORD')</code>. For Helm, pass explicitly: <code>helm install ai-stack … --set smtp.password="$GRAFANA_SMTP_PASSWORD"</code>.</li>
+</ol>
 </div>
 
 <!-- ============== CLONE ============== -->
