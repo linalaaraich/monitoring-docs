@@ -535,9 +535,10 @@
 <table>
 <tr><th>Instance</th><th>Type</th><th>vCPUs</th><th>Count flag</th><th>Purpose</th></tr>
 <tr><td>monitoring</td><td><code>t3.large</code></td><td>2</td><td>always</td><td>Docker-compose stack: Prom, Grafana, Loki, Jaeger, OTel</td></tr>
-<tr><td>k3s</td><td><code>t3.xlarge</code></td><td>4</td><td><code>enable_k3s</code></td><td>Single-node k3s: Spring Boot, Kong, AI stack</td></tr>
-<tr><td>gpu</td><td><code>g4dn.xlarge</code></td><td>4 + T4</td><td><code>enable_gpu</code></td><td>Ollama inference (currently blocked by GPU vCPU quota = 0)</td></tr>
+<tr><td>k3s</td><td><code>t3.xlarge</code></td><td>4</td><td><code>enable_k3s</code></td><td>Single-node k3s: Spring Boot, Kong, AI stack (inc. CPU-Ollama while GPU quota = 0)</td></tr>
+<tr><td>gpu</td><td><code>g4dn.xlarge</code></td><td>4 + T4</td><td><code>enable_gpu</code></td><td>Ollama inference (currently disabled by GPU vCPU quota = 0; Ollama runs on k3s CPU instead)</td></tr>
 </table>
+<p><strong>Subnet placement:</strong> monitoring + k3s live in the <em>public</em> subnet (<code>10.0.1.0/24</code>) so their EIPs actually work for inbound SSH — EIPs on a private-subnet instance get silently blackholed because the private subnet's <code>0.0.0.0/0</code> route points at the NAT Gateway, not the IGW. RDS stays in private subnets (2 AZs for the subnet group) — it's SG-locked to the k3s SG and never needs inbound from the internet.</p>
 
 <h3>Security groups (most likely question)</h3>
 <table>
@@ -554,11 +555,11 @@
 <ol>
   <li>VPC <code>10.0.0.0/16</code> with DNS support + hostnames.</li>
   <li>One public subnet (<code>10.0.1.0/24</code>, us-east-1a) → houses NAT GW + IGW.</li>
-  <li>Two private subnets (<code>10.0.2.0/24</code> us-east-1a for EC2; <code>10.0.3.0/24</code> us-east-1b only to satisfy RDS's 2-AZ subnet-group requirement).</li>
+  <li>Two private subnets (<code>10.0.2.0/24</code> us-east-1a + <code>10.0.3.0/24</code> us-east-1b) exist only to satisfy RDS's 2-AZ subnet-group requirement — EC2s don't live here.</li>
   <li>Route tables: public → IGW, private → NAT GW.</li>
   <li>Key pair from <code>~/.ssh/ansible_key.pub</code>.</li>
-  <li>4 security groups.</li>
-  <li>3 EC2s — each in private subnet, each with its own Elastic IP so we can SSH without a bastion.</li>
+  <li>4 security groups; intra-VPC rules use <code>var.vpc_cidr</code> (<code>10.0.0.0/16</code>) so they cover both subnets regardless of where the client instance lives.</li>
+  <li>2 EC2s in the <em>public</em> subnet (monitoring, k3s), each with its own Elastic IP. SSH works without a bastion; inbound traffic reaches the instance via the IGW route on the public subnet.</li>
   <li>RDS MySQL 8.0, single-AZ, not publicly accessible, SG-restricted to k3s.</li>
   <li>Private S3 bucket + CloudFront with Origin Access Control + SPA error-redirect rules.</li>
 </ol>
@@ -583,8 +584,8 @@
 <div class="inner">
 <ul>
   <li><strong><code>ubuntu_ami_id</code> is required, no default.</strong> We deliberately don't use <code>data "aws_ami" "most_recent"</code> — a silent AMI swap between <code>plan</code> and <code>apply</code> would mean re-testing everything.</li>
-  <li><strong>EIPs on private-subnet instances</strong> let us SSH directly (no bastion). Tiny recurring cost; acceptable for demo.</li>
-  <li><strong>Single-AZ</strong>: everything is in us-east-1a. Subnet B exists <em>only</em> to satisfy RDS subnet-group 2-AZ rule.</li>
+  <li><strong>EC2s in public subnet, RDS in private.</strong> The public-subnet route table points <code>0.0.0.0/0</code> at the IGW so EIPs work for inbound; the NAT Gateway (also in public) handles outbound from private resources. Early version of this Terraform put EC2s in private subnet — silently broke SSH. See reproducibility-guide deploy log surprise #2.</li>
+  <li><strong>Single-AZ</strong>: everything runnable is in us-east-1a. Subnet B exists <em>only</em> to satisfy RDS subnet-group 2-AZ rule.</li>
   <li><strong>SG rules use standalone resources</strong> (<code>aws_vpc_security_group_ingress_rule</code>) instead of inline rules — avoids Terraform drift issues with inline rules.</li>
   <li><strong><code>terraform.tfstate</code> is currently committed to git</strong> — contains the RDS password. Post-sprint fix: S3 + DynamoDB remote backend.</li>
   <li><strong><code>skip_final_snapshot = true</code> on RDS</strong> — a <code>terraform destroy</code> drops the database with no recovery. Flip for production.</li>
@@ -1269,9 +1270,9 @@ investigation_duration_ms</code></pre>
 <details>
 <summary>Default config (<code>app/config.py</code>)</summary>
 <div class="inner">
-<pre><code>ollama_url: http://ollama:11434
-ollama_model: llama3.1:8b
-ollama_request_timeout: 30
+<pre><code>ollama_url: http://ai-stack-ollama:11434      # k8s Service DNS
+ollama_model: llama3.2:3b                      # CPU-friendly 3B model (was 8b on GPU path)
+ollama_request_timeout: 180                    # was 30; CPU inference needs 60–180s
 circuit_breaker_failure_threshold: 5
 circuit_breaker_cooldown_seconds: 60
 context_timeout: 8
@@ -1279,12 +1280,13 @@ prometheus_range_minutes: 15
 loki_log_limit: 50
 jaeger_trace_limit: 20
 dedup_window_seconds: 300
-pipeline_timeout: 300
+pipeline_timeout: 600                          # was 300; covers retries under CPU Ollama
 smtp_host: smtp.gmail.com
 smtp_port: 587
 drain3_state_dir: /var/lib/triage-service/drain3_state
 drain3_poll_interval: 30
 drain3_anomaly_threshold: 5</code></pre>
+<p>Values live in <code>charts/ai-stack/values.yaml</code> (<code>triageService.ollamaRequestTimeout</code>, <code>triageService.pipelineTimeout</code>, <code>ollama.model</code>). <strong>Drop the two timeouts back to 30 / 300 on the GPU path</strong> — CPU numbers would waste a pager cycle on a GPU node that responds in 2–3 s.</p>
 </div>
 </details>
 </section>
@@ -1361,21 +1363,45 @@ ansible all -m ping            # deploy user needs ~90s after EC2 "running"
 ansible-playbook playbooks/monitoring.yml</code></pre>
 
 <h3>Phase 4 · k3s bootstrap <span class="pill pill-new">~5 min</span></h3>
-<pre><code>ansible-playbook playbooks/k3s.yml --tags bootstrap
-kubectl get nodes              # expect: 1 Ready, v1.30.6+k3s1</code></pre>
+<p><strong>Note:</strong> the <code>xanmanning.k3s</code> role had three incompatibility issues on Ansible 2.16+ during the 2026-04-22 deploy (broken conditional, <code>k3s_become: false</code> default, a <code>dirname</code> filter error). The repro path below uses the official installer directly — simpler and works. Full details in the reproducibility-guide deploy-log surprise #5.</p>
+<pre><code>ssh deploy@&lt;k3s_eip&gt; "curl -sfL https://get.k3s.io | \
+  sudo INSTALL_K3S_EXEC='--disable=traefik --write-kubeconfig-mode=644' sh -"
+
+# Fetch kubeconfig + rewrite server URL
+mkdir -p ~/.kube
+ssh deploy@&lt;k3s_eip&gt; "sudo cat /etc/rancher/k3s/k3s.yaml" \
+  | sed "s|https://127.0.0.1:6443|https://&lt;k3s_eip&gt;:6443|" &gt; ~/.kube/config
+chmod 600 ~/.kube/config
+
+# The k3s SG only opens :6443 from the monitoring SG, so local kubectl
+# needs an SSH tunnel (don't widen the SG for this):
+ssh -N -L 6443:localhost:6443 -i ~/.ssh/ansible_key deploy@&lt;k3s_eip&gt; &amp;
+
+kubectl get nodes              # expect: 1 Ready, v1.34.6+k3s1</code></pre>
 
 <h3>Phase 5 · Build &amp; import images <span class="pill pill-new">~8 min</span></h3>
 <pre><code>ansible-playbook playbooks/k3s.yml --tags images
-ssh ubuntu@&lt;k3s_eip&gt; 'sudo k3s crictl images | grep cires'   # expect 6 images</code></pre>
+ssh deploy@&lt;k3s_eip&gt; 'sudo k3s crictl images | grep cires'   # expect 6 cires/* images</code></pre>
 
 <h3>Phase 6 · K8s manifests (OTel, NVIDIA, Prom RBAC)</h3>
-<pre><code>ansible-playbook playbooks/k8s-manifests.yml</code></pre>
+<pre><code># Skip NVIDIA tag while GPU quota = 0 (no device to register)
+ansible-playbook playbooks/k8s-manifests.yml --skip-tags nvidia</code></pre>
 
 <h3>Phase 7 · Helm installs</h3>
-<pre><code># 1. Spring Boot
+<pre><code># 0. Load SMTP creds into the shell (see reproducibility-guide for Gmail app
+#    password generation + the ~/.cires-demo-env pattern)
+source ~/.cires-demo-env
+
+# 1. Spring Boot
+# NOTE: values.yaml image reference (mukundmadhav/react-springboot-mysql) does
+# not exist on Docker Hub as of 2026-04-22. Either build from source or swap
+# the image. Without it the app namespace stays in ImagePullBackOff and the
+# demo uses synthetic webhooks.
 helm install spring-boot charts/spring-boot/ \
   -n app --create-namespace \
-  --set db.host=&lt;rds_endpoint&gt; --set db.password=&lt;db_password&gt; --set image.tag=latest
+  --set database.url="jdbc:mysql://&lt;rds_hostname&gt;:3306/app_db" \
+  --set database.username=appuser \
+  --set database.password=&lt;db_password&gt;
 
 # 2. Kong (upstream chart v2.38.0)
 kubectl apply -f charts/kong/kong-config.yaml -n network
@@ -1383,13 +1409,25 @@ helm repo add kong https://charts.konghq.com
 helm install kong kong/kong --version 2.38.0 \
   -n network --create-namespace -f charts/kong/values-k3s.yaml
 
-# 3. AI stack
+# 3. AI stack — chart now creates its own SMTP Secret from these --set values
 helm install ai-stack charts/ai-stack/ \
   -n ai --create-namespace \
-  --set smtp.user=&lt;email&gt; --set smtp.password="$GRAFANA_SMTP_PASSWORD" --set image.tag=latest
+  --set monitoring.prometheusUrl=http://&lt;mon_private_ip&gt;:9090 \
+  --set monitoring.lokiUrl=http://&lt;mon_private_ip&gt;:3100 \
+  --set monitoring.jaegerUrl=http://&lt;mon_private_ip&gt;:16686 \
+  --set smtp.user=&lt;email&gt; --set smtp.password="$GRAFANA_SMTP_PASSWORD" \
+  --set smtp.from=&lt;email&gt; --set smtp.notificationEmail=&lt;email&gt; \
+  --set grafanaDashboardUrl=http://&lt;mon_eip&gt;:3000
 
-# Pull Ollama model
-kubectl exec -n ai deploy/ollama -- ollama pull llama3.1:8b</code></pre>
+# 4. Frontend portal (nginx landing page)
+helm install frontend charts/frontend/ \
+  -n frontend --create-namespace \
+  --set links.grafana=http://&lt;mon_eip&gt;:3000 \
+  --set links.triageDashboard=http://&lt;k3s_eip&gt;:30090/dashboard \
+  --set links.jaeger=http://&lt;mon_eip&gt;:16686 \
+  --set links.prometheus=http://&lt;mon_eip&gt;:9090
+
+# Ollama auto-pulls its model at startup via chart lifecycle hook (no manual pull)</code></pre>
 
 <h3>Phase 8 · Wire Prometheus to k3s</h3>
 <pre><code># k8s-manifests.yml writes /tmp/k3s-prometheus-token locally
@@ -1473,6 +1511,18 @@ terraform destroy    # skip_final_snapshot=true on RDS — DATA IS GONE</code></
 <tr><td>Alerts fire but no triage verdict</td><td>Ollama slow/down, pipeline timeout</td><td>Check <code>ollama_circuit_state</code> and <code>triage_pipeline_timeouts_total</code></td></tr>
 <tr><td>Every verdict is NEEDS_HUMAN_REVIEW</td><td>LLM JSON parse failing</td><td><code>triage_fallback_total{reason="parse_failure"}</code>; try a smaller/instruction-tuned model</td></tr>
 <tr><td>Emails never sent</td><td>SMTP creds unset or app password expired</td><td><code>triage_email_sent_total</code>; verify Gmail 2FA on + app password active</td></tr>
+<tr><td>SSH "connection <em>timed out</em>" (not refused) to EC2</td><td>EC2 is in the private subnet — EIP inbound needs IGW route, private has NAT route only</td><td>Verify <code>aws_instance.*.subnet_id = aws_subnet.public.id</code>; otherwise <code>terraform apply</code> to replace (see deploy-log surprise #2)</td></tr>
+<tr><td>SSH "refused" then works, rotates again a few hours later</td><td>Operator box on dynamic ISP — public IP changed, <code>allowed_ssh_cidrs</code> stale</td><td>Re-check <code>curl ifconfig.me</code>; either update tfvars or temporarily widen to <code>0.0.0.0/0</code> (sshd is key-only)</td></tr>
+<tr><td>All cross-VM HTTP calls time out (k3s can't reach Prom/Loki/Jaeger)</td><td>SG ingress rules hardcoded to <code>var.private_subnet_cidr</code> but EC2s are in the public CIDR</td><td>Grep <code>private_subnet_cidr</code> in <code>security-groups.tf</code>; replace with <code>var.vpc_cidr</code> + <code>terraform apply</code></td></tr>
+<tr><td>Ansible monitoring playbook fails "Destination directory /opt/stack does not exist"</td><td>otel-collector role runs before the play-level task that creates <code>/opt/stack</code></td><td>Fixed in commit <code>44bb6b0</code>; if running older version, <code>ansible monitoring-vm -m file -a "path=/opt/stack state=directory" -b</code> before the playbook</td></tr>
+<tr><td>xanmanning.k3s role fails ("broken conditional" / "not writable" / "dirname … _OmitType")</td><td>Role incompatible with Ansible 2.16+ and its become default is false</td><td>Skip the role — use <code>curl -sfL https://get.k3s.io | sh -</code> directly (see §16 Phase 4)</td></tr>
+<tr><td><code>helm install --create-namespace</code> fails "namespaces X already exists"</td><td>Chart has its own namespace template (old ai-stack, old frontend)</td><td>Remove <code>templates/namespace.yaml</code> — <code>--create-namespace</code> handles it. Fixed in <code>9bc92b7</code></td></tr>
+<tr><td>triage pod CreateContainerConfigError "Secret ai-stack-smtp-secret not found"</td><td>Chart used to reference the Secret without creating it</td><td>Fixed in <code>f9556b7</code> (added <code>triage-smtp.yaml</code> template); or <code>kubectl create secret generic ai-stack-smtp-secret --from-literal=...</code> (keys: host, port, user, password, from, notificationEmail)</td></tr>
+<tr><td>Ollama pod keeps restarting, logs empty</td><td>Chart probes used <code>curl</code>; <code>ollama/ollama</code> image has no curl</td><td>Fixed in <code>9bc92b7</code> — probes now <code>httpGet /api/tags</code> directly</td></tr>
+<tr><td>mcp-rca-history CrashLoopBackOff "unable to open database file"</td><td>Chart mounted <code>/data</code> read-only; rca-history creates the SQLite DB</td><td>Fixed in <code>9bc92b7</code> — <code>readOnly: true</code> removed</td></tr>
+<tr><td>Spring Boot pod ImagePullBackOff "repository does not exist"</td><td><code>mukundmadhav/react-springboot-mysql</code> isn't published on Docker Hub</td><td>Build from source via <code>roles/spring_backend/templates/Dockerfile.j2</code>, push to a registry you own, update <code>charts/spring-boot/values.yaml</code> <code>image.repository</code></td></tr>
+<tr><td>Local <code>kubectl</code> fails "connection refused :6443"</td><td>k3s SG opens :6443 only from monitoring SG; your box isn't in the VPC</td><td>SSH tunnel: <code>ssh -N -L 6443:localhost:6443 -i ~/.ssh/ansible_key deploy@&lt;k3s_eip&gt;</code></td></tr>
+<tr><td>Alert fires, triage logs show LLM timeout, email still sent as ESCALATE</td><td>Working as designed — CPU Ollama exceeds the 180s per-attempt budget, circuit breaker opens, pipeline fail-safes to ESCALATE</td><td>Not a bug. Either wait for GPU quota, drop the model to <code>llama3.2:1b</code>, or bump <code>triageService.ollamaRequestTimeout</code> higher in <code>charts/ai-stack/values.yaml</code></td></tr>
 </table>
 </section>
 
@@ -1652,6 +1702,12 @@ env:
 
 <div class="box decision"><strong>6. Ollama (local inference) rather than a hosted LLM API.</strong><br>
 <em>Why:</em> data sovereignty (alert content may contain sensitive info), zero per-token cost, works offline on CIRES private cloud later. <em>At scale:</em> bigger model + dedicated GPU; optionally a router that sends hard cases to Claude, routine ones to Ollama.</div>
+
+<div class="box decision"><strong>6a. CPU Ollama with <code>llama3.2:3b</code> while GPU quota = 0.</strong><br>
+<em>Why:</em> account's G+VT on-demand vCPU quota is 0 (pending AWS Support appeal). A 3B model is the largest that reliably produces structured JSON on CPU within the pipeline timeout. Trade-off: cold first-call takes &gt;30 s even at 180 s per-attempt timeout — tonight's smoke test saw all three Ollama attempts time out and the circuit breaker open, with the pipeline correctly fail-safing to ESCALATE. <em>At scale:</em> drop <code>ollamaRequestTimeout</code> back to 30 s and switch to <code>llama3.1:8b</code> on GPU — same code path, 2–3 s responses.</div>
+
+<div class="box decision"><strong>6b. ESCALATE on LLM failure, never silent.</strong><br>
+<em>Why:</em> if the LLM is slow, broken, or returns un-parseable output, the triage circuit breaker opens and the pipeline defaults the verdict to ESCALATE. A paged human is always better than a dropped alert. The email subject carries a <code>[FALLBACK]</code> prefix so oncall can tell LLM-verdicts from deterministic ones at a glance.</div>
 
 <div class="box decision"><strong>7. Pre-gather context in code; don't let the LLM call tools iteratively (yet).</strong><br>
 <em>Why:</em> bounded latency, bounded prompt size, deterministic behavior. <em>At scale:</em> 1–2 iterative rounds with a capable model.</div>
