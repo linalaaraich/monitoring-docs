@@ -135,38 +135,115 @@ Acceptance:
 - [ ] Log which playbook was selected per invocation (surface as `triage_playbook_selected_total{playbook=...}` counter).
 - [ ] Test: at least 3 different alert shapes select 3 different playbooks; a garbage alertname selects the default.
 
-### 2c — Actual LLM-driven MCP tool calling (bigger lift, needs model upgrade)
+### 2c — Planner → Executor → Writer (bounded two-pass retrieval, Lina's 2026-04-22 idea)
 
-**Effort:** 3 pts + requires a cloud LLM path
+**Effort:** 3 pts · **Status:** preferred design · **Replaces** the unbounded-agent-loop shape originally sketched here
 
-Replace the single-shot prompt with a tool-calling loop. The LLM drives the investigation: it issues MCP queries ("find_traces service=spring-boot start=... end=..."), reads the results, issues follow-ups, then emits the final verdict. This is the "real MCP" shape.
+Instead of a full ReAct loop (LLM → tool → LLM → tool → … → verdict), run a **two-inference** pipeline:
 
-**Blockers to address first:**
+1. **Planner pass.** Same webhook, same MCP fan-out producing a *small* initial bundle. The LLM is prompted *not* to write a verdict, but to output a JSON plan: `{"reasoning","can_decide_now","requests":[...]}` where each request uses one of a fixed vocabulary of ~4 retrieval types (`traces_by_id`, `logs_by_pattern`, `metric_instant`, `operation_list`). Max 5 requests.
+2. **Executor.** Pure code in the triage service: for each valid request, call the appropriate MCP tool. Unknown request types are ignored (not crashes). Merge the returned evidence with the initial bundle.
+3. **Writer pass.** Same verdict schema we have today, now prompted with the *expanded* bundle. Writes the final RCA.
 
-- `llama3.2:3b` tool-calling is unreliable — hallucinates tools, invents params, forgets to close loops. We need either (a) Anthropic's Claude via API, (b) a local model with solid tool support (`qwen3:7b-instruct` or similar), or (c) ollama's function-calling mode validated on a larger model.
-- Each tool round-trip is one inference. On CPU that multiplies latency by (rounds+1). We need GPU (AWS quota) or a cloud API path for this to be responsive.
-- MCP servers need a tools-manifest endpoint the LLM can see (standard MCP `/tools/list` / `/tools/call` shape).
+**Why this beats unbounded tool calling for our constraints:**
 
-Acceptance:
+- **3B models can't reliably manage an agent loop**, but they CAN output a fixed-schema JSON list once. The planner phase asks for one well-defined thing, and our existing strict-JSON retry covers parse failures.
+- **Exactly 2 inferences regardless of how much evidence is requested** — bounded latency. On CPU: 2 × ~10 min = ~20 min (within the 40-min pipeline budget). On GPU (Sprint 3 target): 2 × ~30s = ~1 min.
+- **Same safety nets still apply** — circuit breaker, parse-retry, timeout passthrough, Layer 2 suppression all short-circuit before the planner phase when relevant.
 
-- [ ] Decide the model: either add `anthropic.api_key` support to `llm_client.py` or validate a larger local model end-to-end.
-- [ ] Implement a tool-calling loop in `llm_client.py` (max 5 iterations, hard timeout per iteration).
-- [ ] Expose a `/tools/list` endpoint on each MCP server describing its tools in the JSON-schema format the LLM expects.
-- [ ] Add `triage_llm_tool_calls_total{tool=...}` + `triage_llm_tool_call_duration_seconds` metrics.
-- [ ] Test: run the hourly synthetic alert through the new path, confirm the LLM calls at least 2 distinct MCP tools and the verdict references data obtained via those calls.
+**Short-circuits:**
+- `can_decide_now=true` or `requests=[]` → skip executor, run writer on original bundle (same as today's one-shot).
+- Planner-phase parse fail after retry → fall back to one-shot on original bundle.
+- Writer-phase failure → existing NEEDS_HUMAN_REVIEW fallback path.
+
+**Sandbox feasibility test (ran 2026-04-22 evening):** see `scripts/sandbox-planner-prompt.sh` and `/var/log/cires-sandbox-planner.log` on the k3s VM. Exercises the planner prompt against `llama3.2:3b` with a realistic connection-pool-exhaustion alert. If the output validates as `{reasoning, can_decide_now, requests:[typed]}` with no invented request types, the design is viable for the current model. If it hallucinates types or produces prose, we need either a larger model (see §3 below) or a stricter JSON-mode approach before implementation.
+
+**Acceptance:**
+
+- [ ] Planner system prompt in `llm_client.py` (separate constant from the current verdict prompt).
+- [ ] `PlanRequest` Pydantic models for each of the four request types; `InvestigationPlan` envelope.
+- [ ] `executor.py` (new) maps each request type to an MCP call and returns merged evidence.
+- [ ] `pipeline.py` orchestrates planner → executor → writer with short-circuits.
+- [ ] Writer prompt explicitly references "expanded evidence (targeted by planner)" so the model knows to ground its verdict in the specific requested data.
+- [ ] New metrics: `triage_planner_requests_total{type=...}`, `triage_planner_parse_failures_total`, `triage_executor_duration_seconds`.
+- [ ] Test end-to-end with an alert that clearly needs follow-up evidence (e.g. the `BackendHigh5xxRate` scenario with trace-linked log anomalies) — the resulting verdict's `evidence` field should cite data obtained via the executor, not the initial bundle.
 
 ### Sequencing recommendation
 
-Do 2a first (smallest, highest immediate value — makes current verdicts sharper). Then 2b (playbooks — pure system-prompt work, no model change). Save 2c for after the GPU quota lands or once we adopt a cloud LLM path.
+Do 2a first (smallest, highest immediate value — makes today's verdicts sharper without architectural change). Then 2b (playbooks — pure system-prompt work, no model change). Save 2c for after the GPU quota lands or once we adopt a new model per §3 below.
 
 ### Related files
 
 - `monitoring-triage-service/app/context.py` — add trace-linkage step (2a).
 - `monitoring-triage-service/app/drain_analyzer.py` — add `extract_trace_ids` (2a).
 - `monitoring-mcp-servers/jaeger_mcp/main.py` — add `/tools/get_trace` + `/tools/list` (2a, 2c).
-- `monitoring-triage-service/app/llm_client.py` — playbook injection (2b), tool-calling loop (2c).
+- `monitoring-triage-service/app/llm_client.py` — playbook injection (2b), planner prompt + two-pass orchestration (2c).
+- `monitoring-triage-service/app/executor.py` — NEW, Planner request dispatcher (2c).
 - `monitoring-triage-service/app/playbooks/` — new directory (2b).
-- `monitoring-triage-service/app/config.py` — model selector (2c).
+- `monitoring-triage-service/app/config.py` — model selector (§3).
+
+---
+
+## 3. Model choice on private cloud + GPU — defer decision to post-demo <!-- SPRINT-3-MODEL-CHOICE -->
+
+**Priority:** Decision · **Estimated effort:** 1 pt (evaluation) + implementation depends on choice · **Owner:** Lina (decision), engineer TBD (implementation)
+**Surfaced on:** 2026-04-22 evening. Lina will have GPU instances in CIRES private cloud by Sprint 3. The question: once we have GPU *and* a no-external-API constraint (company security policy), which local model should we run, and does that unlock the Planner→Executor→Writer shape in §2c?
+
+### The constraint
+
+**All inference must run inside the CIRES private cloud.** No OpenAI, no Anthropic API, no hosted anything. That's non-negotiable — it's why we picked Ollama + local models in the first place.
+
+That rules out the "call Claude via Anthropic API" path. But it leaves a *larger* local-model space open once GPU is available.
+
+### What GPU unlocks that CPU doesn't
+
+- **Model size:** a 14B or 32B model fits in a single A10/A100/H100 GPU. On CPU, 3B is already the ceiling for sub-15-minute inference.
+- **Tool-calling reliability:** the jump from 3B to 14B+ is where tool-calling / structured-output quality becomes production-grade. `qwen2.5:14b`, `deepseek-v3`, `llama3.1:70b`, and `mistral-nemo:12b` all do well on function-calling benchmarks; `llama3.2:3b` does not.
+- **Latency:** GPU prefill eats ~5k tokens in a second. The 20–40-min single-shot we have now becomes ~30s.
+- **Throughput:** Ollama/vLLM with continuous batching on GPU can process multiple alerts in parallel. No more 2-alert queue drama.
+
+### Candidate local models (to evaluate in Sprint 3)
+
+| Model | Size | Notes |
+|-------|------|-------|
+| `llama3.1:8b-instruct` | 8B | Decent structured output; middle-ground latency/quality. |
+| `qwen2.5:14b-instruct` | 14B | Strong on JSON mode + tool calling; Apache 2.0; widely deployed in enterprise. |
+| `qwen2.5-coder:14b` | 14B | Same family, stronger on structured/code outputs — good fit for our JSON schemas. |
+| `mistral-nemo:12b-instruct` | 12B | Excellent instruction following; Apache 2.0. |
+| `deepseek-r1:14b-distill` | 14B | Reasoning-tuned; may produce better RCA narratives. Check license. |
+| `deepseek-v3` | bigger | Strong tool-calling reputation; bigger footprint. Reasonable on an A100. |
+
+All of the above run under Ollama today. If we want higher throughput: vLLM or LMDeploy as the inference engine, same models. All stay inside the VPC.
+
+### What this unlocks for 2c
+
+With a 14B+ model that does reliable tool-calling:
+
+- The **bounded Planner → Executor → Writer** shape from §2c is rock-solid. No prompt gymnastics needed.
+- We *could* graduate to unbounded tool-calling (true ReAct) if we want — but honestly, Planner-Executor-Writer covers 90% of what unbounded calling buys us, with tighter latency guarantees. Still defensible to stay bounded.
+- We can also keep `llama3.2:3b` as a fallback for when the GPU is saturated or cost-sensitive environments.
+
+### What to evaluate before deciding
+
+- [ ] Benchmark 3 candidate models on 10 representative CIRES alerts. Measure: verdict quality (manually scored), JSON-schema conformance rate, latency on target GPU, memory footprint.
+- [ ] Confirm Ollama vs vLLM for serving. vLLM wins on throughput; Ollama wins on operational simplicity and first-party support for the quant variants we already use.
+- [ ] Confirm the GPU instance type (A10/A100/H100 tier) and the provisioning cadence — if GPUs are scarce, a model that fits on a single A10 (like qwen2.5:14b Q4) may be the pragmatic choice.
+- [ ] License audit for each candidate model (Apache 2.0, MIT, custom — some DeepSeek variants have use restrictions).
+- [ ] Network policy: confirm the GPU instance can reach Prometheus/Loki/Jaeger MCPs without opening new SGs.
+
+### Deliberate non-decision
+
+**This section is a capture, not a plan.** The decision is to be made *after* the Sprint 2 presentation, with real data from the sandbox (§2c) and benchmarks (above). Don't commit to a model choice before presenting — keep the story "local, private-cloud, GPU-ready, model-TBD" for the demo, and pick the winner in Sprint 3 planning.
+
+### Related files (for the eventual implementer)
+
+- `monitoring-triage-service/app/config.py` — `ollama_model` is already a setting; expanding to `ollama_backend: str = "ollama"` (vs "vllm") is trivial.
+- `monitoring-project/charts/ai-stack/values.yaml` — `ollama.model` and `ollama.gpu.enabled` toggles exist.
+- `provisioning-monitoring-infra/ec2.tf` — `enable_gpu` var is already wired in; currently false.
+
+---
+
+## 4. (placeholder — add next item as it's surfaced)
 
 ---
 
