@@ -531,7 +531,7 @@
   </ol>
 
   <div class="box ok">
-    <strong>The headline:</strong> one shell command triggers a failure that autonomously produces a written, human-readable root-cause email — end-to-end — in roughly 2–3 minutes on CPU inference.
+    <strong>The headline:</strong> one shell command triggers a failure that autonomously produces a written, human-readable root-cause email — end-to-end — in roughly 5–15 minutes on CPU inference (drops to ~30 seconds on GPU once the quota lands).
   </div>
 
   <div class="checkpoint sans">
@@ -599,7 +599,7 @@
       <tr>
         <td class="comp"><span class="group">AI brain</span>FastAPI Triage</td>
         <td>The orchestrator. Receives webhooks, dedups, fans out to MCPs, calls Ollama, decides, emails, stores.</td>
-        <td class="tech">:8090 in <code>ai</code> namespace. Pipeline timeout 600s, Ollama timeout 180s.</td>
+        <td class="tech">:8090 in <code>ai</code> namespace. Pipeline timeout 2400s (40 min), Ollama request timeout 1800s (30 min) — sized for CPU inference.</td>
       </tr>
 
       <tr>
@@ -719,7 +719,13 @@
 
   <h3>(b) Triage → Ollama LLM</h3>
 
-  <p>The LLM is not called for every webhook. It's called only after context has been gathered and annotated. The ordering is important — and worth stating out loud.</p>
+  <p>The LLM is not called for every webhook. Two cheaper checks happen first, and the LLM only runs when both let the alert through. The ordering is important — and worth stating out loud.</p>
+
+  <p><strong>Layer 1 — Deduplication.</strong> If the same <code>(alert_name, instance)</code> fired within the last 5 minutes, the webhook is dropped silently. This is the cheapest guard; it stops flappy alerts from re-triggering the pipeline.</p>
+
+  <p><strong>Layer 2 — Pre-LLM suppression (new in Sprint 2).</strong> If the same <code>(alert_name, service)</code> produced a <code>DISMISS</code> verdict — or was itself Layer-2-suppressed — within the last 15 minutes, the triage service replays that decision and returns <code>triage_suppressed</code> without calling Ollama. On a CPU-only Ollama where each call costs 3–15 minutes, this is the difference between a responsive pipeline and one that spends its entire budget on noise. Gated on <code>triageService.suppressionEnabled</code> in the Helm chart.</p>
+
+  <p><strong>Layer 3 — LLM verdict.</strong> Only if Layers 1 and 2 pass does the triage service gather context from the MCP servers, annotate logs with Drain3, and call Ollama.</p>
 
   <div class="ift">
     <div class="ift-title">When the LLM gets called</div>
@@ -836,17 +842,17 @@
     <div class="content">
       <p class="do"><strong>Click:</strong> Terminal C — triage logs.</p>
       <p class="see"><strong>On screen:</strong> structured JSON lines roll in: <code>"Received Grafana webhook"</code> → <code>"Context gathered: prometheus=320ms loki=480ms jaeger=210ms"</code> → <code>"Calling Ollama"</code>.</p>
-      <p class="say">"The triage service received the webhook. It dedups — nothing similar in the last five minutes. Then it fans out to three MCP servers in parallel to pull metrics, logs, and traces for the failing service. Drain3 annotates each log line as known or anomalous. Then it queries the RCA history: has this alert fired before? Then — and only then — it calls Ollama."</p>
+      <p class="say">"The triage service received the webhook. It runs two cheap checks first — dedup on the last 5 minutes, then a Layer 2 pre-LLM suppression that replays recent DISMISS verdicts from the RCA history without burning an Ollama call. Both pass. Then it fans out to three MCP servers in parallel to pull metrics, logs, and traces for the failing service. Drain3 annotates each log line as known or anomalous. Then — and only then — it calls Ollama."</p>
     </div>
   </div>
 
-  <div class="pause sans">Ollama is thinking · 2–3 minutes on CPU · keep narrating</div>
+  <div class="pause sans">Ollama is thinking · 5–15 minutes on CPU · keep narrating</div>
 
   <div class="step">
-    <div class="t">3:45 – 6:00</div>
+    <div class="t">3:45 – ~10:00</div>
     <div class="content">
-      <p class="do"><strong>While Ollama runs:</strong> narrate the architecture. Don't stare at the screen.</p>
-      <p class="say">"This model is <code>llama3.2:3b</code> — about 2 GB, running locally on CPU inside the cluster. No data leaves the VPC. On a GPU node this takes about 15 seconds; on CPU it's two to three minutes. The AWS GPU quota is still at zero on this account, which is why we're waiting."</p>
+      <p class="do"><strong>While Ollama runs:</strong> narrate the architecture. Don't stare at the screen. If this drags past 10 minutes, pivot to a pre-cached decision (see §6).</p>
+      <p class="say">"This model is <code>llama3.2:3b</code> — about 2 GB, running locally on CPU inside the cluster. No data leaves the VPC. On a GPU node this takes about 15 seconds; on CPU with a three-pillar context it's five to fifteen minutes. The AWS GPU quota is still at zero on this account, which is why we're waiting. The pipeline has a 40-minute outer budget so the first attempt never gets cut off mid-thought."</p>
       <p class="say">"While it thinks: every call is wrapped in a circuit breaker. Five consecutive failures open the breaker for 60 seconds, and the triage service falls back to a safe <code>NEEDS_HUMAN_REVIEW</code> path — the raw alert still reaches the engineer; the AI just abstains. That matters because an AI that fails silently is worse than no AI."</p>
     </div>
   </div>
@@ -929,7 +935,7 @@
 
   <div class="emergency">
     <h3>"What happens if Ollama takes too long?"</h3>
-    <p class="answer">"Three guards. The Ollama HTTP client has a per-request timeout — 180 s by default on CPU. The triage pipeline itself has an outer timeout of 600 s; if that trips, a safety-gate email is sent with the raw alert context so the engineer isn't left in the dark. And the circuit breaker trips open after 5 consecutive failures, skipping Ollama entirely for the next 60 s."</p>
+    <p class="answer">"Four guards. The Ollama HTTP client has a per-request timeout — 1800 s (30 min) on CPU, scaled to give the three-pillar prompt enough time to complete. The triage pipeline itself has an outer budget of 2400 s (40 min); if that trips, a safety-gate email is sent with the raw alert context so the engineer isn't left in the dark. The circuit breaker trips open after 5 consecutive failures, skipping Ollama entirely for the next 60 s. And before any of that, a Layer 2 pre-LLM suppression replays recent DISMISS verdicts from RCA history so we don't burn 10 minutes of CPU on an alert we just dismissed."</p>
   </div>
 
   <div class="emergency">
@@ -957,7 +963,7 @@
       <li><strong>ai-stack/</strong> — The big one. Templates: <code>triage-deployment.yaml</code>, <code>mcp-deployments.yaml</code> (templated loop across 5 MCPs), <code>ollama-deployment.yaml</code>, plus Services, PVCs, ConfigMap, SMTP Secret. Triage has a <code>/data</code> PVC shared with the RCA-history MCP for the SQLite file. Ollama has a 10 Gi PVC for model weights. Namespace: <code>ai</code>.</li>
       <li><strong>frontend/</strong> — placeholder; React currently served by Spring Boot.</li>
     </ul>
-    <p><strong>Values worth knowing:</strong> <code>imageTag: "latest"</code> (matching what's imported into containerd), <code>ollama.model: llama3.2:3b</code>, <code>ollama.gpu.enabled: false</code>, <code>triageService.ollamaRequestTimeout: 180</code>, <code>triageService.pipelineTimeout: 600</code>.</p>
+    <p><strong>Values worth knowing:</strong> <code>imageTag: "2026-04-22b"</code> (matching what's imported into containerd — bumped each rebuild for clean rollouts), <code>ollama.model: llama3.2:3b</code>, <code>ollama.gpu.enabled: false</code>, <code>triageService.ollamaRequestTimeout: 1800</code>, <code>triageService.pipelineTimeout: 2400</code>, <code>triageService.suppressionEnabled: true</code>, <code>triageService.historyLookbackMinutes: 15</code>.</p>
     <p><strong>How images get into k3s:</strong> <code>docker build</code> on the k3s host → <code>docker save | gzip</code> → <code>k3s ctr images import</code>. No registry. The <code>k3s_images</code> Ansible role does this for all 6 <code>cires/*</code> images.</p>
   </details>
 
@@ -1040,9 +1046,9 @@
 
       <li><strong><code>circuit_breaker.py</code></strong> — 3-state (closed, open, half-open). Trips open after 5 consecutive failures, cooldown 60 s. <code>llm_client</code> gates every Ollama call on <code>_circuit.is_open</code>.</li>
 
-      <li><strong><code>notifier.py</code></strong> — <code>EmailNotifier</code>. <code>send_escalation()</code> builds an HTML email with alert + verdict + RCA + Grafana link, sends via <code>aiosmtplib</code>. <code>send_timeout_alert()</code> for the pipeline-timeout safety path.</li>
+      <li><strong><code>notifier.py</code></strong> — <code>EmailNotifier</code>. <code>send_escalation()</code> builds a card-based HTML email with alert details, RCA verdict badge, Drain3-annotated log samples, slowest Jaeger span, and Grafana quick-links pulled from the alert's Grafana annotations (Source, DashboardURL, PanelURL, Silence); sends via <code>aiosmtplib</code>. <code>send_timeout_alert()</code> for the pipeline-timeout safety path uses the same card layout.</li>
 
-      <li><strong><code>pipeline.py</code></strong> — <code>TriagePipeline._process_alert()</code> is the canonical sequence: dedup → context → drain3 → history → LLM → act (escalate or dismiss) → persist. Wrapped in <code>asyncio.wait_for(pipeline_timeout)</code>; on timeout, sends a raw-alert safety email and records <code>triage_decision="timeout_passthrough"</code>.</li>
+      <li><strong><code>pipeline.py</code></strong> — <code>TriagePipeline._process_alert()</code> is the canonical sequence: dedup → <em>Layer 2 pre-LLM suppression (via <code>rca_store.get_recent_decision_for_alert</code>)</em> → context → drain3 → history → LLM → act (escalate or dismiss) → persist. Wrapped in <code>asyncio.wait_for(pipeline_timeout)</code>; on timeout, sends a raw-alert safety email and records <code>triage_decision="timeout_passthrough"</code>.</li>
 
       <li><strong><code>metrics.py</code></strong> — 70+ Prometheus metrics. Webhook counts, pipeline duration, Ollama duration &amp; status, MCP per-server latency, Drain3 cluster count, fallback reasons, LLM token counts, circuit state, queue depth.</li>
     </ul>
