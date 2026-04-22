@@ -100,6 +100,7 @@
   <div class="tab" onclick="switchTab('secrets')">Secrets</div>
   <div class="tab" onclick="switchTab('teardown')">Tear-down</div>
   <div class="tab" onclick="switchTab('troubleshooting')">Troubleshooting</div>
+  <div class="tab" onclick="switchTab('deploy-log')">📅 Deploy log</div>
 </div>
 
 <!-- ============== OVERVIEW ============== -->
@@ -234,6 +235,7 @@ $EDITOR terraform.tfvars</code></pre>
     <dt><code>ssh_public_key_path</code></dt><dd>Path to your public key (default <code>~/.ssh/ansible_key.pub</code>).</dd>
     <dt><code>db_password</code></dt><dd>Strong RDS master password. Minimum 8 chars, no <code>/</code> <code>@</code> <code>"</code> per RDS rules.</dd>
     <dt><code>s3_bucket_name</code></dt><dd>Must be globally unique — append a random suffix (e.g. <code>cires-observability-demo-a1b2</code>).</dd>
+    <dt><code>enable_k3s</code> / <code>enable_gpu</code></dt><dd>Staged-deploy flags (default <code>true</code>). Set either to <code>false</code> when your AWS vCPU quota can't fit the full topology on one apply. See the <em>Deploy log</em> tab for why this matters on a fresh AWS account.</dd>
   </dl>
 </div>
 
@@ -297,18 +299,16 @@ ansible-galaxy install -r requirements.yml
 <div class="step">
   <span class="step-num">3.3</span>
   <h3>Deploy the monitoring stack</h3>
-  <pre><code>ansible-playbook playbooks/monitoring.yml</code></pre>
-  <p>This applies, in order:</p>
+  <pre><code>ansible-playbook playbooks/monitoring.yml
+# Or just the common baseline first if you want to stage:
+ansible-playbook playbooks/monitoring.yml --tags common,docker
+ansible-playbook playbooks/monitoring.yml --tags monitoring</code></pre>
+  <p>Two plays in <code>monitoring.yml</code>:</p>
   <ol>
-    <li><code>common</code> — timezone, base packages, UFW firewall</li>
-    <li><code>docker</code> — Docker CE + compose plugin</li>
-    <li><code>prometheus</code> — config, scrape targets, Grafana-Alerting ready</li>
-    <li><code>loki</code> — TSDB storage, 7-day retention</li>
-    <li><code>jaeger</code> — Jaeger v2 (Badger storage) + UI (ports remapped: 4327/4328)</li>
-    <li><code>otel-collector</code> — OTLP receivers + batch + Jaeger exporter</li>
-    <li><code>grafana</code> — datasources + 3 dashboards + <strong>17 alert rules + webhook contact point + notification policy</strong> (E2-01). Drops the Alertmanager role entirely.</li>
-    <li><code>node_exporter</code>, <code>cadvisor</code> — system + container metrics</li>
+    <li><strong>Play 1: base host setup</strong> (tags <code>common,docker</code>) — roles <code>common</code>, <code>docker</code>, <code>node_exporter</code>, <code>cadvisor</code>. Sets timezone, installs base packages + UFW, Docker CE + compose plugin, and pulls the node_exporter + cAdvisor images.</li>
+    <li><strong>Play 2: monitoring stack</strong> (tag <code>monitoring</code>) — roles <code>prometheus</code>, <code>loki</code>, <code>jaeger</code>, <code>otel-collector</code>, <code>grafana</code>, then renders <code>monitoring-compose.yml.j2</code> to the path configured by <code>stack_dir</code> (default <code>/opt/stack/docker-compose.yml</code>) and brings the stack up with <code>community.docker.docker_compose_v2</code>. Final tasks wait for Prometheus/Grafana/Loki/Jaeger to respond on their ports.</li>
   </ol>
+  <p>The Grafana role provisions <strong>4 dashboards</strong> (<code>unified-overview</code>, <code>tracing-overview</code>, <code>otel-collector-health</code>, <code>triage-service-health</code>) plus alerting config (<code>contactpoints.yml.j2</code>, <code>policies.yml.j2</code>, <code>alertrules.yml.j2</code>) &mdash; the legacy Alertmanager role is already removed on origin/main.</p>
 </div>
 
 <div class="step">
@@ -351,11 +351,12 @@ ansible-playbook playbooks/monitoring.yml --tags grafana</code></pre>
   <span class="step-num">4.1</span>
   <h3>Bootstrap k3s (E3-01)</h3>
   <pre><code>ansible-playbook playbooks/k3s.yml --tags bootstrap</code></pre>
-  <p>Installs k3s via the <code>xanmanning.k3s</code> role (pinned to v3.4.4 in <code>requirements.yml</code>) with <code>v1.30.x+k3s1</code> and Traefik disabled. Fetches kubeconfig to <code>~/.kube/config</code> on the control machine with the server URL rewritten to the EC2 EIP.</p>
-  <pre><code># Verify
+  <p>Applies 4 roles in order: <code>common</code>, <code>docker</code>, <code>xanmanning.k3s</code>, <code>k3s_images</code>. k3s is pinned to <strong><code>v1.30.6+k3s1</code></strong> (from <code>inventory/group_vars/k3s_cluster.yml</code>), Traefik is disabled via <code>k3s_server.disable: [traefik]</code>, and <code>write-kubeconfig-mode: "0644"</code> makes the kubeconfig world-readable.</p>
+  <p>Post-tasks wait for <code>kubectl get nodes</code> to return Ready (up to 30×10s retries), fetch the kubeconfig back to the control machine, and rewrite the server URL from <code>127.0.0.1:6443</code> to the EC2 EIP.</p>
+  <pre><code># Verify on your laptop (kubeconfig is at ~/.kube/config)
 kubectl get nodes
-# NAME    STATUS  ROLES                  AGE  VERSION
-# k3s-01  Ready   control-plane,master   90s  v1.30.x+k3s1</code></pre>
+# NAME       STATUS   ROLES                  AGE   VERSION
+# ip-10-0-2  Ready    control-plane,master   90s   v1.30.6+k3s1</code></pre>
 </div>
 
 <div class="step">
@@ -501,19 +502,21 @@ aws cloudfront create-invalidation --distribution-id &lt;cloudfront_id&gt; --pat
 <pre><code>ansible-playbook playbooks/integration-k8s.yml
 # Exit code 0 = all 10 steps pass</code></pre>
 
-<h3>What the 10-step test covers</h3>
+<h3>What the 11-step test covers</h3>
+<p>The playbook begins with a cluster health check (<em>Step 0</em>) before the 10-step functional test. All checks are scripted and parameterised via <code>monitoring_vm_ip</code>, <code>k3s_host_ip</code>, and <code>kong_nodeport</code> (default <code>30080</code>).</p>
 <table>
 <tr><th>#</th><th>Check</th><th>Green if…</th></tr>
-<tr><td>1</td><td><code>load-test.sh</code> against Kong's external endpoint</td><td>9000 requests return 2xx/3xx</td></tr>
-<tr><td>2</td><td>Spring Boot RED metrics in Prometheus</td><td><code>http_server_requests_seconds_count{pod=~"spring-boot.*"}</code> &gt; 0</td></tr>
-<tr><td>3</td><td>Spring Boot logs in Loki with <code>trace_id</code> label</td><td><code>{pod=~"spring-boot.*"} |= "trace_id"</code> has results</td></tr>
-<tr><td>4</td><td>Trace in Jaeger: Kong → Spring → RDS</td><td>3-span trace in Jaeger UI</td></tr>
-<tr><td>5</td><td>High-latency alert fires in Grafana</td><td>Grafana shows state <em>Firing</em></td></tr>
-<tr><td>6</td><td>Webhook POST reaches triage service</td><td>Triage logs show 202 &amp; <code>alert_id</code></td></tr>
-<tr><td>7</td><td>Triage produces a verdict</td><td><code>/decisions</code> returns a new row with ESCALATE/DISMISS/INCONCLUSIVE</td></tr>
-<tr><td>8</td><td>LLM returned valid JSON</td><td>Pydantic validation pass (<code>triage_fallback_total{reason="parse_failure"}</code> unchanged)</td></tr>
-<tr><td>9</td><td>Circuit breaker healthy</td><td><code>ollama_circuit_state == 0</code></td></tr>
-<tr><td>10</td><td>Email sent (or correctly skipped)</td><td><code>triage_email_sent_total{status="sent"}</code> incremented, or <code>skipped</code> if SMTP not configured</td></tr>
+<tr><td>0</td><td><code>kubectl get nodes</code> &amp; <code>get pods -A</code></td><td>Node status <code>True</code>, all expected pods Running</td></tr>
+<tr><td>1</td><td>Workload pods Running (Spring, Kong, triage, 5 MCPs, Ollama)</td><td><code>jsonpath</code> check returns <code>Running</code></td></tr>
+<tr><td>2</td><td><code>load-test.sh</code> against Kong's external endpoint on <code>:30080</code></td><td>9000 requests return 2xx/3xx</td></tr>
+<tr><td>3</td><td>Spring Boot RED metrics in Prometheus</td><td><code>http_server_requests_seconds_count{pod=~"spring-boot.*"}</code> &gt; 0</td></tr>
+<tr><td>4</td><td>Spring Boot logs in Loki with <code>trace_id</code></td><td><code>{pod=~"spring-boot.*"} |= "trace_id"</code> has results</td></tr>
+<tr><td>5</td><td>Trace in Jaeger: Kong → Spring → RDS</td><td>3-span trace visible in Jaeger API</td></tr>
+<tr><td>6</td><td>High-latency alert fires in Grafana</td><td>Alert state reads <em>Firing</em> via Grafana API</td></tr>
+<tr><td>7</td><td>Webhook POST reaches triage</td><td>Triage logs show 202 + <code>alert_id</code></td></tr>
+<tr><td>8</td><td>Triage produces a verdict</td><td><code>GET /decisions</code> returns a new row (ESCALATE/DISMISS/INCONCLUSIVE)</td></tr>
+<tr><td>9</td><td>LLM returned valid JSON</td><td><code>triage_fallback_total{reason="parse_failure"}</code> unchanged; <code>ollama_circuit_state == 0</code></td></tr>
+<tr><td>10</td><td>Email sent (or correctly skipped)</td><td><code>triage_email_sent_total{status="sent"}</code> or <code>skipped</code> incremented</td></tr>
 </table>
 
 <div class="ok"><strong>If you're seeing all 10 green:</strong> you have a fully reproducible AI-observability platform. Congratulations — the grading rubric is met.</div>
@@ -649,6 +652,132 @@ unset KUBECONFIG</code></pre>
 </table>
 
 <div class="note"><strong>Escalation path:</strong> for anything not covered here, open an issue on the relevant repo or check the Sprint 2 extension guide's troubleshooting tab. The Jira board (<code>linalaaraich/jira</code>) has story-level acceptance criteria that describe the expected behavior of each component.</div>
+</div>
+
+<!-- ============== DEPLOY LOG ============== -->
+<div id="tab-deploy-log" class="tab-content">
+<h2>Real-world deploy log &mdash; 2026-04-21</h2>
+<p>What actually happened when we tried to deploy the platform on a freshly-minted AWS account. The reproducibility guide assumes a &ldquo;normal&rdquo; AWS account; this log captures the new-account-specific obstacles so the next operator can budget time correctly.</p>
+
+<div class="warn"><strong>TL;DR:</strong> brand-new AWS accounts hit two anti-fraud restrictions that are invisible until you try to create specific resources &mdash; not quota issues. Budget an extra day before the first deploy if your account is less than a week old.</div>
+
+<h3>Starting state</h3>
+<ul>
+<li>Account <code>522921482430</code> created the same day, IAM user <code>Lina</code> with <code>AdministratorAccess</code></li>
+<li>Region <code>us-east-1</code>, payment method on file, no billing alarms yet</li>
+<li>All 6 repos cloned side-by-side under <code>~/</code> (or <code>/root/</code>), working directory trees clean after a <code>monitoring-project</code> sync</li>
+<li>Local tools: Terraform 1.9.8, Ansible 2.16, Python 3.11, AWS CLI v2 &mdash; all present</li>
+</ul>
+
+<h3>Phase 0 &mdash; pre-flight (passed)</h3>
+<pre><code>aws sts get-caller-identity
+# Account 522921482430, user "Lina"
+
+aws ec2 describe-availability-zones
+# 6 AZs
+
+aws iam list-groups-for-user --user-name Lina
+# Observability-System group
+
+aws iam list-attached-group-policies --group-name Observability-System
+# AdministratorAccess, plus Amplify / Elastic Beanstalk / Audit Manager</code></pre>
+
+<h3>Phase 0.5 &mdash; quota check (blocker #1 discovered)</h3>
+<pre><code># Running On-Demand Standard (T-class) vCPU quota
+aws service-quotas get-service-quota --service-code ec2 --quota-code L-1216C47A
+# Quota = 5.0, Adjustable = true
+
+# Running On-Demand G and VT vCPU quota
+aws service-quotas get-service-quota --service-code ec2 --quota-code L-DB2E81BA
+# Quota = 0.0, Adjustable = true</code></pre>
+<p>Monitoring <code>t3.large</code> (2 vCPU) + k3s <code>t3.xlarge</code> (4 vCPU) = 6 vCPU, over the default 5. GPU node needs 4 G-vCPU, default is 0. <strong>Two quota increase requests submitted via the CLI:</strong></p>
+<pre><code>aws service-quotas request-service-quota-increase \
+  --service-code ec2 --quota-code L-1216C47A --desired-value 16
+aws service-quotas request-service-quota-increase \
+  --service-code ec2 --quota-code L-DB2E81BA --desired-value 4
+# Both returned Status: PENDING, CaseId: null</code></pre>
+<div class="danger"><strong>Initial denial:</strong> both quota requests came back auto-denied within ~10 minutes with the canned text <em>&ldquo;Service quotas are put in place to help you gradually ramp up activity...&rdquo;</em> AWS auto-declines quota bumps on brand-new accounts unless you reopen the case with a detailed technical + academic justification. The <a href="https://github.com/linalaaraich/monitoring-docs">support-case appeal template</a> lives in this repo's history &mdash; use it if you hit the same wall.</div>
+
+<h3>Phase 1 &mdash; mitigation: staged-deploy flags</h3>
+<p>To work around the vCPU quota (5 &lt; 6 needed) without waiting for AWS, two feature flags were added to <code>provisioning-monitoring-infra</code>:</p>
+<pre><code># variables.tf
+variable "enable_k3s" { type = bool, default = true }
+variable "enable_gpu" { type = bool, default = true }
+
+# ec2.tf
+resource "aws_instance" "k3s" {
+  count = var.enable_k3s ? 1 : 0
+  # ...
+}
+resource "aws_instance" "gpu" {
+  count = var.enable_gpu ? 1 : 0
+  # ...
+}
+
+# outputs.tf
+output "k3s_public_ip" {
+  value = var.enable_k3s ? aws_eip.k3s[0].public_ip : null
+}</code></pre>
+<p>This lets you apply monitoring VM + networking + RDS + S3 first, then later flip the flags to <code>true</code> and re-apply for k3s and GPU once quota lifts. No Terraform state pollution.</p>
+
+<h3>Phase 2 &mdash; first <code>terraform apply</code> attempt</h3>
+<pre><code>terraform apply -auto-approve
+
+# Created cleanly:
+aws_vpc.main, aws_subnet.public/private/private_b,
+aws_internet_gateway.main, aws_nat_gateway.main (1m39s),
+aws_route_table.public/private + associations,
+4x aws_security_group + all ingress/egress rules,
+aws_eip.monitoring, aws_eip.nat, aws_key_pair.ansible,
+aws_db_subnet_group.main,
+aws_db_instance.mysql (5m15s),
+aws_s3_bucket.frontend + public_access_block,
+aws_cloudfront_origin_access_control.frontend
+
+# Then hit TWO hard failures:</code></pre>
+
+<div class="danger"><strong>Blocker #2 &mdash; New-account EC2 restriction:</strong>
+<pre><code>Error: creating EC2 Instance: ...
+api error InvalidParameterCombination:
+The specified instance type is not eligible for Free Tier.</code></pre>
+<p>AWS silently restricts brand-new accounts to Free-Tier-eligible instance types (<code>t2.micro</code>, <code>t3.micro</code>, <code>t4g.micro</code>) until a support ticket verifies the account. None of these are big enough to run the monitoring stack (≥ 6 GB RAM needed; <code>t3.micro</code> has 1 GB).</p></div>
+
+<div class="danger"><strong>Blocker #3 &mdash; CloudFront verification required:</strong>
+<pre><code>Error: creating CloudFront Distribution: ...
+AccessDenied: Your account must be verified before you can add
+new CloudFront resources.</code></pre>
+<p>Same root cause &mdash; new-account anti-fraud. Requires a support case.</p></div>
+
+<h3>Phase 3 &mdash; clean recovery</h3>
+<p>Rather than leave <code>~$0.07/hr</code> burning on an unusable partial deploy (RDS + NAT gateway + unattached EIP), tore down:</p>
+<pre><code>terraform destroy -auto-approve
+# Destroy complete! Resources: 57 destroyed.
+# Runtime ≈ 4 min (RDS is the long pole at 1m54s to delete)</code></pre>
+
+<h3>Support cases filed (awaiting response)</h3>
+<table>
+<tr><th>Case</th><th>Type</th><th>Purpose</th><th>Typical resolution</th></tr>
+<tr><td>#1</td><td>Account &amp; billing &rarr; Account Verification</td><td>Lift Free Tier restriction + verify for CloudFront</td><td>2&ndash;24 h</td></tr>
+<tr><td>#2</td><td>Reopened quota case</td><td>Appeal denial with academic use case (UCA / Tanger Med)</td><td>24&ndash;48 h</td></tr>
+</table>
+
+<h3>Lessons for the next operator</h3>
+<ol>
+<li><strong>Check account age.</strong> If the IAM user or root account is &lt; 1 week old, assume Free-Tier + CloudFront restrictions. File the unlock case <em>before</em> touching Terraform.</li>
+<li><strong>Test with a Free Tier instance first.</strong> If <code>aws ec2 run-instances --instance-type t3.micro --dry-run</code> works but <code>--instance-type t3.large --dry-run</code> fails, you're in the restricted state. Takes 5 seconds; saves 5 minutes of RDS creation followed by rollback.</li>
+<li><strong>Academic framing helps AWS appeals.</strong> Mentioning it's a student learning project (with university domain, short lifecycle, and billing alarms) tips quota and unlock appeals toward approval far more than a generic &ldquo;please approve&rdquo; message.</li>
+<li><strong>Separate support cases for separate restrictions.</strong> Quotas, account verification, and Free-Tier lift are three different support queues. Don't bundle &mdash; it slows all three.</li>
+<li><strong>Keep <code>enable_k3s</code> / <code>enable_gpu</code> flags even after quota lifts.</strong> Staged deploys become useful again any time you want to cost-optimize off-hours or run a mini demo.</li>
+</ol>
+
+<h3>Next steps in this deployment</h3>
+<ul>
+<li>[&nbsp;] Await AWS Support response on Case 1 (unlock)</li>
+<li>[&nbsp;] Await AWS Support response on Case 2 (quota appeal)</li>
+<li>[&nbsp;] Once unblocked: <code>terraform apply</code> with <code>enable_k3s=true</code> (requires Standard vCPU quota first), then flip <code>enable_gpu=true</code> when G quota lands</li>
+<li>[&nbsp;] Run the Ansible phases per the <em>Monitoring VM</em> and <em>k3s + Helm</em> tabs</li>
+<li>[&nbsp;] Run <code>ansible-playbook playbooks/integration-k8s.yml</code> for end-to-end validation (E3-10)</li>
+</ul>
 </div>
 
 <script>
