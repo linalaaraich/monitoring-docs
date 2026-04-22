@@ -357,10 +357,24 @@
 <section id="pitch">
 <h2><span class="num">1.</span>Elevator pitch</h2>
 
+<h3>The problem (start here — no tech, just the stakes)</h3>
+<div class="box tip">
+Oncall engineers drown in alerts. Most of them are noise — a transient blip, a known quirk, a flappy threshold. But you can't ignore them, because <em>one in twenty</em> is real. So humans stay up at 2am reading Grafana, correlating Loki logs with Jaeger traces, and deciding "is this real or should I go back to sleep?". That's the work we're automating.
+</div>
+
+<h3>What the platform does (the one-paragraph pitch)</h3>
 <div class="lead">
-<p>"Sprint 2 delivers the <strong>CIRES AI Observability Platform</strong>: a full-stack monitoring pipeline for the <code>react-springboot-mysql</code> application, plus an <strong>AI triage service</strong> that reacts to Grafana alerts, pulls context from metrics, logs and traces over <strong>MCP</strong>, asks an <strong>Ollama-hosted LLM</strong> for a root-cause verdict, and either sends a structured email to oncall or suppresses the alert — so we stop paging humans for noise.</p>
+<p>"The <strong>CIRES AI Observability Platform</strong> is a full-stack monitoring pipeline for the <code>react-springboot-mysql</code> application, plus an <strong>AI triage service</strong> that reacts to Grafana alerts, pulls context from metrics, logs and traces over <strong>MCP</strong>, asks an <strong>Ollama-hosted LLM</strong> for a root-cause verdict, and either sends a structured email to oncall or suppresses the alert — so we stop paging humans for noise.</p>
 <p>Underneath, the infrastructure moved from per-VM docker-compose to a <strong>single-node k3s cluster</strong> deployed via <strong>Terraform + Ansible + Helm</strong>, while the monitoring plane (Prometheus, Grafana, Loki, Jaeger) stays on a dedicated VM — so a cluster failure doesn't blind us to its own failure."</p>
 </div>
+
+<h3>Why this is interesting (the frame for senior engineers)</h3>
+<ul>
+  <li><strong>Real Kubernetes, not a toy.</strong> k3s is CNCF-conformant; the Helm charts written here deploy on EKS/GKE unchanged.</li>
+  <li><strong>Real OpenTelemetry.</strong> Traces propagate end-to-end through Kong → Spring Boot → RDS; logs carry <code>trace_id</code>; Grafana jumps from log → trace in one click.</li>
+  <li><strong>Real LLM tool-use pattern.</strong> The triage service <em>pre-gathers</em> context via 5 MCP bridges, hands the LLM a structured prompt, and validates a structured JSON response with Pydantic. Fail-safe behavior is designed in (circuit breaker, schema-retry, human-review fallback).</li>
+  <li><strong>Reproducible.</strong> Fresh AWS account → working platform in under an hour via Terraform + Ansible + three <code>helm install</code>s.</li>
+</ul>
 
 <h3>Three one-liners to memorize</h3>
 <div class="chips">
@@ -1523,6 +1537,21 @@ terraform destroy    # skip_final_snapshot=true on RDS — DATA IS GONE</code></
 <tr><td>Spring Boot pod ImagePullBackOff "repository does not exist"</td><td><code>mukundmadhav/react-springboot-mysql</code> isn't published on Docker Hub</td><td>Build from source via <code>roles/spring_backend/templates/Dockerfile.j2</code>, push to a registry you own, update <code>charts/spring-boot/values.yaml</code> <code>image.repository</code></td></tr>
 <tr><td>Local <code>kubectl</code> fails "connection refused :6443"</td><td>k3s SG opens :6443 only from monitoring SG; your box isn't in the VPC</td><td>SSH tunnel: <code>ssh -N -L 6443:localhost:6443 -i ~/.ssh/ansible_key deploy@&lt;k3s_eip&gt;</code></td></tr>
 <tr><td>Alert fires, triage logs show LLM timeout, email still sent as ESCALATE</td><td>Working as designed — CPU Ollama exceeds the 180s per-attempt budget, circuit breaker opens, pipeline fail-safes to ESCALATE</td><td>Not a bug. Either wait for GPU quota, drop the model to <code>llama3.2:1b</code>, or bump <code>triageService.ollamaRequestTimeout</code> higher in <code>charts/ai-stack/values.yaml</code></td></tr>
+
+<!-- Added 2026-04-22 during demo-prep sweep. -->
+<tr><td>Kong CrashLoopBackOff with <code>dial tcp [::1]:8444: connect: connection refused</code> (sidecar container)</td><td>Upstream chart's ingress-controller sidecar expects Kong admin API — but in pure DB-less declarative mode the admin API isn't active.</td><td>In <code>charts/kong/values-k3s.yaml</code> set <code>ingressController.enabled: false</code>, then <code>helm upgrade</code>.</td></tr>
+<tr><td>Kong: <code>init_by_lua error: /kong/config/kong.yml: No such file or directory</code></td><td>The chart mounts <code>dblessConfig.configMap</code> at <code>/kong_dbless/</code>, not <code>/kong/config/</code>.</td><td><code>env.declarative_config: /kong_dbless/kong.yml</code> in <code>values-k3s.yaml</code>.</td></tr>
+<tr><td>Spring pod Running 0/1: <code>"Readiness probe failed: HTTP 404"</code> on <code>/actuator/health/readiness</code></td><td>This Spring build (tutorial app) doesn't expose split liveness/readiness endpoints even with <code>probes.enabled=true</code>.</td><td>Point both probes at <code>/actuator/health</code>. It's composed of <code>db</code>+<code>diskSpace</code>+<code>ping</code>, same functional signal.</td></tr>
+<tr><td>Spring pod: <code>secret "spring-boot-db-secret" not found</code></td><td>Chart references a Secret it doesn't create.</td><td><code>kubectl create secret generic spring-boot-db-secret -n app --from-literal=username=appuser --from-literal=password=$DB_PASSWORD</code></td></tr>
+<tr><td>Prometheus targets page at ~44% up, many rows show literal <code>&lt;UNUSED_K3S_PATH&gt;</code></td><td>Legacy VM-era static scrape targets still in the Ansible role; the K8s migration's <code>kubernetes_sd_configs</code> job was never wired.</td><td>Replace static targets with <code>kubernetes-pods</code> job + <code>kubernetes_sd_configs</code> scraping via the k3s API server proxy. See §19 snippet.</td></tr>
+<tr><td>Prometheus reload: <code>error checking bearer token file</code> (promtool check)</td><td>Only <code>prometheus.yml</code> is bind-mounted into the container; sibling files in <code>/etc/prometheus/</code> are invisible.</td><td>Either mount <code>/etc/prometheus</code> as a directory (compose update), OR inline the <code>bearer_token</code> string literally in <code>prometheus.yml</code> (demo-fast, works for a single cluster).</td></tr>
+<tr><td>kubernetes-pods target: HTTP 403 Forbidden</td><td>ClusterRole <code>prometheus-scraper</code> lacks <code>pods/proxy</code>.</td><td><code>kubectl patch clusterrole prometheus-scraper --type=json -p='[{"op":"add","path":"/rules/0/resources/-","value":"pods/proxy"}]'</code></td></tr>
+<tr><td>OTel Collector pod :8888 scrape returns 503</td><td>Collector doesn't expose self-metrics by default.</td><td>In the ConfigMap's <code>service:</code> block add <code>telemetry: { metrics: { address: 0.0.0.0:8888 } }</code>.</td></tr>
+<tr><td>Spring Boot OTel agent: <code>UnknownHostException otel-collector.observability.svc.cluster.local</code></td><td>The DaemonSet had no <code>Service</code> object → CoreDNS NXDOMAIN.</td><td>Create <code>Service</code> <code>otel-collector</code> in <code>observability</code> with ports 4317/4318/8888/13133; selector must match pod labels (<code>app.kubernetes.io/name: otel-collector</code>).</td></tr>
+<tr><td>OTel Collector filelog log spam: <code>cannot parse "+01:00" as "Z"</code></td><td>Timestamp regex expects <code>Z</code> suffix but k3s containerd writes logs with the host's local timezone offset.</td><td>Drop the timestamp parser — use ingest time. (Same info for alert correlation, fewer failure modes.)</td></tr>
+<tr><td>Loki only has <code>service_name="unknown_service"</code>; no pod/namespace labels</td><td>The <code>k8sattributes</code> processor can't enrich filelog-sourced logs — its pod association rules match by pod IP or connection, neither present for filelog.</td><td>In filelog, add a <code>regex_parser</code> that parses <code>log.file.path</code> into resource attributes (<code>k8s_namespace_name</code>, <code>k8s_pod_name</code>, <code>k8s_container_name</code>). Add an <code>attributes/loki-labels</code> processor with the <code>loki.resource.labels</code> hint.</td></tr>
+<tr><td>Drain3 <code>total_clusters: 0</code> even though Loki has data</td><td>The Drain3 ingest loop passed <code>start=30s</code> (duration string) to Loki, which requires nanosecond epoch. Every poll returned 400 silently.</td><td>In <code>drain_analyzer.py</code>: <code>start_ns = int((time.time() - poll_interval) * 1e9)</code>; pass as a stringified int.</td></tr>
+<tr><td>LLM verdict always says "insufficient data" or "Jaeger / Loki unavailable"</td><td>Correlation failure, not LLM failure: the <code>service</code> label on the alert doesn't match Loki <code>service_name</code>, Prom labels, or Jaeger service name.</td><td>Unify names across all three pillars. Easiest: set OTel <code>service.name</code> on the app to match the value alerts carry. Helm: <code>otel.serviceName: "spring-boot"</code>.</td></tr>
 </table>
 </section>
 
@@ -1533,6 +1562,11 @@ terraform destroy    # skip_final_snapshot=true on RDS — DATA IS GONE</code></
 <div class="glance">
 <p>Small fragments you're likely to be asked about. Each is copy-pastable.</p>
 </div>
+
+<div class="box tip"><strong>One rule that matters more than all the snippets: keep the service name consistent across pillars.</strong> The AI's ability to produce useful RCA depends on the <code>service</code> label on the alert matching Loki's <code>service_name</code>, Prometheus's <code>app.kubernetes.io/name</code>, AND Jaeger's service identifier. We set it once in <code>charts/spring-boot/values.yaml</code>:
+<pre style="margin-top:8px"><code>otel:
+  serviceName: "spring-boot"   # must equal the "service" label emitted by alerts</code></pre>
+Every downstream system picks that name up automatically. Mix two names (e.g. <code>spring-boot</code> vs <code>react-springboot-app</code>) and the LLM returns "insufficient data" even though the data is right there.</div>
 
 <details>
 <summary>OTel Collector <code>filelog</code> receiver — trace_id extraction</summary>
@@ -1834,15 +1868,41 @@ env:
 <section id="demo">
 <h2><span class="num">24.</span>Demo / fallback script</h2>
 
+<h3>Day-of pre-flight (run 30 min before the demo)</h3>
+<p>These five checks take 90 seconds. Do them before the room fills up.</p>
+<pre><code># 1. All pods Running in every namespace
+kubectl get pods -A | grep -vE "Running|Completed"
+#    expected: empty output (i.e. nothing unhealthy)
+
+# 2. Prometheus targets all green
+curl -s http://&lt;monitoring-eip&gt;:9090/api/v1/targets \
+  | python3 -c 'import json,sys; d=json.load(sys.stdin)["data"]["activeTargets"];
+                 u=sum(1 for t in d if t["health"]=="up");
+                 print(f"{u}/{len(d)} up")'
+#    expected: 16/16 up (or whatever the current count is — all up)
+
+# 3. Kong and Spring reachable from the public internet
+curl -sI http://&lt;k3s-eip&gt;:30080/ | head -1          # expect: HTTP/1.1 200
+curl -s  http://&lt;k3s-eip&gt;:30080/api/employee | head -c 60   # expect: JSON array
+
+# 4. Ollama warm + model loaded
+kubectl exec -n ai deploy/ai-stack-ollama -- ollama ps
+#    expected: llama3.2:3b 100% CPU, keep_alive > 1h
+
+# 5. Drain3 has a baseline
+kubectl exec -n ai deploy/ai-stack-triage -- \
+  python -c "import httpx; print(httpx.get('http://localhost:8090/drain3/stats').json())"
+#    expected: total_clusters &gt; 50, total_lines_processed &gt; 500</code></pre>
+
 <h3>Happy-path demo (5 min)</h3>
 <ol>
   <li>Walk the team through the <strong>architecture diagram in §3</strong>.</li>
-  <li>Open <strong>Grafana :3000</strong> → unified dashboard: Spring latency, error rate, trace sampling.</li>
-  <li>Run the <strong>load test</strong>: <code>./load-test.sh</code> against Kong NodePort. Watch the P95 panel climb.</li>
-  <li><strong>Trigger an alert</strong> (or temporarily lower the threshold in Grafana).</li>
-  <li>Open the <strong>triage dashboard</strong> at <code>&lt;k3s-ip&gt;:30090/dashboard</code> — the new RCA row appears with verdict + duration.</li>
+  <li>Open <strong>Grafana (52.202.21.192:3000)</strong> → unified dashboard: Spring latency, error rate, trace sampling.</li>
+  <li>Run the <strong>load test</strong>: <code>TOTAL=500 ./load-test.sh</code>. Watch the P95 panel climb.</li>
+  <li><strong>Trigger an alert</strong> (or temporarily lower the Grafana threshold, or <code>curl -X POST</code> a synthetic Grafana webhook at <code>http://&lt;k3s-eip&gt;:30090/webhook/grafana</code>).</li>
+  <li>Open the <strong>triage dashboard</strong> via <code>kubectl port-forward -n ai svc/ai-stack-triage 8090:8090</code>, then <code>http://localhost:8090/dashboard</code> — the new RCA row appears.</li>
   <li>Open the <strong>escalation email</strong> — show the LLM's RCA, suggested actions, evidence, history.</li>
-  <li>Show one <strong>correlation jump</strong>: Loki log line → click the <code>trace_id</code> derived-field link → Jaeger trace opens.</li>
+  <li>Show one <strong>correlation jump</strong>: in Grafana Explore, query <code>{k8s_namespace_name="app"}</code> → click a log line with <code>trace_id=...</code> → Jaeger trace opens.</li>
 </ol>
 
 <h3>Fallbacks if something breaks live</h3>
@@ -1857,7 +1917,7 @@ env:
 <ol>
   <li>This page (<code>prepare.html</code>).</li>
   <li>Grafana (<code>http://&lt;monitoring-ip&gt;:3000</code>).</li>
-  <li>Triage dashboard (<code>http://&lt;k3s-ip&gt;:30090/dashboard</code>).</li>
+  <li>Triage dashboard via port-forward: <code>kubectl port-forward -n ai svc/ai-stack-triage 8090:8090</code> → <code>http://localhost:8090/dashboard</code>.</li>
   <li><code>kubectl get pods -A -w</code> in a terminal.</li>
   <li>Escalation email inbox.</li>
 </ol>
