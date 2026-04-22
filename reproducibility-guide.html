@@ -775,13 +775,79 @@ new CloudFront resources.</code></pre>
 <tr><td>#2</td><td>Reopened quota case</td><td>Appeal denial with academic use case (UCA / Tanger Med)</td><td>24&ndash;48 h</td></tr>
 </table>
 
-<h3>Lessons for the next operator</h3>
+<h2>Real-world deploy log &mdash; 2026-04-22 (alt-account pivot + subnet fix)</h2>
+<p>Second attempt 24 h later, after AWS Support still hadn't verified account <code>522921482430</code>. Three surprises that aren't in the 04-21 log.</p>
+
+<h3>Surprise #1 &mdash; <code>run-instances --dry-run</code> is a liar for Free-Tier checks</h3>
+<pre><code>aws ec2 run-instances --dry-run --instance-type t3.large ...
+# "Request would have succeeded, but DryRun flag is set."</code></pre>
+<p>So we thought the restriction had lifted. It hadn't. Real <code>terraform apply</code> returned the exact same <code>InvalidParameterCombination: not eligible for Free Tier</code> error as on 04-21. <strong>Dry-run validates IAM + parameter shape but does not evaluate the Free-Tier billing restriction.</strong> The only reliable test is a real <code>run-instances</code> for the target instance type &mdash; and if it succeeds, immediately <code>terminate-instances</code>.</p>
+<div class="note">Updated Lesson #2 below.</div>
+
+<h3>Surprise #2 &mdash; EC2 EIP + private subnet = silent SSH blackhole</h3>
+<p>We pivoted to a verified AWS account (<code>735115318342</code>). Apply succeeded. Instances came up. Both were <em>unreachable</em> on port 22, even with security group ingress open to <code>0.0.0.0/0</code>. Symptoms:</p>
+<ul>
+<li><code>ssh -v</code> &rarr; <code>Connection timed out</code> (not <em>refused</em>; no TCP RST)</li>
+<li>Instance status checks: 2/2 passed</li>
+<li><code>get-console-output</code>: sshd running, keys installed, cloud-init finished</li>
+<li>cloud-init logs showed <code>apt-get</code> failed with &ldquo;Network is unreachable&rdquo; &rarr; user_data <code>python3 install</code> got skipped</li>
+</ul>
+<p>Root cause: the original Terraform placed <code>aws_instance.monitoring</code> and <code>aws_instance.k3s</code> in <strong><code>aws_subnet.private</code></strong>, whose route table sends <code>0.0.0.0/0</code> to the NAT Gateway. EIP-based inbound requires an Internet Gateway route on the subnet &mdash; private has none, so inbound SSH packets hit the subnet and get silently dropped. Outbound worked through NAT but asymmetrically (return traffic came in via EIP/IGW, didn't match NAT state table).</p>
+<p>Fix applied (committed <code>1f3b108</code>):</p>
+<pre><code># ec2.tf, both aws_instance resources
+-  subnet_id = aws_subnet.private.id
++  subnet_id = aws_subnet.public.id</code></pre>
+<p>RDS keeps its two-AZ private subnet group (that's what you <em>do</em> want for a database). Only the EIP-bearing EC2s move to public.</p>
+<div class="warn"><strong>If you inherit this Terraform before the fix merges downstream:</strong> change <code>subnet_id = aws_subnet.private.id</code> to <code>aws_subnet.public.id</code> for both <code>aws_instance.monitoring</code> and <code>aws_instance.k3s</code>. RDS keeps <code>aws_db_subnet_group.main</code> unchanged.</div>
+
+<h3>Surprise #3 &mdash; dynamic ISP rotates <code>allowed_ssh_cidrs</code> out from under you</h3>
+<p>The operator box's public IP rotated twice in ~2 hours on a dynamic-NAT mobile-ISP uplink (Morocco Maroc Telecom). Each rotation invalidated the <code>allowed_ssh_cidrs = ["X.X.X.X/32"]</code> in <code>terraform.tfvars</code>. Symptom: SSH that worked an hour ago now times out.</p>
+<p>Two reasonable fixes:</p>
+<ol>
+<li><strong>For solo active-session work on a trusted network:</strong> temporarily widen to <code>["0.0.0.0/0"]</code>, then narrow post-session. Safe because sshd is key-only (no password auth) and the private key isn't exportable.</li>
+<li><strong>For hands-off deploys:</strong> use Terraform's <code>http</code> data source to auto-detect:
+<pre><code>data "http" "my_ip" {
+  url = "https://checkip.amazonaws.com"
+}
+
+locals {
+  allowed_ssh_cidrs = concat(
+    var.allowed_ssh_cidrs,
+    ["${chomp(data.http.my_ip.response_body)}/32"]
+  )
+}</code></pre>
+</li>
+</ol>
+
+<h3>Surprise #4 &mdash; Ansible role writes to a directory its play hasn't created yet</h3>
+<p>Running <code>ansible-playbook playbooks/monitoring.yml</code> failed at <code>roles/otel-collector/tasks/main.yml:17</code>:</p>
+<pre><code>fatal: [monitoring-vm]: FAILED! => {
+  "msg": "Destination directory /opt/stack does not exist"}</code></pre>
+<p>In <code>playbooks/monitoring.yml</code>, the roles (including <code>otel-collector</code>) run <em>before</em> the play-level <code>tasks:</code> block, but <code>/opt/stack</code> is created by a task in that block. Classic Ansible gotcha. Workaround used: <code>ansible monitoring-vm -m file -a "path=/opt/stack state=directory mode=0755" -b</code> then re-run the playbook (idempotent).</p>
+<p>Permanent fix (not yet committed): move the &ldquo;Create stack directory&rdquo; task into a <code>pre_tasks:</code> block so it runs before the roles, or have the <code>otel-collector</code> role create its own parent with <code>state=directory</code>.</p>
+
+<h3>Time budget that actually happened (alt-account path)</h3>
+<table>
+<tr><th>Phase</th><th>Wall clock</th><th>Notes</th></tr>
+<tr><td>Destroy partial 04-21 state</td><td>~4 min</td><td>57 resources, RDS is the long pole</td></tr>
+<tr><td>Apply on alt-account (first)</td><td>~8 min</td><td>RDS 5m38s, NAT ~1m, EC2s 16s each</td></tr>
+<tr><td>Diagnose &amp; fix subnet bug</td><td>~10 min</td><td>Console-log investigation + route-table check</td></tr>
+<tr><td>Re-apply (subnet fix)</td><td>~3 min</td><td>Only EC2s + EIP associations replaced</td></tr>
+<tr><td>Ansible monitoring playbook</td><td>~6 min (+re-run)</td><td>Failed on /opt/stack, re-ran after mkdir</td></tr>
+<tr><td>Ansible k3s playbook</td><td>~8&ndash;10 min</td><td>SSH CIDR rotated mid-run; widen + retry</td></tr>
+<tr><td>Image builds + Helm + smoke test</td><td>~20 min</td><td>See next section</td></tr>
+</table>
+
+<h3>Lessons for the next operator (updated)</h3>
 <ol>
 <li><strong>Check account age.</strong> If the IAM user or root account is &lt; 1 week old, assume Free-Tier + CloudFront restrictions. File the unlock case <em>before</em> touching Terraform.</li>
-<li><strong>Test with a Free Tier instance first.</strong> If <code>aws ec2 run-instances --instance-type t3.micro --dry-run</code> works but <code>--instance-type t3.large --dry-run</code> fails, you're in the restricted state. Takes 5 seconds; saves 5 minutes of RDS creation followed by rollback.</li>
+<li><strong>Test with a real launch, not a dry-run.</strong> Dry-run doesn't catch the Free-Tier billing restriction. Do <code>aws ec2 run-instances --instance-type t3.medium ... --count 1</code> (not <code>--dry-run</code>), then <code>terminate-instances</code> immediately. Cost: <code>~$0.001</code>. Tells you in 10 s whether the account is unrestricted.</li>
+<li><strong>EIP-bearing instances go in the public subnet.</strong> Full stop. If you see "timeout" (not "refused") on SSH and instance status is 2/2 ok, check the subnet's route table for an IGW route on <code>0.0.0.0/0</code>.</li>
+<li><strong>Run Ansible from a box with a static public IP</strong> if you can &mdash; or widen <code>allowed_ssh_cidrs</code> to <code>0.0.0.0/0</code> for the duration of the session and tighten back afterwards. Dynamic ISPs rotate IPs every 1&ndash;3 hours and will lock you out mid-deploy.</li>
 <li><strong>Academic framing helps AWS appeals.</strong> Mentioning it's a student learning project (with university domain, short lifecycle, and billing alarms) tips quota and unlock appeals toward approval far more than a generic &ldquo;please approve&rdquo; message.</li>
 <li><strong>Separate support cases for separate restrictions.</strong> Quotas, account verification, and Free-Tier lift are three different support queues. Don't bundle &mdash; it slows all three.</li>
-<li><strong>Keep <code>enable_k3s</code> / <code>enable_gpu</code> flags even after quota lifts.</strong> Staged deploys become useful again any time you want to cost-optimize off-hours or run a mini demo.</li>
+<li><strong>Keep <code>enable_k3s</code> / <code>enable_gpu</code> / <code>enable_cloudfront</code> flags even after quota lifts.</strong> Staged deploys become useful any time you want to cost-optimize off-hours, run a mini demo, or defer a resource whose account-level gate is slow to clear (CloudFront verification).</li>
+<li><strong>Pre-flight the monitoring playbook.</strong> Until the <code>/opt/stack</code> ordering bug is fixed in <code>monitoring.yml</code>, run <code>ansible monitoring-vm -m file -a "path=/opt/stack state=directory mode=0755" -b</code> before the first <code>ansible-playbook</code> invocation.</li>
 </ol>
 
 <h3>Next steps in this deployment</h3>
