@@ -744,22 +744,52 @@
 
   <hr class="soft">
 
-  <h3>(c) Ollama → MCP → Prometheus / Loki / Jaeger</h3>
+  <h3>(c) Triage → MCP → Prometheus / Loki / Jaeger <span class="sans" style="font-size:13px;color:var(--muted);">(and what "MCP" actually means here)</span></h3>
 
-  <p>This is where most people expect magic. It's actually simpler than it looks. The LLM doesn't "speak" a special protocol — the MCP servers are plain HTTP services with a few well-named tool endpoints. The triage service pre-fetches context from those endpoints before calling the LLM. The LLM's job is to read the already-gathered evidence and write a verdict.</p>
+  <p>This is where most people expect magic. It's actually simpler than it looks — and the naming is a little misleading, so worth stating the shape plainly.</p>
+
+  <p><strong>The LLM never queries anything.</strong> It doesn't speak HTTP, it doesn't call the triage service, it doesn't reach out to the MCPs. The triage service is the orchestrator — it calls the MCPs, assembles a single evidence bundle, then hands that bundle to Ollama as one chat-completion request. The LLM reads the bundle and writes a verdict. One request in, one JSON out. No loop.</p>
 
   <div class="ift">
-    <div class="ift-title">How the AI "asks" for data</div>
-    <span class="if"><span class="tag-if sans">IF</span>The triage pipeline needs the last 15 minutes of data for service <code>spring-boot</code>…</span>
-    <span class="then"><span class="tag-then sans">THEN</span>It issues three concurrent HTTP GETs:<br>
-      • <code>GET prometheus-mcp:8091/tools/query_range?promql=...&amp;start=15m</code><br>
-      • <code>GET loki-mcp:8092/tools/query_range?logql=...&amp;limit=200</code><br>
-      • <code>GET jaeger-mcp:8093/tools/traces?service=spring-boot&amp;limit=20</code><br>
-      …each MCP forwards to its backing system, returns JSON, and the triage service builds a <code>GatheredContext</code> object that becomes part of the prompt.</span>
+    <div class="ift-title">What actually happens on each webhook</div>
+    <span class="if"><span class="tag-if sans">IF</span>The triage pipeline needs context for alert <code>BackendHigh5xxRate</code> on service <code>spring-boot</code> that fired at <code>10:00:00Z</code>…</span>
+    <span class="then"><span class="tag-then sans">THEN</span>
+      <ol style="margin-top:6px;">
+        <li>Triage service issues three concurrent HTTP GETs to the MCPs:
+          <ul>
+            <li><code>GET prometheus-mcp:8091/tools/query_range?promql=...&amp;start=1759312280&amp;end=1759312800</code></li>
+            <li><code>GET loki-mcp:8092/tools/query_logs?logql=...&amp;start=1759312280000000000</code></li>
+            <li><code>GET jaeger-mcp:8093/tools/find_traces?service=spring-boot&amp;start=1759312280000000</code></li>
+          </ul>
+        </li>
+        <li>Each MCP forwards to its backing system, returns JSON. Triage builds a <code>GatheredContext</code> object (metrics, logs, traces).</li>
+        <li>Drain3 annotates each log line as <code>[KNOWN]</code> or <code>[ANOMALY]</code> in-process.</li>
+        <li>Triage assembles a single prompt: system message + user message containing the alert, the <code>GatheredContext</code>, the Drain3 anomaly summary, and RCA history.</li>
+        <li>Triage POSTs once to <code>http://ollama:11434/api/chat</code> with <code>{model: "llama3.2:3b", messages: [...], format: "json"}</code>.</li>
+        <li>Ollama runs inference (~5–15 min on CPU), returns a single JSON object. Pydantic validates it. Done.</li>
+      </ol>
+    </span>
   </div>
 
+  <p>So the answer to "where does the LLM get its data" is: <strong>it's handed a bundle</strong>. The MCPs and the LLM never communicate. The triage service is the only thing that talks to both.</p>
+
+  <h4 style="margin-top:22px;">Why "MCP" at all — three reasons stacked</h4>
+
+  <p><strong>1. Security boundary.</strong> The MCPs expose only <em>GET</em> endpoints over a narrow verb list (<code>query_instant</code>, <code>query_range</code>, <code>query_logs</code>, <code>find_traces</code>, <code>services</code>). The triage service — and by extension the LLM — can see the system but can never change it. No DROP TABLE, no kubectl delete, no git push. This is the answer to "isn't giving an AI production access scary?"</p>
+
+  <p><strong>2. Abstraction layer.</strong> The triage code calls <code>prometheus-mcp</code>, not Prometheus directly. If we migrate to Mimir, VictoriaMetrics, or a hosted Chronosphere tomorrow, only the MCP implementation changes — the triage pipeline doesn't know or care.</p>
+
+  <p><strong>3. The honest caveat — we use MCP <em>naming</em>, not strict MCP <em>semantics</em>.</strong> Anthropic's MCP protocol is designed for <em>LLM-driven</em> tool calls: the model itself decides what to query, emits a tool call, reads the result, decides the next step — a true agent loop. Our implementation pre-fetches a fixed bundle and hands it to the model. The LLM doesn't drive. Two deliberate reasons:</p>
+
+  <ul>
+    <li><strong>Local <code>llama3.2:3b</code> has weak tool-calling.</strong> 3B-parameter models routinely hallucinate tool names, invent arguments, and forget to close agent loops. Claude and GPT-4 do this reliably; local 3B models don't. For a demo-critical pipeline, pre-fetching is the safer shape.</li>
+    <li><strong>On CPU, every tool round-trip is another 5–15 minute inference.</strong> A 4-step agent loop would run 20–60 minutes per alert. One-shot keeps us to a single inference.</li>
+  </ul>
+
+  <p>Moving to <em>true</em> LLM-driven MCP tool calling is on the Sprint 3 backlog (item 2c in <code>monitoring-docs/sprint3-backlog.md</code>). It unlocks sharper, targeted investigation — but requires either the pending GPU quota or a cloud-LLM path (Claude / GPT via API). It's a real architecture, not a today-choice.</p>
+
   <div class="box">
-    <strong>Why "MCP" at all?</strong> The MCP bridges keep the LLM <em>read-only</em>: it can never DROP a table, restart a service, or ship a commit. Every tool is a GET. This is a deliberate security boundary, not a nice-to-have — and it's the answer to "isn't giving an AI access to production scary?"
+    <strong>Easy line to remember during Q&amp;A:</strong> <em>"MCP in our stack is the security boundary and the swap point. The LLM reads the bundle the triage service assembles; it doesn't drive tool calls — yet. That's a Sprint 3 upgrade once the GPU lands."</em>
   </div>
 </section>
 
