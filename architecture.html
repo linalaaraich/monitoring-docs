@@ -260,7 +260,37 @@
 
 <div class="title-bar">
   <h1>Observability Platform Architecture</h1>
-  <p>AWS us-east-1 &nbsp;|&nbsp; 4 EC2 + RDS + S3/CloudFront</p>
+  <p>AWS us-east-1 &nbsp;|&nbsp; 2 EC2 + RDS + S3/CloudFront &nbsp;|&nbsp; AI stack on laptop (tailnet) &nbsp;|&nbsp; updated 2026-04-23</p>
+</div>
+
+<div style="max-width:1100px;margin:20px auto;padding:18px 22px;background:rgba(107,207,127,.06);border-left:3px solid #6bcf7f;border-radius:0 8px 8px 0;">
+  <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#6bcf7f;margin-bottom:8px;">2026-04-23 — the stack as it actually runs</div>
+  <p style="margin:0 0 10px;color:#c0c5d0;line-height:1.6;">
+    The diagrams below are the original Sprint-2 intent. The <strong>live</strong> layout has diverged in two important ways that matter for any operator touching this system:
+  </p>
+  <ul style="margin:0 0 10px 20px;color:#c0c5d0;line-height:1.7;">
+    <li><strong>AI stack (Ollama + 5 MCP servers + triage) is on Lina's laptop</strong>, not a cloud GPU. The laptop's GTX 1060 + qwen2.5:7b delivered end-to-end RCA in ~25 s warm / 68 s cold — acceptable until the G-family quota lands and we commission a dedicated EC2 GPU. The laptop runs WSL2 + Docker Desktop; the AI stack compose file lives at <code>~/cires-ai/docker-compose.yml</code>.</li>
+    <li><strong>Tailscale is the control + data plane between cloud and laptop.</strong> Monitoring VM (EC2) → triage webhook at <code>adolin-wsl</code> (laptop), triage → Loki at <code>observability-rca-monitoring</code> (EC2), controller → ansible to both. Every hop is over WireGuard, keyed on MagicDNS short hostnames that survive EIP drift. Full setup in the <a href="tailscale-guide.html" style="color:#6bcf7f">Tailscale guide</a>.</li>
+  </ul>
+  <p style="margin:0;color:#8890a0;font-size:12.5px;">
+    <strong>Measured latencies:</strong> Prometheus/Loki/Jaeger MCPs 150–280 ms · Ollama inference 25 s warm / 68 s cold · 3-pillar context gather 500–900 ms · Grafana webhook → triage receipt ~60 s (alertmanager debounce).
+  </p>
+</div>
+
+<div style="max-width:1100px;margin:20px auto;padding:16px 20px;background:var(--card);border:1px solid var(--border);border-radius:8px;">
+  <h3 style="margin:0 0 10px;font-size:14px;color:var(--accent-cyan);">Network plane (post-2026-04-23)</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:13px;">
+    <thead><tr style="background:rgba(64,208,208,.06)"><th style="padding:8px 12px;text-align:left;color:var(--muted);font-size:11px;letter-spacing:1px;text-transform:uppercase">Node (MagicDNS)</th><th style="padding:8px 12px;text-align:left;color:var(--muted);font-size:11px;letter-spacing:1px;text-transform:uppercase">Where</th><th style="padding:8px 12px;text-align:left;color:var(--muted);font-size:11px;letter-spacing:1px;text-transform:uppercase">What</th><th style="padding:8px 12px;text-align:left;color:var(--muted);font-size:11px;letter-spacing:1px;text-transform:uppercase">Reached via</th></tr></thead>
+    <tbody>
+      <tr style="border-top:1px solid var(--border)"><td style="padding:8px 12px"><code>claude-controller</code></td><td style="padding:8px 12px;color:var(--muted)">cloud shell</td><td style="padding:8px 12px">ansible control, orchestration</td><td style="padding:8px 12px;color:var(--muted)">tailnet only</td></tr>
+      <tr style="border-top:1px solid var(--border)"><td style="padding:8px 12px"><code>observability-rca-monitoring</code></td><td style="padding:8px 12px;color:var(--muted)">EC2 (EIP 52.202.21.192)</td><td style="padding:8px 12px">Prometheus · Loki · Jaeger · Grafana · OTel · Alertmanager</td><td style="padding:8px 12px;color:var(--muted)">tailnet + public</td></tr>
+      <tr style="border-top:1px solid var(--border)"><td style="padding:8px 12px"><code>observability-rca-k3s</code></td><td style="padding:8px 12px;color:var(--muted)">EC2 (EIP 52.5.239.234)</td><td style="padding:8px 12px">k3s cluster: Spring Boot · MySQL · Kong</td><td style="padding:8px 12px;color:var(--muted)">tailnet + public (Kong NodePort :30080)</td></tr>
+      <tr style="border-top:1px solid var(--border)"><td style="padding:8px 12px"><code>adolin-wsl</code></td><td style="padding:8px 12px;color:var(--muted)">Lina's laptop (WSL2)</td><td style="padding:8px 12px">Triage service · Ollama · 5 MCP servers · Watchtower (CD)</td><td style="padding:8px 12px;color:var(--muted)">tailnet only</td></tr>
+    </tbody>
+  </table>
+  <p style="margin:10px 0 0;color:var(--muted);font-size:12px;line-height:1.6;">
+    <strong>Flow:</strong> Grafana Alertmanager → <code>http://100.117.118.70:8090/webhook/grafana</code> over tailnet → triage investigates (MCPs fan out to monitoring VM) → LLM verdict (local Ollama on laptop) → escalation email via SMTP (public). Webhook URL pinned in <code>inventory/group_vars/monitoring.yml:grafana_external_url</code>; swap to MagicDNS (<code>http://adolin-wsl:8090</code>) once Tailscale DNS is confirmed stable across nodes.
+  </p>
 </div>
 
 <div class="tabs">
