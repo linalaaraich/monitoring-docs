@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Triage Service — CIRES Observability Platform</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --bg-soft: #13151e;
+    --card: #1a1d27;
+    --card-alt: #1e2230;
+    --border: #2a2d3a;
+    --border-hi: #3a3f52;
+    --text: #e4e6ee;
+    --text-soft: #c0c5d0;
+    --muted: #8890a0;
+    --accent-blue: #4ea8de;
+    --accent-green: #6bcf7f;
+    --accent-orange: #f0a050;
+    --accent-purple: #b07ee8;
+    --accent-red: #e06070;
+    --accent-cyan: #40d0d0;
+    --accent-yellow: #e0d060;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { font-family:'Inter','Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); line-height:1.65; font-size:15px; -webkit-font-smoothing:antialiased; }
+  code, pre, .mono { font-family:'JetBrains Mono','Fira Code',ui-monospace,monospace; font-size:0.88em; }
+
+  /* Top nav */
+  .topnav { display:flex; align-items:center; gap:12px; padding:14px 40px; background:var(--bg-soft); border-bottom:1px solid var(--border); flex-wrap:wrap; }
+  .topnav span.nav-label { color:var(--muted); font-size:13px; font-weight:600; margin-right:4px; }
+  .navlink { display:inline-flex; align-items:center; gap:6px; padding:7px 14px; border-radius:8px; font-size:13px; font-weight:600; text-decoration:none; border:1px solid; transition:background .2s, transform .15s; }
+  .navlink:hover { transform:translateY(-1px); }
+  .navlink-home { color:var(--text); border-color:var(--border); background:var(--card); }
+  .navlink-home:hover { background:var(--card-alt); }
+  .navlink-arch { color:var(--accent-blue); border-color:rgba(78,168,222,.4); background:rgba(78,168,222,.08); }
+  .navlink-arch:hover { background:rgba(78,168,222,.18); }
+  .navlink-triage { color:var(--accent-purple); border-color:rgba(176,126,232,.4); background:rgba(176,126,232,.12); }
+  .navlink-sprint3 { color:var(--accent-orange); border-color:rgba(240,160,80,.4); background:rgba(240,160,80,.08); }
+  .navlink-sprint3:hover { background:rgba(240,160,80,.18); }
+
+  /* Hero */
+  .hero { padding:56px 40px 40px; border-bottom:1px solid var(--border); background:linear-gradient(180deg, #13151e 0%, var(--bg) 100%); }
+  .hero .inner { max-width:960px; margin:0 auto; }
+  .hero .eyebrow { font-size:11px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:var(--accent-purple); margin-bottom:12px; }
+  .hero h1 { font-size:36px; font-weight:800; letter-spacing:-.5px; margin-bottom:14px; line-height:1.2; }
+  .hero h1 span.accent { color:var(--accent-purple); }
+  .hero p.lead { font-size:16px; color:var(--text-soft); max-width:720px; line-height:1.7; margin-bottom:20px; }
+  .hero .pill-row { display:flex; gap:8px; flex-wrap:wrap; }
+  .pill { font-size:11px; font-weight:600; padding:4px 10px; border-radius:12px; border:1px solid; letter-spacing:.2px; }
+  .pill.blue { color:var(--accent-blue); border-color:rgba(78,168,222,.35); background:rgba(78,168,222,.08); }
+  .pill.green { color:var(--accent-green); border-color:rgba(107,207,127,.35); background:rgba(107,207,127,.08); }
+  .pill.purple { color:var(--accent-purple); border-color:rgba(176,126,232,.35); background:rgba(176,126,232,.08); }
+  .pill.orange { color:var(--accent-orange); border-color:rgba(240,160,80,.35); background:rgba(240,160,80,.08); }
+  .pill.cyan { color:var(--accent-cyan); border-color:rgba(64,208,208,.35); background:rgba(64,208,208,.08); }
+
+  /* Main layout with TOC sidebar */
+  .layout { display:grid; grid-template-columns:240px 1fr; max-width:1280px; margin:0 auto; padding:32px 40px 80px; gap:40px; }
+  .toc { position:sticky; top:20px; align-self:start; border-left:1px solid var(--border); padding-left:16px; }
+  .toc h4 { font-size:11px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:var(--muted); margin-bottom:12px; }
+  .toc ol { list-style:none; counter-reset:toc; }
+  .toc li { counter-increment:toc; margin-bottom:6px; }
+  .toc a { display:block; padding:5px 8px; color:var(--text-soft); text-decoration:none; font-size:13px; border-radius:4px; transition:background .15s, color .15s; line-height:1.4; }
+  .toc a:hover { background:var(--card); color:var(--text); }
+  .toc a::before { content:counter(toc) ". "; color:var(--muted); font-variant-numeric:tabular-nums; }
+
+  .content { min-width:0; max-width:860px; }
+  .content h2 { font-size:26px; font-weight:700; margin:48px 0 16px; letter-spacing:-.3px; scroll-margin-top:24px; padding-bottom:8px; border-bottom:1px solid var(--border); }
+  .content h2:first-child { margin-top:0; }
+  .content h2 .num { color:var(--muted); font-weight:600; margin-right:8px; font-variant-numeric:tabular-nums; }
+  .content h3 { font-size:18px; font-weight:700; margin:28px 0 10px; color:var(--text); }
+  .content h4 { font-size:14px; font-weight:700; margin:18px 0 6px; color:var(--accent-blue); text-transform:uppercase; letter-spacing:.5px; }
+  .content p { margin-bottom:14px; color:var(--text-soft); }
+  .content p strong { color:var(--text); font-weight:600; }
+  .content ul, .content ol { margin:8px 0 16px 24px; color:var(--text-soft); }
+  .content li { margin-bottom:6px; }
+  .content code { background:var(--card); border:1px solid var(--border); padding:1px 6px; border-radius:4px; font-size:0.85em; color:var(--accent-cyan); }
+  .content pre { background:var(--card); border:1px solid var(--border); padding:14px 16px; border-radius:8px; margin:12px 0 18px; overflow-x:auto; line-height:1.5; }
+  .content pre code { background:none; border:none; padding:0; color:var(--text); font-size:0.85em; }
+  .content a { color:var(--accent-blue); text-decoration:none; border-bottom:1px dashed rgba(78,168,222,.35); }
+  .content a:hover { border-bottom-style:solid; }
+
+  /* Callouts */
+  .callout { border-left:3px solid; border-radius:0 8px 8px 0; padding:14px 18px; margin:16px 0; background:var(--card); }
+  .callout.note { border-color:var(--accent-blue); }
+  .callout.tip { border-color:var(--accent-green); }
+  .callout.warn { border-color:var(--accent-orange); }
+  .callout.story { border-color:var(--accent-purple); background:linear-gradient(90deg, rgba(176,126,232,.08), var(--card) 60%); }
+  .callout-label { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; margin-bottom:6px; }
+  .callout.note .callout-label { color:var(--accent-blue); }
+  .callout.tip .callout-label { color:var(--accent-green); }
+  .callout.warn .callout-label { color:var(--accent-orange); }
+  .callout.story .callout-label { color:var(--accent-purple); }
+
+  /* Pipeline diagram */
+  .pipeline { display:flex; flex-direction:column; gap:8px; margin:20px 0; }
+  .pipeline-step { display:grid; grid-template-columns:48px 1fr; gap:14px; align-items:start; padding:14px 16px; background:var(--card); border:1px solid var(--border); border-radius:8px; position:relative; }
+  .pipeline-step::after { content:""; position:absolute; left:40px; top:100%; width:2px; height:8px; background:var(--border-hi); }
+  .pipeline-step:last-child::after { display:none; }
+  .pipeline-num { grid-row:1/3; width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:13px; color:white; flex-shrink:0; margin-top:2px; }
+  .ps-blue .pipeline-num { background:var(--accent-blue); }
+  .ps-green .pipeline-num { background:var(--accent-green); }
+  .ps-orange .pipeline-num { background:var(--accent-orange); }
+  .ps-purple .pipeline-num { background:var(--accent-purple); }
+  .ps-red .pipeline-num { background:var(--accent-red); }
+  .ps-cyan .pipeline-num { background:var(--accent-cyan); }
+  .pipeline-title { font-weight:700; font-size:14px; color:var(--text); margin-bottom:2px; }
+  .pipeline-title .mini-tag { display:inline-block; margin-left:8px; font-size:10px; padding:2px 7px; border-radius:10px; background:var(--card-alt); color:var(--muted); font-weight:500; border:1px solid var(--border); vertical-align:middle; }
+  .pipeline-desc { color:var(--text-soft); font-size:13px; line-height:1.55; }
+  .pipeline-desc code { font-size:0.88em; }
+
+  /* Endpoint cards */
+  .endpoint { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:18px 20px; margin:16px 0; }
+  .endpoint-head { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:8px; }
+  .method { font-family:monospace; font-weight:700; font-size:11px; padding:4px 10px; border-radius:4px; letter-spacing:.5px; }
+  .method.GET { background:rgba(78,168,222,.15); color:var(--accent-blue); }
+  .method.POST { background:rgba(107,207,127,.15); color:var(--accent-green); }
+  .endpoint-path { font-family:monospace; font-size:14px; color:var(--text); font-weight:600; }
+  .endpoint-returns { margin-left:auto; font-size:11px; color:var(--muted); }
+  .endpoint-summary { color:var(--text-soft); font-size:13.5px; margin-bottom:10px; line-height:1.6; }
+  .endpoint-details { background:var(--bg-soft); border:1px solid var(--border); border-radius:6px; padding:10px 14px; margin-top:8px; font-size:12.5px; }
+  .endpoint-details dt { color:var(--accent-cyan); font-family:monospace; font-weight:600; margin-top:6px; font-size:12px; }
+  .endpoint-details dt:first-child { margin-top:0; }
+  .endpoint-details dd { color:var(--text-soft); margin-left:0; padding-left:12px; line-height:1.55; }
+
+  /* Field table */
+  .field-table { width:100%; border-collapse:collapse; font-size:13px; margin:12px 0 16px; }
+  .field-table th, .field-table td { padding:8px 12px; text-align:left; border-bottom:1px solid var(--border); vertical-align:top; }
+  .field-table th { font-size:11px; letter-spacing:.5px; text-transform:uppercase; color:var(--muted); font-weight:700; background:var(--bg-soft); }
+  .field-table tr:hover td { background:rgba(255,255,255,0.02); }
+  .field-table td.name { font-family:monospace; color:var(--accent-cyan); font-weight:600; white-space:nowrap; }
+  .field-table td.type { font-family:monospace; color:var(--accent-orange); font-size:12px; white-space:nowrap; }
+  .field-table td.desc { color:var(--text-soft); }
+  .field-table td.req { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; }
+  .req-yes { color:var(--accent-red); }
+  .req-no { color:var(--muted); }
+
+  /* Highlights / kbd / marks */
+  mark { background:rgba(224,208,96,.15); color:var(--accent-yellow); padding:1px 4px; border-radius:3px; }
+  kbd { font-family:monospace; font-size:0.85em; background:var(--card-alt); border:1px solid var(--border); border-bottom-width:2px; padding:1px 6px; border-radius:4px; color:var(--text); }
+
+  /* JSON block with line-highlighting */
+  .json-block { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:14px 16px; margin:12px 0; overflow-x:auto; font-family:monospace; font-size:12.5px; line-height:1.55; white-space:pre; }
+  .json-block .k { color:var(--accent-cyan); }
+  .json-block .s { color:var(--accent-green); }
+  .json-block .n { color:var(--accent-orange); }
+  .json-block .c { color:var(--muted); font-style:italic; }
+  .json-block .hl { background:rgba(224,208,96,.08); display:inline-block; width:100%; margin:0 -16px; padding:0 16px; border-left:2px solid var(--accent-yellow); }
+
+  /* Footer */
+  .footer { text-align:center; padding:40px 20px; color:var(--muted); font-size:12px; border-top:1px solid var(--border); margin-top:40px; }
+  .footer a { color:var(--accent-blue); text-decoration:none; }
+
+  /* Small screens */
+  @media(max-width:860px) {
+    .layout { grid-template-columns:1fr; padding:24px 20px 60px; gap:24px; }
+    .toc { position:static; }
+    .hero { padding:40px 20px 32px; }
+    .hero h1 { font-size:26px; }
+    .topnav { padding:12px 20px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topnav">
+  <span class="nav-label">Pages:</span>
+  <a href="index.html" class="navlink navlink-home">← Home</a>
+  <a href="architecture.html" class="navlink navlink-arch">🏗️ Architecture</a>
+  <a href="triage-service.html" class="navlink navlink-triage">🧠 Triage Service</a>
+  <a href="sprint3-backlog.md" class="navlink navlink-sprint3">🚀 Sprint 3 Backlog</a>
+  <a href="build-guide.html" class="navlink navlink-arch">📖 Build Guide</a>
+  <a href="reproducibility-guide.html" class="navlink" style="color:var(--accent-green); border-color:rgba(107,207,127,.35); background:rgba(107,207,127,.08);">🧭 Reproducibility</a>
+</div>
+
+<div class="hero">
+  <div class="inner">
+    <div class="eyebrow">AI RCA · Service Reference</div>
+    <h1>The <span class="accent">Triage Service</span> — how it thinks about your alerts</h1>
+    <p class="lead">
+      A FastAPI service that turns a raw Grafana webhook into a structured root-cause verdict in seconds. Built on Ollama + five MCP servers + Drain3 anomaly detection, with dedup, pre-LLM suppression, and a timeout-safe fallback path. This page documents the pipeline, HTTP surface, data model, dashboard, and the metrics it exposes — everything you need to navigate <code>/decisions</code>, the dashboard, and the logs with confidence.
+    </p>
+    <div class="pill-row">
+      <span class="pill purple">FastAPI</span>
+      <span class="pill blue">Ollama</span>
+      <span class="pill green">Prometheus · Loki · Jaeger MCPs</span>
+      <span class="pill orange">Drain3</span>
+      <span class="pill cyan">SQLite RCA store</span>
+    </div>
+  </div>
+</div>
+
+<div class="layout">
+<aside class="toc">
+  <h4>On this page</h4>
+  <ol>
+    <li><a href="#overview">Overview</a></li>
+    <li><a href="#pipeline">The 9-step pipeline</a></li>
+    <li><a href="#api">HTTP API</a></li>
+    <li><a href="#decisions">The <code>/decisions</code> endpoint</a></li>
+    <li><a href="#models">Data model</a></li>
+    <li><a href="#dashboard">The dashboard</a></li>
+    <li><a href="#metrics">Prometheus metrics</a></li>
+    <li><a href="#suppression">Dedup &amp; suppression</a></li>
+    <li><a href="#verdict-story">A real verdict (2026-04-23)</a></li>
+    <li><a href="#related">Related pages</a></li>
+  </ol>
+</aside>
+
+<main class="content">
+
+<h2 id="overview"><span class="num">1.</span> Overview</h2>
+
+<p>
+The triage service is the <strong>brain</strong> of the AI RCA pipeline. Grafana (or Drain3's anomaly webhook) POSTs an alert at it; the service spends at most <code>PIPELINE_TIMEOUT</code> seconds gathering correlated context from Prometheus, Loki, and Jaeger, asking an LLM to reason over the evidence, and storing the resulting verdict. Downstream, <strong>one of four things</strong> happens:
+</p>
+<ul>
+  <li><strong>Escalate</strong> — verdict "something's genuinely wrong" → email the on-call engineer an HTML report with RCA, suggested actions, and evidence.</li>
+  <li><strong>Dismiss</strong> — verdict "expected / noise" → record the decision, send no email, the pager stays quiet.</li>
+  <li><strong>Suppress (pre-LLM)</strong> — a second instance of an alert we just dismissed; we reuse the prior verdict without paying the Ollama cost.</li>
+  <li><strong>Timeout passthrough</strong> — the LLM didn't return in time → we forward the raw Grafana alert as a safety fallback. <em>Alerting never gets blocked by the AI layer.</em></li>
+</ul>
+
+<p>
+Every decision — escalate, dismiss, suppress, or timeout — is persisted in a local SQLite RCA history. That history doubles as (a) the dashboard, (b) the Layer 2 suppression signal, and (c) the "how often does this alert fire" context for future LLM prompts.
+</p>
+
+<div class="callout note">
+  <div class="callout-label">Why a separate service?</div>
+  <p style="margin:0">
+    The triage service is intentionally a thin coordinator — it doesn't own Prometheus, Loki, or Jaeger. Each pillar is queried through a small MCP server (<code>prometheus-mcp</code>, <code>loki-mcp</code>, <code>jaeger-mcp</code>), so swapping storage backends, adding auth, or rate-limiting a pillar doesn't touch the pipeline code. See the <a href="architecture.html">architecture diagram</a> for the full picture.
+  </p>
+</div>
+
+<h3>At-a-glance</h3>
+<table class="field-table">
+  <tbody>
+    <tr><td class="name">Listen port</td><td class="desc"><code>:8090</code> (published via docker-compose)</td></tr>
+    <tr><td class="name">Repo</td><td class="desc"><a href="https://github.com/linalaaraich/monitoring-triage-service">linalaaraich/monitoring-triage-service</a></td></tr>
+    <tr><td class="name">Entry point</td><td class="desc"><code>app/main.py</code> — FastAPI app + endpoint declarations</td></tr>
+    <tr><td class="name">Pipeline</td><td class="desc"><code>app/pipeline.py</code> — the 9-step flow below</td></tr>
+    <tr><td class="name">Context fan-out</td><td class="desc"><code>app/context.py</code> — parallel calls to the 3 pillar MCPs</td></tr>
+    <tr><td class="name">Storage</td><td class="desc"><code>app/rca_store.py</code> — SQLite (<code>rca_history</code> table)</td></tr>
+    <tr><td class="name">LLM target</td><td class="desc">Ollama REST (<code>/api/generate</code>) — model picked by <code>OLLAMA_MODEL</code> env</td></tr>
+  </tbody>
+</table>
+
+<!-- ───────────────────────────────────────── -->
+<h2 id="pipeline"><span class="num">2.</span> The 9-step pipeline</h2>
+<p>
+Each Grafana alert the service accepts runs through these stages. Steps 1–2 are cheap and synchronous (dedup + suppression check); step 3 onward runs under an asyncio timeout with a safety fallback.
+</p>
+
+<div class="pipeline">
+  <div class="pipeline-step ps-blue">
+    <div class="pipeline-num">1</div>
+    <div>
+      <div class="pipeline-title">Webhook receive <span class="mini-tag">200&nbsp;µs</span></div>
+      <div class="pipeline-desc">
+        <code>POST /webhook/grafana</code> or <code>/webhook/drain3</code> returns HTTP&nbsp;202 immediately and enqueues the pipeline as a FastAPI background task. <code>triage_webhooks_received_total</code> is incremented here.
+      </div>
+    </div>
+  </div>
+  <div class="pipeline-step ps-green">
+    <div class="pipeline-num">2</div>
+    <div>
+      <div class="pipeline-title">Deduplication <span class="mini-tag">Layer 1</span></div>
+      <div class="pipeline-desc">
+        An in-memory fingerprint of <code>(alertname, instance, status)</code> with a TTL of <code>DEDUP_WINDOW_SECONDS</code>. Grafana re-fires the same alert while it's active; we only run the pipeline once per window. <code>triage_alerts_deduplicated_total</code> increments when a dup is dropped.
+      </div>
+    </div>
+  </div>
+  <div class="pipeline-step ps-green">
+    <div class="pipeline-num">3</div>
+    <div>
+      <div class="pipeline-title">Pre-LLM suppression <span class="mini-tag">Layer 2</span></div>
+      <div class="pipeline-desc">
+        Looks up the same <code>(alertname, service)</code> in the RCA history over the last <code>TRIAGE_HISTORY_LOOKBACK_MINUTES</code>. If the prior verdict was <code>dismiss</code> or <code>triage_suppressed</code>, we replay that verdict without calling Ollama. Saves the GPU from burning cycles on known-noise alerts. Gated by <code>TRIAGE_SUPPRESSION_ENABLED</code>.
+      </div>
+    </div>
+  </div>
+  <div class="pipeline-step ps-orange">
+    <div class="pipeline-num">4</div>
+    <div>
+      <div class="pipeline-title">Context gather <span class="mini-tag">parallel</span></div>
+      <div class="pipeline-desc">
+        <code>ContextGatherer.gather()</code> fires three <code>httpx.AsyncClient</code> calls in parallel — to <code>prometheus-mcp</code>, <code>loki-mcp</code>, and <code>jaeger-mcp</code> — <strong>anchored on the alert's <code>startsAt</code></strong>, not on wall-clock "now". All three pillars share an absolute time window of <code>[startsAt − 8&nbsp;min, startsAt + 2&nbsp;min]</code> (clamped to ≤ now). That correlation is why metrics, logs, and traces all describe the <em>same incident</em>, not three different ones.
+      </div>
+    </div>
+  </div>
+  <div class="pipeline-step ps-orange">
+    <div class="pipeline-num">5</div>
+    <div>
+      <div class="pipeline-title">Drain3 log annotation</div>
+      <div class="pipeline-desc">
+        Raw Loki log lines are handed to <code>DrainAnalyzer.annotate_lines()</code>. Drain3 clusters each line against a learned template set; outliers are tagged <code>[ANOMALY]</code> and surfaced as <code>anomaly_summary</code>. The LLM then sees pre-digested log signals instead of a 200-line raw dump.
+      </div>
+    </div>
+  </div>
+  <div class="pipeline-step ps-purple">
+    <div class="pipeline-num">6</div>
+    <div>
+      <div class="pipeline-title">Historical frequency lookup</div>
+      <div class="pipeline-desc">
+        <code>RCAStore.get_alert_frequency()</code> counts how many times this <code>alertname</code> has fired in the past 7 days and grabs its last-seen timestamp. The LLM prompt gets "<em>this alert has fired N times in the last 7 days — last seen {ts}</em>" so its verdict can be flaky-test-aware.
+      </div>
+    </div>
+  </div>
+  <div class="pipeline-step ps-purple">
+    <div class="pipeline-num">7</div>
+    <div>
+      <div class="pipeline-title">LLM investigation</div>
+      <div class="pipeline-desc">
+        <code>LLMClient.investigate()</code> builds a JSON-schema prompt (<code>decision</code>, <code>severity</code>, <code>rca</code>, <code>reason</code>, <code>anomaly_summary</code>, <code>suggested_actions</code>, <code>evidence</code>), POSTs it to Ollama's <code>/api/generate</code>, and parses the response. Sloppy outputs (dict-in-list, missing fields) are coerced by <code>LLMDecision</code>'s pydantic validators rather than rejected — small quantized models are forgiving, and we'd rather take their signal than 500 on the user.
+      </div>
+    </div>
+  </div>
+  <div class="pipeline-step ps-red">
+    <div class="pipeline-num">8</div>
+    <div>
+      <div class="pipeline-title">Act on verdict</div>
+      <div class="pipeline-desc">
+        If <code>decision == ESCALATE</code>, build a polished HTML email (see <code>app/notifier.py</code>) and send via SMTP. If the notifier crashes (SMTP hiccup, template bug), we <strong>log and continue</strong> — the RCA record must still land in step 9. If <code>decision == DISMISS</code>, no email; the record still goes to history so Layer 2 can learn from it.
+      </div>
+    </div>
+  </div>
+  <div class="pipeline-step ps-cyan">
+    <div class="pipeline-num">9</div>
+    <div>
+      <div class="pipeline-title">Persist to RCA history</div>
+      <div class="pipeline-desc">
+        <code>RCAStore.save_decision()</code> writes the full <code>RCARecord</code> — verdict, reasoning, RCA text, duration, all of it — to the SQLite <code>rca_history</code> table. That row is what powers <code>/decisions</code>, the dashboard, and the next pipeline's suppression check.
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="callout warn">
+  <div class="callout-label">Timeout safety</div>
+  <p style="margin:0">Steps 4–9 run under <code>asyncio.wait_for(..., timeout=PIPELINE_TIMEOUT)</code>. If it fires, we (a) send the <em>raw</em> Grafana alert email as a fallback, (b) record a <code>timeout_passthrough</code> row, and (c) continue serving. The AI layer is never in the critical path for paging.</p>
+</div>
+
+<!-- ───────────────────────────────────────── -->
+<h2 id="api"><span class="num">3.</span> HTTP API</h2>
+
+<p>
+All endpoints are served on port <code>8090</code>. Inbound webhooks return <code>202 Accepted</code> because the pipeline is async — a <code>200</code> would imply "verdict ready", which takes seconds, not microseconds.
+</p>
+
+<div class="endpoint">
+  <div class="endpoint-head">
+    <span class="method POST">POST</span>
+    <span class="endpoint-path">/webhook/grafana</span>
+    <span class="endpoint-returns">→ 202</span>
+  </div>
+  <div class="endpoint-summary">The primary ingress. Accepts a standard <a href="https://grafana.com/docs/grafana/latest/alerting/fundamentals/notifications/webhook-notifier/" target="_blank" rel="noopener">Grafana Alerting webhook payload</a>. Returns <code>202</code> instantly, kicks the pipeline off as a background task.</div>
+  <div class="endpoint-details">
+    <dl>
+      <dt>Body (JSON)</dt>
+      <dd>Grafana webhook object — <code>alerts[]</code> with <code>status</code>, <code>labels</code>, <code>annotations</code>, <code>startsAt</code>, <code>fingerprint</code>. <code>labels.alertname</code> and <code>labels.service</code> (or <code>labels.job</code>) are the two fields the pipeline cares about most.</dd>
+      <dt>Response</dt>
+      <dd><code>{"status": "accepted"}</code></dd>
+      <dt>Example</dt>
+      <dd><code>curl -X POST http://localhost:8090/webhook/grafana -H 'Content-Type: application/json' -d @sample-alert.json</code></dd>
+    </dl>
+  </div>
+</div>
+
+<div class="endpoint">
+  <div class="endpoint-head">
+    <span class="method POST">POST</span>
+    <span class="endpoint-path">/webhook/drain3</span>
+    <span class="endpoint-returns">→ 202</span>
+  </div>
+  <div class="endpoint-summary">Alternative ingress from Drain3's own anomaly detector. The payload is lower-level (anomalous log lines + rate); the triage service synthesizes a <code>Drain3AnomalyDetected</code> alert and runs the same pipeline.</div>
+  <div class="endpoint-details">
+    <dl>
+      <dt>Body (JSON)</dt>
+      <dd><code>{anomalous_lines: [str], anomaly_rate: float, new_templates: [str], service: str, timestamp: str}</code></dd>
+      <dt>Response</dt>
+      <dd><code>{"status": "accepted"}</code></dd>
+    </dl>
+  </div>
+</div>
+
+<div class="endpoint">
+  <div class="endpoint-head">
+    <span class="method GET">GET</span>
+    <span class="endpoint-path">/health</span>
+    <span class="endpoint-returns">→ 200</span>
+  </div>
+  <div class="endpoint-summary">Liveness probe. Used by the docker-compose healthcheck and by the MCPs to know the triage service is reachable.</div>
+  <div class="endpoint-details">
+    <dl>
+      <dt>Response</dt>
+      <dd><code>{"status": "healthy", "uptime_seconds": 2089.1, "version": "0.1.0"}</code></dd>
+    </dl>
+  </div>
+</div>
+
+<div class="endpoint">
+  <div class="endpoint-head">
+    <span class="method GET">GET</span>
+    <span class="endpoint-path">/decisions</span>
+    <span class="endpoint-returns">→ 200 (JSON array)</span>
+  </div>
+  <div class="endpoint-summary">The full RCA history — recent decisions, newest first. Every verdict the pipeline has ever produced is here. See <a href="#decisions">§4</a> for a field-by-field breakdown.</div>
+  <div class="endpoint-details">
+    <dl>
+      <dt>Query params</dt>
+      <dd><code>limit</code> (1–500, default 50), <code>alert_name</code> (filter to one alertname)</dd>
+      <dt>Example</dt>
+      <dd><code>curl 'http://localhost:8090/decisions?alert_name=BackendHigh5xxRate&limit=10'</code></dd>
+    </dl>
+  </div>
+</div>
+
+<div class="endpoint">
+  <div class="endpoint-head">
+    <span class="method GET">GET</span>
+    <span class="endpoint-path">/dashboard</span>
+    <span class="endpoint-returns">→ 200 (HTML)</span>
+  </div>
+  <div class="endpoint-summary">A zero-dependency HTML dashboard that renders <code>/decisions</code> as a searchable, click-to-expand table. See <a href="#dashboard">§6</a>.</div>
+</div>
+
+<div class="endpoint">
+  <div class="endpoint-head">
+    <span class="method GET">GET</span>
+    <span class="endpoint-path">/drain3/stats</span>
+    <span class="endpoint-returns">→ 200 (JSON)</span>
+  </div>
+  <div class="endpoint-summary">Internal Drain3 state — cluster count, lines processed, anomaly rate. Used by the Grafana Drain3 row for at-a-glance health.</div>
+</div>
+
+<div class="endpoint">
+  <div class="endpoint-head">
+    <span class="method GET">GET</span>
+    <span class="endpoint-path">/metrics</span>
+    <span class="endpoint-returns">→ 200 (text/plain)</span>
+  </div>
+  <div class="endpoint-summary">Prometheus exposition format. All triage-specific metrics are enumerated in <a href="#metrics">§7</a>.</div>
+</div>
+
+<!-- ───────────────────────────────────────── -->
+<h2 id="decisions"><span class="num">4.</span> The <code>/decisions</code> endpoint</h2>
+
+<p>
+This is the endpoint you'll spend the most time with — both programmatically (Grafana panels, alerting audits) and through the dashboard UI. It returns a JSON array of decisions, newest first, each one a flat object backed by the <code>rca_history</code> SQLite table.
+</p>
+
+<h3>Response shape (per item)</h3>
+
+<table class="field-table">
+  <thead><tr><th>Field</th><th>Type</th><th>Meaning</th></tr></thead>
+  <tbody>
+    <tr><td class="name">id</td><td class="type">uuid</td><td class="desc">Opaque decision ID — stable across reads, safe to link to.</td></tr>
+    <tr><td class="name">timestamp</td><td class="type">ISO 8601 (UTC)</td><td class="desc">When the pipeline <em>finished</em> this decision. Not the alert's <code>startsAt</code>.</td></tr>
+    <tr><td class="name">alert_source</td><td class="type">str</td><td class="desc"><code>"grafana"</code> or <code>"drain3"</code> — which webhook kicked off the pipeline.</td></tr>
+    <tr><td class="name">alert_name</td><td class="type">str</td><td class="desc">Copied from <code>labels.alertname</code>. The clearest key to filter on.</td></tr>
+    <tr><td class="name">alert_fingerprint</td><td class="type">str</td><td class="desc">Grafana's own fingerprint — stable across re-fires of the same alert.</td></tr>
+    <tr><td class="name">affected_service</td><td class="type">str</td><td class="desc">From <code>labels.service</code> (fallback <code>labels.job</code>). Feeds the MCP queries.</td></tr>
+    <tr><td class="name">severity</td><td class="type">str</td><td class="desc">The LLM's re-assessed severity (can differ from the raw alert severity — that's the point).</td></tr>
+    <tr><td class="name">triage_decision</td><td class="type">str</td><td class="desc">High-level path taken: <code>investigate</code> (full pipeline), <code>triage_suppressed</code> (Layer 2), <code>timeout_passthrough</code> (safety fallback).</td></tr>
+    <tr><td class="name">llm_verdict</td><td class="type">str | null</td><td class="desc"><code>"escalate"</code>, <code>"dismiss"</code>, or <code>"inconclusive"</code>. <code>null</code> if we never reached the LLM (suppressed or timed out).</td></tr>
+    <tr><td class="name">llm_confidence</td><td class="type">str | null</td><td class="desc">Optional self-reported confidence from the model. Small quantized models often omit this.</td></tr>
+    <tr><td class="name">rca_report</td><td class="type">str | null</td><td class="desc">The <strong>full natural-language RCA</strong> the LLM produced. This is what gets emailed on escalation.</td></tr>
+    <tr><td class="name">llm_reasoning</td><td class="type">str | null</td><td class="desc">Short "why I made this call" string. Often more useful for quick scanning than the full RCA.</td></tr>
+    <tr><td class="name">action_taken</td><td class="type">str</td><td class="desc"><code>emailed</code> (escalation sent), <code>suppressed</code> (dismissed / pre-LLM suppressed), <code>emailed_raw</code> (timeout passthrough).</td></tr>
+    <tr><td class="name">related_alerts</td><td class="type">str | null</td><td class="desc">JSON-encoded list of related alerts fingerprints (for future correlation work — currently unused).</td></tr>
+    <tr><td class="name">investigation_duration_ms</td><td class="type">int</td><td class="desc">Total wall-clock time from webhook receive to record save. Includes context gather + LLM + DB write.</td></tr>
+  </tbody>
+</table>
+
+<h3>Example — a real dismiss verdict</h3>
+
+<div class="json-block">[
+  {
+    <span class="k">"id"</span>: <span class="s">"e8e820d2-a464-4226-9fd5-dff0fc014696"</span>,
+    <span class="k">"timestamp"</span>: <span class="s">"2026-04-23T14:49:08.241615"</span>,
+    <span class="k">"alert_source"</span>: <span class="s">"grafana"</span>,
+    <span class="k">"alert_name"</span>: <span class="s">"LaptopSmoke_154806"</span>,
+    <span class="k">"alert_fingerprint"</span>: <span class="s">"laptop-smoke-test"</span>,
+    <span class="k">"affected_service"</span>: <span class="s">"spring-boot-app"</span>,
+    <span class="k">"severity"</span>: <span class="s">"info"</span>,
+    <span class="k">"triage_decision"</span>: <span class="s">"investigate"</span>,
+<span class="hl">    <span class="k">"llm_verdict"</span>: <span class="s">"dismiss"</span>,</span>
+    <span class="k">"llm_confidence"</span>: <span class="n">null</span>,
+    <span class="k">"rca_report"</span>: <span class="s">"The alert is part of a manual integration smoke test designed to validate the end-to-end AI-stack pipeline on a laptop GPU. The presence of logs indicating 'unavailable' and empty metrics/traces is expected during this test as it bypasses normal service interactions."</span>,
+    <span class="k">"llm_reasoning"</span>: <span class="s">"This is a manual synthetic test, expected behavior."</span>,
+    <span class="k">"action_taken"</span>: <span class="s">"suppressed"</span>,
+    <span class="k">"related_alerts"</span>: <span class="n">null</span>,
+<span class="hl">    <span class="k">"investigation_duration_ms"</span>: <span class="n">67995</span></span>
+  }
+]</div>
+
+<p>
+The two highlighted lines are the ones to watch: the model's verdict (<code>dismiss</code>) and the time it took (<code>67&nbsp;995&nbsp;ms</code> = about a minute). See <a href="#verdict-story">§9</a> for the story behind <em>this specific row</em> — it's a good example of the whole pipeline working end-to-end.
+</p>
+
+<!-- ───────────────────────────────────────── -->
+<h2 id="models"><span class="num">5.</span> Data model</h2>
+
+<p>Three pydantic models you'll see in logs and the codebase:</p>
+
+<h3><code>RCARecord</code> — what gets persisted</h3>
+<p>One row per pipeline run. Defined in <code>app/models.py</code>. Every field is pre-flattened (no nested objects), which is what makes the SQLite schema straightforward. See the table in <a href="#decisions">§4</a> for field meanings — the <code>/decisions</code> response is a list of these.</p>
+
+<h3><code>LLMDecision</code> — what Ollama returns</h3>
+<p>The LLM is asked for a structured JSON object matching this shape. It's merged into <code>RCARecord</code> in step 8 of the pipeline.</p>
+<table class="field-table">
+  <thead><tr><th>Field</th><th>Type</th><th>Meaning</th></tr></thead>
+  <tbody>
+    <tr><td class="name">decision</td><td class="type">enum</td><td class="desc"><code>ESCALATE</code> / <code>DISMISS</code> / <code>INCONCLUSIVE</code></td></tr>
+    <tr><td class="name">severity</td><td class="type">str</td><td class="desc">Re-assessed severity — <code>critical</code> / <code>warning</code> / <code>info</code></td></tr>
+    <tr><td class="name">confidence</td><td class="type">float [0,1]</td><td class="desc">Optional; many small quantized models omit it</td></tr>
+    <tr><td class="name">rca</td><td class="type">str</td><td class="desc">Natural-language root-cause narrative</td></tr>
+    <tr><td class="name">reason</td><td class="type">str</td><td class="desc">One-liner: <em>why</em> this verdict</td></tr>
+    <tr><td class="name">anomaly_summary</td><td class="type">str</td><td class="desc">Summary of Drain3-tagged anomalies seen in logs</td></tr>
+    <tr><td class="name">suggested_actions</td><td class="type">list[str]</td><td class="desc">Concrete next steps, rendered in the escalation email</td></tr>
+    <tr><td class="name">evidence</td><td class="type">list[str]</td><td class="desc">Bullet points: metrics values, trace IDs, specific log lines</td></tr>
+  </tbody>
+</table>
+
+<div class="callout tip">
+  <div class="callout-label">Pragmatic tolerance</div>
+  <p style="margin:0">Small 7B-quantized models occasionally return <code>evidence</code> as <code>[{"metric": "cpu", "value": 87}]</code> instead of <code>["cpu=87"]</code>. A pydantic <code>field_validator</code> coerces the dict shape to a compact string rather than 500-ing the pipeline. If the model wants to give us structured evidence, we take it — we just don't make downstream code deal with the shape variance.</p>
+</div>
+
+<h3><code>GatheredContext</code> — what the pillars returned</h3>
+<p>Internal only; not persisted. Holds metrics/logs/traces as they came back from the three MCPs plus the per-pillar latency and any errors. Feeds the prompt builder in <code>app/llm_client.py</code>.</p>
+
+<!-- ───────────────────────────────────────── -->
+<h2 id="dashboard"><span class="num">6.</span> The dashboard</h2>
+
+<p>
+<code>GET /dashboard</code> renders a zero-dependency HTML page that pulls the latest 100 decisions, shows running stats at the top, and lets you click any row to expand the full RCA + reasoning inline. No JavaScript framework, no build step — just FastAPI returning HTML.
+</p>
+
+<h3>What's in it</h3>
+<ul>
+  <li><strong>Four stat cards</strong>: total decisions, count escalated, count dismissed, count timed out.</li>
+  <li><strong>Filter bar</strong>: type to narrow the table by <em>alert name</em>, <em>service</em>, or <em>verdict</em> in real time.</li>
+  <li><strong>Decision table</strong>: timestamp, alert, source, service, severity, verdict, action taken, duration.</li>
+  <li><strong>Click any row</strong> → an inline panel opens beneath it showing: full <code>rca_report</code>, full <code>llm_reasoning</code>, triage decision, alert fingerprint, LLM confidence, decision ID.</li>
+</ul>
+
+<div class="callout note">
+  <div class="callout-label">Where to open it</div>
+  <p style="margin:0">
+    On the laptop smoke test: <code>http://localhost:8090/dashboard</code> in your Windows browser, or <code>http://&lt;laptop-tailscale-ip&gt;:8090/dashboard</code> from any tailnet peer. On the cloud GPU box: <code>http://&lt;gpu-eip&gt;:8090/dashboard</code> once the operator CIDRs are opened in the security group (see staging Terraform).
+  </p>
+</div>
+
+<!-- ───────────────────────────────────────── -->
+<h2 id="metrics"><span class="num">7.</span> Prometheus metrics</h2>
+
+<p>Exposed at <code>GET /metrics</code>. The monitoring VM's Prometheus scrapes them out-of-the-box.</p>
+
+<table class="field-table">
+  <thead><tr><th>Metric</th><th>Type</th><th>Meaning</th></tr></thead>
+  <tbody>
+    <tr><td class="name">triage_webhooks_received_total</td><td class="type">counter</td><td class="desc">Labelled by <code>source</code> (<code>grafana</code> | <code>drain3</code>). Incremented on every inbound webhook.</td></tr>
+    <tr><td class="name">triage_alerts_deduplicated_total</td><td class="type">counter</td><td class="desc">Layer 1 hits — alerts dropped as in-window duplicates.</td></tr>
+    <tr><td class="name">triage_alerts_suppressed_total</td><td class="type">counter</td><td class="desc">Layer 2 hits — labelled by <code>reason</code> (<code>recent_dismissed_history</code> | <code>recent_suppressed_history</code>).</td></tr>
+    <tr><td class="name">triage_alerts_processed_total</td><td class="type">counter</td><td class="desc">Labelled by <code>decision</code> (<code>escalate</code> | <code>dismiss</code>).</td></tr>
+    <tr><td class="name">triage_pipeline_duration_seconds</td><td class="type">histogram</td><td class="desc">End-to-end pipeline latency — webhook receive to record saved.</td></tr>
+    <tr><td class="name">triage_llm_investigation_seconds</td><td class="type">histogram</td><td class="desc">Just the Ollama call. Subtract from pipeline_duration for context-gather overhead.</td></tr>
+    <tr><td class="name">triage_mcp_requests_total</td><td class="type">counter</td><td class="desc">Labelled by <code>server</code> (<code>prometheus</code> | <code>loki</code> | <code>jaeger</code>) and <code>status</code> (<code>success</code> | <code>error</code>).</td></tr>
+    <tr><td class="name">triage_mcp_duration_seconds</td><td class="type">histogram</td><td class="desc">Per-pillar latency.</td></tr>
+    <tr><td class="name">triage_llm_token_count</td><td class="type">histogram</td><td class="desc">Labelled by <code>type</code> (<code>prompt</code> | <code>completion</code>).</td></tr>
+    <tr><td class="name">triage_pipeline_timeouts_total</td><td class="type">counter</td><td class="desc">How often the <code>PIPELINE_TIMEOUT</code> asyncio guard fired — i.e. we shipped a raw-alert fallback.</td></tr>
+    <tr><td class="name">triage_email_sent_total</td><td class="type">counter</td><td class="desc">Labelled by <code>status</code> (<code>sent</code> | <code>failed</code> | <code>skipped</code>). Non-fatal: SMTP failure is logged, pipeline continues.</td></tr>
+    <tr><td class="name">triage_queue_depth</td><td class="type">gauge</td><td class="desc">Live count of alerts currently in the <em>investigate</em> stage. A leading indicator of GPU saturation.</td></tr>
+  </tbody>
+</table>
+
+<!-- ───────────────────────────────────────── -->
+<h2 id="suppression"><span class="num">8.</span> Dedup &amp; suppression — the two layers</h2>
+
+<p>Alerts are noisy. Grafana re-fires them while they're active; the same root cause can trip five correlated rules at once. The triage service has two complementary ways to avoid burning GPU on redundant work.</p>
+
+<h3>Layer 1 — in-memory dedup (<code>app/dedup.py</code>)</h3>
+<p>
+A <code>DedupManager</code> with a TTL fingerprint of <code>(alertname, instance, status)</code>. Window is <code>DEDUP_WINDOW_SECONDS</code> (default 120s). While an alert is actively firing, Grafana will re-POST it every <em>group wait</em>; we skip all but the first within the window. Cheap, deterministic, process-local.
+</p>
+
+<h3>Layer 2 — pre-LLM suppression (<code>pipeline._check_suppression</code>)</h3>
+<p>
+Queries <code>rca_history</code> for the same <code>(alertname, service)</code> in the last <code>TRIAGE_HISTORY_LOOKBACK_MINUTES</code> (default 30m). If we recently produced a <code>dismiss</code> verdict, or suppressed it for the same reason, <strong>we replay that decision without calling Ollama</strong>. This is the mechanism that keeps a flaky-test noise pattern from consuming GPU cycles repeatedly.
+</p>
+
+<p>
+Both layers are <em>optional</em> via env (<code>TRIAGE_SUPPRESSION_ENABLED=false</code>, <code>DEDUP_WINDOW_SECONDS=0</code>). Useful when debugging — you want every alert to run end-to-end.
+</p>
+
+<!-- ───────────────────────────────────────── -->
+<h2 id="verdict-story"><span class="num">9.</span> A real verdict — the 2026-04-23 laptop smoke test</h2>
+
+<div class="callout story">
+  <div class="callout-label">Field note · 2026-04-23</div>
+  <p>
+    The first end-to-end run of the GPU-migration pipeline was on a laptop (MSI with GTX 1060 / 6 GB VRAM) using <code>qwen2.5:7b-instruct</code>. The smoke-test script <code>test-alert.sh</code> fires a synthetic <code>LaptopSmoke_*</code> alert with a fabricated <code>BackendHigh5xxRate</code> payload, waits for a verdict, prints it.
+  </p>
+  <p>
+    The verdict the LLM produced — visible in the <a href="#decisions">JSON example above</a> — was <strong><code>dismiss</code></strong>, with the reasoning <em>"This is a manual synthetic test, expected behavior."</em>. The RCA continued: <em>"The alert is part of a manual integration smoke test designed to validate the end-to-end AI-stack pipeline on a laptop GPU. The presence of logs indicating 'unavailable' and empty metrics/traces is expected during this test as it bypasses normal service interactions."</em>
+  </p>
+  <p>
+    What makes this impressive: <strong>we never told the model this was a synthetic test.</strong> The alert payload itself looked like a real production alert (real alertname shape, real service name, real Grafana webhook structure). The model inferred the synthetic nature from the <em>absence</em> of correlated evidence — Prometheus returned empty metrics for the service, Loki had no matching log lines, Jaeger had no traces. Rather than hallucinate a root cause, it correctly concluded "this is probably a test" and dismissed the alert. That's exactly the behaviour you want from an AI triage layer: <mark>if there's no evidence, don't invent one.</mark>
+  </p>
+  <p style="margin-bottom:0">
+    The pipeline completed in <strong>67&nbsp;995&nbsp;ms</strong> (≈68 s). The historical CPU-only baseline on k3s with <code>llama3.2:3b</code> was 20–40 <em>minutes</em> per alert; on the 1060 with <code>qwen2.5:7b</code>, we're down to roughly a minute — and the cloud A10 target (<code>qwen2.5:14b-instruct</code>) is expected to halve it again. This is the validation that the <a href="sprint3-backlog.md">Sprint 3 §4 GPU migration plan</a> was aiming for.
+  </p>
+</div>
+
+<h3>What to take away from this</h3>
+<ul>
+  <li><strong>The LLM doesn't need to be told what it's looking at</strong> — structured evidence plus "tell me what's going on" is enough.</li>
+  <li><strong>Empty context is a signal, not a failure.</strong> The service already ships <code>sources_available</code> and per-pillar errors in <code>GatheredContext</code>; the LLM uses them.</li>
+  <li><strong>The dashboard is the fastest way to eyeball this.</strong> Click the row, read the reasoning — don't squint at <code>/decisions</code> JSON.</li>
+  <li><strong>The Layer 2 suppression path matters.</strong> This exact alertname re-fires in Sprint 3's scheduled rehearsals — the second run should skip Ollama entirely and replay the dismiss verdict in milliseconds.</li>
+</ul>
+
+<!-- ───────────────────────────────────────── -->
+<h2 id="related"><span class="num">10.</span> Related pages</h2>
+<ul>
+  <li><a href="architecture.html">Architecture diagram</a> — where the triage service sits relative to monitoring VM, k3s, and the MCPs.</li>
+  <li><a href="sprint3-backlog.md">Sprint 3 backlog §4 &amp; §5</a> — the GPU migration and native Ollama tool-calling work. Changes how steps 4–7 of the pipeline run, not <em>whether</em>.</li>
+  <li><a href="sprint2-extension-guide.html">Sprint 2 extension guide</a> — the hardening work (circuit breaker, JSON schema enforcement, observability) that got the triage service to production-ish shape.</li>
+  <li><a href="build-guide.html">Complete build guide</a> — the reference doc for every service in the stack. The triage service is covered end-to-end there too, but less deeply than this page.</li>
+  <li><a href="reproducibility-guide.html">Reproducibility guide</a> — how to bring everything up from scratch, including the triage service container.</li>
+  <li>Source of truth: <a href="https://github.com/linalaaraich/monitoring-triage-service">github.com/linalaaraich/monitoring-triage-service</a> — <code>app/main.py</code>, <code>app/pipeline.py</code>, <code>app/context.py</code> are the three files that implement most of what this page describes.</li>
+</ul>
+
+</main>
+</div>
+
+<div class="footer">
+  CIRES Technologies · Tanger Med · Observability Platform
+  · <a href="index.html">Home</a>
+  · <a href="https://github.com/linalaaraich/monitoring-triage-service">Source</a>
+</div>
+
+</body>
+</html>
