@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Build Pipeline — CIRES Observability Platform</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --bg-soft: #13151e;
+    --card: #1a1d27;
+    --card-alt: #1e2230;
+    --border: #2a2d3a;
+    --border-hi: #3a3f52;
+    --text: #e4e6ee;
+    --text-soft: #c0c5d0;
+    --muted: #8890a0;
+    --accent-blue: #4ea8de;
+    --accent-green: #6bcf7f;
+    --accent-orange: #f0a050;
+    --accent-purple: #b07ee8;
+    --accent-red: #e06070;
+    --accent-cyan: #40d0d0;
+    --accent-yellow: #e0d060;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { font-family:'Inter','Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); line-height:1.65; font-size:15px; -webkit-font-smoothing:antialiased; }
+  code, pre, .mono { font-family:'JetBrains Mono','Fira Code',ui-monospace,monospace; font-size:0.88em; }
+
+  .topnav { display:flex; align-items:center; gap:12px; padding:14px 40px; background:var(--bg-soft); border-bottom:1px solid var(--border); flex-wrap:wrap; }
+  .topnav span.nav-label { color:var(--muted); font-size:13px; font-weight:600; margin-right:4px; }
+  .navlink { display:inline-flex; align-items:center; gap:6px; padding:7px 14px; border-radius:8px; font-size:13px; font-weight:600; text-decoration:none; border:1px solid; transition:background .2s, transform .15s; }
+  .navlink:hover { transform:translateY(-1px); }
+  .navlink-home { color:var(--text); border-color:var(--border); background:var(--card); }
+  .navlink-home:hover { background:var(--card-alt); }
+  .navlink-triage { color:var(--accent-purple); border-color:rgba(176,126,232,.4); background:rgba(176,126,232,.12); }
+  .navlink-triage:hover { background:rgba(176,126,232,.22); }
+  .navlink-arch { color:var(--accent-blue); border-color:rgba(78,168,222,.4); background:rgba(78,168,222,.08); }
+  .navlink-arch:hover { background:rgba(78,168,222,.18); }
+
+  .hero { padding:56px 40px 40px; border-bottom:1px solid var(--border); background:linear-gradient(180deg, #13151e 0%, var(--bg) 100%); }
+  .hero .inner { max-width:960px; margin:0 auto; }
+  .hero .eyebrow { font-size:11px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:var(--accent-cyan); margin-bottom:12px; }
+  .hero h1 { font-size:36px; font-weight:800; letter-spacing:-.5px; margin-bottom:14px; line-height:1.2; }
+  .hero h1 span.accent { color:var(--accent-cyan); }
+  .hero p.lead { font-size:16px; color:var(--text-soft); max-width:720px; line-height:1.7; margin-bottom:20px; }
+  .hero .pill-row { display:flex; gap:8px; flex-wrap:wrap; }
+  .pill { font-size:11px; font-weight:600; padding:4px 10px; border-radius:12px; border:1px solid; letter-spacing:.2px; }
+  .pill.cyan { color:var(--accent-cyan); border-color:rgba(64,208,208,.35); background:rgba(64,208,208,.08); }
+  .pill.green { color:var(--accent-green); border-color:rgba(107,207,127,.35); background:rgba(107,207,127,.08); }
+  .pill.blue { color:var(--accent-blue); border-color:rgba(78,168,222,.35); background:rgba(78,168,222,.08); }
+
+  .layout { max-width:960px; margin:0 auto; padding:32px 40px 80px; }
+  .content h2 { font-size:24px; font-weight:700; margin:40px 0 14px; letter-spacing:-.3px; scroll-margin-top:24px; padding-bottom:8px; border-bottom:1px solid var(--border); }
+  .content h2:first-child { margin-top:0; }
+  .content h3 { font-size:16px; font-weight:700; margin:24px 0 8px; color:var(--text); }
+  .content p { margin-bottom:14px; color:var(--text-soft); }
+  .content p strong { color:var(--text); font-weight:600; }
+  .content ul, .content ol { margin:8px 0 16px 24px; color:var(--text-soft); }
+  .content li { margin-bottom:6px; }
+  .content code { background:var(--card); border:1px solid var(--border); padding:1px 6px; border-radius:4px; font-size:0.85em; color:var(--accent-cyan); }
+  .content pre { background:var(--card); border:1px solid var(--border); padding:14px 16px; border-radius:8px; margin:12px 0 18px; overflow-x:auto; line-height:1.5; }
+  .content pre code { background:none; border:none; padding:0; color:var(--text); font-size:0.85em; }
+  .content a { color:var(--accent-blue); text-decoration:none; border-bottom:1px dashed rgba(78,168,222,.35); }
+  .content a:hover { border-bottom-style:solid; }
+
+  .callout { border-left:3px solid; border-radius:0 8px 8px 0; padding:14px 18px; margin:16px 0; background:var(--card); }
+  .callout.note { border-color:var(--accent-blue); }
+  .callout.tip { border-color:var(--accent-green); }
+  .callout.warn { border-color:var(--accent-orange); }
+  .callout-label { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; margin-bottom:6px; }
+  .callout.note .callout-label { color:var(--accent-blue); }
+  .callout.tip .callout-label { color:var(--accent-green); }
+  .callout.warn .callout-label { color:var(--accent-orange); }
+
+  table.compare { width:100%; border-collapse:collapse; margin:12px 0 20px; font-size:13px; }
+  table.compare th, table.compare td { padding:10px 14px; border-bottom:1px solid var(--border); text-align:left; vertical-align:top; }
+  table.compare th { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--muted); background:var(--card); }
+  table.compare tr:hover td { background:var(--card-alt); }
+  table.compare td.choice { color:var(--accent-green); font-weight:600; }
+  table.compare td.reject { color:var(--muted); }
+
+  .flow { display:flex; flex-direction:column; gap:8px; margin:20px 0; }
+  .flow-step {
+    display:grid; grid-template-columns:32px 1fr;
+    gap:12px; align-items:center;
+    padding:12px 16px; background:var(--card);
+    border:1px solid var(--border); border-radius:8px; position:relative;
+  }
+  .flow-step::after {
+    content:""; position:absolute; left:28px; top:100%;
+    width:2px; height:8px; background:var(--border-hi);
+  }
+  .flow-step:last-child::after { display:none; }
+  .flow-num {
+    width:28px; height:28px; border-radius:50%;
+    background:rgba(64,208,208,.15); color:var(--accent-cyan);
+    display:flex; align-items:center; justify-content:center;
+    font-weight:700; font-size:13px; border:1px solid rgba(64,208,208,.35);
+  }
+  .flow-body .title { font-weight:600; color:var(--text); margin-bottom:2px; font-size:14px; }
+  .flow-body .desc { font-size:13px; color:var(--muted); }
+
+  @media (max-width: 640px) {
+    .layout { padding: 20px; }
+    .hero { padding: 36px 20px 28px; }
+    .topnav { padding: 12px 20px; }
+  }
+</style>
+</head>
+<body>
+
+<nav class="topnav">
+  <span class="nav-label">CIRES Platform</span>
+  <a href="index.html" class="navlink navlink-home">← Home</a>
+  <a href="triage-service.html" class="navlink navlink-triage">🧠 Triage Service</a>
+  <a href="architecture.html" class="navlink navlink-arch">Architecture</a>
+</nav>
+
+<header class="hero">
+  <div class="inner">
+    <div class="eyebrow">DevEx · Build &amp; deploy</div>
+    <h1>Build <span class="accent">pipeline</span></h1>
+    <p class="lead">
+      How the triage-service container image gets built, tagged, and published
+      on every push to <code>main</code> — and why we picked GitHub Actions
+      and the GitHub Container Registry as the zero-cost option that fits an
+      open-source-first brief.
+    </p>
+    <div class="pill-row">
+      <span class="pill cyan">GitHub Actions</span>
+      <span class="pill cyan">GHCR (ghcr.io)</span>
+      <span class="pill green">Zero cost, public repo</span>
+      <span class="pill blue">No secrets to manage</span>
+    </div>
+  </div>
+</header>
+
+<main class="layout">
+<div class="content">
+
+<h2>Why this pipeline exists</h2>
+<p>
+  Until recently the <code>monitoring-triage-service</code> compose file
+  pinned an image tag (<code>cires/triage-service:${IMAGE_TAG}</code>) that
+  had to be built locally on every host that ran the stack. That was fine
+  while the service only ran on the AWS k3s cluster, but it broke as soon
+  as we moved the AI stack to Lina's laptop: pulling the latest source
+  code was no longer enough, because the Python was baked into an image
+  nobody had built with the new code yet.
+</p>
+<p>
+  We needed an automated build that produces an image any host can pull.
+  The constraint was: <strong>cheapest possible, most open-source
+  option</strong>. The pipeline documented here is the result.
+</p>
+
+<h2>Why GitHub Actions + GHCR</h2>
+
+<table class="compare">
+  <thead>
+    <tr><th>Option</th><th>Cost</th><th>Verdict</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>GitHub Actions + GHCR</strong> (chosen)</td>
+      <td>$0 for public repos; built-in <code>GITHUB_TOKEN</code> authenticates to GHCR with no secrets to rotate</td>
+      <td class="choice">✓ Picked — zero ops, zero cost, zero new accounts</td>
+    </tr>
+    <tr>
+      <td>Docker Hub</td>
+      <td>Free tier limits image pulls to 100/6h per anonymous IP; rate limits bite even in light CI</td>
+      <td class="reject">Pull-rate limits are a latent footgun</td>
+    </tr>
+    <tr>
+      <td>Self-hosted <code>registry:2</code> on the monitoring VM</td>
+      <td>$0 licensing, but needs TLS, auth, backups, and storage management that nobody wants to own</td>
+      <td class="reject">Adds infra we'd have to run ourselves</td>
+    </tr>
+    <tr>
+      <td>AWS ECR</td>
+      <td>Free tier is 500 MB-months private storage; image retention bills after</td>
+      <td class="reject">Costs money once the triage image is &gt; 500 MB of layers</td>
+    </tr>
+    <tr>
+      <td>Jenkins + GitLab CI + ...</td>
+      <td>Requires a runner host we'd have to pay to keep up 24/7</td>
+      <td class="reject">Too heavy for a single-service build</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="callout tip">
+  <div class="callout-label">Why it's free</div>
+  GitHub gives public repositories unlimited CI minutes on Linux runners
+  (standard tier), and GHCR storage &amp; bandwidth for public images is
+  uncapped. The triage image is ~200 MB compressed and we build ~10×/day
+  at most, so we sit comfortably inside the free tier with no credit card
+  on file.
+</div>
+
+<h2>What happens on every push to <code>main</code></h2>
+
+<div class="flow">
+  <div class="flow-step">
+    <div class="flow-num">1</div>
+    <div class="flow-body">
+      <div class="title">Trigger</div>
+      <div class="desc">Any commit touching <code>app/</code>, <code>requirements.txt</code>, <code>Dockerfile</code>, <code>drain3.ini</code>, or the workflow itself. Docs-only commits skip CI.</div>
+    </div>
+  </div>
+  <div class="flow-step">
+    <div class="flow-num">2</div>
+    <div class="flow-body">
+      <div class="title">Checkout + Buildx setup</div>
+      <div class="desc"><code>actions/checkout@v4</code> + <code>docker/setup-buildx-action@v3</code>. Buildx enables layer caching via GHA's cache backend.</div>
+    </div>
+  </div>
+  <div class="flow-step">
+    <div class="flow-num">3</div>
+    <div class="flow-body">
+      <div class="title">Log in to GHCR</div>
+      <div class="desc"><code>docker/login-action@v3</code> using <code>${{ secrets.GITHUB_TOKEN }}</code> — no PAT, no service account, no manual rotation.</div>
+    </div>
+  </div>
+  <div class="flow-step">
+    <div class="flow-num">4</div>
+    <div class="flow-body">
+      <div class="title">Derive tags</div>
+      <div class="desc"><code>docker/metadata-action@v5</code> generates three tags: <code>main</code> (rolling), <code>sha-&lt;short&gt;</code> (immutable, for pinning), and <code>latest</code> (only on default branch).</div>
+    </div>
+  </div>
+  <div class="flow-step">
+    <div class="flow-num">5</div>
+    <div class="flow-body">
+      <div class="title">Build + push</div>
+      <div class="desc"><code>docker/build-push-action@v5</code> with <code>cache-from/to: type=gha,mode=max</code>. Typical cold build ~90 s; typical warm build ~15 s when only <code>app/**</code> changes.</div>
+    </div>
+  </div>
+  <div class="flow-step">
+    <div class="flow-num">6</div>
+    <div class="flow-body">
+      <div class="title">Run summary</div>
+      <div class="desc">The final step writes the pushed tags + a copy-paste <code>docker pull</code> command into the GitHub Actions run summary, so you never have to hunt for the right tag.</div>
+    </div>
+  </div>
+</div>
+
+<h2>How the compose stack consumes it</h2>
+
+<p>
+  <code>gpu-migration-staging/compose/docker-compose.yml</code> now
+  references the GHCR image via an override-friendly env expression:
+</p>
+
+<pre><code>triage-service:
+  image: "${TRIAGE_IMAGE:-ghcr.io/linalaaraich/monitoring-triage-service:${TRIAGE_TAG:-main}}"</code></pre>
+
+<p>
+  Two knobs, both optional:
+</p>
+<ul>
+  <li><code>TRIAGE_TAG</code> — which GHCR tag to pull. Defaults to <code>main</code> (rolling-latest). Pin to <code>sha-a1b2c3d</code> for reproducible deploys.</li>
+  <li><code>TRIAGE_IMAGE</code> — a full image reference that overrides everything else. Use when you want to run a <em>local</em> build for iteration: <code>docker build -t cires/triage-service:local ./monitoring-triage-service &amp;&amp; export TRIAGE_IMAGE=cires/triage-service:local</code>.</li>
+</ul>
+
+<h3>The laptop workflow</h3>
+
+<p>From now on, picking up a new triage build on the laptop is:</p>
+
+<pre><code>cd ~/cires-ai
+docker compose pull triage-service          # fetch the new :main from GHCR
+docker compose up -d --force-recreate triage-service</code></pre>
+
+<p>
+  No more <code>git pull &amp;&amp; docker build</code> dance — the CI builds once
+  in the cloud and every host just pulls.
+</p>
+
+<h2>Manual rebuild (when you need it)</h2>
+
+<p>
+  Triggering a rebuild without a code change (e.g. to pick up a base-image
+  security patch):
+</p>
+<ol>
+  <li>Go to <a href="https://github.com/linalaaraich/monitoring-triage-service/actions">the Actions tab</a> in the repo.</li>
+  <li>Select the <strong>build-push</strong> workflow on the left.</li>
+  <li>Click <strong>Run workflow</strong> → <strong>Run workflow</strong> (on <code>main</code>).</li>
+</ol>
+
+<h2>Known gaps / followups</h2>
+
+<div class="callout warn">
+  <div class="callout-label">Not yet pipelined</div>
+  <p style="margin:0">
+    The five MCP servers (<code>prometheus</code>, <code>loki</code>,
+    <code>jaeger</code>, <code>drain3</code>, <code>rca-history</code>)
+    are still built locally under the <code>cires/mcp-*:${IMAGE_TAG}</code>
+    convention. They'll each get their own <code>build-push.yml</code>
+    once their repos stabilise — same workflow template as this one, with
+    the repo name swapped in.
+  </p>
+</div>
+
+<ul>
+  <li><strong>Multi-arch builds.</strong> Currently <code>linux/amd64</code> only. If a future GPU host runs ARM (e.g. a Graviton), add <code>linux/arm64</code> to the platforms list — GHA emulates via QEMU, roughly 2× slower.</li>
+  <li><strong>Image signing.</strong> Not doing <code>cosign</code> yet. Consider signing the GHCR manifests before any production use that isn't just Lina's laptop.</li>
+  <li><strong>Security scan gate.</strong> No Trivy / Grype scan in the workflow. Easy to add as a separate job before <code>push: true</code>.</li>
+  <li><strong>Scheduled rebuilds.</strong> No weekly cron to re-pull the base Python image and pick up CVE patches. One-line add.</li>
+</ul>
+
+<div class="callout note">
+  <div class="callout-label">Reference</div>
+  The workflow lives at
+  <code>monitoring-triage-service/.github/workflows/build-push.yml</code>
+  and is short (~70 lines including comments). Copy it into each MCP repo
+  when you're ready to pipeline those too.
+</div>
+
+</div>
+</main>
+
+</body>
+</html>
