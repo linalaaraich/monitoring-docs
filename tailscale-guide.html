@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tailscale Guide — CIRES Observability Platform</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --bg-soft: #13151e;
+    --card: #1a1d27;
+    --card-alt: #1e2230;
+    --border: #2a2d3a;
+    --border-hi: #3a3f52;
+    --text: #e4e6ee;
+    --text-soft: #c0c5d0;
+    --muted: #8890a0;
+    --accent-blue: #4ea8de;
+    --accent-green: #6bcf7f;
+    --accent-orange: #f0a050;
+    --accent-purple: #b07ee8;
+    --accent-red: #e06070;
+    --accent-cyan: #40d0d0;
+    --accent-yellow: #e0d060;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { font-family:'Inter','Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); line-height:1.65; font-size:15px; -webkit-font-smoothing:antialiased; }
+  code, pre, .mono { font-family:'JetBrains Mono','Fira Code',ui-monospace,monospace; font-size:0.88em; }
+
+  .topnav { display:flex; align-items:center; gap:12px; padding:14px 40px; background:var(--bg-soft); border-bottom:1px solid var(--border); flex-wrap:wrap; }
+  .topnav span.nav-label { color:var(--muted); font-size:13px; font-weight:600; margin-right:4px; }
+  .navlink { display:inline-flex; align-items:center; gap:6px; padding:7px 14px; border-radius:8px; font-size:13px; font-weight:600; text-decoration:none; border:1px solid; transition:background .2s, transform .15s; }
+  .navlink:hover { transform:translateY(-1px); }
+  .navlink-home { color:var(--text); border-color:var(--border); background:var(--card); }
+  .navlink-home:hover { background:var(--card-alt); }
+  .navlink-arch { color:var(--accent-blue); border-color:rgba(78,168,222,.4); background:rgba(78,168,222,.08); }
+  .navlink-triage { color:var(--accent-purple); border-color:rgba(176,126,232,.4); background:rgba(176,126,232,.12); }
+  .navlink-build { color:var(--accent-cyan); border-color:rgba(64,208,208,.4); background:rgba(64,208,208,.08); }
+  .navlink-ts { color:var(--accent-green); border-color:rgba(107,207,127,.4); background:rgba(107,207,127,.08); }
+
+  .hero { padding:56px 40px 40px; border-bottom:1px solid var(--border); background:linear-gradient(180deg, #13151e 0%, var(--bg) 100%); }
+  .hero .inner { max-width:960px; margin:0 auto; }
+  .hero .eyebrow { font-size:11px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:var(--accent-green); margin-bottom:12px; }
+  .hero h1 { font-size:36px; font-weight:800; letter-spacing:-.5px; margin-bottom:14px; line-height:1.2; }
+  .hero h1 span.accent { color:var(--accent-green); }
+  .hero p.lead { font-size:16px; color:var(--text-soft); max-width:720px; line-height:1.7; margin-bottom:20px; }
+  .hero .pill-row { display:flex; gap:8px; flex-wrap:wrap; }
+  .pill { font-size:11px; font-weight:600; padding:4px 10px; border-radius:12px; border:1px solid; letter-spacing:.2px; }
+  .pill.green { color:var(--accent-green); border-color:rgba(107,207,127,.35); background:rgba(107,207,127,.08); }
+  .pill.cyan { color:var(--accent-cyan); border-color:rgba(64,208,208,.35); background:rgba(64,208,208,.08); }
+  .pill.blue { color:var(--accent-blue); border-color:rgba(78,168,222,.35); background:rgba(78,168,222,.08); }
+
+  .layout { max-width:960px; margin:0 auto; padding:32px 40px 80px; }
+  .content h2 { font-size:24px; font-weight:700; margin:40px 0 14px; letter-spacing:-.3px; scroll-margin-top:24px; padding-bottom:8px; border-bottom:1px solid var(--border); }
+  .content h2:first-child { margin-top:0; }
+  .content h3 { font-size:16px; font-weight:700; margin:24px 0 8px; color:var(--text); }
+  .content p { margin-bottom:14px; color:var(--text-soft); }
+  .content p strong { color:var(--text); font-weight:600; }
+  .content ul, .content ol { margin:8px 0 16px 24px; color:var(--text-soft); }
+  .content li { margin-bottom:6px; }
+  .content code { background:var(--card); border:1px solid var(--border); padding:1px 6px; border-radius:4px; font-size:0.85em; color:var(--accent-cyan); }
+  .content pre { background:var(--card); border:1px solid var(--border); padding:14px 16px; border-radius:8px; margin:12px 0 18px; overflow-x:auto; line-height:1.5; }
+  .content pre code { background:none; border:none; padding:0; color:var(--text); font-size:0.85em; }
+  .content a { color:var(--accent-blue); text-decoration:none; border-bottom:1px dashed rgba(78,168,222,.35); }
+  .content a:hover { border-bottom-style:solid; }
+
+  .callout { border-left:3px solid; border-radius:0 8px 8px 0; padding:14px 18px; margin:16px 0; background:var(--card); }
+  .callout.note { border-color:var(--accent-blue); }
+  .callout.tip { border-color:var(--accent-green); }
+  .callout.warn { border-color:var(--accent-orange); }
+  .callout-label { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; margin-bottom:6px; }
+  .callout.note .callout-label { color:var(--accent-blue); }
+  .callout.tip .callout-label { color:var(--accent-green); }
+  .callout.warn .callout-label { color:var(--accent-orange); }
+
+  table { width:100%; border-collapse:collapse; margin:12px 0 20px; font-size:13px; }
+  table th, table td { padding:10px 14px; border-bottom:1px solid var(--border); text-align:left; vertical-align:top; }
+  table th { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--muted); background:var(--card); }
+  table tr:hover td { background:var(--card-alt); }
+  .kbd { background:var(--card); border:1px solid var(--border); padding:1px 6px; border-radius:4px; font-family:ui-monospace,monospace; font-size:0.85em; color:var(--accent-yellow); }
+</style>
+</head>
+<body>
+
+<nav class="topnav">
+  <span class="nav-label">CIRES Platform</span>
+  <a href="index.html" class="navlink navlink-home">← Home</a>
+  <a href="architecture.html" class="navlink navlink-arch">Architecture</a>
+  <a href="triage-service.html" class="navlink navlink-triage">🧠 Triage Service</a>
+  <a href="build-pipeline.html" class="navlink navlink-build">⚙️ Build Pipeline</a>
+</nav>
+
+<header class="hero">
+  <div class="inner">
+    <div class="eyebrow">Networking · Zero-trust mesh</div>
+    <h1>Tailscale <span class="accent">guide</span></h1>
+    <p class="lead">
+      How CIRES Observability uses Tailscale to keep hands-off operations
+      working across the cloud controller, monitoring VM, k3s node, and
+      Lina's laptop — without chasing public IPs after every redeploy.
+      This is the networking spine the ansible role, deep-links, and
+      webhook URLs all lean on.
+    </p>
+    <div class="pill-row">
+      <span class="pill green">WireGuard-based</span>
+      <span class="pill green">Zero-config mesh</span>
+      <span class="pill cyan">MagicDNS hostnames</span>
+      <span class="pill blue">Free tier sufficient</span>
+    </div>
+  </div>
+</header>
+
+<main class="layout">
+<div class="content">
+
+<h2>Why Tailscale</h2>
+<p>
+  The CIRES platform has four moving pieces that need to reach each other:
+  the cloud controller (where this documentation and the ansible control
+  node live), the monitoring VM on EC2, the k3s node on EC2, and Lina's
+  laptop running the AI stack. Three of those are on AWS EC2 with
+  elastic IPs that can drift; one is on a residential WSL2 box with a
+  dynamic home-router IP. Coordinating them via public IPs + security
+  groups is brittle — every re-provision is a hand-editing exercise.
+</p>
+<p>
+  Tailscale fixes this by putting every node on a single WireGuard mesh
+  (the <strong>tailnet</strong>) with stable <code>100.x.y.z</code>
+  addresses and MagicDNS hostnames. The monitoring VM reaches Lina's
+  laptop at <code>adolin-wsl</code> regardless of what IP her ISP hands
+  out that morning. Ansible runs against <code>observability-rca-monitoring</code>
+  regardless of whether AWS re-assigns the EIP. And none of this crosses
+  the public internet — traffic goes peer-to-peer when possible,
+  encrypted, with a NAT-traversal relay fallback.
+</p>
+<div class="callout tip">
+  <div class="callout-label">Free tier</div>
+  <p style="margin:0">
+    Tailscale's free tier allows 100 devices and 3 users, unlimited
+    bandwidth, and MagicDNS — far beyond what this project needs. No
+    payment method required for setup. Paid tiers add audit logging,
+    SSO, and device posture features we don't use.
+  </p>
+</div>
+
+<h2>The CIRES tailnet as of 2026-04-23</h2>
+
+<table>
+  <thead>
+    <tr><th>Role</th><th>MagicDNS hostname</th><th>Tailnet IP</th><th>What it runs</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Cloud controller</td>
+      <td><code>claude-controller</code></td>
+      <td>100.86.159.84</td>
+      <td>Orchestration; ansible control node; this documentation source</td>
+    </tr>
+    <tr>
+      <td>Monitoring VM</td>
+      <td><code>observability-rca-monitoring</code></td>
+      <td>100.74.21.104</td>
+      <td>Prometheus, Loki, Jaeger, Grafana, OTel Collector, Alertmanager</td>
+    </tr>
+    <tr>
+      <td>k3s VM</td>
+      <td><code>observability-rca-k3s</code></td>
+      <td>varies</td>
+      <td>Spring Boot + MySQL + Kong in k3s pods (monitored app)</td>
+    </tr>
+    <tr>
+      <td>Laptop (Windows host)</td>
+      <td><code>adolin</code></td>
+      <td>100.101.132.78</td>
+      <td>Docker Desktop host for WSL2</td>
+    </tr>
+    <tr>
+      <td>Laptop (WSL2 / AI stack)</td>
+      <td><code>adolin-wsl</code></td>
+      <td>100.117.118.70</td>
+      <td>Triage service, Ollama, 5 MCP servers</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>
+  Tailnet name: <code>tail680fd7.ts.net</code> (owner:
+  linalaaraich2002@gmail.com). Short hostnames resolve directly from any
+  peer with MagicDNS — no need to spell out the full FQDN.
+</p>
+
+<h2>Setting up a new host</h2>
+
+<p>
+  Two paths depending on whether the host is cloud-provisioned from
+  Terraform or an already-running box (VM, laptop, etc.):
+</p>
+
+<h3>Path A — fresh AWS instance (Terraform-driven)</h3>
+<ol>
+  <li>Generate an ephemeral+reusable auth key at
+    <a href="https://login.tailscale.com/admin/settings/keys">the tailscale admin panel</a>.
+    Check both <em>Reusable</em> and <em>Ephemeral</em>; set TTL to 24 h or less.</li>
+  <li>Set it for Terraform via env:
+    <pre><code>export TF_VAR_tailscale_auth_key="tskey-auth-xxxxxxxxxx"</code></pre>
+  </li>
+  <li>Run <code>terraform apply</code>. The <code>user_data</code> for each
+    instance has a conditional Tailscale-install snippet that fires on first
+    boot when the var is set — the instance joins with hostname
+    <code>${var.project_name}-monitoring</code> (or <code>-k3s</code> /
+    <code>-gpu</code>) and <code>--ssh</code> enabled.</li>
+  <li>Once the apply completes, run <code>tailscale status</code> from the
+    controller and you should see the new node listed.</li>
+</ol>
+<div class="callout note">
+  <div class="callout-label">Ephemeral node benefit</div>
+  <p style="margin:0">
+    An ephemeral node auto-removes from the tailnet admin panel when
+    it goes offline, which keeps the panel clean across terraform
+    destroy + re-apply cycles. The hostname is re-used when a new
+    instance with the same name comes up.
+  </p>
+</div>
+
+<h3>Path B — already-running host (ansible-driven)</h3>
+
+<p>
+  Use the <code>tailscale</code> role in the <code>monitoring-project</code>
+  repo. Two steps from the controller:
+</p>
+
+<pre><code># 1. Generate an ephemeral+reusable auth key as above.
+# 2. Run the tailscale playbook, which applies the role to every host:
+TAILSCALE_AUTH_KEY="tskey-auth-xxxxxxxxxx" \
+  ansible-playbook playbooks/tailscale.yml</code></pre>
+
+<p>
+  The role installs the Tailscale repo, apt-installs the package, enables
+  the systemd unit, and runs <code>tailscale up</code> with the current
+  inventory hostname. It's idempotent — re-running after the first join
+  is a no-op.
+</p>
+
+<h2>MagicDNS — the hostname convention</h2>
+
+<p>
+  MagicDNS is enabled by default on all new tailnets (since 2023). It
+  publishes every tailnet member's hostname as a resolvable short name
+  on all its peers. No <code>/etc/hosts</code> edits, no DNS server
+  setup.
+</p>
+
+<p>
+  The CIRES convention: a node's <strong>Ansible inventory name is also its
+  MagicDNS hostname</strong>. The <code>tailscale</code> role uses
+  <code>inventory_hostname</code> as the <code>--hostname</code> argument
+  on join, so they can't drift. The complementary inventory file
+  <code>inventory/tailnet.yml</code> then sets <code>ansible_host</code>
+  to that same hostname, and ansible routes over the tailnet
+  transparently:
+</p>
+
+<pre><code># Point ansible at the tailnet inventory
+ansible-playbook -i inventory/tailnet.yml playbooks/site.yml
+
+# Or make it the default in ansible.cfg:
+[defaults]
+inventory = inventory/tailnet.yml</code></pre>
+
+<h2>ACLs — who can reach what</h2>
+
+<p>
+  By default every tailnet member can reach every other member on every
+  port. For this project that's what we want: the controller ansibles
+  the other boxes, the monitoring VM webhooks the laptop, and the
+  laptop pulls from the monitoring VM's Loki. If you want to tighten it
+  later, edit the ACL at
+  <a href="https://login.tailscale.com/admin/acls">login.tailscale.com/admin/acls</a>
+  — the default policy looks like:
+</p>
+
+<pre><code>{
+  "acls": [
+    { "action": "accept", "src": ["*"], "dst": ["*:*"] }
+  ]
+}</code></pre>
+
+<p>
+  A tighter version keyed on tags the <code>tailscale</code> role applies
+  on join would be:
+</p>
+
+<pre><code>{
+  "tagOwners": {
+    "tag:controller":   ["linalaaraich2002@gmail.com"],
+    "tag:server":       ["linalaaraich2002@gmail.com"],
+    "tag:workstation":  ["linalaaraich2002@gmail.com"]
+  },
+  "acls": [
+    // Controller can reach everything
+    { "action": "accept", "src": ["tag:controller"], "dst": ["*:*"] },
+    // Servers can reach each other on observability ports only
+    { "action": "accept", "src": ["tag:server"], "dst": ["tag:server:3000,3100,9090,16686,4317,4318"] },
+    // Laptop can reach servers for ansible + webhook targets
+    { "action": "accept", "src": ["tag:workstation"], "dst": ["tag:server:*"] }
+  ]
+}</code></pre>
+
+<p>
+  To apply, set <code>tailscale_tags: ["tag:server"]</code> (or
+  <code>:workstation</code>, <code>:controller</code>) in the inventory
+  group vars and rerun the tailscale role.
+</p>
+
+<h2>Troubleshooting common gotchas</h2>
+
+<h3><code>tailscale up</code> fails with "failed to connect to local tailscaled"</h3>
+<p>
+  Almost always because the <code>tailscaled</code> systemd unit hasn't
+  finished starting yet. After <code>apt install tailscale</code>,
+  systemd kicks off <code>tailscaled.service</code> which can take 30–60
+  seconds on a cold install. Wait and retry. The role handles this with
+  <code>systemd: state=started</code> before invoking
+  <code>tailscale up</code>.
+</p>
+
+<h3>Node joins but MagicDNS short name doesn't resolve</h3>
+<p>
+  Usually <code>--accept-dns=false</code> was passed on join, which tells
+  Tailscale not to publish its DNS into <code>/etc/resolv.conf</code>.
+  Fix: <code>sudo tailscale up --accept-dns=true</code> (re-run, adds
+  the flag without re-auth). The role defaults to <code>true</code>.
+</p>
+<p>
+  Another failure mode: the tailnet admin has MagicDNS globally
+  disabled. Check at
+  <a href="https://login.tailscale.com/admin/dns">login.tailscale.com/admin/dns</a>.
+</p>
+
+<h3>Controller can ping tailnet IP but ansible times out</h3>
+<p>
+  SSH isn't enabled on the target. Either install openssh-server + start
+  sshd, or join the target with <code>--ssh</code> so Tailscale SSH
+  handles it (no port 22 exposure needed). Our Terraform user_data sets
+  <code>--ssh</code>; the ansible role doesn't (it assumes sshd is
+  already there). To add Tailscale SSH to an existing node:
+</p>
+<pre><code>ssh deploy@&lt;host&gt; "sudo tailscale up --ssh --accept-dns=true"</code></pre>
+
+<h3>Ephemeral key expired mid-session</h3>
+<p>
+  Ephemeral keys default to 1-hour TTL if you don't set a longer one.
+  If a terraform apply spans more than an hour, new instances late in
+  the apply can fail the join step. Always generate keys with 24 h TTL
+  for non-trivial applies. The key is gone from the admin panel after
+  you rotate; no cleanup needed.
+</p>
+
+<h3>I see the node but can't reach it</h3>
+<p>
+  Run <code>tailscale status</code> and check the state of the peer:
+</p>
+<ul>
+  <li><code>-</code> (just a dash): idle, never connected. Probably
+      never came up on the network.</li>
+  <li><code>idle, tx 0 rx 0</code>: reachable in principle, no traffic
+      yet. Try <code>tailscale ping &lt;host&gt;</code>.</li>
+  <li><code>offline</code>: the node hasn't heartbeated recently. If
+      it's a cloud instance, check it's running (<code>aws ec2 describe-instances</code>).
+      If it's your laptop, Tailscale daemon may have crashed —
+      <code>sudo systemctl restart tailscaled</code>.</li>
+</ul>
+
+<h2>What happens when an EIP changes?</h2>
+
+<p>
+  Short answer: nothing, from the ansible perspective. The controller
+  reaches the monitoring VM at <code>observability-rca-monitoring</code>;
+  Tailscale routes that over the tailnet regardless of what
+  <code>aws_eip_association.monitoring</code> currently points at.
+  Security groups can even drop port 22 from <code>0.0.0.0/0</code>
+  entirely — you still reach the box via Tailscale SSH.
+</p>
+
+<p>
+  This is the single biggest reproducibility win from adopting Tailscale:
+  the infra-setup runbook no longer has to say "now copy the new EIP
+  into <code>inventory/production.yml</code>".
+</p>
+
+<h2>Related pages</h2>
+<ul>
+  <li><a href="architecture.html">Architecture</a> — the overall topology and where Tailscale fits in the network plane</li>
+  <li><a href="build-pipeline.html">Build pipeline</a> — CI that publishes to GHCR, orthogonal to the tailnet but deployed images travel over it</li>
+  <li><a href="triage-service.html">Triage service</a> — the escalation webhook target on the laptop, reached over tailnet</li>
+</ul>
+
+</div>
+</main>
+
+</body>
+</html>
