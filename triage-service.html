@@ -532,6 +532,26 @@ The two highlighted lines are the ones to watch: the model's verdict (<code>dism
 <h3><code>GatheredContext</code> — what the pillars returned</h3>
 <p>Internal only; not persisted. Holds metrics/logs/traces as they came back from the three MCPs plus the per-pillar latency and any errors. Feeds the prompt builder in <code>app/llm_client.py</code>.</p>
 
+<h3><code>rca_quality</code> — post-hoc RCA quality tag</h3>
+<p>
+  Every persisted decision gets classified <code>actionable</code> or <code>data_starved</code> post-hoc (after the LLM responds) by a regex on the RCA text. <code>data_starved</code> means the model hedged with phrases like <em>"insufficient data"</em>, <em>"no recent metrics"</em>, or <em>"cannot determine"</em> rather than naming a cause. The classifier is defensive — false negatives (missing the tag on a hedge) are much cheaper than false positives that'd teach the LLM to avoid the right phrases.
+</p>
+<p>
+  The tag is used three ways:
+</p>
+<ul>
+  <li>Visible on the dashboard as a small <code>⚠ DATA STARVED</code> pill next to the verdict, so you can scan a week of decisions and spot the hedges instantly.</li>
+  <li>Fed back into the LLM prompt on the next invocation for the same <code>(alertname, service)</code> pair, quoted verbatim with an explicit "don't repeat these phrasings" instruction. This is the only way to teach a stateless LLM from its own past mistakes.</li>
+  <li>Triggers a one-shot retry loop: if the first pass is tagged <code>data_starved</code>, the pipeline runs the LLM once more with an escalated anti-hedge prompt appended before persisting the decision. The retry is gated on <code>triage_data_starved_retry_enabled</code> (default on) and only runs if the pipeline has enough budget left.</li>
+</ul>
+
+<div class="callout note">
+  <div class="callout-label">Why this matters</div>
+  <p style="margin:0">
+    The 2026-04-23 run produced two <code>MediumCpuUsage</code> decisions that both said "insufficient data in metrics, logs, and traces" — not because the alert was wrong, but because the webhook carried <code>service="unknown"</code> and every MCP query returned empty. After the quality sweep (alert-rule enrichment + triage fallbacks + retry loop), the same webhook now produces an RCA citing the observed metric value from the alert payload, with fallback queries when service-scoped MCP lookups miss.
+  </p>
+</div>
+
 <!-- ───────────────────────────────────────── -->
 <h2 id="dashboard"><span class="num">6.</span> The dashboard</h2>
 
