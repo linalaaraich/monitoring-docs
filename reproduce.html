@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reproduce — CIRES Observability Platform</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --bg-soft: #13151e;
+    --card: #1a1d27;
+    --card-alt: #1e2230;
+    --border: #2a2d3a;
+    --text: #e4e6ee;
+    --text-soft: #c0c5d0;
+    --muted: #8890a0;
+    --accent-blue: #4ea8de;
+    --accent-green: #6bcf7f;
+    --accent-orange: #f0a050;
+    --accent-purple: #b07ee8;
+    --accent-cyan: #40d0d0;
+    --accent-red: #e06070;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { font-family:'Inter','Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); line-height:1.65; font-size:15px; -webkit-font-smoothing:antialiased; }
+  code, pre, .mono { font-family:'JetBrains Mono','Fira Code',ui-monospace,monospace; font-size:0.88em; }
+  .topnav { display:flex; align-items:center; gap:12px; padding:14px 40px; background:var(--bg-soft); border-bottom:1px solid var(--border); flex-wrap:wrap; }
+  .topnav span.nav-label { color:var(--muted); font-size:13px; font-weight:600; }
+  .navlink { padding:7px 14px; border-radius:8px; font-size:13px; font-weight:600; text-decoration:none; border:1px solid var(--border); background:var(--card); color:var(--text); }
+
+  .hero { padding:48px 40px 32px; border-bottom:1px solid var(--border); background:linear-gradient(180deg, #13151e 0%, var(--bg) 100%); }
+  .hero .inner { max-width:960px; margin:0 auto; }
+  .hero .eyebrow { font-size:11px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:var(--accent-orange); margin-bottom:12px; }
+  .hero h1 { font-size:32px; font-weight:800; letter-spacing:-.5px; margin-bottom:10px; line-height:1.2; }
+  .hero h1 span { color:var(--accent-orange); }
+  .hero p.lead { font-size:15px; color:var(--text-soft); max-width:720px; line-height:1.7; }
+
+  .layout { max-width:960px; margin:0 auto; padding:32px 40px 80px; }
+  .content h2 { font-size:22px; font-weight:700; margin:36px 0 14px; letter-spacing:-.3px; padding-bottom:8px; border-bottom:1px solid var(--border); }
+  .content h2:first-child { margin-top:0; }
+  .content h3 { font-size:15px; font-weight:700; margin:22px 0 8px; color:var(--text); }
+  .content p { margin-bottom:14px; color:var(--text-soft); }
+  .content strong { color:var(--text); }
+  .content ul, .content ol { margin:8px 0 16px 24px; color:var(--text-soft); }
+  .content li { margin-bottom:6px; }
+  .content code { background:var(--card); border:1px solid var(--border); padding:1px 6px; border-radius:4px; font-size:0.85em; color:var(--accent-cyan); }
+  .content pre { background:var(--card); border:1px solid var(--border); padding:14px 16px; border-radius:8px; margin:12px 0 18px; overflow-x:auto; line-height:1.5; }
+  .content pre code { background:none; border:none; padding:0; color:var(--text); font-size:0.85em; }
+  .content a { color:var(--accent-blue); text-decoration:none; border-bottom:1px dashed rgba(78,168,222,.35); }
+  .content a:hover { border-bottom-style:solid; }
+  .step { padding:14px 18px; background:var(--card); border:1px solid var(--border); border-radius:8px; margin:10px 0; }
+  .step .num { display:inline-block; width:26px; height:26px; border-radius:50%; background:rgba(107,207,127,.15); color:var(--accent-green); font-weight:800; text-align:center; line-height:26px; font-size:13px; margin-right:10px; vertical-align:middle; }
+  .callout { border-left:3px solid; border-radius:0 8px 8px 0; padding:12px 16px; margin:14px 0; background:var(--card); }
+  .callout.note { border-color:var(--accent-blue); }
+  .callout.warn { border-color:var(--accent-orange); }
+  .callout-label { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; margin-bottom:6px; color:var(--accent-blue); }
+  .callout.warn .callout-label { color:var(--accent-orange); }
+  table { width:100%; border-collapse:collapse; margin:12px 0 20px; font-size:13px; }
+  table th, table td { padding:10px 14px; border-bottom:1px solid var(--border); text-align:left; vertical-align:top; }
+  table th { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--muted); background:var(--card); }
+</style>
+</head>
+<body>
+
+<nav class="topnav">
+  <span class="nav-label">CIRES Platform</span>
+  <a href="index.html" class="navlink">← Home</a>
+  <a href="architecture.html" class="navlink">Architecture</a>
+  <a href="tailscale-guide.html" class="navlink">Tailscale</a>
+  <a href="build-pipeline.html" class="navlink">Build pipeline</a>
+</nav>
+
+<header class="hero">
+  <div class="inner">
+    <div class="eyebrow">Reproducibility · Cold-start playbook</div>
+    <h1>Reproduce <span>the stack</span> from zero</h1>
+    <p class="lead">
+      What to do when the controller's gone, the EC2 instances are terminated,
+      and all you have is the GitHub org + a laptop with docker. End state:
+      the full CIRES observability platform running end-to-end, reachable
+      over tailnet, with an AI RCA pipeline responding to alerts.
+    </p>
+  </div>
+</header>
+
+<main class="layout">
+<div class="content">
+
+<h2>The 6 repos and what each one owns</h2>
+<table>
+  <thead><tr><th>Repo</th><th>Owns</th><th>Notable entry points</th></tr></thead>
+  <tbody>
+    <tr><td><code>provisioning-monitoring-infra</code></td><td>AWS infra (EC2, RDS, S3, VPC, SGs, EIPs)</td><td><code>terraform apply</code></td></tr>
+    <tr><td><code>monitoring-project</code></td><td>Ansible roles + playbooks (common, docker, k3s, grafana, loki, prom, jaeger, OTel, tailscale, etc.)</td><td><code>ansible-playbook playbooks/site.yml</code></td></tr>
+    <tr><td><code>monitoring-triage-service</code></td><td>FastAPI triage + LLM client. Ships via GHCR.</td><td><code>app/main.py</code>; CI: <code>.github/workflows/build-push.yml</code></td></tr>
+    <tr><td><code>monitoring-mcp-servers</code></td><td>5 MCP services. Ships via GHCR.</td><td><code>{prometheus,loki,jaeger,drain3,rca_history}_mcp/</code></td></tr>
+    <tr><td><code>monitoring-gpu-migration</code> (a.k.a. <code>gpu-migration-staging</code>)</td><td>Laptop AI-stack compose + <code>.env.laptop</code> + Windows walkthrough</td><td><code>compose/docker-compose.yml</code></td></tr>
+    <tr><td><code>monitoring-load-tests</code></td><td>HTTP load scenarios that deliberately fire alerts</td><td><code>scenarios/*.sh</code>; <code>run-all.sh</code></td></tr>
+    <tr><td><code>monitoring-chaos-tests</code></td><td>Python harness + scenarios that break infra (auto-revert)</td><td><code>harness/run.py</code></td></tr>
+  </tbody>
+</table>
+
+<h2>Cold-start walkthrough (end-to-end)</h2>
+
+<div class="step"><span class="num">0</span><strong>Prereqs on the machine that'll drive the setup</strong>
+<ul>
+  <li>AWS CLI authenticated (<code>aws sts get-caller-identity</code> must work) against an account with enough quota: 2 vCPU Standard on-demand minimum (4+ preferred), G family optional.</li>
+  <li><code>terraform</code> ≥ 1.5, <code>ansible-core</code> ≥ 2.14, <code>docker</code> (for compose).</li>
+  <li>SSH key pair at <code>~/.ssh/ansible_key</code> + pub variant at <code>~/.ssh/ansible_key.pub</code> (or matching paths in <code>terraform.tfvars</code>).</li>
+  <li>Tailscale account (free) — create one at <a href="https://login.tailscale.com/">login.tailscale.com</a>. Generate an ephemeral+reusable auth key at <a href="https://login.tailscale.com/admin/settings/keys">Settings → Keys</a>; 24 h TTL is sufficient for setup.</li>
+</ul>
+</div>
+
+<div class="step"><span class="num">1</span><strong>Clone the six repos</strong>
+<pre><code>mkdir -p ~/cires && cd ~/cires
+for r in provisioning-monitoring-infra monitoring-project monitoring-triage-service \
+         monitoring-mcp-servers monitoring-gpu-migration \
+         monitoring-load-tests monitoring-chaos-tests; do
+  git clone https://github.com/linalaaraich/$r.git
+done</code></pre>
+</div>
+
+<div class="step"><span class="num">2</span><strong>Provision AWS</strong> via Terraform, with Tailscale install baked into user_data.
+<pre><code>cd ~/cires/provisioning-monitoring-infra
+cp terraform.tfvars.example terraform.tfvars   # fill in db_password, ubuntu_ami_id
+export TF_VAR_tailscale_auth_key="tskey-auth-xxxxx"   # enables auto-join on boot
+terraform init
+terraform apply                                 # ~8 min; creates 2 EC2 + RDS + EIPs + SGs
+</code></pre>
+<p>When apply finishes, every new EC2 instance has Tailscale running and has joined the tailnet as <code>${project_name}-monitoring</code> / <code>-k3s</code> / <code>-gpu</code>. Verify with <code>tailscale status</code> from the local machine (which also needs to be on the tailnet — run <code>sudo tailscale up --authkey=$TF_VAR_tailscale_auth_key</code> if not already).</p>
+</div>
+
+<div class="step"><span class="num">3</span><strong>Configure monitoring via ansible</strong>, routing over the tailnet.
+<pre><code>cd ~/cires/monitoring-project
+export TAILSCALE_AUTH_KEY="$TF_VAR_tailscale_auth_key"
+ansible-playbook -i inventory/tailnet.yml playbooks/tailscale.yml       # idempotent check
+ansible-playbook -i inventory/tailnet.yml playbooks/site.yml            # full config</code></pre>
+<p>After ~12 min you should be able to hit Grafana at <code>http://observability-rca-monitoring:3000</code> (over tailnet) with admin/admin.</p>
+</div>
+
+<div class="step"><span class="num">4</span><strong>Stand up the AI stack on the laptop</strong>, pulling pre-built images from GHCR.
+<pre><code># On the laptop (WSL2 / Ubuntu):
+sudo tailscale up --authkey=$TAILSCALE_AUTH_KEY --hostname=adolin-wsl --accept-dns
+mkdir -p ~/cires-ai && cd ~/cires-ai
+curl -O https://raw.githubusercontent.com/linalaaraich/monitoring-gpu-migration/main/compose/docker-compose.yml
+curl -O https://raw.githubusercontent.com/linalaaraich/monitoring-gpu-migration/main/compose/drain3.ini  # if present
+curl -o .env https://raw.githubusercontent.com/linalaaraich/monitoring-gpu-migration/main/laptop/.env.laptop
+# edit .env: set MONITORING_VM_IP=100.74.21.104 (observability-rca-monitoring's tailnet IP)
+# and fill in SMTP_* if you want escalation emails.
+docker compose pull        # pulls triage + 5 MCPs + Ollama from GHCR + Docker Hub
+docker compose up -d       # brings up the whole AI stack
+docker compose logs -f triage-service | head -30  # watch for "Triage service started"</code></pre>
+<p>
+  From now on, Watchtower (also in the compose) auto-updates labeled
+  containers within ~60 s of a new GHCR push — no more manual
+  <code>docker compose pull</code>.
+</p>
+</div>
+
+<div class="step"><span class="num">5</span><strong>Smoke-test the pipeline.</strong>
+<pre><code># From the controller or any tailnet peer:
+curl -s http://adolin-wsl:8090/health                   # should return {"status":"healthy",...}
+curl -s http://adolin-wsl:8090/drain3/stats | jq        # should show clusters + lines processed
+
+# Fire a load-test scenario from the monitoring VM (low-latency path):
+cd ~/cires/monitoring-load-tests
+cp .env.example .env    # set KONG_URL=http://10.0.1.194:30080 (k3s private IP)
+./scenarios/02-latency-spike.sh                         # ~4 min — should trigger MediumCpuUsage
+
+# Watch /decisions populate:
+curl -s http://adolin-wsl:8090/decisions?limit=3 | jq</code></pre>
+</div>
+
+<h2>Pinned versions (2026-04-23 known-good)</h2>
+
+<p>
+  Hard-pin these in a fresh setup to make the reproduction bit-identical.
+  The rolling <code>:main</code> tags move — for demo-stable use
+  <code>:sha-&lt;7chars&gt;</code> which is immutable.
+</p>
+
+<table>
+  <thead><tr><th>Component</th><th>Pin</th><th>Where to pin it</th></tr></thead>
+  <tbody>
+    <tr><td>Ollama server</td><td><code>ollama/ollama:0.5.7</code></td><td><code>compose/docker-compose.yml</code>, service <code>ollama</code></td></tr>
+    <tr><td>LLM model</td><td><code>qwen2.5:7b-instruct-q4_K_M</code></td><td><code>.env</code> — <code>OLLAMA_MODEL</code></td></tr>
+    <tr><td>Triage service</td><td>set <code>TRIAGE_TAG=sha-&lt;commit&gt;</code> in <code>.env</code></td><td>corresponds to a git SHA on <code>monitoring-triage-service</code></td></tr>
+    <tr><td>MCP servers (×5)</td><td>set <code>MCP_TAG=sha-&lt;commit&gt;</code></td><td>corresponds to a SHA on <code>monitoring-mcp-servers</code></td></tr>
+    <tr><td>Watchtower</td><td><code>containrrr/watchtower:1.7.1</code></td><td>compose — do NOT auto-update watchtower itself</td></tr>
+    <tr><td>Grafana</td><td><code>grafana/grafana:&lt;version in ansible&gt;</code></td><td><code>monitoring-project/inventory/group_vars/all.yml</code> — <code>grafana_version</code></td></tr>
+    <tr><td>Prometheus / Loki / Jaeger / OTel</td><td>pinned via ansible vars</td><td>same <code>all.yml</code></td></tr>
+  </tbody>
+</table>
+
+<div class="callout warn">
+  <div class="callout-label">Caveat</div>
+  <p style="margin:0">
+    The pinned <code>:main</code> strategy depends on images staying
+    available in GHCR. If a repo is deleted or you rotate organizations,
+    the exact image is gone. For absolute long-term archival, mirror the
+    GHCR images to S3 as OCI archives — not done yet; noted on
+    the <a href="https://github.com/linalaaraich/monitoring-docs/blob/main/sprint3-backlog.md">Sprint 3 backlog</a>.
+  </p>
+</div>
+
+<h2>Per-repo READMEs</h2>
+
+<p>
+  Each repo will eventually carry a short <code>REPRODUCE.md</code> at the
+  root scoped to that repo's contribution (what to run, what gets produced).
+  For now, the repo-level quick-start is in the main <code>README.md</code>
+  of each; this page is the <em>cross-repo</em> walkthrough.
+</p>
+
+<h2>What to do when something breaks</h2>
+
+<ul>
+  <li><strong>AWS apply fails on quota</strong> — set <code>enable_k3s = false</code> or <code>enable_gpu = false</code> in <code>terraform.tfvars</code> and provision monitoring VM first; request quota increase; re-apply with the flag back on.</li>
+  <li><strong>Tailscale nodes don't see each other</strong> — check MagicDNS is enabled at <a href="https://login.tailscale.com/admin/dns">login.tailscale.com/admin/dns</a>. Rejoin a node with <code>sudo tailscale up --accept-dns=true</code>.</li>
+  <li><strong>Grafana links in emails point at localhost</strong> — <code>GF_SERVER_ROOT_URL</code> not set. Re-run ansible with the updated <code>inventory/group_vars/monitoring.yml:grafana_external_url</code>.</li>
+  <li><strong>Triage RCAs say "insufficient data"</strong> — the rca_quality classifier + retry loop should kill this pattern. If it persists, check the alert rule has a <code>service</code> label set (see <a href="triage-service.html">Triage service docs</a> §5.x).</li>
+  <li><strong>Watchtower won't update the laptop</strong> — the GHCR package may be private. Go to <a href="https://github.com/users/linalaaraich/packages">your package settings</a> and flip visibility to public, OR configure Watchtower with a GHCR pull secret (add <code>DOCKER_CONFIG</code> volume mount).</li>
+</ul>
+
+</div>
+</main>
+</body>
+</html>
