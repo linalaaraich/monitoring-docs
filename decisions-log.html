@@ -144,6 +144,7 @@
     <li><a href="#d13">Pre-LLM metric interpreter (narrow the LLM's job)</a></li>
     <li><a href="#d14">Downtime backfill from Grafana annotations</a></li>
     <li><a href="#d15">Bounded-agency retry (one MCP call, not a chain)</a></li>
+    <li><a href="#d16"><strong>UEBA framing for Sprint 2 Epic 5</strong></a></li>
   </ol>
 </div>
 
@@ -1124,6 +1125,86 @@
         should convert to <code>actionable</code> via bounded agency. Under that,
         the tool whitelist is wrong — add or remove tools based on which
         requests the model makes most.
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- =================================================================== -->
+<h2 id="d16">D16 · UEBA framing for Sprint 2 Epic 5</h2>
+<div class="decision">
+  <div class="decision-meta">
+    <span class="tag tag-fixed">✅ Epic created + backlogged</span>
+    <span class="date">2026-04-24</span>
+  </div>
+  <h3 class="problem-title">The pipeline is event-centric; real incidents are entity-behavior-centric.</h3>
+
+  <div class="section-block">
+    <span class="block-label">Problem</span>
+    <div class="block-body">
+      <p>
+        Sprint 2 shipped an event-driven pipeline: Grafana rule crosses
+        threshold → triage synthesizes RCA → email sent. Useful, but four
+        classes of issues are invisible to it: (1) no baselines means
+        static thresholds over-fire at night and under-fire at day;
+        (2) no incident grouping means a four-alert cascade produces four
+        separate emails; (3) no learning loop means every past analyst
+        verdict is thrown away; (4) no entity memory means Drain3 blends
+        kong logs with spring-boot logs.
+      </p>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <span class="block-label">Reasoning</span>
+    <div class="block-body">
+      <p>
+        UEBA (User and Entity Behavior Analytics) solved these exact four
+        problems in the SIEM/security world ten years ago. The core
+        vocabulary — "entity-centric baselines," "kill chain correlation,"
+        "closed-loop feedback," "peer grouping," "adaptive thresholds" —
+        maps cleanly onto observability when you substitute "service" for
+        "user" and "metric/log signal" for "security event." Adopting this
+        framing has three payoffs: (a) a principled set of next-sprint
+        stories instead of an ad-hoc wishlist; (b) a jury-recognizable
+        vocabulary for the PFE defense; (c) concrete fixes for the
+        audit findings (drain3 silence = no entity memory, alert
+        flapping = no incident grouping, false-positive repeats = no
+        closed loop).
+      </p>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <span class="block-label">Solution</span>
+    <div class="block-body">
+      <p>
+        New Epic 5 in Sprint 2 (pre-demo): <strong>see <a href="sprint2-epic5-ueba.html">sprint2-epic5-ueba.html</a></strong>. Seven user stories:
+      </p>
+      <ul>
+        <li>US-5.1 Per-service Drain3 + per-service metric baselines (core)</li>
+        <li>US-5.2 Incident correlator — kill-chain grouping (core, biggest demo impact)</li>
+        <li>US-5.3 Closed-loop feedback from analyst verdicts (core, lowest effort)</li>
+        <li>US-5.4 Adaptive thresholds (core, 2 hours of work, huge FP reduction)</li>
+        <li>US-5.5 Peer grouping (per-pod z-score) — stretch</li>
+        <li>US-5.6 Deployment-history MCP — stretch</li>
+        <li>US-5.7 Labeled corpus + precision/recall F1 tracking — stretch (folds into Sprint 3 evaluation work)</li>
+      </ul>
+      <p>
+        Total core budget ~3–4 days for one engineer, ~2 days if parallelized.
+      </p>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <span class="block-label">Evaluation</span>
+    <div class="block-body">
+      <p>
+        Success = the four event-centric gaps (above) are closed. Concrete
+        measurable outcomes per story's acceptance criteria in the Epic 5
+        page. Overall quality metric post-Epic-5: precision + recall tracked
+        via US-5.3's new Prometheus gauges, baselined today and tracked
+        every sprint after.
       </p>
     </div>
   </div>

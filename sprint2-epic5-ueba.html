@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sprint 2 Epic 5 — UEBA-inspired features — CIRES Observability Platform</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --bg-soft: #13151e;
+    --card: #1a1d27;
+    --card-alt: #1e2230;
+    --border: #2a2d3a;
+    --border-hi: #3a3f52;
+    --text: #e4e6ee;
+    --text-soft: #c0c5d0;
+    --muted: #8890a0;
+    --accent-blue: #4ea8de;
+    --accent-green: #6bcf7f;
+    --accent-orange: #f0a050;
+    --accent-purple: #b07ee8;
+    --accent-red: #e06070;
+    --accent-cyan: #40d0d0;
+    --accent-yellow: #e0d060;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { font-family:'Inter','Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); line-height:1.65; font-size:15px; -webkit-font-smoothing:antialiased; }
+  code, pre, .mono { font-family:'JetBrains Mono','Fira Code',ui-monospace,monospace; font-size:0.88em; }
+
+  .topnav { display:flex; align-items:center; gap:12px; padding:14px 40px; background:var(--bg-soft); border-bottom:1px solid var(--border); flex-wrap:wrap; }
+  .topnav span.nav-label { color:var(--muted); font-size:13px; font-weight:600; margin-right:4px; }
+  .navlink { display:inline-flex; align-items:center; gap:6px; padding:7px 14px; border-radius:8px; font-size:13px; font-weight:600; text-decoration:none; border:1px solid; transition:background .2s, transform .15s; }
+  .navlink:hover { transform:translateY(-1px); }
+  .navlink-home { color:var(--text); border-color:var(--border); background:var(--card); }
+  .navlink-sprint { color:var(--accent-purple); border-color:rgba(176,126,232,.4); background:rgba(176,126,232,.08); }
+  .navlink-audit { color:var(--accent-red); border-color:rgba(224,96,112,.4); background:rgba(224,96,112,.08); }
+  .navlink-log { color:var(--accent-orange); border-color:rgba(240,160,80,.4); background:rgba(240,160,80,.08); }
+
+  .hero { padding:56px 40px 40px; border-bottom:1px solid var(--border); background:linear-gradient(180deg, #13151e 0%, var(--bg) 100%); }
+  .hero .inner { max-width:1060px; margin:0 auto; }
+  .hero .eyebrow { font-size:11px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:var(--accent-yellow); margin-bottom:12px; }
+  .hero h1 { font-size:36px; font-weight:800; letter-spacing:-.5px; margin-bottom:14px; line-height:1.2; }
+  .hero h1 span.accent { color:var(--accent-yellow); }
+  .hero p.lead { font-size:16px; color:var(--text-soft); max-width:860px; line-height:1.7; margin-bottom:20px; }
+  .hero .pill-row { display:flex; gap:8px; flex-wrap:wrap; }
+  .pill { font-size:11px; font-weight:600; padding:4px 10px; border-radius:12px; border:1px solid; letter-spacing:.2px; }
+  .pill.yellow { color:var(--accent-yellow); border-color:rgba(224,208,96,.35); background:rgba(224,208,96,.08); }
+  .pill.purple { color:var(--accent-purple); border-color:rgba(176,126,232,.35); background:rgba(176,126,232,.08); }
+  .pill.green { color:var(--accent-green); border-color:rgba(107,207,127,.35); background:rgba(107,207,127,.08); }
+
+  .layout { max-width:1060px; margin:0 auto; padding:32px 40px 80px; }
+  .content h2 { font-size:24px; font-weight:700; margin:40px 0 14px; letter-spacing:-.3px; scroll-margin-top:24px; padding-bottom:8px; border-bottom:1px solid var(--border); }
+  .content h2:first-child { margin-top:0; }
+  .content h3 { font-size:18px; font-weight:700; margin:26px 0 10px; color:var(--text); scroll-margin-top:24px; }
+  .content h4 { font-size:13px; font-weight:700; margin:16px 0 6px; letter-spacing:1px; text-transform:uppercase; color:var(--muted); }
+  .content p { margin-bottom:14px; color:var(--text-soft); }
+  .content p strong { color:var(--text); font-weight:600; }
+  .content ul, .content ol { margin:8px 0 16px 24px; color:var(--text-soft); }
+  .content li { margin-bottom:6px; }
+  .content code { background:var(--card); border:1px solid var(--border); padding:1px 6px; border-radius:4px; font-size:0.85em; color:var(--accent-cyan); }
+  .content pre { background:var(--card); border:1px solid var(--border); padding:14px 16px; border-radius:8px; margin:12px 0 18px; overflow-x:auto; line-height:1.5; font-size:12.5px; }
+  .content pre code { background:none; border:none; padding:0; color:var(--text); font-size:1em; }
+  .content a { color:var(--accent-blue); text-decoration:none; border-bottom:1px dashed rgba(78,168,222,.35); }
+  .content a:hover { border-bottom-style:solid; }
+
+  .callout { border-left:3px solid; border-radius:0 8px 8px 0; padding:14px 18px; margin:16px 0; background:var(--card); }
+  .callout.note { border-color:var(--accent-blue); }
+  .callout.tip { border-color:var(--accent-green); }
+  .callout.insight { border-color:var(--accent-yellow); background:rgba(224,208,96,.04); }
+  .callout-label { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; margin-bottom:6px; }
+  .callout.note .callout-label { color:var(--accent-blue); }
+  .callout.tip .callout-label { color:var(--accent-green); }
+  .callout.insight .callout-label { color:var(--accent-yellow); }
+
+  .story {
+    background:var(--card); border:1px solid var(--border); border-radius:10px;
+    padding:22px 26px; margin:20px 0;
+  }
+  .story-header { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:12px; }
+  .story-id { font-family:'JetBrains Mono',monospace; font-size:12px; font-weight:700; color:var(--accent-yellow); background:rgba(224,208,96,.08); border:1px solid rgba(224,208,96,.25); padding:3px 10px; border-radius:6px; white-space:nowrap; }
+  .story-title { font-size:17px; font-weight:700; color:var(--text); flex:1; line-height:1.3; }
+  .story-meta-row { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:12px; font-size:11px; }
+  .meta-tag { padding:3px 10px; border-radius:12px; letter-spacing:.2px; border:1px solid; font-weight:600; }
+  .meta-effort-low { color:var(--accent-green); border-color:rgba(107,207,127,.35); background:rgba(107,207,127,.08); }
+  .meta-effort-med { color:var(--accent-orange); border-color:rgba(240,160,80,.35); background:rgba(240,160,80,.08); }
+  .meta-effort-high { color:var(--accent-red); border-color:rgba(224,96,112,.35); background:rgba(224,96,112,.08); }
+  .meta-prio-core { color:var(--accent-purple); border-color:rgba(176,126,232,.35); background:rgba(176,126,232,.08); }
+  .meta-prio-stretch { color:var(--muted); border-color:var(--border); background:var(--card-alt); }
+  .story-section { margin-top:12px; }
+  .story-section h4 { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--muted); margin-bottom:5px; }
+  .story-section p { color:var(--text-soft); margin-bottom:8px; font-size:14px; }
+
+  table { width:100%; border-collapse:collapse; margin:12px 0 20px; font-size:13px; }
+  table th, table td { padding:10px 12px; border-bottom:1px solid var(--border); text-align:left; vertical-align:top; }
+  table th { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--muted); background:var(--card); }
+  table tr:hover td { background:var(--card-alt); }
+  .shipped { color:var(--accent-green); font-weight:600; }
+  .partial { color:var(--accent-orange); font-weight:600; }
+  .planned { color:var(--accent-yellow); font-weight:600; }
+  .descoped { color:var(--muted); font-weight:600; }
+</style>
+</head>
+<body>
+
+<nav class="topnav">
+  <span class="nav-label">CIRES Observability Platform</span>
+  <a href="index.html" class="navlink navlink-home">🏠 Home</a>
+  <a href="sprint2-backlog.html" class="navlink navlink-sprint">🚀 Sprint 2 Backlog</a>
+  <a href="alerts-audit.html" class="navlink navlink-audit">🔍 Alerts Audit</a>
+  <a href="decisions-log.html" class="navlink navlink-log">📝 Decisions Log</a>
+</nav>
+
+<section class="hero">
+  <div class="inner">
+    <div class="eyebrow">Sprint 2 · Epic 5 · New — 2026-04-24</div>
+    <h1>Epic 5 — <span class="accent">Entity-behavior-driven</span> observability (UEBA applied to AIOps)</h1>
+    <p class="lead">
+      UEBA (User and Entity Behavior Analytics) is a mature discipline in the
+      SIEM/security world. Its core insight — <em>reason about entities whose
+      behavior you profile continuously, not events in isolation</em> — maps
+      directly onto observability. This Epic lifts seven concrete patterns
+      from UEBA and applies each to the CIRES AI triage pipeline. Four are
+      <strong>core Sprint 2 deliverables</strong> (US-5.1 through US-5.4);
+      three are <strong>stretch</strong> (carry to post-presentation sprint
+      if time allows). The philosophical shift — from "alert-driven" to
+      "entity-behavior-driven" — is what makes the platform defensible as a
+      production-grade AIOps system, not a demo toy.
+    </p>
+    <div class="pill-row">
+      <span class="pill yellow">New Epic · 2026-04-24</span>
+      <span class="pill purple">7 user stories</span>
+      <span class="pill green">4 core · 3 stretch</span>
+    </div>
+  </div>
+</section>
+
+<main class="layout">
+<div class="content">
+
+<!-- ============================================================== -->
+<h2 id="overview">Why this Epic</h2>
+
+<p>
+  Everything we've shipped in Sprint 2 is <strong>event-centric</strong>: a
+  Grafana rule crosses a threshold, the triage pipeline synthesizes an RCA
+  for that single event, an email goes out. That's useful, but it's what a
+  senior SRE was already doing manually — just faster and at 3 AM.
+  UEBA systems in the security world made the jump to
+  <strong>entity-centric</strong> reasoning 10 years ago. The same jump in
+  observability collapses four classes of current-state problems:
+</p>
+
+<ul>
+  <li>
+    <strong>No baselines.</strong> Our alerts use static thresholds
+    (<code>CpuUsage &gt; 85%</code>). Real traffic is not stationary —
+    Tuesday 10 AM ≠ Sunday 03 AM. Static thresholds miss daytime
+    regressions and over-fire on nighttime batch jobs.
+  </li>
+  <li>
+    <strong>No incident grouping.</strong> Today a cascade (disk fills →
+    DB slow → connection pool exhausts → Kong 503s → users report errors)
+    fires 4 separate alerts, produces 4 separate RCAs, sends 4 emails.
+    The human sees one incident. So should the system.
+  </li>
+  <li>
+    <strong>No learning loop.</strong> Every past analyst verdict is
+    training data we're throwing away. False positives repeat. True
+    positives that the LLM marked DISMISS repeat too. We have the
+    storage (<code>rca_history</code>); we just haven't closed the loop.
+  </li>
+  <li>
+    <strong>No entity memory.</strong> Drain3 has a global template
+    cluster pool. <code>kong</code> and <code>spring-boot</code> logs
+    cluster together, diluting each service's signal. A 50 %
+    log-volume drop on the triage service would go unnoticed because
+    the global rate barely moves.
+  </li>
+</ul>
+
+<p>
+  The seven stories below address these directly, using UEBA's vocabulary
+  and methods. Each links to code paths in this codebase and acceptance
+  criteria a reviewer can check.
+</p>
+
+<div class="callout insight">
+  <div class="callout-label">Meta-lesson</div>
+  <p><strong>The deepest lesson isn't any single feature — it's the philosophical shift from alert-driven ops to entity-behavior-driven ops.</strong> Every service has a running behavioral profile. Alerts are samples from that profile. The RCA is always "this entity behaved differently than its own baseline / its peers / its recent history" — and the machine tracks that continuously, whether or not an alert has fired. That's the 10-year UEBA endgame; Epic 5 gets us 80% of the way there architecturally.</p>
+</div>
+
+<!-- ============================================================== -->
+<h2 id="traceability">Sprint 2 traceability — what's shipped, what's Epic 5</h2>
+
+<p>
+  Before presenting the new stories, a clear account of what already
+  shipped vs what's new. Every row traces to a commit or an epic backlog
+  reference.
+</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Area</th>
+      <th>What shipped (Sprint 2)</th>
+      <th>Gap → Epic 5 story</th>
+      <th>Status</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Detection layer</td>
+      <td>Drain3 global clusters (log template learning) — <code>app/drain_analyzer.py</code></td>
+      <td>Per-service Drain3 + per-service metric baselines → <strong>US-5.1</strong></td>
+      <td class="shipped">✅ Global shipped · ⏳ per-service new</td>
+    </tr>
+    <tr>
+      <td>Alert grouping</td>
+      <td>Fingerprint-window dedup collapses repeat fires of SAME alert → <code>app/dedup.py</code> (commit <code>c6694f4</code>)</td>
+      <td>Incident correlator groups DIFFERENT but co-firing alerts → <strong>US-5.2</strong></td>
+      <td class="shipped">✅ Dedup shipped · ⏳ correlator new</td>
+    </tr>
+    <tr>
+      <td>LLM feedback</td>
+      <td>Pipeline READS past RCAs for history context — <code>pipeline.py:200-250</code></td>
+      <td>Analyst verdicts WRITE BACK → closed loop → <strong>US-5.3</strong></td>
+      <td class="partial">⚠ Read-only · ⏳ two-way new</td>
+    </tr>
+    <tr>
+      <td>Alert thresholds</td>
+      <td>18 static rules in <code>roles/grafana/templates/alertrules.yml.j2</code></td>
+      <td>Time-of-day / day-of-week adaptive thresholds → <strong>US-5.4</strong></td>
+      <td class="shipped">✅ Static shipped · ⏳ adaptive new</td>
+    </tr>
+    <tr>
+      <td>Metric aggregation</td>
+      <td>Service-level metrics via Prometheus <code>rate()</code> + <code>histogram_quantile()</code></td>
+      <td>Per-pod peer comparison (z-score within replica set) → <strong>US-5.5</strong> (stretch)</td>
+      <td class="descoped">Stretch · post-Sprint 2</td>
+    </tr>
+    <tr>
+      <td>RCA context sources</td>
+      <td>5 MCP servers: Prometheus, Loki, Jaeger, Drain3, RCA-History</td>
+      <td>+ deployment-history MCP (Helm / git / Jira) → <strong>US-5.6</strong> (stretch)</td>
+      <td class="descoped">Stretch · post-Sprint 2</td>
+    </tr>
+    <tr>
+      <td>Quality measurement</td>
+      <td>`rca_quality` classifier (actionable / data_starved / needs_review) → <code>app/rca_store.py</code></td>
+      <td>Labeled corpus + batch reanalysis + F1 per version → <strong>US-5.7</strong> (stretch — fits Track A P2 already in <a href="alerts-audit.html#improvement-plan">alerts-audit plan</a>)</td>
+      <td class="descoped">Stretch · post-Sprint 2</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>
+  In short: Sprint 2 delivered the event pipeline. Epic 5 delivers the
+  entity-behavior profile that sits ON TOP of it. The pipeline stays;
+  we wrap it with continuous entity state.
+</p>
+
+<!-- ============================================================== -->
+<h2 id="stories">The 7 stories</h2>
+
+<!-- US-5.1 -->
+<div class="story" id="us-5-1">
+  <div class="story-header">
+    <div class="story-id">US-5.1</div>
+    <div class="story-title">Per-service Drain3 instances + per-service metric baselines</div>
+  </div>
+  <div class="story-meta-row">
+    <span class="meta-tag meta-prio-core">Core</span>
+    <span class="meta-tag meta-effort-med">Medium effort · ~1 day</span>
+  </div>
+  <div class="story-section">
+    <h4>UEBA lesson</h4>
+    <p>Don't profile events globally. Profile <em>entities</em> whose behavior you track continuously. A login at 3 AM matters differently if the user has done it 50 times before vs never.</p>
+  </div>
+  <div class="story-section">
+    <h4>Apply to observability</h4>
+    <p>Keep the existing global Drain3, but add a <strong>second dimension keyed by <code>service</code> label</strong>: separate template state files per service so <code>spring-boot</code> logs don't blend with <code>kong</code> logs. Add <strong>per-service metric baselines</strong> for p95 latency distribution, error rate, memory curve — stored as <code>quantile_over_time()</code> aggregates in Prometheus and exposed to the LLM prompt as a new "behavioral context" block.</p>
+  </div>
+  <div class="story-section">
+    <h4>Concrete implementation</h4>
+    <p>In <code>app/drain_analyzer.py</code>, replace the single <code>TemplateMiner</code> with a <code>dict[service_name → TemplateMiner]</code>. FilePersistence paths become <code>{drain3_state_dir}/{service}.bin</code>. The <code>analyze()</code> method routes by service label (extracted from the Loki stream labels during ingest). <code>/drain3/stats</code> returns per-service stats.</p>
+    <p>For metric baselines: new module <code>app/entity_baselines.py</code> with <code>get_baseline(service, metric, window='7d') → {mean, stddev, p50, p95}</code>. Called by <code>metric_interpreter.interpret()</code> and included in <code>MetricFacts</code> as <code>baseline</code> field. The LLM prompt then gets <em>"p95 latency = 30000 ms — 4.2σ above spring-boot's 30-day baseline (mean=850ms, σ=250ms)"</em> instead of just <em>"above 1000 ms threshold."</em></p>
+  </div>
+  <div class="story-section">
+    <h4>Acceptance criteria</h4>
+    <ul>
+      <li><code>/drain3/stats?service=spring-boot</code> returns distinct template count from <code>service=kong</code></li>
+      <li>Any RCA for a service with ≥7 days of history cites at least one "Xσ above baseline" claim sourced from <code>entity_baselines</code></li>
+      <li>New Prometheus metric <code>triage_baseline_sigma{service,metric}</code> exported for observability</li>
+    </ul>
+  </div>
+</div>
+
+<!-- US-5.2 -->
+<div class="story" id="us-5-2">
+  <div class="story-header">
+    <div class="story-id">US-5.2</div>
+    <div class="story-title">Incident correlator — group co-firing alerts into one "kill chain" incident</div>
+  </div>
+  <div class="story-meta-row">
+    <span class="meta-tag meta-prio-core">Core · biggest demo impact</span>
+    <span class="meta-tag meta-effort-med">Medium effort · ~1–2 days</span>
+  </div>
+  <div class="story-section">
+    <h4>UEBA lesson</h4>
+    <p>Single events rarely matter. Sequences matter. Attackers do recon → exploit → persist → lateral movement. UEBA platforms score the chain, not the steps.</p>
+  </div>
+  <div class="story-section">
+    <h4>Apply to observability</h4>
+    <p>Real incidents are cascades: disk fills → DB writes slow → connection pool exhausts → Kong 503s → user errors. Today the triage pipeline sees 4 alerts, produces 4 RCAs, emails 4 times. A human sees one incident with four symptoms. The LLM is dramatically better at RCA when it reasons over the WHOLE chain at once.</p>
+  </div>
+  <div class="story-section">
+    <h4>Concrete implementation</h4>
+    <p>New module <code>app/incident_correlator.py</code>. On every alert arrival, check for other alerts within a <code>settings.incident_correlation_window_seconds</code> (default 900 s = 15 min). If any exist, all alerts in that window join a shared <code>incident_id</code> (UUID). The incident object carries <code>alert_ids[]</code>, <code>earliest_start</code>, <code>latest_start</code>, aggregated <code>affected_services</code>, and a single shared RCA.</p>
+    <p>New SQLite table <code>incidents(id, created_at, status, alert_ids_json, rca_report, verdict, ...)</code>. The pipeline's LLM call changes: for incident-scoped alerts, send ALL alerts in the incident to the LLM in one prompt under a new "Related alerts firing concurrently" section. Single email per incident with all symptoms listed.</p>
+    <p>Dashboard: incident rows become parent records, with child alerts shown indented when expanded.</p>
+  </div>
+  <div class="story-section">
+    <h4>Acceptance criteria</h4>
+    <ul>
+      <li>Given 4 Grafana webhooks within 12 min, exactly 1 escalation email is sent (not 4)</li>
+      <li>The incident object carries all 4 <code>alert_id</code>s; dashboard renders them as indented children</li>
+      <li>The LLM RCA references the causal chain explicitly (rule H of SYSTEM_PROMPT already enforces this for dyads; extend to N)</li>
+      <li>New metric <code>triage_incidents_total{size}</code> tracks incident-size distribution</li>
+    </ul>
+  </div>
+</div>
+
+<!-- US-5.3 -->
+<div class="story" id="us-5-3">
+  <div class="story-header">
+    <div class="story-id">US-5.3</div>
+    <div class="story-title">Closed-loop feedback from analyst verdicts</div>
+  </div>
+  <div class="story-meta-row">
+    <span class="meta-tag meta-prio-core">Core · lowest effort, highest signal</span>
+    <span class="meta-tag meta-effort-low">Low effort · ~half-day</span>
+  </div>
+  <div class="story-section">
+    <h4>UEBA lesson</h4>
+    <p>Every analyst decision is training data: false positive, tuned threshold, confirmed true positive. UEBA platforms use this to auto-tune detection over time. Without this loop, the system degrades instead of improving.</p>
+  </div>
+  <div class="story-section">
+    <h4>Apply to observability</h4>
+    <p>Today <code>rca_history</code> is read-only from the LLM's perspective. It reads past RCAs as context but doesn't LEARN from analyst overrides. Close the loop.</p>
+  </div>
+  <div class="story-section">
+    <h4>Concrete implementation</h4>
+    <p>Two new endpoints on the triage service:</p>
+    <ul>
+      <li><code>POST /feedback/override</code> — body: <code>{decision_id, new_verdict: "escalate"|"dismiss", reason}</code>. Flags the row as analyst-overridden and updates <code>rca_quality</code>.</li>
+      <li><code>POST /feedback/confirm</code> — body: <code>{decision_id, outcome: "true_positive"|"false_positive"}</code>. Records the ground truth.</li>
+    </ul>
+    <p>Link in each escalation email: two one-click buttons "<strong>Was right</strong>" and "<strong>False positive</strong>" that POST to these endpoints with a signed URL token.</p>
+    <p>Extend the existing Layer-2 suppression (<code>pipeline._check_suppression()</code>): if the same <code>(alert_name, service)</code> was marked <strong>false positive</strong> by an analyst within <code>settings.feedback_suppression_days</code> (default 7 d), suppress the new alert without calling the LLM. If a similar alert was <strong>confirmed as incident</strong> by analyst override within the same window, bias the verdict toward ESCALATE even if the LLM says DISMISS.</p>
+    <p>New Prometheus metrics: <code>triage_precision</code> (true_positives / escalations) and <code>triage_recall</code> (true_positives / all_confirmed_incidents). These become the KPIs for Sprint 3 evaluation dashboard.</p>
+  </div>
+  <div class="story-section">
+    <h4>Acceptance criteria</h4>
+    <ul>
+      <li>Escalation emails carry the two feedback buttons; POSTs hit the endpoints and persist</li>
+      <li>A same-alert false-positive marker within 7 days suppresses the next fire without Ollama</li>
+      <li><code>triage_precision</code> and <code>triage_recall</code> exposed at <code>/metrics</code></li>
+      <li>Feedback is sourced-tagged: <code>analyst-override</code> rows are visually distinguished on the dashboard</li>
+    </ul>
+  </div>
+</div>
+
+<!-- US-5.4 -->
+<div class="story" id="us-5-4">
+  <div class="story-header">
+    <div class="story-id">US-5.4</div>
+    <div class="story-title">Adaptive thresholds — time-of-day / day-of-week baselines instead of static</div>
+  </div>
+  <div class="story-meta-row">
+    <span class="meta-tag meta-prio-core">Core · trivial change, huge FP reduction</span>
+    <span class="meta-tag meta-effort-low">Low effort · ~2 hours</span>
+  </div>
+  <div class="story-section">
+    <h4>UEBA lesson</h4>
+    <p>A user logging in at 3 AM means nothing for an on-call sysadmin. It means everything for a 9-to-5 accountant. Static thresholds over-fire on expected-busy times and under-fire on expected-quiet degradations.</p>
+  </div>
+  <div class="story-section">
+    <h4>Apply to observability</h4>
+    <p>Your alert rules today are static: <code>CpuUsage &gt; 85%</code>. Real traffic is not stationary. Tuesday 10 AM ≠ Sunday 03 AM. An adaptive rule like <em>"CPU is 3σ above the last-7-days-same-hour baseline"</em> catches real regressions that a static threshold misses, and silences the nightly batch jobs that currently fire at 02:00 every day.</p>
+  </div>
+  <div class="story-section">
+    <h4>Concrete implementation</h4>
+    <p>PromQL pattern for a same-hour-seasonal baseline:</p>
+    <pre><code>(
+  avg_over_time(node_cpu_busy_percent[5m])
+  - avg_over_time(node_cpu_busy_percent[7d] offset 1h)
+)
+/ stddev_over_time(node_cpu_busy_percent[7d] offset 1h)
+&gt; 3</code></pre>
+    <p>Rewrite 3–5 of the most-flappy static rules in <code>roles/grafana/templates/alertrules.yml.j2</code> (start with <code>MediumCpuUsage</code> — it fired 8 times in the audit window, most post-P1 dismissed). Keep the static rules as fallback until adaptive proves stable.</p>
+    <p>Annotate converted rules with <code>label: "adaptive"</code> so the dashboard can render them with a visible tag. <code>MetricFacts</code> one-liner gets updated to say <em>"CPU = 94% — 3.4σ above same-hour-Tuesday-10am baseline"</em>.</p>
+  </div>
+  <div class="story-section">
+    <h4>Acceptance criteria</h4>
+    <ul>
+      <li>At least 3 alert rules converted to adaptive thresholds; all 18 rules document their threshold strategy in a comment</li>
+      <li>Before/after comparison: 7-day window, count of fires for the converted rules drops ≥ 30% (baseline: MediumCpuUsage fired 8× pre-change in one 40-min window — target: fires only on genuine anomalies)</li>
+      <li>Grafana dashboard distinguishes adaptive vs static rules visually</li>
+    </ul>
+  </div>
+</div>
+
+<!-- US-5.5 -->
+<div class="story" id="us-5-5">
+  <div class="story-header">
+    <div class="story-id">US-5.5</div>
+    <div class="story-title">Peer grouping — per-pod z-score within replica set</div>
+  </div>
+  <div class="story-meta-row">
+    <span class="meta-tag meta-prio-stretch">Stretch · post-Sprint 2</span>
+    <span class="meta-tag meta-effort-med">Medium effort · ~1 day</span>
+  </div>
+  <div class="story-section">
+    <h4>UEBA lesson</h4>
+    <p>Compare a user to users like them. If a backend engineer runs <code>kubectl</code> it's fine; if an accountant does it, page someone.</p>
+  </div>
+  <div class="story-section">
+    <h4>Apply to observability</h4>
+    <p>In Kubernetes, replicas of the same Deployment are natural peers. If <code>spring-boot-abc</code> has 5× the latency of <code>spring-boot-def</code> and <code>spring-boot-ghi</code>, that's a specific-pod issue — very different RCA from a service-wide degradation. Most observability tools aggregate at service level and miss this entirely.</p>
+  </div>
+  <div class="story-section">
+    <h4>Concrete implementation</h4>
+    <p>New MCP tool in <code>monitoring-mcp-servers/prometheus-mcp</code>: <code>compare_peers(service, metric, window) → {pod: z_score}</code>. Internally runs:</p>
+    <pre><code>PromQL: histogram_quantile(0.95,
+    sum by (pod) (rate(http_server_requests_seconds_bucket{service=X}[window])))
+
+Then: z-score each pod against the mean + stddev of its siblings.</code></pre>
+    <p>Add to the bounded-agency whitelist (<code>app/bounded_agency.py</code>): the LLM can request <code>prometheus.compare_peers</code> on data_starved retry. RCA prose then says <em>"Pod spring-boot-abc is 4.2σ above its 2 sibling replicas' latency — local issue, not service-wide."</em></p>
+  </div>
+  <div class="story-section">
+    <h4>Acceptance criteria</h4>
+    <ul>
+      <li><code>compare_peers</code> MCP returns per-pod z-scores for a given service+metric</li>
+      <li>At least one live RCA cites peer-comparison evidence (can be verified via a synthetic imbalanced-replica load test)</li>
+      <li>Tool appears in <code>TOOLS_DESCRIPTION</code> of <code>bounded_agency.py</code></li>
+    </ul>
+  </div>
+</div>
+
+<!-- US-5.6 -->
+<div class="story" id="us-5-6">
+  <div class="story-header">
+    <div class="story-id">US-5.6</div>
+    <div class="story-title">Deployment-history enrichment — "what changed 30 min ago?"</div>
+  </div>
+  <div class="story-meta-row">
+    <span class="meta-tag meta-prio-stretch">Stretch · post-Sprint 2</span>
+    <span class="meta-tag meta-effort-med">Medium effort · ~1 day</span>
+  </div>
+  <div class="story-section">
+    <h4>UEBA lesson</h4>
+    <p>Correlate internal events with external context — threat feeds, CVE databases, geo-IP.</p>
+  </div>
+  <div class="story-section">
+    <h4>Apply to observability</h4>
+    <p>≈ 87 % of production incidents come from recent changes. Correlating alerts with deployment history converts most RCAs from "something is wrong somewhere" to <em>"Service X started failing at 14:32. At 14:28, Helm upgraded spring-boot from v1.4.2 to v1.4.3. Probable cause: the 1.4.3 deployment. Suggested: rollback."</em> That's senior-SRE quality.</p>
+  </div>
+  <div class="story-section">
+    <h4>Concrete implementation</h4>
+    <p>New MCP server <code>monitoring-mcp-servers/deployment-history-mcp</code> (port 8096). Endpoints:</p>
+    <ul>
+      <li><code>GET /recent?service=X&window=30m</code> — returns recent deployment events for this service from three sources:</li>
+      <li>Helm release history: <code>helm history spring-boot -n app -o json</code></li>
+      <li>Git commits on the deployment repo since timestamp: <code>git log --since='30 minutes ago' --oneline</code></li>
+      <li>Jira ticket transitions (existing CSV export under <code>monitoring-docs/jira/</code>) filtered by service label</li>
+    </ul>
+    <p>Wire into the context gatherer (<code>app/context.py</code>) as a FOURTH pillar. Add to <code>SYSTEM_PROMPT</code> rules: <em>"If a recent deployment exists within ±30 min, state it explicitly and weight it as a probable cause."</em></p>
+  </div>
+  <div class="story-section">
+    <h4>Acceptance criteria</h4>
+    <ul>
+      <li>New MCP server deployed + healthy</li>
+      <li>Every RCA shows a "Recent deployments" section (even if empty)</li>
+      <li>Synthetic test: deploy a broken config, fire an alert — RCA attributes to the deployment</li>
+    </ul>
+  </div>
+</div>
+
+<!-- US-5.7 -->
+<div class="story" id="us-5-7">
+  <div class="story-header">
+    <div class="story-id">US-5.7</div>
+    <div class="story-title">Batch reanalysis + labeled corpus → objective precision/recall tracking</div>
+  </div>
+  <div class="story-meta-row">
+    <span class="meta-tag meta-prio-stretch">Stretch · folds into Sprint 3 evaluation dashboard</span>
+    <span class="meta-tag meta-effort-high">High effort · ~2 days</span>
+  </div>
+  <div class="story-section">
+    <h4>UEBA lesson</h4>
+    <p>When detection logic improves, re-run it against old events. You find past incidents you missed AND quantify your improvement objectively.</p>
+  </div>
+  <div class="story-section">
+    <h4>Apply to observability</h4>
+    <p>Sprint 3's Track A already plans precision/recall as a first-class metric. Make it a loop instead of a one-off: every prompt change, every threshold tweak, every MCP tool addition re-runs against a labeled corpus and reports F1 delta.</p>
+  </div>
+  <div class="story-section">
+    <h4>Concrete implementation</h4>
+    <p>Curate <code>monitoring-triage-service/tests/corpus/</code> — a directory of JSON webhook payloads + expected verdict + expected RCA phrases (goldens). Start with 20 from the current <code>rca_history</code> where the verdict is manually verified correct.</p>
+    <p>New endpoint <code>POST /evaluate</code> — runs the corpus through the current pipeline (temperature=0, so deterministic), compares outputs to goldens, returns <code>{precision, recall, f1, per_alert_results[]}</code>.</p>
+    <p>CI hook: on every push to <code>monitoring-triage-service</code>, run <code>/evaluate</code> inside the built image. Fail the build if F1 drops by more than 5 % vs the main-branch baseline.</p>
+    <p>New table <code>evaluations(commit_sha, timestamp, f1, precision, recall, corpus_size)</code> persisted to SQLite. Grafana panel plots F1 over time against commit markers.</p>
+  </div>
+  <div class="story-section">
+    <h4>Acceptance criteria</h4>
+    <ul>
+      <li>Corpus of ≥ 20 labeled goldens in <code>tests/corpus/</code></li>
+      <li><code>POST /evaluate</code> runs end-to-end and returns scores</li>
+      <li>CI fails on &gt; 5 % F1 regression</li>
+      <li>Grafana panel renders F1 over time (sourced from <code>evaluations</code> table)</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ============================================================== -->
+<h2 id="priority-order">Recommended delivery order</h2>
+
+<p>
+  Based on effort × demo impact × reviewer legibility (a PFE jury
+  recognizes UEBA vocabulary, so leading with incident correlation is
+  strategic):
+</p>
+
+<ol>
+  <li>
+    <strong>US-5.4 (adaptive thresholds)</strong> — 2 hours, largest
+    immediate false-positive reduction, visible on the dashboard
+    tomorrow. Wins goodwill by demonstrating noise reduction.
+  </li>
+  <li>
+    <strong>US-5.3 (closed-loop feedback)</strong> — half-day, zero
+    new infrastructure. Get <code>triage_precision</code> and
+    <code>triage_recall</code> exported so every future change can be
+    measured.
+  </li>
+  <li>
+    <strong>US-5.2 (incident correlator)</strong> — 1–2 days, biggest
+    demo moment. "4 alerts collapse to 1 email with a proper RCA of
+    the whole chain" is a jury-stopper.
+  </li>
+  <li>
+    <strong>US-5.1 (per-service Drain3 + baselines)</strong> — 1 day,
+    enables the "Xσ above baseline" framing in every RCA. Pairs
+    naturally with US-5.4.
+  </li>
+  <li>
+    <em>Stretch: US-5.5, US-5.6, US-5.7</em> — deliver in order of
+    dependency; US-5.7 folds into Sprint 3 evaluation work already
+    planned.
+  </li>
+</ol>
+
+<p>
+  Total core Epic 5 budget: <strong>~3–4 days of work</strong> if
+  executed sequentially by one engineer; parallelizable to ~2 days if
+  US-5.3 and US-5.4 are done in parallel with US-5.2.
+</p>
+
+<!-- ============================================================== -->
+<h2 id="related">Related pages</h2>
+
+<ul>
+  <li><a href="sprint2-backlog.html">Sprint 2 Backlog</a> — original Epic 1 + Epic 2 stories</li>
+  <li><a href="alerts-audit.html">Alerts Audit</a> — the data-driven motivation for several of these stories (especially US-5.1 and US-5.2 — drain3 silence + alert flapping)</li>
+  <li><a href="decisions-log.html">Decisions Log</a> — architectural decisions; a new D16 entry will document the UEBA adoption</li>
+  <li><a href="system-explained.html">System Explained</a> — current runtime that Epic 5 augments (not replaces)</li>
+</ul>
+
+<p style="margin-top:40px; padding-top:20px; border-top:1px solid var(--border); color:var(--muted); font-size:13px;">
+  Epic 5 created 2026-04-24 after a re-read of UEBA (User and Entity
+  Behavior Analytics) canonical texts. Seven stories — four core, three
+  stretch — applying continuous-entity-profile thinking to the
+  event-centric AI triage pipeline. Designed to be delivered within the
+  remaining Sprint 2 demo window; stretch items carry to post-presentation.
+</p>
+
+</div>
+</main>
+
+</body>
+</html>

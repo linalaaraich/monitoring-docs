@@ -503,6 +503,16 @@ suggested_actions: []                             ← ❌ no concrete suggestion
 <!-- ============================================================== -->
 <h2 id="improvement-plan">Improvement plan — Sprint 3 priority order</h2>
 
+<div class="callout note">
+  <div class="callout-label">Overlap with Epic 5 (UEBA)</div>
+  Several Track A/C items below correspond 1:1 to stories in the new
+  <a href="sprint2-epic5-ueba.html">Sprint 2 Epic 5 — UEBA</a> page.
+  Those stories are cross-referenced inline (e.g. "→ US-5.2 incident
+  correlator"). If Epic 5 lands before Sprint 3 starts, these items get
+  ticked off early; the remaining Sprint 3 work becomes the harder
+  evaluation + dashboard + widening pieces.
+</div>
+
 <p>
   Based on this audit, the following ordered plan takes the pipeline
   from "works" to "measurably reliable."
@@ -515,7 +525,7 @@ suggested_actions: []                             ← ❌ no concrete suggestion
     <strong>Drain3 novelty trigger</strong> (~1 hour). See
     <a href="#drain3-better-fix">drain3-fix note above</a>. Make drain3
     fire on new-template + severity-marker instead of rate. Retires
-    the need for threshold tuning.
+    the need for threshold tuning. <em>Subsumed by <a href="sprint2-epic5-ueba.html#us-5-1">US-5.1 per-service Drain3 + baselines</a>.</em>
   </li>
   <li>
     <strong>Trace-anomaly detector</strong> (~1 day). New
@@ -523,7 +533,16 @@ suggested_actions: []                             ← ❌ no concrete suggestion
     <code>(service, operation)</code>; flag &gt; 3σ as an alert source.
     Opens the fourth pillar (metrics, logs, <em>and now traces</em>)
     for drain3-style novelty detection. Would have caught the 13 s
-    <code>/actuator/health</code> latency on day 1.
+    <code>/actuator/health</code> latency on day 1. <em>Related to <a href="sprint2-epic5-ueba.html#us-5-1">US-5.1</a> (entity baselines applied to traces).</em>
+  </li>
+  <li>
+    <strong>Incident correlator — kill-chain grouping</strong> (~1-2 days) → <a href="sprint2-epic5-ueba.html#us-5-2">US-5.2 (Epic 5 core)</a>
+  </li>
+  <li>
+    <strong>Closed-loop analyst feedback</strong> (~half-day) → <a href="sprint2-epic5-ueba.html#us-5-3">US-5.3 (Epic 5 core)</a>
+  </li>
+  <li>
+    <strong>Adaptive thresholds</strong> (~2 hours) → <a href="sprint2-epic5-ueba.html#us-5-4">US-5.4 (Epic 5 core)</a>
   </li>
   <li>
     <strong>P2 golden-test set in CI</strong> (~4 hours). 20 synthetic
