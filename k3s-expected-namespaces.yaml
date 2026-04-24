@@ -1,0 +1,27 @@
+# Expected k3s namespaces. Anything on the cluster not in this list is DRIFT
+# and should be investigated — if it's safe, add it here; if it's not, remove it
+# from the cluster.
+#
+# This file is the input to the weekly /schedule namespace-audit agent (P1.8).
+# See monitoring-docs/decisions-log.html#d6 for the context (the 2026-04-23
+# overnight rogue-ai-stack incident that motivated this check).
+
+namespaces:
+  # k3s / kubernetes system namespaces — always expected
+  - kube-system
+  - kube-public
+  - kube-node-lease
+  - default
+
+  # CIRES workload namespaces — the app under test + its supporting services
+  - app            # spring-boot backend
+  - frontend       # react frontend
+  - network        # kong API gateway
+  - observability  # otel-collector in-cluster
+
+  # Add additional namespaces here as they become part of the system:
+  #
+  #   - widening        # Sprint 3 P2: second workload for dataset widening
+  #
+  # Anything else that appears on `kubectl get namespaces -o name` and is NOT
+  # listed above should trigger a GitHub issue via the weekly audit agent.

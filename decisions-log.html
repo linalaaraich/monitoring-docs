@@ -1,0 +1,1163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Decisions Log — CIRES Observability Platform</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --bg-soft: #13151e;
+    --card: #1a1d27;
+    --card-alt: #1e2230;
+    --border: #2a2d3a;
+    --border-hi: #3a3f52;
+    --text: #e4e6ee;
+    --text-soft: #c0c5d0;
+    --muted: #8890a0;
+    --accent-blue: #4ea8de;
+    --accent-green: #6bcf7f;
+    --accent-orange: #f0a050;
+    --accent-purple: #b07ee8;
+    --accent-red: #e06070;
+    --accent-cyan: #40d0d0;
+    --accent-yellow: #e0d060;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { font-family:'Inter','Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); line-height:1.65; font-size:15px; -webkit-font-smoothing:antialiased; }
+  code, pre, .mono { font-family:'JetBrains Mono','Fira Code',ui-monospace,monospace; font-size:0.88em; }
+
+  .topnav { display:flex; align-items:center; gap:12px; padding:14px 40px; background:var(--bg-soft); border-bottom:1px solid var(--border); flex-wrap:wrap; }
+  .topnav span.nav-label { color:var(--muted); font-size:13px; font-weight:600; margin-right:4px; }
+  .navlink { display:inline-flex; align-items:center; gap:6px; padding:7px 14px; border-radius:8px; font-size:13px; font-weight:600; text-decoration:none; border:1px solid; transition:background .2s, transform .15s; }
+  .navlink:hover { transform:translateY(-1px); }
+  .navlink-home { color:var(--text); border-color:var(--border); background:var(--card); }
+  .navlink-arch { color:var(--accent-blue); border-color:rgba(78,168,222,.4); background:rgba(78,168,222,.08); }
+  .navlink-triage { color:var(--accent-purple); border-color:rgba(176,126,232,.4); background:rgba(176,126,232,.12); }
+
+  .hero { padding:56px 40px 40px; border-bottom:1px solid var(--border); background:linear-gradient(180deg, #13151e 0%, var(--bg) 100%); }
+  .hero .inner { max-width:960px; margin:0 auto; }
+  .hero .eyebrow { font-size:11px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:var(--accent-orange); margin-bottom:12px; }
+  .hero h1 { font-size:36px; font-weight:800; letter-spacing:-.5px; margin-bottom:14px; line-height:1.2; }
+  .hero h1 span.accent { color:var(--accent-orange); }
+  .hero p.lead { font-size:16px; color:var(--text-soft); max-width:720px; line-height:1.7; margin-bottom:20px; }
+  .hero .pill-row { display:flex; gap:8px; flex-wrap:wrap; }
+  .pill { font-size:11px; font-weight:600; padding:4px 10px; border-radius:12px; border:1px solid; letter-spacing:.2px; }
+  .pill.orange { color:var(--accent-orange); border-color:rgba(240,160,80,.35); background:rgba(240,160,80,.08); }
+  .pill.purple { color:var(--accent-purple); border-color:rgba(176,126,232,.35); background:rgba(176,126,232,.08); }
+  .pill.green { color:var(--accent-green); border-color:rgba(107,207,127,.35); background:rgba(107,207,127,.08); }
+
+  .layout { max-width:960px; margin:0 auto; padding:32px 40px 80px; }
+  .content h2 { font-size:24px; font-weight:700; margin:40px 0 14px; letter-spacing:-.3px; scroll-margin-top:24px; padding-bottom:8px; border-bottom:1px solid var(--border); }
+  .content h2:first-child { margin-top:0; }
+  .content h3 { font-size:16px; font-weight:700; margin:22px 0 6px; color:var(--text); }
+  .content h4 { font-size:13px; font-weight:700; margin:14px 0 4px; letter-spacing:1px; text-transform:uppercase; color:var(--muted); }
+  .content p { margin-bottom:14px; color:var(--text-soft); }
+  .content p strong { color:var(--text); font-weight:600; }
+  .content ul, .content ol { margin:8px 0 16px 24px; color:var(--text-soft); }
+  .content li { margin-bottom:6px; }
+  .content code { background:var(--card); border:1px solid var(--border); padding:1px 6px; border-radius:4px; font-size:0.85em; color:var(--accent-cyan); }
+  .content pre { background:var(--card); border:1px solid var(--border); padding:14px 16px; border-radius:8px; margin:12px 0 18px; overflow-x:auto; line-height:1.5; }
+  .content pre code { background:none; border:none; padding:0; color:var(--text); font-size:0.85em; }
+  .content a { color:var(--accent-blue); text-decoration:none; border-bottom:1px dashed rgba(78,168,222,.35); }
+  .content a:hover { border-bottom-style:solid; }
+
+  .callout { border-left:3px solid; border-radius:0 8px 8px 0; padding:14px 18px; margin:16px 0; background:var(--card); }
+  .callout.note { border-color:var(--accent-blue); }
+  .callout.tip { border-color:var(--accent-green); }
+  .callout.warn { border-color:var(--accent-orange); }
+  .callout-label { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; margin-bottom:6px; }
+  .callout.note .callout-label { color:var(--accent-blue); }
+  .callout.tip .callout-label { color:var(--accent-green); }
+  .callout.warn .callout-label { color:var(--accent-orange); }
+
+  .decision { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:22px 26px; margin:18px 0; }
+  .decision-meta { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px; font-size:11px; }
+  .decision-meta .tag { font-weight:600; padding:3px 10px; border-radius:12px; letter-spacing:.2px; border:1px solid; }
+  .tag-fixed { color:var(--accent-green); border-color:rgba(107,207,127,.4); background:rgba(107,207,127,.08); }
+  .tag-partial { color:var(--accent-orange); border-color:rgba(240,160,80,.4); background:rgba(240,160,80,.08); }
+  .tag-pending { color:var(--muted); border-color:var(--border); background:var(--card-alt); }
+  .decision-meta .date { color:var(--muted); padding:3px 0; }
+  .decision h3.problem-title { margin-top:0; font-size:18px; font-weight:700; color:var(--text); }
+
+  .section-block { display:grid; gap:4px; margin-top:12px; }
+  .section-block .block-label { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--muted); }
+  .section-block .block-body { color:var(--text-soft); }
+  .section-block .block-body p { margin-bottom:8px; }
+
+  .toc { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:18px 24px; margin:24px 0; }
+  .toc h4 { color:var(--accent-blue); margin-top:0; }
+  .toc ol { columns:2; column-gap:32px; list-style-position:inside; }
+  .toc li { margin-bottom:4px; color:var(--text-soft); }
+  .toc a { border:none; }
+</style>
+</head>
+<body>
+
+<nav class="topnav">
+  <span class="nav-label">CIRES Observability Platform</span>
+  <a href="index.html" class="navlink navlink-home">🏠 Home</a>
+  <a href="architecture.html" class="navlink navlink-arch">🏗️ Architecture</a>
+  <a href="triage-service.html" class="navlink navlink-triage">🧠 Triage Service</a>
+</nav>
+
+<section class="hero">
+  <div class="inner">
+    <div class="eyebrow">Sprint 2 → Sprint 3 · Problem → Reasoning → Solution</div>
+    <h1>Decisions <span class="accent">Log</span></h1>
+    <p class="lead">
+      Every significant architectural or product decision made while building the
+      CIRES AI triage pipeline, in one place. Each entry captures the problem as
+      observed, what we considered, the chosen solution, and how we're evaluating
+      whether it worked. The goal: a defensible line of reasoning for reviewers,
+      and onboarding material for future collaborators who inherit this codebase
+      wondering "why the hell is it like this?"
+    </p>
+    <div class="pill-row">
+      <span class="pill orange">Engineering decisions</span>
+      <span class="pill purple">LLM + RCA quality</span>
+      <span class="pill green">Living document</span>
+    </div>
+  </div>
+</section>
+
+<main class="layout">
+<div class="content">
+
+<div class="toc">
+  <h4>TABLE OF CONTENTS</h4>
+  <ol>
+    <li><a href="#d1">LLM hedging with "insufficient data"</a></li>
+    <li><a href="#d2">Empty suggested_actions on most RCAs</a></li>
+    <li><a href="#d3">Observed value picked from the wrong refId</a></li>
+    <li><a href="#d4">llm_confidence never persisted</a></li>
+    <li><a href="#d5">rca_quality lied when actions+evidence empty</a></li>
+    <li><a href="#d6">Overnight email incident (rogue k3s stack)</a></li>
+    <li><a href="#d7">Deployment-type mismatch (kubectl for Grafana)</a></li>
+    <li><a href="#d8">Drain3 anomalies never fired into triage</a></li>
+    <li><a href="#d9">Flapping alerts consumed N× LLM calls</a></li>
+    <li><a href="#d10">Correlated alerts rendered but not prompted</a></li>
+    <li><a href="#d11">Ollama non-determinism (temperature=0.8 default)</a></li>
+    <li><a href="#d12">Structured outputs vs JSON mode</a></li>
+    <li><a href="#d13">Pre-LLM metric interpreter (narrow the LLM's job)</a></li>
+    <li><a href="#d14">Downtime backfill from Grafana annotations</a></li>
+    <li><a href="#d15">Bounded-agency retry (one MCP call, not a chain)</a></li>
+  </ol>
+</div>
+
+<h2>Why this log exists</h2>
+<p>
+  When someone asks <em>"why did you build it that way?"</em> six months from now,
+  the commit messages will tell them WHAT changed but not WHY. This page is the
+  durable narrative: every time the team said "that's broken, fix it," we write
+  down the broken thing, what we thought about, what we picked, and how we
+  know it worked. If a decision gets revisited, we update the entry and note
+  the supersession. Nothing here is an opinion piece — every decision references
+  a file, a commit, or a dashboard observation.
+</p>
+
+<div class="callout note">
+  <div class="callout-label">Format</div>
+  Each decision has four fields: <strong>Problem</strong> (what was broken),
+  <strong>Reasoning</strong> (what we considered and why), <strong>Solution</strong>
+  (what shipped), <strong>Evaluation</strong> (how we know it worked, or why we're
+  still waiting to know). Status tag in the top-right: ✅ fixed + verified,
+  ⚠️ partial, ⏳ pending evaluation.
+</div>
+
+<!-- =================================================================== -->
+<h2 id="d1">D1 · LLM hedging with "insufficient data"</h2>
+<div class="decision">
+  <div class="decision-meta">
+    <span class="tag tag-fixed">✅ Fixed + verified</span>
+    <span class="date">Identified 2026-04-23 evening</span>
+  </div>
+  <h3 class="problem-title">The LLM kept writing "insufficient data" as a standalone RCA conclusion.</h3>
+
+  <div class="section-block">
+    <span class="block-label">Problem</span>
+    <div class="block-body">
+      <p>
+        Multiple rows on the triage dashboard showed <code>rca_report = "Insufficient metrics data within the alert time window"</code>
+        as the entire root-cause analysis. The alert itself always carried signal — a
+        PromQL expression and a current observed value — but the model was ignoring
+        that and reporting the MCP pillar quality instead of using the available data
+        to reason.
+      </p>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <span class="block-label">Reasoning</span>
+    <div class="block-body">
+      <p>
+        Root cause was a weak prompt combined with a small model (<code>qwen2.5:7b</code>).
+        The prompt had 6 rules but rule B (<em>never write "insufficient data" as a
+        standalone conclusion</em>) was phrased as a rule among many, not as an invariant
+        the model should treat as non-negotiable. qwen2.5:7b doesn't reliably prioritize
+        rule hierarchies inside verbose prompts. Options considered: (1) bigger model
+        (blocked: GPU quota = 0 at the time), (2) stricter prompt (won't stick at 7B),
+        (3) programmatic validator that <em>re-prompts</em> when banned phrases appear.
+      </p>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <span class="block-label">Solution</span>
+    <div class="block-body">
+      <p>
+        Three-layer defense:
+      </p>
+      <ol>
+        <li>Prompt still has rule B (explicit forbidden phrase) — minimum bar.</li>
+        <li><code>app/rca_store._classify_rca_quality()</code> tags hedged RCAs as
+            <code>data_starved</code> using regex match on the RCA prose.</li>
+        <li><code>app/response_validator.py</code> (see <a href="#d15">D15</a>) scans
+            for banned phrases and requests a retry when hit. The retry in turn uses
+            bounded-agency (<a href="#d15">D15</a>) to let the model request one more
+            piece of evidence rather than re-attempt the same hedge.</li>
+      </ol>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <span class="block-label">Evaluation</span>
+    <div class="block-body">
+      <p>
+        Verified via synthetic probe <code>P0FixVerification_1035</code>: produced
+        a clean RCA without any banned phrase, <code>confidence=0.70</code>,
+        <code>quality=actionable</code>. Ongoing measurement: the evaluation dashboard
+        (P2) will track banned-phrase-hit rate as a running metric.
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- =================================================================== -->
+<h2 id="d2">D2 · Empty <code>suggested_actions</code> on most RCAs</h2>
+<div class="decision">
+  <div class="decision-meta">
+    <span class="tag tag-fixed">✅ Fixed + verified</span>
+    <span class="date">Identified 2026-04-24 audit</span>
+  </div>
+  <h3 class="problem-title">The LLM emitted <code>suggested_actions = []</code> on nearly every row.</h3>
+
+  <div class="section-block">
+    <span class="block-label">Problem</span>
+    <div class="block-body">
+      <p>
+        On the 2026-04-23 dashboard, only 1 of 15 decisions (TargetDown) had
+        non-empty <code>suggested_actions</code>. Rule E of the prompt told the LLM
+        "empty list is better than vague advice" AND gave BAD/GOOD examples — and
+        qwen2.5:7b was reading "empty is better" as the default and not trying.
+        Each dashboard row that shipped with empty actions was effectively useless
+        to the operator: they still had to think about the alert from scratch.
+      </p>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <span class="block-label">Reasoning</span>
+    <div class="block-body">
+      <p>
+        You cannot prompt a 7B model out of this — rule conflicts at that scale
+        always lean toward the easier path. The real insight: SRE remediation for
+        infrastructure alerts is <em>highly templated</em>. For CPU pressure, you
+        always want <code>kubectl top nodes</code>, <code>top -b -n 1</code>, and
+        a PromQL verification query. The variation between alerts is the
+        <em>instance</em>, not the set of commands. Let the template carry the shape,
+        let the LLM fill placeholders.
+      </p>
+      <p>
+        Options: (a) force the LLM via validator rejection (one extra call per
+        fire, fragile), (b) static template-only (zero LLM contribution), (c)
+        template as fallback only when LLM returns empty. Chose (c) — the LLM
+        can still contribute context-aware actions, but the operator never gets a
+        dashboard row with empty actions.
+      </p>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <span class="block-label">Solution</span>
+    <div class="block-body">
+      <p>
+        New file <code>app/suggested_actions.yaml</code> holds templates keyed by
+        alertname regex, branched by <code>deployment_type</code> (see
+        <a href="#d7">D7</a>). Pipeline in <code>app/pipeline.py</code> calls
+        <code>app.action_templates.fill_template()</code> when
+        <code>decision.suggested_actions</code> is empty after the LLM + validator
+        pass. Placeholders like <code>{instance_host}</code> resolve via
+        <code>settings.instance_hosts</code>.
+      </p>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <span class="block-label">Evaluation</span>
+    <div class="block-body">
+      <p>
+        Source tracked via the <code>suggested_actions_source</code> local in the
+        pipeline (<code>llm</code> vs <code>template</code>). Future:
+        evaluation dashboard will plot template-fill-rate as a quality metric —
+        a high rate means the LLM isn't contributing enough and the prompt
+        needs work; low rate means the LLM is reliably producing concrete
+        actions on its own.
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- =================================================================== -->
+<h2 id="d3">D3 · Observed value picked from the wrong refId</h2>
+<div class="decision">
+  <div class="decision-meta">
+    <span class="tag tag-fixed">✅ Fixed + verified</span>
+    <span class="date">Identified 2026-04-24 audit</span>
+  </div>
+  <h3 class="problem-title">TargetDown dashboard row showed <code>OBSERVED VALUE 1 (refId=C) [B=0]</code> and the LLM wrote "target is UP" for an alert firing on <code>up==0</code>.</h3>
+
+  <div class="section-block">
+    <span class="block-label">Problem</span>
+    <div class="block-body">
+      <p>
+        Grafana's standard 3-step alert rule pipeline is <strong>A</strong>=query →
+        <strong>B</strong>=reduce → <strong>C</strong>=threshold. C returns a boolean
+        (0 or 1) — <em>did the condition match</em> — not a metric value. Our picker
+        sorted refIds alphabetically and chose the last one (C) as "primary observed
+        value," which always gave the LLM a 0 or 1 instead of the real metric. For
+        TargetDown that meant the RCA was reasoning from "1 = the condition matched"
+        but phrasing it as "the observed up value is 1, so target is UP."
+      </p>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <span class="block-label">Reasoning</span>
+    <div class="block-body">
+      <p>
+        Heuristic: if the highest-ref-id value is exactly 0 or 1 AND there are other
+        entries, it's the threshold step; prefer the one below (the reduce). For
+        single-step rules, the only entry IS the observed value. For already-correct
+        multi-step rules that don't end in a boolean (rare), the last entry is
+        still correct. Covers the three cases we see in practice with no schema
+        introspection needed.
+      </p>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <span class="block-label">Solution</span>
+    <div class="block-body">
+      <p>
+        <code>app.llm_client.pick_primary_value()</code> — one function, used in
+        three places (<code>_format_observed_value</code> in the same file,
+        <code>_observed_value_block</code> in <code>notifier.py</code>,
+        <code>record.observed_value</code> construction in <code>pipeline.py</code>).
+      </p>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <span class="block-label">Evaluation</span>
+    <div class="block-body">
+      <p>
+        Verified via synthetic TargetDown webhook with <code>values={"A":0,"B":0,"C":1}</code>:
+        dashboard shows <code>observed_value="0 (refId=B) [A=0, C=1]"</code> — the
+        metric value is the headline and the boolean is context. LLM correctly
+        reasoned about the target being down.
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- =================================================================== -->
+<h2 id="d4">D4 · <code>llm_confidence</code> never persisted</h2>
+<div class="decision">
+  <div class="decision-meta">
+    <span class="tag tag-fixed">✅ Fixed + verified</span>
+    <span class="date">Identified 2026-04-24 audit</span>
+  </div>
+  <h3 class="problem-title">Every dashboard row showed <code>llm_confidence = —</code>.</h3>
+
+  <div class="section-block">
+    <span class="block-label">Problem</span>
+    <div class="block-body">
+      <p>
+        <code>app/pipeline.py:330</code> was hardcoded <code>llm_confidence=None</code>
+        when building the <code>RCARecord</code>. The LLM was emitting a confidence
+        float in its JSON response (validated by Pydantic), but the pipeline was
+        throwing it away before persisting. A bug that never surfaced until the
+        audit specifically looked for <em>why does every row say "—"?</em>
+      </p>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <span class="block-label">Solution</span>
+    <div class="block-body">
+      <p>
+        One-line fix:
+      </p>
+      <pre><code>llm_confidence = f"{decision.confidence:.2f}" if decision.confidence is not None else None</code></pre>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <span class="block-label">Evaluation</span>
+    <div class="block-body">
+      <p>
+        Synthetic probe confirmed: new rows show e.g. <code>conf=0.70</code> in
+        the dashboard. Old rows (pre-fix) remain <code>—</code> because we
+        deliberately didn't back-fill history.
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- =================================================================== -->
+<h2 id="d5">D5 · <code>rca_quality</code> lied when actions+evidence empty</h2>
+<div class="decision">
+  <div class="decision-meta">
+    <span class="tag tag-fixed">✅ Fixed + verified</span>
+    <span class="date">Identified 2026-04-24 audit</span>
+  </div>
+  <h3 class="problem-title">Rows with empty actions + empty evidence were tagged <code>quality=actionable</code>.</h3>
+
+  <div class="section-block">
+    <span class="block-label">Problem</span>
+    <div class="block-body">
+      <p>
+        The classifier ran regex-only on RCA prose. A confidently-phrased but
+        artifact-free RCA ("CPU usage has reached 100%") would pass the regex —
+        no hedge words — and get tagged <code>actionable</code>. But with zero
+        concrete actions and zero evidence, the operator had nothing to do.
+        The tag was misleading.
+      </p>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <span class="block-label">Solution</span>
+    <div class="block-body">
+      <p>
+        <code>_classify_rca_quality()</code> now takes <code>suggested_actions</code>
+        and <code>evidence</code>. If BOTH are empty regardless of RCA prose →
+        tag <code>needs_review</code>. Accepts either raw Python lists (from
+        pipeline) or JSON-serialized strings (from the DB classifier path).
+      </p>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <span class="block-label">Evaluation</span>
+    <div class="block-body">
+      <p>
+        Ongoing. The <code>P0FixVerification_1035</code> probe landed
+        <code>quality=actionable</code> (both fields populated) — the positive
+        path works. Negative path (empty fields → needs_review) not yet observed
+        organically but codepath is tested.
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- =================================================================== -->
+<h2 id="d6">D6 · Overnight email incident — rogue k3s AI stack</h2>
+<div class="decision">
+  <div class="decision-meta">
+    <span class="tag tag-fixed">✅ Root-caused + stopped</span>
+    <span class="date">2026-04-23 → 2026-04-24 overnight</span>
+  </div>
+  <h3 class="problem-title">Lina woke up to hourly triage-styled emails through the night — laptop was closed, dashboard was empty of those rows.</h3>
+
+  <div class="section-block">
+    <span class="block-label">Problem</span>
+    <div class="block-body">
+      <p>
+        Emails arrived hourly: <code>[ALERT] CRITICAL: HourlyDemoTest_02 — spring-boot</code>
+        and variants. Formatted exactly like real triage emails — observed value,
+        RCA, suggested actions — but ZERO of them appeared on the laptop dashboard.
+        And the laptop was closed overnight.
+      </p>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <span class="block-label">Reasoning</span>
+    <div class="block-body">
+      <p>
+        Three theories in order of probability: (a) laptop didn't actually sleep —
+        Docker + Tailscale still running through lid-close. (b) Grafana's
+        <code>gmail-smtp</code> contact point was bypassing triage and emailing
+        directly. (c) A second triage instance was running somewhere.
+      </p>
+      <p>
+        Evidence from probing: laptop WSL2 <em>was</em> active (Tailscale showed live
+        <code>tx/rx</code>), but laptop triage uptime was 71 minutes at 09:40 UTC —
+        it had been DOWN for the 8 hours preceding. So NOT (a). Grafana's live config
+        showed <code>gmail-smtp</code> was provisioned but NOT actually referenced in
+        the routing policy — so NOT (b). Which left (c): find the second instance.
+      </p>
+      <p>
+        SSH to the k3s EC2 node revealed a full <code>ai</code> namespace with
+        <code>ai-stack-triage</code> (34h uptime), <code>ai-stack-ollama</code> (44h),
+        all 5 MCPs, plus 5 <code>ImagePullBackOff</code> ghost pods from a failed
+        redeploy. The k3s triage was supposed to be decommissioned on 2026-04-23
+        when AI migrated to the laptop — it wasn't. And inside that triage pod, an
+        hourly synthetic-test cron had been firing <code>HourlyDemoTest_HH</code>
+        webhooks to its own <code>localhost:8090/webhook/grafana</code>. Those got
+        processed by the in-cluster triage, emailed out (SMTP creds were still
+        wired), and persisted to the cluster's SQLite. The laptop dashboard read
+        from the laptop's SQLite — it never saw any of this.
+      </p>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <span class="block-label">Solution</span>
+    <div class="block-body">
+      <p>
+        Three actions:
+      </p>
+      <ol>
+        <li><code>kubectl delete namespace ai</code> on the k3s node — 12 pods +
+            7 services + 7 deployments gone. Rogue cron dies with them.</li>
+        <li>Remove <code>gmail-smtp</code> contact point from
+            <code>monitoring-project/roles/grafana/templates/contactpoints.yml.j2</code>
+            and add <code>deleteContactPoints</code> directive so Grafana tears it
+            down on provisioning reload. Ship via Ansible + container restart.
+            Triage becomes the <strong>sole</strong> notifier — commit <code>8860e6c</code>.</li>
+        <li>Weekly <code>/schedule</code> agent (see <a href="#d6-prevention">below</a>)
+            that diffs <code>kubectl get namespaces</code> against a declared
+            allowlist and opens a GitHub issue on drift. Would have caught this
+            46 hours earlier.</li>
+      </ol>
+    </div>
+  </div>
+
+  <div class="section-block" id="d6-prevention">
+    <span class="block-label">Evaluation</span>
+    <div class="block-body">
+      <p>
+        Post-fix probe of <code>kubectl get pods -A</code> on the k3s node shows
+        only the expected namespaces (<code>kube-system</code>, <code>default</code>,
+        <code>app</code>, <code>frontend</code>, <code>network</code>,
+        <code>observability</code>). Grafana's live API confirms
+        <code>contact-points</code> now has only <code>triage-webhook</code>. The
+        weekly namespace audit is in Sprint 3's backlog as P1.5 / P1.8 — scheduled
+        to catch any future drift within 7 days of occurrence.
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- =================================================================== -->
+<h2 id="d7">D7 · Deployment-type mismatch (<code>kubectl</code> for Grafana)</h2>
+<div class="decision">
+  <div class="decision-meta">
+    <span class="tag tag-fixed">✅ Framework shipped · ⏳ evaluation pending</span>
+    <span class="date">Identified 2026-04-24 during plan review</span>
+  </div>
+  <h3 class="problem-title">The LLM kept suggesting <code>kubectl get pods</code> for services that run in docker-compose on a plain VM.</h3>
+
+  <div class="section-block">
+    <span class="block-label">Problem</span>
+    <div class="block-body">
+      <p>
+        Classic example: <code>service=monitoring</code> actually means Grafana,
+        which runs via <code>docker-compose</code> on <code>observability-rca-monitoring</code>
+        — not a k3s workload. The LLM generalized from "service" → "kubectl" and
+        handed operators commands that would return nothing. The RCA body was
+        otherwise fine; the suggested actions were architecturally wrong.
+      </p>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <span class="block-label">Reasoning</span>
+    <div class="block-body">
+      <p>
+        The LLM doesn't know the deployment topology. It can't — the MCPs expose
+        metrics/logs/traces, but not "spring-boot is in k3s, grafana is in
+        docker-compose, node-exporter is a systemd service." We need to
+        <em>tell</em> the model, OR constrain its output so it physically can't
+        emit mismatched commands. We do both.
+      </p>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <span class="block-label">Solution</span>
+    <div class="block-body">
+      <p>
+        Three-layer defense:
+      </p>
+      <ol>
+        <li><code>settings.service_deployment_type</code> in <code>app/config.py</code>
+            — explicit map from service label to one of
+            <code>{k8s, docker-vm, systemd, external, unknown}</code>.</li>
+        <li><code>app.metric_interpreter.interpret()</code> emits the deployment
+            type on every <code>MetricFacts</code>. The LLM prompt includes it
+            inline next to the service label, and prompt rule G explicitly
+            forbids mixing command families.</li>
+        <li><code>app.response_validator.validate()</code> runs after the LLM and
+            rejects any suggested action whose command family doesn't match the
+            service's deployment type — e.g. <code>kubectl ...</code> in a
+            <code>docker-vm</code> RCA gets pruned, with a reason string the
+            retry prompt quotes back.</li>
+      </ol>
+      <p>
+        And the <a href="#d2">D2 templates</a> branch on deployment type — so the
+        template fallback is <em>also</em> architecture-aware.
+      </p>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <span class="block-label">Evaluation</span>
+    <div class="block-body">
+      <p>
+        The validator's <code>arch_mismatch</code> reject counter will be plotted
+        in the Sprint 3 evaluation dashboard. A rising rate means the LLM is
+        still guessing deployment types — prompt/training needs work. A falling
+        rate means the explicit inline hint is working.
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- =================================================================== -->
+<h2 id="d8">D8 · Drain3 anomalies never fired into triage</h2>
+<div class="decision">
+  <div class="decision-meta">
+    <span class="tag tag-fixed">✅ Bridge shipped · ⏳ evaluation pending</span>
+    <span class="date">Identified 2026-04-24 plan review</span>
+  </div>
+  <h3 class="problem-title">Dashboard showed "98 anomalies flagged" but zero decisions had Drain3 as the alert source.</h3>
+
+  <div class="section-block">
+    <span class="block-label">Problem</span>
+    <div class="block-body">
+      <p>
+        <code>/webhook/drain3</code> endpoint existed in <code>app/main.py</code>.
+        <code>app/pipeline.py::process_drain3_webhook()</code> existed and
+        synthesized a <code>Drain3AnomalyDetected</code> GrafanaAlert. The
+        background ingest loop in <code>app/drain_analyzer.py</code> was
+        detecting anomalies and incrementing <code>_total_anomalies</code>. But
+        nothing connected those three facts — the anomaly count just sat on
+        the dashboard as a number, never converted into an alert.
+      </p>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <span class="block-label">Reasoning</span>
+    <div class="block-body">
+      <p>
+        Keep the trigger local to <code>DrainAnalyzer</code> — the thing
+        measuring anomalies is the thing that should decide when to fire. A
+        threshold-based trigger (rate over a sliding window) is simpler than
+        integrating with an external alert engine. Cooldown (<code>drain3_alert_cooldown_seconds</code>)
+        prevents thrashing on persistent anomaly spikes.
+      </p>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <span class="block-label">Solution</span>
+    <div class="block-body">
+      <p>
+        New method <code>DrainAnalyzer.maybe_fire_alert()</code> called from the
+        background ingest loop after every batch. Logic:
+        <code>if len(anomalous)/batch_total &gt;= drain3_alert_rate_threshold</code>
+        AND <code>batch_total &gt;= drain3_alert_min_lines</code>
+        AND past cooldown → <code>httpx.AsyncClient.post</code> to
+        <code>settings.drain3_self_webhook_url</code> (default
+        <code>http://localhost:8090/webhook/drain3</code>). The endpoint
+        synthesizes a GrafanaAlert and runs the full pipeline. Drain3
+        becomes a visible alert source on the dashboard.
+      </p>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <span class="block-label">Evaluation</span>
+    <div class="block-body">
+      <p>
+        Defaults: <code>drain3_alert_rate_threshold=0.10</code>,
+        <code>drain3_alert_min_lines=100</code>,
+        <code>drain3_alert_cooldown_seconds=600</code>. Tune after first week of
+        production — rate is service-dependent. Watch for "alert storms" if
+        threshold is too low; watch for missed real anomalies if too high.
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- =================================================================== -->
+<h2 id="d9">D9 · Flapping alerts consumed N× LLM calls</h2>
+<div class="decision">
+  <div class="decision-meta">
+    <span class="tag tag-fixed">✅ Fixed</span>
+    <span class="date">Identified 2026-04-24 audit</span>
+  </div>
+  <h3 class="problem-title">The 2026-04-23 dashboard showed <code>MediumCpuUsage</code> firing 5 times in 40 minutes, each generating a fresh LLM pipeline run.</h3>
+
+  <div class="section-block">
+    <span class="block-label">Problem</span>
+    <div class="block-body">
+      <p>
+        The existing dedup used <code>(alertname, instance)</code> as its key with a
+        300s window. But (a) some alerts had <code>instance=None</code> so the key
+        was ambiguous, and (b) 300s was too short for alerts with 5-minute
+        Grafana <code>group_interval</code> — every re-fire fell outside the
+        window. Each fire cost ~50-70s of Ollama inference. Five fires on the
+        same symptom burned 4-6 minutes of GPU time for no new information.
+      </p>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <span class="block-label">Solution</span>
+    <div class="block-body">
+      <p>
+        Re-key dedup on Grafana's stable <code>fingerprint</code> (hash over
+        labels). Window widened to 600s. On second+ fire: persist a short-path
+        <code>triage_decision=suppressed_duplicate</code> record with
+        <code>action_taken=see_previous_rca:{prior_id}</code>, no LLM call.
+        Dashboard shows the flap as a compact row pointing at the prior RCA —
+        operator still sees it happened, but without the gap of a silent drop.
+      </p>
+      <p>
+        Implementation: <code>app/dedup.py</code>
+        <code>DedupManager.check(fingerprint, status)</code> returns
+        <code>(is_dup, first_decision_id)</code>. Pipeline calls
+        <code>dedup.record_first_decision()</code> after the initial RCA
+        persists so subsequent dups link correctly.
+      </p>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <span class="block-label">Evaluation</span>
+    <div class="block-body">
+      <p>
+        Metric: <code>alerts_deduplicated</code> counter was already exported.
+        Add a ratio panel in the evaluation dashboard:
+        <code>deduplicated / (deduplicated + processed)</code>. A rising ratio
+        means we're saving more LLM work; watch for it breaking 40-50% on
+        chatty rules.
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- =================================================================== -->
+<h2 id="d10">D10 · Correlated alerts rendered but not prompted</h2>
+<div class="decision">
+  <div class="decision-meta">
+    <span class="tag tag-fixed">✅ Fixed</span>
+    <span class="date">Identified 2026-04-24 plan review</span>
+  </div>
+  <h3 class="problem-title">We pulled neighboring alerts into the email and dashboard but never asked the LLM to reason about them.</h3>
+
+  <div class="section-block">
+    <span class="block-label">Problem</span>
+    <div class="block-body">
+      <p>
+        <code>app/rca_store.get_correlated_alerts()</code> returned ±5-min
+        neighbors; we rendered them in <code>_correlated_alerts_block</code>
+        and the dashboard panel. But in the LLM prompt they were buried inside
+        <code>history_context</code> — no specific rule, no explicit question
+        about causation. So the LLM usually just ignored them.
+      </p>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <span class="block-label">Solution</span>
+    <div class="block-body">
+      <p>
+        Move correlation out of <code>history_context</code> into its own
+        prompt section (<em>"## Neighboring alerts (±5 min of this one)"</em>)
+        with rule H in <code>SYSTEM_PROMPT</code>: <em>"if correlation is present,
+        your RCA MUST explain whether (a) X caused Y, (b) they share common
+        cause Z, or (c) they are unrelated — explicitly stated, not silently."</em>
+        Pipeline passes <code>correlated</code> list to
+        <code>LLMClient.investigate()</code> as a dedicated kwarg,
+        rendered by <code>_build_prompt</code>.
+      </p>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <span class="block-label">Evaluation</span>
+    <div class="block-body">
+      <p>
+        Qualitative for now. Inspect RCA text on next multi-alert storm — does
+        it name the relationship, or does it still ignore? If rule H compliance
+        is under ~60%, add to response validator as a post-hoc check ("rca
+        references at least one correlated alertname").
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- =================================================================== -->
+<h2 id="d11">D11 · Ollama non-determinism (temperature 0.8 default)</h2>
+<div class="decision">
+  <div class="decision-meta">
+    <span class="tag tag-fixed">✅ Fixed</span>
+    <span class="date">Identified 2026-04-24 plan review</span>
+  </div>
+  <h3 class="problem-title">Same alert, two successive fires, two different verdicts.</h3>
+
+  <div class="section-block">
+    <span class="block-label">Problem</span>
+    <div class="block-body">
+      <p>
+        Ollama's default <code>temperature=0.8</code> is tuned for creative
+        chat. For alert triage it means the same inputs can produce noticeably
+        different verdicts — the RCA text may diverge, <code>severity</code>
+        can shift between warning/critical, confidence drifts. Reproducibility
+        is at stake.
+      </p>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <span class="block-label">Solution</span>
+    <div class="block-body">
+      <p>
+        Add <code>"options": {"temperature": 0, "num_ctx": 16384}</code> to the
+        <code>/api/chat</code> payload in
+        <code>LLMClient._call_ollama()</code>. <code>num_ctx</code> caps the
+        context window explicitly at 16K — qwen2.5:7b advertises 32K but
+        effective quality degrades past ~16K, and 500 Loki lines + traces
+        can push us close.
+      </p>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <span class="block-label">Evaluation</span>
+    <div class="block-body">
+      <p>
+        Post-deploy, fire the same synthetic webhook twice within a minute and
+        diff the two decisions. If they match byte-for-byte (excluding
+        timestamps), determinism holds. This becomes a golden-test assertion
+        in Sprint 3's P2 test suite.
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- =================================================================== -->
+<h2 id="d12">D12 · Structured outputs vs JSON mode</h2>
+<div class="decision">
+  <div class="decision-meta">
+    <span class="tag tag-fixed">✅ Fixed</span>
+    <span class="date">Identified 2026-04-24 plan review</span>
+  </div>
+  <h3 class="problem-title">JSON mode produces valid JSON but not necessarily schema-conformant; we had a parse-retry path to catch the gap.</h3>
+
+  <div class="section-block">
+    <span class="block-label">Problem</span>
+    <div class="block-body">
+      <p>
+        Ollama's <code>format: "json"</code> guarantees valid JSON. It does NOT
+        guarantee the JSON matches our expected schema. Missing fields,
+        unexpected fields, wrong types — all possible. <code>_parse_response()</code>
+        handled this with a retry prompt that quoted the Pydantic error back.
+        Adds 25-70s latency when it triggers.
+      </p>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <span class="block-label">Solution</span>
+    <div class="block-body">
+      <p>
+        Ollama ≥0.5 accepts <code>format: &lt;JSON schema dict&gt;</code> and
+        enforces at decode time — invalid JSON is impossible, not just unlikely.
+        <code>LLMClient._RESPONSE_SCHEMA</code> hand-written (kept inline so
+        there are no <code>$defs</code>/<code>$refs</code> Ollama might mis-resolve).
+        Parse-retry path removed from the happy flow.
+      </p>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <span class="block-label">Evaluation</span>
+    <div class="block-body">
+      <p>
+        Parse-failure counter (<code>triage_fallback_total{reason="parse_failure"}</code>)
+        should be zero in steady state post-change. If it's not,
+        Ollama ≤0.4 is running somewhere — check image tags.
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- =================================================================== -->
+<h2 id="d13">D13 · Pre-LLM metric interpreter (shrink the LLM's job)</h2>
+<div class="decision">
+  <div class="decision-meta">
+    <span class="tag tag-fixed">✅ Shipped · ⏳ evaluation pending</span>
+    <span class="date">Identified 2026-04-24 audit</span>
+  </div>
+  <h3 class="problem-title">The LLM was being asked to do four jobs at once: interpret metrics, write narrative, recommend actions, filter noise. It failed the numerical-reasoning job the most.</h3>
+
+  <div class="section-block">
+    <span class="block-label">Problem</span>
+    <div class="block-body">
+      <p>
+        Audit bugs #5, #6, #9 all traced to the same root: the LLM was being
+        trusted with <em>numerical interpretation</em> (reading refId, computing
+        deltas, attaching units). That's exactly what 7B models are worst at. It
+        hallucinated units, conflated log-line-counts with metric values,
+        contradicted itself within the same sentence ("observed 0" → "spike to 100%").
+      </p>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <span class="block-label">Reasoning</span>
+    <div class="block-body">
+      <p>
+        Thesis: LLMs are excellent at synthesis and narrative, mediocre at
+        deduplication, and bad at numerical reasoning. The cheapest architectural
+        win is to <em>remove numerical reasoning from the LLM's job</em>. Do the
+        math deterministically; feed the LLM a pre-computed one-liner as authority;
+        the LLM's remaining job is narrative and action suggestion, which it can
+        actually do.
+      </p>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <span class="block-label">Solution</span>
+    <div class="block-body">
+      <p>
+        New module <code>app/metric_interpreter.py</code>. Input:
+        <code>(alert.annotations.expr, alert.values, alert.labels)</code>.
+        Output: a <code>MetricFacts</code> dataclass with <code>observed_value</code>,
+        <code>threshold</code>, <code>delta</code>, <code>unit</code>,
+        <code>deployment_type</code>, and a <code>one_liner</code> like
+        <em>"CPU busy = 94.4% — 9.4pp above 80% threshold (MediumCpuUsage, service=k3s-node)"</em>.
+      </p>
+      <p>
+        Unit detection is pattern-based on PromQL (<code>_UNIT_PATTERNS</code> list):
+        <code>histogram_quantile(...) * 1000</code> → ms,
+        <code>100 - (...idle...)</code> → percent, <code>up == 0</code> → boolean,
+        etc. Covers all 18 current rules; falls through to "unit unknown" which
+        the LLM then reasons around.
+      </p>
+      <p>
+        The LLM prompt gets the <code>one_liner</code> as <em>authoritative ground
+        truth</em> and is instructed to <em>cite verbatim, not re-derive</em>.
+        The few-shot examples in <code>SYSTEM_PROMPT</code> show this shape end-to-end.
+      </p>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <span class="block-label">Evaluation</span>
+    <div class="block-body">
+      <p>
+        Qualitative first: read post-deploy RCAs and check they match the
+        <code>one_liner</code> instead of re-doing math. Quantitative later:
+        parse <code>decision.rca</code> for numeric claims, compare to
+        <code>MetricFacts.observed_value</code>, track drift rate.
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- =================================================================== -->
+<h2 id="d14">D14 · Downtime backfill from Grafana annotations</h2>
+<div class="decision">
+  <div class="decision-meta">
+    <span class="tag tag-fixed">✅ Shipped · ⏳ evaluation pending</span>
+    <span class="date">Identified 2026-04-24 post-incident</span>
+  </div>
+  <h3 class="problem-title">When triage is down, Grafana's webhook retries fail and the alerts are lost — there's no durable replay.</h3>
+
+  <div class="section-block">
+    <span class="block-label">Problem</span>
+    <div class="block-body">
+      <p>
+        <a href="#d6">D6</a> exposed that we have zero resilience to triage
+        downtime. Grafana fires a webhook, it fails, Grafana gives up, the alert
+        lives only in Grafana's annotation store. The operator has no way to
+        know what was missed without manually querying the annotation API.
+      </p>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <span class="block-label">Reasoning</span>
+    <div class="block-body">
+      <p>
+        Two options: (a) persistent webhook queue inside triage — but triage is
+        WHAT goes down, so its queue is also gone. (b) Treat Grafana's annotation
+        API as the durable source of truth (which it already is). On startup,
+        compute the gap between now and last RCA, query annotations for that
+        window, replay each unique firing through the normal pipeline. Elegant
+        — no new infrastructure.
+      </p>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <span class="block-label">Solution</span>
+    <div class="block-body">
+      <p>
+        New module <code>app/startup_backfill.py</code>. Called from the lifespan
+        hook as a fire-and-forget task (so service readiness isn't gated on
+        Grafana's response time). Config gates: disabled when
+        <code>GRAFANA_API_PASSWORD</code> is unset so it's safe-by-default;
+        only triggers when the gap exceeds <code>startup_backfill_threshold_minutes</code>
+        (default 15); capped at <code>startup_backfill_max_gap_hours</code>
+        (default 24) so a week-old restart doesn't replay a week of alerts.
+      </p>
+      <p>
+        Filters: skips synthetic test alerts (<code>HourlyDemoTest_*</code>,
+        <code>Verify*</code>, <code>LaptopSmoke_*</code>). Dedupes by
+        <code>(alertname, service)</code> so a rule that fired 20 times during
+        the gap produces one replay, not 20.
+      </p>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <span class="block-label">Evaluation</span>
+    <div class="block-body">
+      <p>
+        Verified on a zero-length gap (no missed alerts, module logged
+        <em>"0 annotations in window"</em> and exited cleanly). A real downtime
+        test — stop triage for 30+ minutes while something fires — is on the
+        deferred list.
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- =================================================================== -->
+<h2 id="d15">D15 · Bounded-agency retry (one MCP call, not a chain)</h2>
+<div class="decision">
+  <div class="decision-meta">
+    <span class="tag tag-fixed">✅ Shipped · ⏳ evaluation pending</span>
+    <span class="date">Identified 2026-04-24 plan review</span>
+  </div>
+  <h3 class="problem-title">The old data-starved retry just said "don't hedge" — the model produced the same hedge again, this time with attitude.</h3>
+
+  <div class="section-block">
+    <span class="block-label">Problem</span>
+    <div class="block-body">
+      <p>
+        When the first LLM pass was tagged <code>data_starved</code>, the old
+        flow appended a scolding to the retry prompt. Same context, same model,
+        same temperature — same answer. Retry rate of
+        <code>actionable &lt;- data_starved</code> was low.
+      </p>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <span class="block-label">Reasoning</span>
+    <div class="block-body">
+      <p>
+        Options were (a) full agent framework (tool use, chain-of-thought,
+        multiple loops) — too much surface area, expensive, non-deterministic,
+        overkill for this problem, (b) skip retry, just ship data_starved rows
+        as-is — gives up on the hedge class, and (c) one extra call with
+        <em>one</em> whitelisted tool, Pydantic-validated args, bounded latency.
+        (c) is the minimum agency that pays off: if the model's problem is
+        "not enough evidence," giving it the ability to fetch <em>one</em> more
+        piece of evidence is directly the fix.
+      </p>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <span class="block-label">Solution</span>
+    <div class="block-body">
+      <p>
+        New module <code>app/bounded_agency.py</code>. Four whitelisted tools:
+        <code>prometheus.query</code>, <code>loki.query_range</code>,
+        <code>jaeger.get_traces</code>, <code>rca_history.similar</code>. Each
+        has a Pydantic schema class (<code>PrometheusQueryArgs</code>,
+        <code>LokiQueryRangeArgs</code>, etc.) that validates the LLM's
+        requested args and rejects extras.
+      </p>
+      <p>
+        Flow when <code>quality=data_starved</code> on first pass:
+      </p>
+      <ol>
+        <li><code>LLMClient.request_tool_or_decide()</code> — LLM can emit
+            <code>{"tool_request": {"name": ..., "args": {...}}}</code> OR a
+            final decision.</li>
+        <li>If tool_request: <code>execute_tool()</code> runs the MCP call via
+            direct httpx → re-prompt via <code>investigate()</code> with the
+            tool result appended as additional evidence.</li>
+        <li>If decision: try to parse as <code>LLMDecision</code>, use directly.</li>
+        <li>Fall back to the old plain anti-hedge retry if the agency path
+            fails.</li>
+      </ol>
+      <p>
+        Properties: <em>exactly one extra call max</em> (bounded cost/latency),
+        reproducible at temperature=0, uses existing MCPs, no new infrastructure.
+      </p>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <span class="block-label">Evaluation</span>
+    <div class="block-body">
+      <p>
+        Logs emit <code>used_agency=True/False</code> per retry so we can track
+        adoption rate. Target: after ~20 data-starved events, at least 50%
+        should convert to <code>actionable</code> via bounded agency. Under that,
+        the tool whitelist is wrong — add or remove tools based on which
+        requests the model makes most.
+      </p>
+    </div>
+  </div>
+</div>
+
+<h2>What's next (perspectives)</h2>
+<p>
+  This log is a live artifact — future sprints will add entries. Near-term expected
+  additions:
+</p>
+<ul>
+  <li>
+    <strong>Traces in drain3</strong> — currently drain3 only templates logs.
+    Applying the same template-learning to traces (operation name + span.kind +
+    duration bucket) would expose latency anomalies invisible to log templating.
+    Design work pending.
+  </li>
+  <li>
+    <strong>Widening the dataset</strong> — add a second k3s workload and
+    re-run the golden-test set. Target: 10 consecutive fires with
+    <code>quality=actionable</code> before declaring the pipeline production-ready.
+  </li>
+  <li>
+    <strong>Qwen Coder vs Instruct benchmark</strong> — Coder variants are
+    reportedly stronger at structured output. Need a golden set first (P2)
+    before the swap is measurable.
+  </li>
+  <li>
+    <strong>Cloud LLM fallback</strong> — only worth pursuing if evaluation
+    dashboards prove the 7B ceiling is the bottleneck. Likely Sprint 4+.
+  </li>
+</ul>
+
+</div>
+</main>
+
+</body>
+</html>
