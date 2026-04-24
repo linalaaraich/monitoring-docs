@@ -1,0 +1,1029 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>System Explained — CIRES Observability Platform</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --bg-soft: #13151e;
+    --card: #1a1d27;
+    --card-alt: #1e2230;
+    --border: #2a2d3a;
+    --border-hi: #3a3f52;
+    --text: #e4e6ee;
+    --text-soft: #c0c5d0;
+    --muted: #8890a0;
+    --accent-blue: #4ea8de;
+    --accent-green: #6bcf7f;
+    --accent-orange: #f0a050;
+    --accent-purple: #b07ee8;
+    --accent-red: #e06070;
+    --accent-cyan: #40d0d0;
+    --accent-yellow: #e0d060;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { font-family:'Inter','Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); line-height:1.65; font-size:15px; -webkit-font-smoothing:antialiased; }
+  code, pre, .mono { font-family:'JetBrains Mono','Fira Code',ui-monospace,monospace; font-size:0.88em; }
+
+  .topnav { display:flex; align-items:center; gap:12px; padding:14px 40px; background:var(--bg-soft); border-bottom:1px solid var(--border); flex-wrap:wrap; }
+  .topnav span.nav-label { color:var(--muted); font-size:13px; font-weight:600; margin-right:4px; }
+  .navlink { display:inline-flex; align-items:center; gap:6px; padding:7px 14px; border-radius:8px; font-size:13px; font-weight:600; text-decoration:none; border:1px solid; transition:background .2s, transform .15s; }
+  .navlink:hover { transform:translateY(-1px); }
+  .navlink-home { color:var(--text); border-color:var(--border); background:var(--card); }
+  .navlink-arch { color:var(--accent-blue); border-color:rgba(78,168,222,.4); background:rgba(78,168,222,.08); }
+  .navlink-triage { color:var(--accent-purple); border-color:rgba(176,126,232,.4); background:rgba(176,126,232,.12); }
+
+  .hero { padding:56px 40px 40px; border-bottom:1px solid var(--border); background:linear-gradient(180deg, #13151e 0%, var(--bg) 100%); }
+  .hero .inner { max-width:1080px; margin:0 auto; }
+  .hero .eyebrow { font-size:11px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:var(--accent-cyan); margin-bottom:12px; }
+  .hero h1 { font-size:38px; font-weight:800; letter-spacing:-.5px; margin-bottom:14px; line-height:1.2; }
+  .hero h1 span.accent { color:var(--accent-cyan); }
+  .hero p.lead { font-size:16px; color:var(--text-soft); max-width:820px; line-height:1.7; margin-bottom:20px; }
+  .hero .pill-row { display:flex; gap:8px; flex-wrap:wrap; }
+  .pill { font-size:11px; font-weight:600; padding:4px 10px; border-radius:12px; border:1px solid; letter-spacing:.2px; }
+  .pill.cyan { color:var(--accent-cyan); border-color:rgba(64,208,208,.35); background:rgba(64,208,208,.08); }
+  .pill.purple { color:var(--accent-purple); border-color:rgba(176,126,232,.35); background:rgba(176,126,232,.08); }
+  .pill.orange { color:var(--accent-orange); border-color:rgba(240,160,80,.35); background:rgba(240,160,80,.08); }
+
+  .layout { max-width:1080px; margin:0 auto; padding:32px 40px 80px; display:grid; grid-template-columns: 240px 1fr; gap:40px; }
+  @media (max-width: 900px) { .layout { grid-template-columns:1fr; } .toc-sidebar { position:static; } }
+  .toc-sidebar { position:sticky; top:20px; align-self:start; font-size:13px; }
+  .toc-sidebar h4 { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--muted); margin-bottom:10px; }
+  .toc-sidebar ol { list-style:none; padding:0; }
+  .toc-sidebar li { margin-bottom:4px; }
+  .toc-sidebar a { color:var(--text-soft); text-decoration:none; border-bottom:1px dashed transparent; }
+  .toc-sidebar a:hover { color:var(--accent-cyan); border-bottom-color:var(--accent-cyan); }
+  .toc-sidebar li.sub { padding-left:14px; font-size:12px; }
+  .toc-sidebar li.sub a { color:var(--muted); }
+
+  .content h2 { font-size:26px; font-weight:700; margin:48px 0 16px; letter-spacing:-.3px; scroll-margin-top:24px; padding-bottom:8px; border-bottom:1px solid var(--border); }
+  .content h2:first-child { margin-top:0; }
+  .content h3 { font-size:18px; font-weight:700; margin:28px 0 10px; color:var(--text); scroll-margin-top:24px; }
+  .content h4 { font-size:14px; font-weight:700; margin:20px 0 6px; color:var(--text); }
+  .content p { margin-bottom:14px; color:var(--text-soft); }
+  .content p strong { color:var(--text); font-weight:600; }
+  .content ul, .content ol { margin:8px 0 16px 24px; color:var(--text-soft); }
+  .content li { margin-bottom:6px; }
+  .content code { background:var(--card); border:1px solid var(--border); padding:1px 6px; border-radius:4px; font-size:0.85em; color:var(--accent-cyan); }
+  .content pre { background:var(--card); border:1px solid var(--border); padding:14px 16px; border-radius:8px; margin:12px 0 18px; overflow-x:auto; line-height:1.5; }
+  .content pre code { background:none; border:none; padding:0; color:var(--text); font-size:0.85em; }
+  .content a { color:var(--accent-blue); text-decoration:none; border-bottom:1px dashed rgba(78,168,222,.35); }
+  .content a:hover { border-bottom-style:solid; }
+
+  .callout { border-left:3px solid; border-radius:0 8px 8px 0; padding:14px 18px; margin:16px 0; background:var(--card); }
+  .callout.note { border-color:var(--accent-blue); }
+  .callout.tip { border-color:var(--accent-green); }
+  .callout.warn { border-color:var(--accent-orange); }
+  .callout-label { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; margin-bottom:6px; }
+  .callout.note .callout-label { color:var(--accent-blue); }
+  .callout.tip .callout-label { color:var(--accent-green); }
+  .callout.warn .callout-label { color:var(--accent-orange); }
+
+  table { width:100%; border-collapse:collapse; margin:12px 0 20px; font-size:13px; }
+  table th, table td { padding:10px 14px; border-bottom:1px solid var(--border); text-align:left; vertical-align:top; }
+  table th { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--muted); background:var(--card); }
+  table tr:hover td { background:var(--card-alt); }
+
+  .ascii { background:var(--card); border:1px solid var(--border); padding:20px; border-radius:8px; font-family:monospace; font-size:11px; line-height:1.4; white-space:pre; overflow-x:auto; color:var(--text); }
+
+  .kv-table { width:100%; }
+  .kv-table td { font-size:12px; padding:6px 10px; }
+  .kv-table td:first-child { font-weight:600; color:var(--text); width:220px; font-family:monospace; font-size:12px; }
+
+  .file-ref { font-family:monospace; font-size:0.88em; padding:1px 6px; border-radius:3px; background:rgba(78,168,222,.08); color:var(--accent-blue); border:1px solid rgba(78,168,222,.25); }
+</style>
+</head>
+<body>
+
+<nav class="topnav">
+  <span class="nav-label">CIRES Observability Platform</span>
+  <a href="index.html" class="navlink navlink-home">🏠 Home</a>
+  <a href="architecture.html" class="navlink navlink-arch">🏗️ Architecture</a>
+  <a href="triage-service.html" class="navlink navlink-triage">🧠 Triage Service</a>
+  <a href="decisions-log.html" class="navlink" style="color:var(--accent-orange); border-color:rgba(240,160,80,.4); background:rgba(240,160,80,.08);">📝 Decisions Log</a>
+</nav>
+
+<section class="hero">
+  <div class="inner">
+    <div class="eyebrow">Obsessive-detail reference · every file, every flow</div>
+    <h1>System <span class="accent">Explained</span></h1>
+    <p class="lead">
+      Exactly how the CIRES AI triage pipeline is assembled and what each file
+      does. If you're inheriting this codebase, read this page once end-to-end —
+      it names every module, every config variable, every data type, every
+      invariant. References are concrete (file paths + line numbers, module
+      names, config keys). Skim the Table of Contents; deep-dive only the
+      sections you need.
+    </p>
+    <div class="pill-row">
+      <span class="pill cyan">Reference-grade</span>
+      <span class="pill purple">Triage Service internals</span>
+      <span class="pill orange">Future perspectives</span>
+    </div>
+  </div>
+</section>
+
+<main class="layout">
+
+<aside class="toc-sidebar">
+  <h4>CONTENTS</h4>
+  <ol>
+    <li><a href="#overview">1. Overview</a></li>
+    <li><a href="#topology">2. Runtime topology</a></li>
+    <li><a href="#lifecycle">3. Alert lifecycle</a></li>
+    <li class="sub"><a href="#lifecycle-step1">3.1 Webhook arrival</a></li>
+    <li class="sub"><a href="#lifecycle-step2">3.2 Dedup + suppression</a></li>
+    <li class="sub"><a href="#lifecycle-step3">3.3 Context gathering</a></li>
+    <li class="sub"><a href="#lifecycle-step4">3.4 Metric interpreter</a></li>
+    <li class="sub"><a href="#lifecycle-step5">3.5 LLM + validator</a></li>
+    <li class="sub"><a href="#lifecycle-step6">3.6 Bounded-agency retry</a></li>
+    <li class="sub"><a href="#lifecycle-step7">3.7 Template fallback</a></li>
+    <li class="sub"><a href="#lifecycle-step8">3.8 Notify + persist</a></li>
+    <li><a href="#modules">4. Module reference</a></li>
+    <li class="sub"><a href="#mod-main">4.1 main.py</a></li>
+    <li class="sub"><a href="#mod-pipeline">4.2 pipeline.py</a></li>
+    <li class="sub"><a href="#mod-llm">4.3 llm_client.py</a></li>
+    <li class="sub"><a href="#mod-context">4.4 context.py</a></li>
+    <li class="sub"><a href="#mod-interpreter">4.5 metric_interpreter.py</a></li>
+    <li class="sub"><a href="#mod-validator">4.6 response_validator.py</a></li>
+    <li class="sub"><a href="#mod-actions">4.7 action_templates.py</a></li>
+    <li class="sub"><a href="#mod-agency">4.8 bounded_agency.py</a></li>
+    <li class="sub"><a href="#mod-dedup">4.9 dedup.py</a></li>
+    <li class="sub"><a href="#mod-drain">4.10 drain_analyzer.py</a></li>
+    <li class="sub"><a href="#mod-backfill">4.11 startup_backfill.py</a></li>
+    <li class="sub"><a href="#mod-rca">4.12 rca_store.py</a></li>
+    <li class="sub"><a href="#mod-notifier">4.13 notifier.py</a></li>
+    <li class="sub"><a href="#mod-models">4.14 models.py</a></li>
+    <li class="sub"><a href="#mod-config">4.15 config.py</a></li>
+    <li class="sub"><a href="#mod-cb">4.16 circuit_breaker.py</a></li>
+    <li class="sub"><a href="#mod-metrics">4.17 metrics.py</a></li>
+    <li><a href="#data">5. Data model</a></li>
+    <li><a href="#config">6. Configuration surface</a></li>
+    <li><a href="#deploy">7. Deployment</a></li>
+    <li><a href="#obs">8. Observability</a></li>
+    <li><a href="#gotchas">9. Gotchas</a></li>
+    <li><a href="#future">10. Future perspectives</a></li>
+  </ol>
+</aside>
+
+<div class="content">
+
+<!-- ============================================================== -->
+<h2 id="overview">1. Overview</h2>
+
+<p>
+  The CIRES AI triage pipeline is a FastAPI service that consumes Grafana
+  alert webhooks, enriches each alert with pre-gathered context from three
+  MCP bridges (Prometheus / Loki / Jaeger), runs an on-prem LLM (Ollama +
+  qwen2.5:7b) to produce a root-cause analysis, writes the result to a
+  SQLite history store, and emails escalations. A dashboard at
+  <code>/dashboard</code> renders the decision history.
+</p>
+
+<p>
+  The core thesis after the 2026-04-24 audit: <strong>shrink the LLM's job.</strong>
+  LLMs are great at narrative synthesis; mediocre at deduplication;
+  <em>bad at numerical reasoning over ambiguous data</em>. Every module in
+  the repo below exists to take one of those "bad" responsibilities off
+  the LLM's plate and hand it to deterministic code. See the
+  <a href="decisions-log.html">Decisions Log</a> for the individual
+  decisions.
+</p>
+
+<h3>What's in this repo vs elsewhere</h3>
+
+<table>
+  <thead><tr><th>Repo</th><th>Scope</th></tr></thead>
+  <tbody>
+    <tr><td><code>monitoring-triage-service</code></td><td>This doc. FastAPI pipeline, LLM client, MCPs consumers, dashboard.</td></tr>
+    <tr><td><code>monitoring-mcp-servers</code></td><td>5 MCP HTTP bridges: prometheus-mcp, loki-mcp, jaeger-mcp, drain3-mcp, rca-history-mcp.</td></tr>
+    <tr><td><code>monitoring-project</code></td><td>Ansible — Grafana/Prometheus/Loki/Jaeger/OTel config, alert rules, contact points.</td></tr>
+    <tr><td><code>provisioning-monitoring-infra</code></td><td>Terraform — the AWS EC2s + security groups that host the observability stack.</td></tr>
+    <tr><td><code>gpu-migration-staging</code> (aka <code>cires-ai</code>)</td><td>Docker-compose for the laptop AI stack: Ollama + triage + MCPs + Watchtower.</td></tr>
+    <tr><td><code>monitoring-docs</code></td><td>You are here.</td></tr>
+    <tr><td><code>monitoring-load-tests</code> + <code>monitoring-chaos-tests</code></td><td>Load generators + chaos scenarios.</td></tr>
+  </tbody>
+</table>
+
+<!-- ============================================================== -->
+<h2 id="topology">2. Runtime topology</h2>
+
+<pre class="ascii">
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │                         MONITORING-VM (EC2)                          │
+  │                                                                      │
+  │  Prometheus :9090  ─┐                                                │
+  │  Loki       :3100  ─┤   ┌─────────────────┐   evaluates alert rules  │
+  │  Jaeger     :16686 ─┘   │  Grafana :3000  │   fires webhook when     │
+  │                         │  + unified      │   condition crosses      │
+  │  OTel Collector         │  alerting       │                          │
+  │    :4317 gRPC           │                 │    POST /webhook/grafana │
+  │    :4318 HTTP    ◀──────┘                 └──────────────────────────┼──┐
+  │                                                                      │  │
+  │  docker-compose stack managed by Ansible (monitoring-project)        │  │
+  └──────────────────────────────────────────────────────────────────────┘  │
+                                                                            │
+                                  Tailscale tailnet                         │
+                                                                            │
+  ┌──────────────────────────────────────────────────────────────────────┐  │
+  │                    K3S-NODE (EC2)                                    │  │
+  │                                                                      │  │
+  │    app/    spring-boot  ─┐                   │ node-exporter         │  │
+  │    front/  react        ─┤  scraped by       │ (systemd on host)     │  │
+  │    network/ kong         ├─ Prometheus ─────▶│                       │  │
+  │    observ/ otel-col     ─┘                                           │  │
+  │                                                                      │  │
+  │  (the OLD `ai` namespace was removed 2026-04-24 after the            │  │
+  │   overnight rogue-stack incident — see Decisions Log D6)             │  │
+  └──────────────────────────────────────────────────────────────────────┘  │
+                                                                            │
+  ┌──────────────────────────────────────────────────────────────────────┐  │
+  │                    LAPTOP / adolin-wsl  (tailnet 100.117.118.70)     │◀─┘
+  │                                                                      │
+  │  ┌──────────────────────┐   ┌──────────────────────┐                 │
+  │  │ Ollama  :11434 GPU   │◀──│ Triage Service :8090 │                 │
+  │  │ qwen2.5:7b           │   │                      │                 │
+  │  └──────────────────────┘   │ FastAPI + Pipeline   │                 │
+  │                             │ + SQLite rca_history │                 │
+  │  ┌──────────────────────┐   │                      │                 │
+  │  │ prometheus-mcp :8091 │◀──┤                      │                 │
+  │  │ loki-mcp       :8092 │◀──┤                      │                 │
+  │  │ jaeger-mcp     :8093 │◀──┤                      │                 │
+  │  │ drain3-mcp     :8094 │◀──┤                      │                 │
+  │  │ rca-history    :8095 │◀──┤                      │                 │
+  │  └──────────────────────┘   └──────────────────────┘                 │
+  │                                                                      │
+  │  Watchtower polls GHCR every 60 s; auto-rolls on new :main tag.      │
+  │  docker-compose up from gpu-migration-staging/compose/docker-compose │
+  └──────────────────────────────────────────────────────────────────────┘
+</pre>
+
+<p>
+  Tailscale MagicDNS hostnames in use (verified 2026-04-24):
+  <code>claude-controller</code> (ephemeral EC2 orchestrator),
+  <code>adolin</code> (laptop Windows host),
+  <code>adolin-wsl</code> (laptop WSL2 — triage lives here),
+  <code>observability-rca-monitoring</code> (EC2 monitoring VM).
+</p>
+
+<!-- ============================================================== -->
+<h2 id="lifecycle">3. Alert lifecycle — end-to-end</h2>
+
+<p>
+  An alert enters the system as a Grafana webhook POST. This section traces
+  the full lifecycle, naming every file and function hit. Code references
+  are all in <code>monitoring-triage-service/app/</code>.
+</p>
+
+<!-- 3.1 -->
+<h3 id="lifecycle-step1">3.1 Webhook arrival → <span class="file-ref">main.py:154</span></h3>
+<p>
+  Grafana POSTs a <code>GrafanaWebhook</code> to <code>/webhook/grafana</code>.
+  FastAPI deserializes into the Pydantic model defined at
+  <span class="file-ref">models.py:42</span>. A <code>GrafanaWebhook</code>
+  contains <code>alerts: list[GrafanaAlert]</code>; each
+  <code>GrafanaAlert</code> has <code>labels</code>, <code>annotations</code>,
+  <code>values</code> (refId → number), <code>fingerprint</code>,
+  <code>startsAt</code>.
+</p>
+<p>
+  The endpoint returns <code>202 Accepted</code> immediately and enqueues
+  <code>_pipeline.process_grafana_webhook</code> as a FastAPI
+  <code>BackgroundTasks</code>. Grafana never waits — that's deliberate so
+  it can't time-out on our LLM latency. Also means webhooks during a wedged
+  pipeline silently pile up (the wedge symptom from 2026-04-24 morning).
+</p>
+
+<!-- 3.2 -->
+<h3 id="lifecycle-step2">3.2 Dedup + Layer-2 suppression → <span class="file-ref">pipeline.py:80</span></h3>
+<p>
+  First check: fingerprint-window dedup via <code>DedupManager.check()</code>
+  (<span class="file-ref">dedup.py:42</span>). Keyed on Grafana's stable
+  fingerprint, window is <code>settings.dedup_window_seconds</code> (default 600).
+  Second+ fire of the same fingerprint within the window → persist a
+  <code>triage_decision=suppressed_duplicate</code> record linking to the prior
+  RCA and short-circuit. No LLM work.
+</p>
+<p>
+  Second check: Layer-2 pre-LLM suppression
+  (<span class="file-ref">pipeline.py:90</span> calling
+  <code>_check_suppression()</code>). If the same
+  <code>(alert_name, service)</code> was DISMISSED within
+  <code>settings.triage_history_lookback_minutes</code>, dismiss again without
+  paying Ollama cost. Persists a <code>triage_decision=triage_suppressed</code>
+  record with a one-line reason.
+</p>
+
+<!-- 3.3 -->
+<h3 id="lifecycle-step3">3.3 Context gathering → <span class="file-ref">context.py:89</span></h3>
+<p>
+  <code>ContextGatherer.gather(alert)</code> runs three fetches in parallel
+  (asyncio.gather) against the MCP bridges:
+</p>
+<table>
+  <thead><tr><th>Call</th><th>Function</th><th>Returns</th></tr></thead>
+  <tbody>
+    <tr><td><code>prometheus-mcp</code></td><td><span class="file-ref">context.py:164</span> <code>_fetch_prometheus()</code></td><td>Time-series for the rule's PromQL; falls back to <code>alert.annotations.expr</code> or instance-scoped query when primary empty.</td></tr>
+    <tr><td><code>loki-mcp</code></td><td><span class="file-ref">context.py:218</span> <code>_fetch_loki()</code></td><td>Last <code>settings.loki_log_limit</code> lines for the service. Fallback to ambient (any-service) lines ONLY if <code>labels.signal=="log"</code>, because ambient fallback for metric alerts leads to the 50-log-line hallucination (see Decisions Log D1).</td></tr>
+    <tr><td><code>jaeger-mcp</code></td><td><span class="file-ref">context.py:274</span> <code>_fetch_jaeger()</code></td><td>Last <code>settings.jaeger_trace_limit</code> traces. Skipped entirely for non-traced services (<code>TRACED = {"spring-boot", "kong", "otel-collector"}</code>).</td></tr>
+  </tbody>
+</table>
+<p>
+  All fetches share a per-alert absolute-time window computed from
+  <code>alert.startsAt</code> so all three pillars cover the same epoch.
+  Returns a <code>GatheredContext</code>
+  (<span class="file-ref">models.py:107</span>) with the three fetch results +
+  <code>loki_is_fallback</code> flag + per-pillar timing metrics. The
+  <code>sources_available</code> counter reflects how many of the three
+  returned something non-empty.
+</p>
+<p>
+  Drain3 templating runs on the Loki lines at
+  <code>drain.annotate_lines()</code>
+  (<span class="file-ref">drain_analyzer.py:91</span>) — returns both the
+  annotated lines (<code>[ANOMALY]</code> / <code>[KNOWN]</code> prefix) and a
+  one-line summary string.
+</p>
+
+<!-- 3.4 -->
+<h3 id="lifecycle-step4">3.4 Metric interpreter → <span class="file-ref">metric_interpreter.py:interpret</span></h3>
+<p>
+  Called from the pipeline right before the LLM call. Deterministic math,
+  zero LLM. Inputs: <code>alert.annotations.expr</code>,
+  <code>alert.values</code>, <code>alert.labels</code>. Outputs a
+  <code>MetricFacts</code> dataclass with:
+</p>
+<ul>
+  <li><code>observed_value</code> — reduce-step value, picked via <code>pick_primary_value()</code> (<span class="file-ref">llm_client.py:173</span>) which skips the threshold-boolean when present</li>
+  <li><code>threshold</code> + <code>threshold_direction</code> — parsed from the PromQL expr or rule annotations</li>
+  <li><code>delta</code> + <code>delta_pct</code> — observed minus threshold, signed</li>
+  <li><code>unit</code> — detected via regex pattern match against PromQL (<code>_UNIT_PATTERNS</code> list); covers <code>ms</code>, <code>percent</code>, <code>boolean</code>, <code>bytes/sec</code>, <code>seconds-to-zero</code>, <code>ratio</code></li>
+  <li><code>deployment_type</code> — from <code>settings.service_deployment_type[alert.service]</code></li>
+  <li><code>one_liner</code> — human interpretation string the LLM cites verbatim</li>
+</ul>
+<p>
+  <code>MetricFacts.as_prompt_block()</code>
+  (<span class="file-ref">metric_interpreter.py:48</span>) renders the struct
+  as a 5-line block the LLM prompt embeds under
+  <em>"## Pre-computed metric facts (ground truth — cite verbatim)"</em>.
+</p>
+
+<!-- 3.5 -->
+<h3 id="lifecycle-step5">3.5 LLM + response validator → <span class="file-ref">pipeline.py:260</span></h3>
+<p>
+  <code>LLMClient.investigate()</code>
+  (<span class="file-ref">llm_client.py:256</span>) builds the prompt via
+  <code>_build_prompt()</code> (<span class="file-ref">llm_client.py:396</span>):
+  system message carries <code>SYSTEM_PROMPT</code> (rules A–H + schema
+  description + 3 few-shot examples); user message carries alert details,
+  <code>MetricFacts.as_prompt_block()</code>, correlated-alerts section,
+  pre-gathered context, history.
+</p>
+<p>
+  <code>_call_ollama()</code> (<span class="file-ref">llm_client.py:592</span>)
+  POSTs to <code>/api/chat</code> with <code>temperature=0</code>,
+  <code>num_ctx=16384</code>, and <code>format=_RESPONSE_SCHEMA</code> (the
+  inline JSON-schema dict enforcing the response shape at decode time).
+  Ollama token-counts are exported as Prometheus metrics
+  (<code>triage_llm_token_count{type="prompt"|"completion"}</code>).
+</p>
+<p>
+  Response is parsed into <code>LLMDecision</code>
+  (<span class="file-ref">models.py:70</span>). Immediately after parse,
+  <code>validate()</code> from
+  <span class="file-ref">response_validator.py</span> runs three passes:
+</p>
+<ol>
+  <li><strong>Banned-phrase scan</strong> on rca + reason (<code>_BANNED_PHRASE_PATTERNS</code>) — catches "insufficient data", "cannot determine", etc. Matched phrases go into <code>report.banned_phrase_hits</code> so a retry can quote them back.</li>
+  <li><strong>Vague-action scan</strong> on suggested_actions — entries starting with <code>check|monitor|investigate|...</code> and lacking a concrete payload (backtick, URL, kubectl/ssh/docker/etc.) are pruned in place.</li>
+  <li><strong>Architecture-mismatch scan</strong> — if deployment_type is <code>docker-vm</code> and an action contains <code>kubectl</code>, that specific action is pruned (with reason <code>arch_mismatch:k8s_command_for_docker-vm_service</code>).</li>
+</ol>
+<p>
+  The validator MUTATES <code>decision.suggested_actions</code> — callers see the
+  cleaned list. Violations are logged but don't block the main flow; they
+  inform the retry path.
+</p>
+
+<!-- 3.6 -->
+<h3 id="lifecycle-step6">3.6 Bounded-agency retry → <span class="file-ref">pipeline.py:305</span></h3>
+<p>
+  After LLM + validator, the pipeline classifies RCA quality via
+  <code>_classify_rca_quality()</code>
+  (<span class="file-ref">rca_store.py:43</span>). Gates:
+  <code>actionable</code> ⟶ ship. <code>data_starved</code> ⟶ retry.
+  <code>needs_review</code> ⟶ ship but tag for human follow-up.
+</p>
+<p>
+  On <code>data_starved</code>, if <code>settings.triage_bounded_agency_enabled</code>
+  AND we have >10 s of pipeline budget left, engage bounded agency
+  (<a href="decisions-log.html#d15">see D15 in decisions log</a>):
+</p>
+<ol>
+  <li><code>LLMClient.request_tool_or_decide()</code> — sends a second prompt adding <code>bounded_agency.TOOLS_DESCRIPTION</code> and instructing the model to emit EITHER a <code>tool_request</code> JSON OR a final decision.</li>
+  <li><code>parse_tool_request()</code> validates the request against one of four Pydantic schemas: <code>PrometheusQueryArgs</code>, <code>LokiQueryRangeArgs</code>, <code>JaegerGetTracesArgs</code>, <code>RCAHistorySimilarArgs</code>. Unknown tools or malformed args → <code>None</code> → fall through to plain retry.</li>
+  <li><code>execute_tool()</code> makes a direct httpx call against the relevant MCP URL (<code>settings.prometheus_mcp_url</code>, etc.).</li>
+  <li><code>tool_result_to_prompt_block()</code> formats the result for re-prompting.</li>
+  <li><code>LLMClient.investigate()</code> runs again with the tool_result_block appended to user_content. This is the THIRD and FINAL LLM call — bounded by design.</li>
+</ol>
+<p>
+  If the model emits a decision directly (skipping tool use) on the agency
+  call, that decision is used. If bounded-agency produces nothing usable,
+  falls back to the plain "don't hedge" anti-hedge retry.
+</p>
+
+<!-- 3.7 -->
+<h3 id="lifecycle-step7">3.7 Action-template fallback → <span class="file-ref">pipeline.py:314</span></h3>
+<p>
+  After the final LLM decision (with any retries), if
+  <code>decision.suggested_actions</code> is empty (either the LLM returned
+  none, or the validator pruned them all),
+  <code>action_templates.fill_template()</code>
+  (<span class="file-ref">action_templates.py:67</span>) kicks in:
+</p>
+<ol>
+  <li>Loads <code>app/suggested_actions.yaml</code> once (lru_cache'd).</li>
+  <li>First matching <code>match</code> regex wins; pulls the deployment-type-scoped action list.</li>
+  <li>Substitutes placeholders: <code>{instance}</code>, <code>{instance_host}</code> (via <code>settings.instance_hosts</code>), <code>{service}</code>, <code>{grafana}</code>, <code>{job}</code>.</li>
+</ol>
+<p>
+  Pipeline local variable <code>suggested_actions_source</code> tracks whether
+  the list came from the LLM (<code>"llm"</code>) or from the template
+  (<code>"template"</code>) — future telemetry can plot the fill-source rate.
+</p>
+
+<!-- 3.8 -->
+<h3 id="lifecycle-step8">3.8 Notify + persist → <span class="file-ref">pipeline.py:420</span></h3>
+<p>
+  If <code>decision.decision == ESCALATE</code>:
+  <code>EmailNotifier.send_escalation()</code>
+  (<span class="file-ref">notifier.py</span>) composes the HTML email.
+  Sections in order: meta summary, observed-value lede card, RCA, suggested
+  actions, evidence, model reasoning, drain3 summary, correlated alerts
+  table, top traces, deep link to Grafana. Uses the same
+  <code>_to_local_time()</code> helper (mirrored from
+  <span class="file-ref">main.py:17</span>) to render timestamps in
+  Africa/Casablanca.
+</p>
+<p>
+  Either way, <code>RCAStore.save_decision()</code>
+  (<span class="file-ref">rca_store.py:108</span>) writes an
+  <code>rca_history</code> row. Classifier runs on the record if
+  <code>rca_quality</code> isn't already set. After save,
+  <code>DedupManager.record_first_decision()</code> is called with the new
+  decision id so subsequent duplicates within the window get a link back.
+</p>
+
+<!-- ============================================================== -->
+<h2 id="modules">4. Module reference</h2>
+
+<h3 id="mod-main">4.1 <code>app/main.py</code></h3>
+<p>
+  FastAPI app + lifespan + dashboard HTML + routes. ~1030 lines.
+</p>
+<table class="kv-table"><tbody>
+  <tr><td><code>lifespan()</code> :72</td><td>async context manager that sets up <code>RCAStore</code>, <code>DrainAnalyzer</code>, <code>ContextGatherer</code>, <code>LLMClient</code>, <code>EmailNotifier</code>, <code>DedupManager</code>, <code>TriagePipeline</code>. Kicks off the <code>startup_backfill</code> as a fire-and-forget task.</td></tr>
+  <tr><td><code>webhook_grafana()</code> :154</td><td>POST endpoint accepts a <code>GrafanaWebhook</code>, enqueues <code>process_grafana_webhook</code>, returns 202.</td></tr>
+  <tr><td><code>webhook_drain3()</code> :166</td><td>POST endpoint for the drain3 self-bridge (P1.7).</td></tr>
+  <tr><td><code>health()</code> :181</td><td>Cheap uptime check. No DB.</td></tr>
+  <tr><td><code>decisions()</code> :187</td><td>GET <code>/decisions?limit=N&alert_name=X</code> — returns recent RCA rows.</td></tr>
+  <tr><td><code>drain3_stats()</code> :195</td><td>GET <code>/drain3/stats</code> — hops to a thread to avoid blocking on the drain3 lock.</td></tr>
+  <tr><td><code>_to_local_time()</code> :17</td><td>Render UTC→Africa/Casablanca.</td></tr>
+  <tr><td><code>dashboard()</code> :940</td><td>Renders the dashboard HTML from scratch; all CSS inlined. Auto-refresh 30s paused while a row is open.</td></tr>
+  <tr><td><code>metrics()</code> :1028</td><td>Prometheus scrape endpoint.</td></tr>
+</tbody></table>
+
+<h3 id="mod-pipeline">4.2 <code>app/pipeline.py</code></h3>
+<p>
+  <code>TriagePipeline</code> class — the orchestrator. <code>_process_alert()</code>
+  is the main flow; it calls everything else in sequence. 514 lines.
+</p>
+<p>Key method: <code>_process_alert(alert, source)</code>. Steps numbered in-source from 1 through 9 matching the <a href="#lifecycle">alert-lifecycle section</a>.</p>
+
+<h3 id="mod-llm">4.3 <code>app/llm_client.py</code></h3>
+<table class="kv-table"><tbody>
+  <tr><td><code>SYSTEM_PROMPT</code> :23</td><td>Static string. Contains rules A–H, response schema description, 3 few-shot examples. Static-by-design so Ollama's KV-cache stays warm across alerts.</td></tr>
+  <tr><td><code>pick_primary_value()</code> :173</td><td>Skips the threshold-boolean refId and returns the real metric value. Used in 3 places.</td></tr>
+  <tr><td><code>_format_observed_value()</code> :205</td><td>Renders <code>(ref, val)</code> as "X (refId=Y) [other refIds: ...]".</td></tr>
+  <tr><td><code>_build_fallback_decision()</code> :223</td><td>Safe ESCALATE fallback when Ollama is unreachable.</td></tr>
+  <tr><td><code>LLMClient._RESPONSE_SCHEMA</code> :~500</td><td>Inline JSON schema passed as <code>format=</code> to Ollama's chat API for structured outputs.</td></tr>
+  <tr><td><code>LLMClient.investigate()</code> :256</td><td>Main entry: builds prompt, calls Ollama, parses. Takes optional <code>correlated</code>, <code>metric_facts</code>, <code>tool_result_block</code>.</td></tr>
+  <tr><td><code>LLMClient.request_tool_or_decide()</code> :325</td><td>Bounded-agency half-step. <code>format="json"</code> (no schema) so the response can be either shape.</td></tr>
+  <tr><td><code>LLMClient._call_ollama()</code> :592</td><td>Sets <code>temperature=0</code>, <code>num_ctx=16384</code>, <code>format=_RESPONSE_SCHEMA</code>. Exports token-count metrics.</td></tr>
+  <tr><td><code>LLMClient._call_ollama_with_resilience()</code> :501</td><td>Circuit breaker + retry on 5xx/timeout. Max 2 retries, exponential backoff.</td></tr>
+  <tr><td><code>LLMClient._parse_response()</code> :638</td><td>JSON → LLMDecision. Handles markdown-wrapped JSON. Post-validation field aliasing (<code>root_cause</code>→<code>rca</code>, <code>verdict</code>→<code>decision</code>).</td></tr>
+</tbody></table>
+
+<h3 id="mod-context">4.4 <code>app/context.py</code></h3>
+<p>
+  <code>ContextGatherer</code>: owns a shared <code>httpx.AsyncClient</code>.
+  <code>gather()</code> runs three parallel MCP calls with a global
+  <code>settings.context_timeout</code> budget (default 8 s). Per-pillar
+  timing metrics exported as <code>triage_mcp_duration_seconds{server="..."}</code>.
+</p>
+<p>
+  <code>_fetch_prometheus()</code> has three fallback tiers:
+  (1) rule expr from <code>alert.annotations.expr</code>,
+  (2) instance-scoped variant if primary empty,
+  (3) ambient service-scoped.
+</p>
+
+<h3 id="mod-interpreter">4.5 <code>app/metric_interpreter.py</code></h3>
+<p>
+  Dataclass <code>MetricFacts</code>. Functions: <code>interpret()</code>,
+  <code>detect_unit()</code>, <code>extract_threshold()</code>,
+  <code>build_one_liner()</code>. Never raises — returns partial data with a
+  best-effort one-liner. Added 2026-04-24 as the deterministic
+  numerical-reasoning layer (<a href="decisions-log.html#d13">D13</a>).
+</p>
+
+<h3 id="mod-validator">4.6 <code>app/response_validator.py</code></h3>
+<p>
+  <code>validate(decision, deployment_type, confidence_floor)</code> returns a
+  <code>ValidationReport</code> with <code>violations</code>,
+  <code>banned_phrase_hits</code>, <code>rejected_actions</code>, and
+  <code>is_clean</code>/<code>should_retry</code> properties. Mutates
+  <code>decision.suggested_actions</code> in place — pruned list is the clean
+  output.
+</p>
+<p>
+  <code>build_retry_feedback(report)</code> constructs the feedback text the
+  retry prompt appends, quoting specific violations. Added 2026-04-24
+  (<a href="decisions-log.html#d2">D2</a> +
+  <a href="decisions-log.html#d7">D7</a>).
+</p>
+
+<h3 id="mod-actions">4.7 <code>app/action_templates.py</code></h3>
+<p>
+  Loads <code>app/suggested_actions.yaml</code> once, regex-matches alertname
+  to a rule, branches by <code>deployment_type</code>, fills placeholders.
+  <code>fill_template()</code> is the single entry point. Returns
+  <code>[]</code> on no match — callers treat empty as "no template help,"
+  not "template explicitly empty."
+</p>
+
+<h3 id="mod-agency">4.8 <code>app/bounded_agency.py</code></h3>
+<p>
+  Whitelisted tools with per-tool Pydantic arg schemas:
+</p>
+<ul>
+  <li><code>PrometheusQueryArgs(expr)</code> — single instant query</li>
+  <li><code>LokiQueryRangeArgs(query, lookback_seconds=30–3600)</code></li>
+  <li><code>JaegerGetTracesArgs(service, operation?, min_duration_ms, limit=1–20)</code></li>
+  <li><code>RCAHistorySimilarArgs(alert_name, affected_service?, days=1–30, limit=1–10)</code></li>
+</ul>
+<p>
+  <code>TOOLS_DESCRIPTION</code> is the user-facing catalog appended to the
+  agency retry prompt. <code>parse_tool_request()</code> is tolerant — returns
+  <code>None</code> on any parse or validation error so the pipeline falls
+  back gracefully.
+</p>
+
+<h3 id="mod-dedup">4.9 <code>app/dedup.py</code></h3>
+<p>
+  <code>DedupManager</code> — fingerprint-keyed, 600 s sliding window.
+  <code>check(fingerprint, status)</code> returns
+  <code>(is_dup, first_decision_id)</code>. <code>record_first_decision()</code>
+  is called by the pipeline post-save so second fires get a real link.
+  <code>_cleanup()</code> drops expired entries on every check.
+</p>
+
+<h3 id="mod-drain">4.10 <code>app/drain_analyzer.py</code></h3>
+<p>
+  Wraps <code>drain3.TemplateMiner</code>. Key methods:
+</p>
+<ul>
+  <li><code>analyze(log_line)</code> — single-line template matching. Increments <code>_total_anomalies</code> when a new cluster is created OR when <code>match_count &lt; settings.drain3_anomaly_threshold</code>.</li>
+  <li><code>annotate_lines(lines)</code> — batch-mode <code>[ANOMALY]</code>/<code>[KNOWN]</code> prefix for the LLM prompt.</li>
+  <li><code>seed_from_loki()</code> — startup ingestion of recent Loki lines.</li>
+  <li><code>start_background_ingestion()</code> — async task that polls Loki every <code>settings.drain3_poll_interval</code> s.</li>
+  <li><code>_ingest_batch_sync(lines)</code> — CPU-bound work offloaded via <code>asyncio.to_thread</code> to avoid blocking the event loop (was the 2026-04-22 <code>/drain3/stats</code>-hangs bug).</li>
+  <li><code>maybe_fire_alert(batch_total, anomalous)</code> — P1.7 self-bridge. Posts to <code>settings.drain3_self_webhook_url</code> when rate crosses threshold + cooldown elapsed.</li>
+  <li><code>save_snapshot_to_file()</code> + <code>upload_snapshot_to_s3()</code> — Drain3 state checkpointing.</li>
+</ul>
+<p>
+  Thread safety: every read/write of <code>self._miner</code>,
+  <code>_total_lines</code>, <code>_total_anomalies</code> goes through
+  <code>self._lock</code> (<code>threading.Lock</code>, not async) because
+  the offloaded work runs in the thread pool.
+</p>
+
+<h3 id="mod-backfill">4.11 <code>app/startup_backfill.py</code></h3>
+<p>
+  <code>run_startup_backfill(last_seen_iso)</code> — queries Grafana's
+  <code>/api/annotations</code> for firings during the downtime window, dedupes
+  by <code>(alertname, service)</code>, filters synthetic names
+  (<code>HourlyDemoTest_*</code>, <code>Verify*</code>, <code>LaptopSmoke_*</code>),
+  POSTs each as a webhook to <code>http://localhost:8090/webhook/grafana</code>.
+</p>
+<p>
+  Disabled when <code>settings.grafana_api_password == ""</code> (safe-by-default).
+  Gates: <code>startup_backfill_threshold_minutes</code> (only run if gap
+  exceeds it), <code>startup_backfill_max_gap_hours</code> (cap replay depth).
+</p>
+
+<h3 id="mod-rca">4.12 <code>app/rca_store.py</code></h3>
+<p>
+  <code>RCAStore</code> — aiosqlite wrapper. Key methods:
+</p>
+<ul>
+  <li><code>init_db()</code> — CREATE TABLE + additive column migration (<code>PRAGMA table_info</code> + <code>ALTER TABLE ADD COLUMN</code> per missing column). Idempotent.</li>
+  <li><code>save_decision(record)</code> — insert + commit. Classifier runs if <code>rca_quality</code> is None.</li>
+  <li><code>get_decisions(limit, alert_name)</code> — backs the <code>/decisions</code> + dashboard endpoints.</li>
+  <li><code>get_recent_decision_for_alert()</code> — Layer-2 suppression input.</li>
+  <li><code>get_alert_frequency(days=7)</code> — N-fire count for a rule.</li>
+  <li><code>get_recent_data_starved_rcas()</code> — examples to quote back in anti-hedge retry.</li>
+  <li><code>get_correlated_alerts(fingerprint, at, window_minutes=5)</code> — neighbors for P1.4.</li>
+</ul>
+<p>
+  <code>_classify_rca_quality(rca, reason, actions, evidence)</code> returns
+  <code>needs_review</code> when both <code>actions</code> and
+  <code>evidence</code> are empty, else <code>data_starved</code> on banned
+  phrases, else <code>actionable</code>.
+</p>
+
+<h3 id="mod-notifier">4.13 <code>app/notifier.py</code></h3>
+<p>
+  <code>EmailNotifier</code>. SMTP via <code>aiosmtplib</code> with STARTTLS.
+  Multiple <code>_</code>-prefixed helpers compose the HTML: <code>_observed_value_block</code>, <code>_top_traces_rows</code>, <code>_correlated_alerts_block</code>, <code>_deep_links</code>. Subject format:
+  <code>"[ALERT] {severity}: {alertname} — {service}"</code>.
+</p>
+
+<h3 id="mod-models">4.14 <code>app/models.py</code></h3>
+<p>
+  Pydantic models used as the type contract between layers.
+</p>
+<table class="kv-table"><tbody>
+  <tr><td><code>GrafanaAlert</code> :11</td><td>One alert from a webhook. Properties <code>alertname</code>, <code>instance</code>, <code>severity</code>, <code>service</code>.</td></tr>
+  <tr><td><code>GrafanaWebhook</code> :42</td><td>The webhook envelope.</td></tr>
+  <tr><td><code>Drain3Webhook</code> :54</td><td>Drain3 self-bridge payload.</td></tr>
+  <tr><td><code>Decision</code> :64</td><td>Enum: <code>ESCALATE</code>/<code>DISMISS</code>/<code>INCONCLUSIVE</code>.</td></tr>
+  <tr><td><code>LLMDecision</code> :70</td><td>The LLM's structured output. Coerces non-str list items to strings via validator (for small models that return dict items instead of strings).</td></tr>
+  <tr><td><code>GatheredContext</code> :107</td><td>Output of ContextGatherer.</td></tr>
+  <tr><td><code>RCARecord</code> :128</td><td>DB row. <code>suggested_actions</code> and <code>evidence</code> are JSON strings at persist time.</td></tr>
+</tbody></table>
+
+<h3 id="mod-config">4.15 <code>app/config.py</code></h3>
+<p>
+  Single <code>Settings(BaseSettings)</code> class. Every env var comes in
+  through it — no direct <code>os.getenv</code> elsewhere in the codebase.
+  Full config reference in <a href="#config">§6</a> below.
+</p>
+
+<h3 id="mod-cb">4.16 <code>app/circuit_breaker.py</code></h3>
+<p>
+  Simple 3-state (CLOSED/OPEN/HALF_OPEN) breaker. Trips after
+  <code>settings.circuit_breaker_failure_threshold</code> consecutive
+  failures; cooldown <code>settings.circuit_breaker_cooldown_seconds</code>.
+  Used inside <code>LLMClient._call_ollama_with_resilience</code>.
+</p>
+
+<h3 id="mod-metrics">4.17 <code>app/metrics.py</code></h3>
+<p>
+  Prometheus client wrappers. Every exported metric is named and has a
+  clear purpose (shown in <a href="#obs">§8</a>).
+</p>
+
+<!-- ============================================================== -->
+<h2 id="data">5. Data model</h2>
+
+<h3>5.1 In-flight vs persisted</h3>
+<p>
+  Three lifecycle "shapes" to keep straight:
+</p>
+<ol>
+  <li><strong>Wire shape</strong> — <code>GrafanaWebhook</code> /
+      <code>Drain3Webhook</code> coming in over HTTP.</li>
+  <li><strong>Processing shape</strong> — <code>GrafanaAlert</code> (from
+      webhook), <code>GatheredContext</code> (from MCPs),
+      <code>MetricFacts</code> (from interpreter), <code>LLMDecision</code>
+      (from LLM), <code>correlated: list[dict]</code> (from store).</li>
+  <li><strong>Persisted shape</strong> — <code>RCARecord</code> in the
+      <code>rca_history</code> SQLite table. Lists become JSON strings here.</li>
+</ol>
+
+<h3>5.2 <code>rca_history</code> schema</h3>
+<p>
+  Current columns (after additive migrations):
+</p>
+<table>
+  <thead><tr><th>Column</th><th>Type</th><th>Purpose</th></tr></thead>
+  <tbody>
+    <tr><td><code>id</code></td><td>TEXT PK</td><td>UUID per decision</td></tr>
+    <tr><td><code>timestamp</code></td><td>TEXT</td><td>ISO UTC (no tz suffix)</td></tr>
+    <tr><td><code>alert_source</code></td><td>TEXT</td><td><code>grafana</code> / <code>drain3</code></td></tr>
+    <tr><td><code>alert_name</code></td><td>TEXT</td><td>e.g. MediumCpuUsage</td></tr>
+    <tr><td><code>alert_fingerprint</code></td><td>TEXT</td><td>Grafana's stable hash</td></tr>
+    <tr><td><code>affected_service</code></td><td>TEXT</td><td>from labels.service</td></tr>
+    <tr><td><code>severity</code></td><td>TEXT</td><td>critical/warning/info</td></tr>
+    <tr><td><code>triage_decision</code></td><td>TEXT</td><td>investigate / triage_suppressed / suppressed_duplicate</td></tr>
+    <tr><td><code>llm_verdict</code></td><td>TEXT</td><td>escalate/dismiss lowercase</td></tr>
+    <tr><td><code>llm_confidence</code></td><td>TEXT</td><td>Formatted "0.70" — as of 2026-04-24 actually persisted (was None)</td></tr>
+    <tr><td><code>rca_report</code></td><td>TEXT</td><td>The narrative</td></tr>
+    <tr><td><code>llm_reasoning</code></td><td>TEXT</td><td>One-liner reason</td></tr>
+    <tr><td><code>action_taken</code></td><td>TEXT</td><td>emailed / suppressed / emailed_raw / see_previous_rca:{id}</td></tr>
+    <tr><td><code>investigation_duration_ms</code></td><td>INTEGER</td><td>Pipeline latency</td></tr>
+    <tr><td><code>rca_quality</code></td><td>TEXT</td><td>actionable / data_starved / needs_review</td></tr>
+    <tr><td><code>alert_instance</code></td><td>TEXT</td><td>labels.instance</td></tr>
+    <tr><td><code>alert_component</code></td><td>TEXT</td><td>labels.component</td></tr>
+    <tr><td><code>alert_signal</code></td><td>TEXT</td><td>labels.signal</td></tr>
+    <tr><td><code>observed_value</code></td><td>TEXT</td><td>Rendered from values dict</td></tr>
+    <tr><td><code>promql_expr</code></td><td>TEXT</td><td>From annotations.expr</td></tr>
+    <tr><td><code>suggested_actions</code></td><td>TEXT</td><td>JSON list</td></tr>
+    <tr><td><code>evidence</code></td><td>TEXT</td><td>JSON list</td></tr>
+    <tr><td><code>anomaly_summary</code></td><td>TEXT</td><td>Drain3 one-liner</td></tr>
+    <tr><td><code>correlated_alerts</code></td><td>TEXT</td><td>JSON list of {timestamp,alert_name,service,verdict}</td></tr>
+  </tbody>
+</table>
+
+<!-- ============================================================== -->
+<h2 id="config">6. Configuration surface</h2>
+
+<p>
+  Every tunable in <code>app/config.py</code>. Env var name = uppercase key
+  (pydantic-settings default). Change without rebuilding the image —
+  <code>docker compose up -d triage-service</code> picks up env.
+</p>
+
+<h4>Ollama + LLM</h4>
+<table class="kv-table"><tbody>
+  <tr><td>OLLAMA_URL</td><td>http://ollama:11434 — via compose network</td></tr>
+  <tr><td>OLLAMA_MODEL</td><td>qwen2.5:7b (production), llama3.2:3b (CPU fallback)</td></tr>
+  <tr><td>OLLAMA_REQUEST_TIMEOUT</td><td>30 s for single chat call — short because circuit breaker</td></tr>
+  <tr><td>OLLAMA_TIMEOUT</td><td>300 s full pipeline budget alias</td></tr>
+</tbody></table>
+
+<h4>Resilience</h4>
+<table class="kv-table"><tbody>
+  <tr><td>CIRCUIT_BREAKER_FAILURE_THRESHOLD</td><td>5 (default)</td></tr>
+  <tr><td>CIRCUIT_BREAKER_COOLDOWN_SECONDS</td><td>60 (default)</td></tr>
+  <tr><td>PIPELINE_TIMEOUT</td><td>300 — whole pipeline gate via <code>asyncio.wait_for</code></td></tr>
+</tbody></table>
+
+<h4>MCP bridges</h4>
+<table class="kv-table"><tbody>
+  <tr><td>PROMETHEUS_MCP_URL</td><td>http://prometheus-mcp:8091</td></tr>
+  <tr><td>LOKI_MCP_URL</td><td>http://loki-mcp:8092</td></tr>
+  <tr><td>JAEGER_MCP_URL</td><td>http://jaeger-mcp:8093</td></tr>
+  <tr><td>DRAIN3_MCP_URL</td><td>http://drain3-mcp:8094</td></tr>
+  <tr><td>RCA_HISTORY_MCP_URL</td><td>http://rca-history-mcp:8095</td></tr>
+  <tr><td>LOKI_API_URL</td><td>Direct Loki — ONLY for drain3 bg ingestion (bulk)</td></tr>
+</tbody></table>
+
+<h4>Context sizing (evidence bundle)</h4>
+<table class="kv-table"><tbody>
+  <tr><td>PROMETHEUS_RANGE_MINUTES</td><td>30 (bumped from 15 on 2026-04-23)</td></tr>
+  <tr><td>LOKI_LOG_LIMIT</td><td>500 (bumped from 50)</td></tr>
+  <tr><td>JAEGER_TRACE_LIMIT</td><td>100 (bumped from 20)</td></tr>
+  <tr><td>CONTEXT_TIMEOUT</td><td>8 s fan-out budget</td></tr>
+</tbody></table>
+
+<h4>Dedup + suppression</h4>
+<table class="kv-table"><tbody>
+  <tr><td>DEDUP_WINDOW_SECONDS</td><td>600 (was 300)</td></tr>
+  <tr><td>TRIAGE_SUPPRESSION_ENABLED</td><td>true — Layer-2 dismiss-reuse</td></tr>
+  <tr><td>TRIAGE_HISTORY_LOOKBACK_MINUTES</td><td>15</td></tr>
+</tbody></table>
+
+<h4>Retry + agency</h4>
+<table class="kv-table"><tbody>
+  <tr><td>TRIAGE_DATA_STARVED_RETRY_ENABLED</td><td>true</td></tr>
+  <tr><td>TRIAGE_BOUNDED_AGENCY_ENABLED</td><td>true (P1.5)</td></tr>
+</tbody></table>
+
+<h4>Drain3</h4>
+<table class="kv-table"><tbody>
+  <tr><td>DRAIN3_STATE_DIR</td><td>/var/lib/triage-service/drain3_state — persisted</td></tr>
+  <tr><td>DRAIN3_POLL_INTERVAL</td><td>30 s</td></tr>
+  <tr><td>DRAIN3_ANOMALY_THRESHOLD</td><td>5 — lines below this match-count count as anomalous</td></tr>
+  <tr><td>DRAIN3_ALERT_ENABLED</td><td>true (P1.7)</td></tr>
+  <tr><td>DRAIN3_ALERT_RATE_THRESHOLD</td><td>0.10</td></tr>
+  <tr><td>DRAIN3_ALERT_MIN_LINES</td><td>100</td></tr>
+  <tr><td>DRAIN3_ALERT_COOLDOWN_SECONDS</td><td>600</td></tr>
+  <tr><td>DRAIN3_SELF_WEBHOOK_URL</td><td>http://localhost:8090/webhook/drain3</td></tr>
+</tbody></table>
+
+<h4>Startup backfill (P0 bonus)</h4>
+<table class="kv-table"><tbody>
+  <tr><td>GRAFANA_API_USER / PASSWORD</td><td>Disabled until password is set — safe-by-default</td></tr>
+  <tr><td>STARTUP_BACKFILL_THRESHOLD_MINUTES</td><td>15</td></tr>
+  <tr><td>STARTUP_BACKFILL_MAX_GAP_HOURS</td><td>24</td></tr>
+</tbody></table>
+
+<h4>Deep-link + timezone + deployment map</h4>
+<table class="kv-table"><tbody>
+  <tr><td>GRAFANA_URL</td><td>http://52.202.21.192:3000 default; should be tailnet MagicDNS</td></tr>
+  <tr><td>SERVICE_DEPLOYMENT_TYPE</td><td>dict (P1.9). Spring-boot/kong/otel-collector=k8s; grafana/prometheus/loki/jaeger/monitoring=docker-vm; k3s-node/node-exporter=systemd.</td></tr>
+  <tr><td>INSTANCE_HOSTS</td><td>IP → friendly hostname map</td></tr>
+  <tr><td>INSTANCE_PORTS</td><td>port → role map for UI enrichment</td></tr>
+</tbody></table>
+
+<!-- ============================================================== -->
+<h2 id="deploy">7. Deployment</h2>
+
+<p>
+  Production mode = Docker container on adolin-wsl (laptop WSL2), deployed via
+  <code>gpu-migration-staging/compose/docker-compose.yml</code>. Containers:
+</p>
+<ul>
+  <li><code>ai-ollama</code> — GPU inference, model <code>qwen2.5:7b</code></li>
+  <li><code>ai-ollama-init</code> — one-shot sidecar that pulls the model</li>
+  <li><code>ai-triage-service</code> — FastAPI + pipeline (THIS repo)</li>
+  <li><code>ai-mcp-prometheus/loki/jaeger/drain3/rca-history</code> — 5 HTTP bridges</li>
+  <li><code>watchtower</code> — polls GHCR every 60 s, auto-rolls on new image</li>
+</ul>
+<p>
+  Images: triage builds via
+  <code>.github/workflows/build-push.yml</code> (monitoring-triage-service
+  repo) on every merge to main, pushed to
+  <code>ghcr.io/linalaaraich/monitoring-triage-service:main</code>. MCPs
+  built similarly from monitoring-mcp-servers with a matrix workflow.
+</p>
+<p>
+  Volume: <code>ai-stack_triage_data</code> holds
+  <code>/data/rca_history.db</code> and
+  <code>/data/drain3_state/drain3_state.bin</code>. Both persist across
+  container restarts.
+</p>
+<p>
+  Tailscale: triage on <code>adolin-wsl:8090</code>, Grafana on
+  <code>observability-rca-monitoring:3000</code>. Grafana webhook URL in
+  <code>monitoring-project/inventory/group_vars/monitoring.yml</code>:
+  <code>triage_service_webhook_url: "http://100.117.118.70:8090/webhook/grafana"</code>.
+</p>
+
+<!-- ============================================================== -->
+<h2 id="obs">8. Observability</h2>
+
+<p>
+  Every pipeline hit exports metrics. Endpoint:
+  <code>GET /metrics</code>.
+</p>
+
+<table>
+  <thead><tr><th>Metric</th><th>Type</th><th>Use</th></tr></thead>
+  <tbody>
+    <tr><td><code>triage_webhooks_received_total{source}</code></td><td>Counter</td><td>Grafana vs drain3 webhook volume</td></tr>
+    <tr><td><code>triage_alerts_processed_total{decision}</code></td><td>Counter</td><td>escalate/dismiss/suppressed counts</td></tr>
+    <tr><td><code>triage_alerts_deduplicated_total</code></td><td>Counter</td><td>Dedup savings</td></tr>
+    <tr><td><code>triage_pipeline_duration_seconds</code></td><td>Histogram</td><td>End-to-end latency p50/p95/p99</td></tr>
+    <tr><td><code>triage_llm_duration_seconds</code></td><td>Histogram</td><td>Ollama-only latency</td></tr>
+    <tr><td><code>triage_llm_token_count{type}</code></td><td>Histogram</td><td>Prompt + completion token counts (feeds P2 context-size dashboard)</td></tr>
+    <tr><td><code>triage_mcp_requests_total{server,status}</code></td><td>Counter</td><td>MCP reliability</td></tr>
+    <tr><td><code>triage_mcp_duration_seconds{server}</code></td><td>Histogram</td><td>Per-pillar latency</td></tr>
+    <tr><td><code>triage_ollama_requests_total{status}</code></td><td>Counter</td><td>success / timeout / error / circuit_open</td></tr>
+    <tr><td><code>triage_fallback_total{reason}</code></td><td>Counter</td><td>When we return the safe fallback decision</td></tr>
+    <tr><td><code>triage_queue_depth</code></td><td>Gauge</td><td>In-flight pipeline count (saturation signal)</td></tr>
+    <tr><td><code>triage_circuit_breaker_state</code></td><td>Gauge</td><td>0=closed, 1=half-open, 2=open</td></tr>
+    <tr><td><code>triage_emails_sent_total{type}</code></td><td>Counter</td><td>escalation / timeout / escalation_failed</td></tr>
+    <tr><td><code>triage_pipeline_timeouts_total</code></td><td>Counter</td><td>Pipeline hits <code>pipeline_timeout</code></td></tr>
+    <tr><td><code>triage_alerts_suppressed_total{reason}</code></td><td>Counter</td><td>Layer-2 suppression reasons</td></tr>
+  </tbody>
+</table>
+
+<p>
+  Prometheus on the monitoring VM scrapes <code>:8090/metrics</code> on the
+  laptop via Tailscale. A Grafana dashboard for these is tracked as P2
+  "Evaluation dashboard" in the <a href="decisions-log.html">Decisions Log</a>.
+</p>
+
+<!-- ============================================================== -->
+<h2 id="gotchas">9. Gotchas (hard-earned)</h2>
+
+<div class="callout warn">
+  <div class="callout-label">Ollama defaults are WRONG for triage</div>
+  <p>
+    <code>temperature=0.8</code> default means non-deterministic output.
+    Fixed in <code>_call_ollama()</code> by passing explicit
+    <code>"options": {"temperature": 0, "num_ctx": 16384}</code>.
+  </p>
+</div>
+
+<div class="callout warn">
+  <div class="callout-label">Structured outputs ≠ JSON mode</div>
+  <p>
+    <code>format="json"</code> guarantees valid JSON but NOT schema compliance.
+    Use <code>format=&lt;schema dict&gt;</code> on Ollama ≥0.5 for
+    decode-time enforcement. The <code>_parse_response</code> retry path
+    becomes dead code once this is on.
+  </p>
+</div>
+
+<div class="callout warn">
+  <div class="callout-label">Grafana refId order ≠ value order</div>
+  <p>
+    A 3-step rule emits A=query, B=reduce, C=threshold. <code>C</code> is a
+    boolean (0 or 1), NOT the observed value. Always use
+    <code>pick_primary_value()</code> which skips the threshold step.
+  </p>
+</div>
+
+<div class="callout warn">
+  <div class="callout-label">Drain3 is sync; offload or the event loop stalls</div>
+  <p>
+    <code>TemplateMiner</code> is a sync library. Calling it from the event
+    loop with large batches blocks everything (2026-04-22 bug where
+    <code>/drain3/stats</code> hung for 15 s). Offload via
+    <code>asyncio.to_thread()</code>; guard shared state with
+    <code>threading.Lock</code>.
+  </p>
+</div>
+
+<div class="callout warn">
+  <div class="callout-label">aiosqlite single-connection serialization</div>
+  <p>
+    If the pipeline is writing + reading concurrently, long-running writes
+    can block <code>/decisions</code> reads on the same connection. Saw this
+    during 2026-04-24 morning when 5 concurrent LLM pipelines all tried to
+    save. Consider WAL mode + per-task connection for Sprint 3.
+  </p>
+</div>
+
+<div class="callout note">
+  <div class="callout-label">Deployment-type map is mandatory</div>
+  <p>
+    If a service isn't in <code>settings.service_deployment_type</code>, it
+    resolves to <code>"unknown"</code> and the template + validator skip
+    architecture-specific logic. Add every new service you introduce.
+  </p>
+</div>
+
+<div class="callout note">
+  <div class="callout-label">Watchtower doesn't re-read compose env</div>
+  <p>
+    Watchtower just restarts containers with a new image. It inherits the
+    env already attached to the running container. Changing env in
+    <code>docker-compose.yml</code> requires <code>docker compose up -d</code> —
+    Watchtower alone won't pick it up.
+  </p>
+</div>
+
+<!-- ============================================================== -->
+<h2 id="future">10. Future perspectives</h2>
+
+<h3>Near-term (Sprint 3)</h3>
+<ul>
+  <li><strong>P2 evaluation dashboard</strong> — surfaces rca_quality distribution, confidence histogram, template-fill-rate, banned-phrase-hit rate, arch-mismatch-reject rate, dedup-ratio. The feedback loop that turns quality from vibes into a number.</li>
+  <li><strong>Golden-test set in CI</strong> — 20 synthetic webhooks + expected-RCA-contains assertions running in the triage-service build workflow. Makes regressions loud before they ship.</li>
+  <li><strong>Widening dataset</strong> — add a second k3s workload, re-run the golden set. Validates that the pipeline generalizes beyond the original 18 rules.</li>
+  <li><strong>Traces in drain3</strong> — extend drain3 from logs to
+      <em>(operation, span.kind, duration_bucket)</em> tuples. A latency
+      anomaly at a specific span boundary is invisible to log templating;
+      this closes that gap.</li>
+  <li><strong>Qwen Coder benchmark</strong> — swap the model for
+      <code>qwen2.5-coder:7b</code> on the golden set, compare accuracy +
+      latency. Coder variants are stronger at structured output.</li>
+</ul>
+
+<h3>Medium-term</h3>
+<ul>
+  <li><strong>Cloud LLM fallback</strong> for low-confidence cases — Claude
+      Haiku via Anthropic API, or qwen2.5:32b via a hosted endpoint. Only
+      worth pursuing after the evaluation dashboard shows the 7B ceiling is
+      the bottleneck (i.e. <code>actionable</code> rate doesn't improve with
+      prompt changes).</li>
+  <li><strong>Vector retrieval</strong> of past RCAs for dynamic few-shot.
+      Complements the 3 hand-picked examples in
+      <code>SYSTEM_PROMPT</code> — would fetch 2–3 similar past RCAs per
+      alert based on embedding similarity.</li>
+  <li><strong>Webhook auth</strong> — shared-secret header check on
+      <code>/webhook/grafana</code>. Harden before any external demo.</li>
+  <li><strong>S3 RCA history backup</strong> — nightly
+      <code>aws s3 cp</code> from the laptop so the SQLite isn't the only
+      copy.</li>
+</ul>
+
+<h3>Strategic</h3>
+<ul>
+  <li><strong>Treat the LLM as replaceable.</strong> The deterministic layers
+      (<code>metric_interpreter</code>, <code>response_validator</code>,
+      <code>action_templates</code>, <code>bounded_agency</code>) are the
+      durable value. Swap qwen2.5:7b for Llama 4, Claude, or anything else
+      with one env var change.</li>
+  <li><strong>Measure what the LLM uniquely contributes.</strong> If
+      <code>suggested_actions_source="template"</code> rate hits 90%+, the
+      LLM isn't earning its GPU time. Ramp the template fraction up
+      consciously; turn prompts into richer context → narrative.</li>
+  <li><strong>Graduate from single-instance to multi-workload.</strong>
+      Everything in this repo is written for the 7-service CIRES demo. Widen
+      to N-service requires rethinking the suggested_actions template
+      match order + the service_deployment_type map → likely a separate
+      config source of truth.</li>
+</ul>
+
+<p style="margin-top:40px; padding-top:20px; border-top:1px solid var(--border); color:var(--muted); font-size:13px;">
+  This page is the obsessive-detail companion to
+  <a href="architecture.html">architecture.html</a> (block diagrams) and
+  <a href="decisions-log.html">decisions-log.html</a> (the why behind each
+  choice). Last updated 2026-04-24 after P0.5 + P1 shipping. When the code
+  changes substantively, update the relevant §4 module entry + §6 config
+  table.
+</p>
+
+</div>
+</main>
+
+</body>
+</html>
