@@ -55,6 +55,11 @@
 </head>
 <body>
 
+<div style="background:rgba(240,160,80,.08); border-bottom:2px solid #f0a050; padding:14px 32px; font-size:13px; line-height:1.6;">
+  <strong style="color:#f0a050; text-transform:uppercase; font-size:11px; letter-spacing:2px;">⚠ Partial drift (2026-04-24)</strong> —
+  Epic 3 (k3s GPU with g4dn.xlarge + NVIDIA device plugin) was NOT deployed as described here. GPU workloads landed on Lina's laptop (GTX 1060 + WSL2) instead, because AWS G-family quota remained at 0. Epic 4 hardening (circuit breaker, response_validator, bounded_agency) IS implemented but on the laptop, not k3s. See <a href="system-explained.html" style="color:#4ea8de">System Explained</a> for actual runtime topology and <a href="alerts-audit.html" style="color:#4ea8de">Alerts Audit</a> for what shipped.
+</div>
+
 <div class="topbar">
   <div class="topbar-left">
     <a href="index.html" class="back-link">&larr; Back to Index</a>

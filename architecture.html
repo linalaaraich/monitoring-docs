@@ -273,7 +273,7 @@
     <li><strong>Tailscale is the control + data plane between cloud and laptop.</strong> Monitoring VM (EC2) → triage webhook at <code>adolin-wsl</code> (laptop), triage → Loki at <code>observability-rca-monitoring</code> (EC2), controller → ansible to both. Every hop is over WireGuard, keyed on MagicDNS short hostnames that survive EIP drift. Full setup in the <a href="tailscale-guide.html" style="color:#6bcf7f">Tailscale guide</a>.</li>
   </ul>
   <p style="margin:0;color:#8890a0;font-size:12.5px;">
-    <strong>Measured latencies:</strong> Prometheus/Loki/Jaeger MCPs 150–280 ms · Ollama inference 25 s warm / 68 s cold · 3-pillar context gather 500–900 ms · Grafana webhook → triage receipt ~60 s (alertmanager debounce).
+    <strong>Measured latencies:</strong> Prometheus/Loki/Jaeger MCPs 150–280 ms · Ollama inference 25 s warm / 68 s cold · 3-pillar context gather 500–900 ms · Grafana webhook → triage receipt ~60 s (Grafana unified-alerting <code>group_interval</code>; no Alertmanager in the stack).
   </p>
 </div>
 
@@ -283,13 +283,13 @@
     <thead><tr style="background:rgba(64,208,208,.06)"><th style="padding:8px 12px;text-align:left;color:var(--muted);font-size:11px;letter-spacing:1px;text-transform:uppercase">Node (MagicDNS)</th><th style="padding:8px 12px;text-align:left;color:var(--muted);font-size:11px;letter-spacing:1px;text-transform:uppercase">Where</th><th style="padding:8px 12px;text-align:left;color:var(--muted);font-size:11px;letter-spacing:1px;text-transform:uppercase">What</th><th style="padding:8px 12px;text-align:left;color:var(--muted);font-size:11px;letter-spacing:1px;text-transform:uppercase">Reached via</th></tr></thead>
     <tbody>
       <tr style="border-top:1px solid var(--border)"><td style="padding:8px 12px"><code>claude-controller</code></td><td style="padding:8px 12px;color:var(--muted)">cloud shell</td><td style="padding:8px 12px">ansible control, orchestration</td><td style="padding:8px 12px;color:var(--muted)">tailnet only</td></tr>
-      <tr style="border-top:1px solid var(--border)"><td style="padding:8px 12px"><code>observability-rca-monitoring</code></td><td style="padding:8px 12px;color:var(--muted)">EC2 (EIP 52.202.21.192)</td><td style="padding:8px 12px">Prometheus · Loki · Jaeger · Grafana · OTel · Alertmanager</td><td style="padding:8px 12px;color:var(--muted)">tailnet + public</td></tr>
+      <tr style="border-top:1px solid var(--border)"><td style="padding:8px 12px"><code>observability-rca-monitoring</code></td><td style="padding:8px 12px;color:var(--muted)">EC2 (EIP 52.202.21.192)</td><td style="padding:8px 12px">Prometheus · Loki · Jaeger · Grafana (unified alerting, no Alertmanager) · OTel</td><td style="padding:8px 12px;color:var(--muted)">tailnet + public</td></tr>
       <tr style="border-top:1px solid var(--border)"><td style="padding:8px 12px"><code>observability-rca-k3s</code></td><td style="padding:8px 12px;color:var(--muted)">EC2 (EIP 52.5.239.234)</td><td style="padding:8px 12px">k3s cluster: Spring Boot · MySQL · Kong</td><td style="padding:8px 12px;color:var(--muted)">tailnet + public (Kong NodePort :30080)</td></tr>
       <tr style="border-top:1px solid var(--border)"><td style="padding:8px 12px"><code>adolin-wsl</code></td><td style="padding:8px 12px;color:var(--muted)">Lina's laptop (WSL2)</td><td style="padding:8px 12px">Triage service · Ollama · 5 MCP servers · Watchtower (CD)</td><td style="padding:8px 12px;color:var(--muted)">tailnet only</td></tr>
     </tbody>
   </table>
   <p style="margin:10px 0 0;color:var(--muted);font-size:12px;line-height:1.6;">
-    <strong>Flow:</strong> Grafana Alertmanager → <code>http://100.117.118.70:8090/webhook/grafana</code> over tailnet → triage investigates (MCPs fan out to monitoring VM) → LLM verdict (local Ollama on laptop) → escalation email via SMTP (public). Webhook URL pinned in <code>inventory/group_vars/monitoring.yml:grafana_external_url</code>; swap to MagicDNS (<code>http://adolin-wsl:8090</code>) once Tailscale DNS is confirmed stable across nodes.
+    <strong>Flow:</strong> Grafana unified-alerting (single contact point <code>triage-webhook</code>, no Alertmanager — <code>gmail-smtp</code> removed 2026-04-24) → <code>http://100.117.118.70:8090/webhook/grafana</code> over tailnet → triage investigates (MCPs fan out to monitoring VM) → LLM verdict (local Ollama on laptop) → escalation email via SMTP (public). Webhook URL pinned in <code>inventory/group_vars/monitoring.yml:triage_service_webhook_url</code>.
   </p>
 </div>
 

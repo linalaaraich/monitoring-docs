@@ -76,6 +76,11 @@
 </head>
 <body>
 
+<div style="background:rgba(240,160,80,.08); border-bottom:2px solid #f0a050; padding:14px 32px; font-size:13px; line-height:1.6;">
+  <strong style="color:#f0a050; text-transform:uppercase; font-size:11px; letter-spacing:2px;">⚠ Partial drift (2026-04-24)</strong> —
+  This guide describes the <em>intended</em> Epic 3/4 architecture (k3s GPU). The <em>actual</em> runtime has AI on Lina's laptop (adolin-wsl) via docker-compose, and laptop CD is now automated by the new <code>roles/triage_laptop</code> ansible role (<code>monitoring-project@e408589</code>). The k3s <code>ai</code> namespace was deleted 2026-04-24. For actual deployment see <a href="system-explained.html" style="color:#4ea8de">System Explained § 7</a> and the <code>playbooks/laptop.yml</code> one-liner.
+</div>
+
 <div class="topbar">
   <div class="topbar-left">
     <a href="index.html" class="back-link">&larr; Back to Index</a>
