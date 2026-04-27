@@ -541,6 +541,78 @@ Then: z-score each pod against the mean + stddev of its siblings.</code></pre>
   </div>
 </div>
 
+<!-- US-5.8 -->
+<div class="story" id="us-5-8">
+  <div class="story-header">
+    <div class="story-id">US-5.8</div>
+    <div class="story-title">Recurrence gate — two-tier hysteresis for known-flappy alerts</div>
+  </div>
+  <div class="story-meta-row">
+    <span class="meta-tag meta-prio-core">Core · structured noise suppression</span>
+    <span class="meta-tag meta-effort-med">Medium effort · ~4–6 hours</span>
+  </div>
+  <div class="story-section">
+    <h4>UEBA lesson</h4>
+    <p>Single events rarely matter; sequences do. UEBA platforms score the chain, not the steps. The corollary: an event that fires once can be ignored, but the same event firing repeatedly (in a window) is itself signal — even if no individual fire is concerning enough on its own.</p>
+  </div>
+  <div class="story-section">
+    <h4>Apply to observability</h4>
+    <p>Today the pipeline has two recurrence-aware features:</p>
+    <ul>
+      <li><strong>Fingerprint dedup</strong> (<a href="decisions-log.html#d9">D9</a>) — collapses identical fires inside a 10-minute window. Catches "same alert, refired immediately."</li>
+      <li><strong>Drain3 7-day recurrence</strong> (<a href="decisions-log.html#d8">D8</a>) — escalates a Drain3 anomaly when its template fired ≥3× in 7d.</li>
+    </ul>
+    <p>Both are great, but they leave a gap: a Grafana metric alert (e.g. <code>MediumCpuUsage</code>) that fires every 90 minutes — too slow for dedup, too noisy to page someone every time, but eventually meaningful if it keeps happening. Today every fire goes through the LLM and gets dismissed individually; on fire #5 the operator's mental model is "something IS going on" but the system is still treating each fire in isolation.</p>
+    <p>The recurrence gate adds a third layer: a windowed counter that gates the LLM call, then a post-LLM override that forces escalation when the LLM has dismissed the same alert too many times.</p>
+  </div>
+  <div class="story-section">
+    <h4>Concrete implementation</h4>
+    <p><strong>Two-tier behavior</strong> (configurable per-alert in the rule annotation):</p>
+    <ol>
+      <li><strong>Pre-LLM gate</strong> — first N fires (default 4) of the same fingerprint within a window (default 2h) are persisted as <code>triage_decision=recurrence_gated_pre_llm</code> with no LLM call, no email. Cheap rows that show in the dashboard but don't burn GPU or wake the on-call.</li>
+      <li><strong>Post-LLM override</strong> — when fire N+1 reaches the LLM and the LLM dismisses it, the gate counts that as one "LLM-seen dismissal." If past LLM-seen-dismissals on the same fingerprint within the window reach a threshold (default 2), the next fire's LLM dismissal is overridden to ESCALATE. The reasoning: <em>"the LLM said 'noise' twice and the alert kept firing — there's a real signal the model isn't picking up."</em></li>
+    </ol>
+    <p><strong>Per-rule opt-in</strong> via Grafana rule annotation:</p>
+    <pre><code>annotations:
+  recurrence_gate: "pre_llm=4,llm_dismiss=2,window=2h"</code></pre>
+    <p>Without that annotation, the gate is bypassed entirely. <strong>Critical-severity alerts must NEVER opt in</strong> — for <code>TargetDown</code>, <code>OOMKill</code>, <code>OTelCollectorDown</code>, the customer is already in pain on fire #1 and waiting four fires is malpractice. The gate is for warning- and info-tier rules with a known noise problem.</p>
+    <p><strong>Code shape:</strong></p>
+    <ul>
+      <li><code>monitoring-triage-service/app/recurrence_gate.py</code> — new module with two pure functions: <code>pre_llm_gate(alert, history)</code> and <code>post_llm_gate(decision, history)</code>. Both return either <code>None</code> (no gate triggered) or a <code>GateResult</code> with the new triage_decision and a reason string.</li>
+      <li><code>app/pipeline.py</code> — wire in two new gate calls: one right after dedup (pre-LLM), one right after the LLM call (post-LLM, only if the LLM verdict was DISMISS).</li>
+      <li><code>app/main.py</code> — add humanize entries for the two new <code>triage_decision</code> values: <code>recurrence_gated_pre_llm</code> → "Gated (count under threshold)", <code>recurrence_gated_post_llm_force_escalate</code> → "Escalated by gate (LLM dismissed too many)".</li>
+      <li><code>roles/grafana/templates/alertrules.yml.j2</code> — add the <code>recurrence_gate</code> annotation to 2–3 specific noisy rules (good candidates: <code>MediumCpuUsage</code>, <code>MediumMemoryUsage</code>; <strong>never</strong> to TargetDown, CriticalCpuUsage, or OOM-style rules).</li>
+      <li><code>monitoring-docs/dashboard-guide.html</code> — add the new <code>triage_decision</code> values to the codes glossary; add a 7th worked scenario "Recurrence-gated row" to the scenarios section.</li>
+      <li><code>monitoring-docs/decisions-log.html</code> — D19 entry documenting the philosophy + the "never on critical-severity" guardrail.</li>
+      <li><code>tests/test_recurrence_gate.py</code> — test the two gate functions against synthetic history fixtures (fire counts, window expiry, threshold crossing, critical-severity bypass).</li>
+    </ul>
+  </div>
+  <div class="story-section">
+    <h4>Acceptance criteria</h4>
+    <ul>
+      <li>The two new triage_decision values render correctly on the dashboard with humanized labels and tooltips.</li>
+      <li>An opted-in alert (e.g. MediumCpuUsage with the annotation) shows N pre-LLM-gated rows in the dashboard before the first LLM-evaluated row.</li>
+      <li>An alert without the annotation behaves unchanged (no regression to existing pipeline).</li>
+      <li>A critical-severity alert with the annotation logs a warning and the gate is bypassed (defense in depth — even if a misconfigured rule opts in, criticals never wait).</li>
+      <li>After 2 LLM dismissals of the same fingerprint within the window, the third fire's verdict is force-escalated and the email is sent with a clear "Escalated by gate" line in the body.</li>
+      <li>D19 in decisions-log explains the philosophy + composes the gate cleanly with existing dedup + Drain3 7d-recurrence layers.</li>
+    </ul>
+  </div>
+  <div class="story-section">
+    <h4>How it composes with existing recurrence layers</h4>
+    <table style="font-size:13px;">
+      <thead><tr><th>Layer</th><th>Window</th><th>Triggers on</th><th>Action</th></tr></thead>
+      <tbody>
+        <tr><td>Fingerprint dedup (<a href="decisions-log.html#d9">D9</a>)</td><td>10 min</td><td>identical fingerprint refired</td><td>persist as <code>triage_suppressed</code>, no LLM</td></tr>
+        <tr><td><strong>Recurrence pre-LLM gate (this story)</strong></td><td>~2h</td><td>opted-in alert, count &lt; threshold</td><td>persist as <code>recurrence_gated_pre_llm</code>, no LLM</td></tr>
+        <tr><td><strong>Recurrence post-LLM override (this story)</strong></td><td>~2h</td><td>LLM dismissed same alert ≥2× in window</td><td>force ESCALATE on next fire</td></tr>
+        <tr><td>Drain3 7d-recurrence (<a href="decisions-log.html#d8">D8</a>)</td><td>7 days</td><td>same Drain3 template ≥3 fires</td><td>LLM is told to escalate on pattern alone</td></tr>
+      </tbody>
+    </table>
+    <p>Different windows, different layers, different signals. Each catches what the others miss; no overlap.</p>
+  </div>
+</div>
+
 <!-- ============================================================== -->
 <h2 id="priority-order">Recommended delivery order</h2>
 
@@ -552,15 +624,24 @@ Then: z-score each pod against the mean + stddev of its siblings.</code></pre>
 
 <ol>
   <li>
-    <strong>US-5.4 (adaptive thresholds)</strong> — 2 hours, largest
-    immediate false-positive reduction, visible on the dashboard
-    tomorrow. Wins goodwill by demonstrating noise reduction.
+    <strong>✅ US-5.4 (adaptive thresholds) — shipped 2026-04-27.</strong>
+    See <a href="decisions-log.html#d18">D18</a>. 3 rules rewritten;
+    largest immediate false-positive reduction; visible in Grafana now.
+  </li>
+  <li>
+    <strong>US-5.8 (recurrence gate)</strong> — 4–6 hours, structured
+    noise suppression with safety guardrails. Slot here because it's
+    the natural follow-up to adaptive thresholds: where adaptive
+    thresholds reduce raw fire frequency, the recurrence gate decides
+    which fires actually deserve a human's attention. Pairs cleanly
+    with US-5.3 (the post-LLM override IS a feedback signal).
   </li>
   <li>
     <strong>US-5.3 (closed-loop feedback)</strong> — half-day, zero
     new infrastructure. Get <code>triage_precision</code> and
     <code>triage_recall</code> exported so every future change can be
-    measured.
+    measured. Couples well with US-5.8 — both rely on the same
+    "LLM-was-wrong" signal.
   </li>
   <li>
     <strong>US-5.2 (incident correlator)</strong> — 1–2 days, biggest
@@ -570,7 +651,7 @@ Then: z-score each pod against the mean + stddev of its siblings.</code></pre>
   <li>
     <strong>US-5.1 (per-service Drain3 + baselines)</strong> — 1 day,
     enables the "Xσ above baseline" framing in every RCA. Pairs
-    naturally with US-5.4.
+    naturally with US-5.4 (which already shipped).
   </li>
   <li>
     <em>Stretch: US-5.5, US-5.6, US-5.7</em> — deliver in order of
