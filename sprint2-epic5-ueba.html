@@ -139,6 +139,20 @@
 <div class="content">
 
 <!-- ============================================================== -->
+<div style="background:rgba(120,200,180,.08); border-left:3px solid rgba(120,200,180,.6); padding:14px 18px; margin:18px 0; border-radius:4px;">
+  <strong>2026-04-27 update — exemplar library shipped (D17).</strong> Every
+  US-5.x story below ultimately produces RCA text via the LLM. To raise the
+  quality floor across all of them, an
+  <a href="decisions-log.html#d17">exemplar library</a> was added that
+  pre-injects a canonical good-RCA shape (matched to this alert's archetype)
+  into every prompt. Eleven archetypes are catalogued — the per-story
+  acceptance criteria below assume this baseline is in place. The library is
+  separate from <code>rca_history.db</code> precisely so it doesn't pollute
+  US-5.3's closed-loop feedback or US-5.7's precision/recall metrics.
+  Source-of-truth: <code>monitoring-triage-service/app/exemplars/library.yaml</code>;
+  prose: <code>monitoring-triage-service/docs/happy-path-scenarios.md</code>.
+</div>
+
 <h2 id="overview">Why this Epic</h2>
 
 <p>
@@ -378,8 +392,12 @@
     <div class="story-title">Adaptive thresholds — time-of-day / day-of-week baselines instead of static</div>
   </div>
   <div class="story-meta-row">
-    <span class="meta-tag meta-prio-core">Core · trivial change, huge FP reduction</span>
-    <span class="meta-tag meta-effort-low">Low effort · ~2 hours</span>
+    <span class="meta-tag meta-prio-core" style="background:rgba(107,207,127,.15); color:var(--accent-green); border-color:rgba(107,207,127,.4);">✅ Shipped 2026-04-27 · see <a href="decisions-log.html#d18" style="color:var(--accent-green);">D18</a></span>
+    <span class="meta-tag meta-effort-low">Low effort · ~2 hours actual</span>
+  </div>
+  <div class="story-section" style="background:rgba(107,207,127,.06); border-left:3px solid var(--accent-green); padding:10px 14px; border-radius:0 6px 6px 0; margin-bottom:10px;">
+    <h4 style="color:var(--accent-green); margin-top:0;">What shipped</h4>
+    <p>3 rules rewritten in <code>roles/grafana/templates/alertrules.yml.j2</code>: <code>HighP95Latency</code>, <code>HighKongP95Latency</code>, <code>MediumCpuUsage</code>. Each is now a single PromQL expression: <code>(current) - (avg_over_time + 3·stddev_over_time over 1h offset 7d, with `or vector(static_floor)` fallback)</code>, threshold <code>gt 0</code>. All three gain an <code>adaptive_threshold: "true"</code> label so dashboards and the triage service can distinguish adaptive vs static rules. Applied via <code>ansible-playbook -i inventory/tailnet.yml playbooks/monitoring.yml --tags monitoring</code>; verified live in Grafana provisioning API. Full philosophy + tradeoff analysis in <a href="decisions-log.html#d18">D18</a>.</p>
   </div>
   <div class="story-section">
     <h4>UEBA lesson</h4>

@@ -145,6 +145,8 @@
     <li><a href="#d14">Downtime backfill from Grafana annotations</a></li>
     <li><a href="#d15">Bounded-agency retry (one MCP call, not a chain)</a></li>
     <li><a href="#d16"><strong>UEBA framing for Sprint 2 Epic 5</strong></a></li>
+    <li><a href="#d17">Exemplar library — pre-LLM injection of canonical good-RCA shapes</a></li>
+    <li><a href="#d18"><strong>Adaptive thresholds — Epic 5 US-5.4</strong></a></li>
   </ol>
 </div>
 
@@ -1205,6 +1207,283 @@
         page. Overall quality metric post-Epic-5: precision + recall tracked
         via US-5.3's new Prometheus gauges, baselined today and tracked
         every sprint after.
+      </p>
+    </div>
+  </div>
+</div>
+
+<h2 id="d17">D17 · Exemplar library — pre-LLM injection of canonical good-RCA shapes</h2>
+<div class="decision">
+  <div class="decision-meta">
+    <span class="tag tag-fixed">✅ Shipped 2026-04-27</span>
+    <span class="date">2026-04-27</span>
+  </div>
+  <h3 class="problem-title">The LLM should know what excellent looks like — but the empirical record (rca_history.db) is not the place to teach it.</h3>
+
+  <div class="section-block">
+    <span class="block-label">Problem</span>
+    <div class="block-body">
+      <p>
+        The triage LLM (qwen2.5:7b) produces highly variable RCA quality. The
+        existing few-shot examples in <code>SYSTEM_PROMPT</code> (3 generic ones,
+        shipped P0.5.3 on 2026-04-24) helped, but they cannot be tailored to
+        the specific archetype of a firing alert. After a session designing
+        eleven detailed "happy-path" scenarios for the triage service
+        (<code>monitoring-triage-service/docs/happy-path-scenarios.md</code>),
+        the question came up: how do we make the LLM <em>actually use these</em>
+        as a calibration target on every inference, rather than have them sit in
+        a doc that the LLM never reads?
+      </p>
+      <p>
+        The naive answer — "feed them into <code>rca_history.db</code> so the
+        LLM pulls them via the existing rca-history MCP" — is wrong. That table
+        is the empirical record: it drives the dashboard, the closed-loop
+        feedback (Epic 5 US-5.3), the precision/recall metrics (Epic 5 US-5.7),
+        and the pre-LLM similarity-suppression layer. Mixing synthetic
+        exemplars in would corrupt all four. You'd see fake rows on the
+        dashboard. The override-similarity check would learn from non-events.
+        "We had X OOMs this month" would become a lie.
+      </p>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <span class="block-label">Reasoning</span>
+    <div class="block-body">
+      <p>
+        Exemplars and history have <strong>different epistemic roles</strong>:
+        history says "this is what happened in this deployment", exemplars say
+        "this is what good RCA looks like for this archetype." Mixing them
+        contaminates both. The right shape is two separate stores with
+        complementary access patterns:
+      </p>
+      <ul>
+        <li><strong>Eager pre-injection</strong> — for every alert, the prompt
+        builder picks the best-matching exemplar (alertname regex + service +
+        deployment_type + signal + severity scoring) and injects it BEFORE the
+        LLM call as a <code>## Reference exemplar</code> section. The LLM sees
+        a quality target tailored to <em>this</em> archetype on attempt 1, with
+        no extra latency and no agent-loop ceremony.</li>
+        <li><strong>Lazy retrieval</strong> — for the rare case where the
+        injected exemplar doesn't fit, the bounded-agency layer
+        (<a href="#d15">D15</a>) exposes <code>rca_history.list_exemplars</code>
+        and <code>rca_history.get_exemplar</code> tools so the LLM can scan the
+        catalogue and request a different archetype. Implemented as direct
+        in-process calls (same pattern as <code>rca_history.similar</code>) — no
+        HTTP roundtrip.</li>
+      </ul>
+      <p>
+        The library is the <em>source of truth</em> in code:
+        <code>monitoring-triage-service/app/exemplars/library.yaml</code>. The
+        prose version
+        (<code>monitoring-triage-service/docs/happy-path-scenarios.md</code>)
+        is the human-facing reference and is linked from every rendered exemplar
+        as <code>_Source: docs/happy-path-scenarios.md#&lt;anchor&gt;_</code>.
+        The two stay in sync because every exemplar entry includes a
+        <code>doc_anchor</code> field.
+      </p>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <span class="block-label">Solution</span>
+    <div class="block-body">
+      <p>Shipped:</p>
+      <ul>
+        <li><code>app/exemplars/library.yaml</code> — eleven canonical archetypes:
+        OOM-loop, upstream-latency attribution, synthetic-blip dismiss, cascade
+        incidents (4-alert kill chain), Drain3 novelty post-deploy,
+        bounded-agency retry resolution, adaptive-threshold no-op, closed-loop
+        feedback override, CrashLoopBackOff from bad config, network/firewall
+        attribution, TLS pre-failure expiry. Each entry is structured: id,
+        archetype, match selectors, decision, RCA paragraph, evidence shape,
+        actions shape, lesson, doc anchor.</li>
+        <li><code>app/exemplars/__init__.py</code> — loader + matcher.
+        Score = 0.10 (regex base) + 0.40 (service) + 0.30 (deployment_type) +
+        0.20 (signal) + 0.10 (severity); highest wins, ties broken by library
+        order. Returns the <code>generic-sre-shape</code> default when no
+        archetype matches.</li>
+        <li><code>app/llm_client.py</code> — <code>SYSTEM_PROMPT</code> updated
+        to tell the LLM about the library, and <code>_build_prompt</code>
+        injects the matched exemplar before the pre-gathered context section.</li>
+        <li><code>app/bounded_agency.py</code> — two new whitelisted tools
+        (<code>rca_history.list_exemplars</code>,
+        <code>rca_history.get_exemplar</code>) for retry-time access.</li>
+        <li><code>tests/test_exemplars.py</code> + <code>tests/test_bounded_agency_exemplars.py</code>
+        — 21 unit tests covering matching, formatting, fallbacks, and the
+        bounded-agency tool surface.</li>
+      </ul>
+      <p>
+        Closed-loop-feedback-override is intentionally gated behind a sentinel
+        regex (<code>^__pipeline_explicit__$</code>) so it never auto-matches —
+        it depends on a runtime signal (a recent operator override on a similar
+        alert) that's not a property of the alert itself. The pipeline fetches
+        it explicitly by id when US-5.3 ships.
+      </p>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <span class="block-label">Evaluation</span>
+    <div class="block-body">
+      <p>
+        Three measurable outcomes:
+      </p>
+      <ul>
+        <li><strong>Quality target visible to the model on attempt 1.</strong>
+        Every prompt now contains a structurally-perfect RCA shape for this
+        alert's archetype. Should reduce the rate of <code>rca_quality=data_starved</code>
+        rows by giving the LLM a concrete shape to match instead of asking it
+        to invent one.</li>
+        <li><strong>Bounded-agency retry rate should drop.</strong> Today the
+        retry path fires when the first pass hedges. With a quality template
+        in the prompt up-front, the first pass should be confident more often.
+        The metric to watch:
+        <code>triage_bounded_agency_invocations_total</code>.</li>
+        <li><strong>Library can grow without breaking existing prompts.</strong>
+        Adding a new archetype is a single-file YAML edit + a corresponding
+        scenario in <code>happy-path-scenarios.md</code>. The matcher picks it
+        up automatically — no prompt-engineering touch needed.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<h2 id="d18">D18 · Adaptive thresholds — Epic 5 US-5.4</h2>
+<div class="decision">
+  <div class="decision-meta">
+    <span class="tag tag-fixed">✅ Shipped 2026-04-27</span>
+    <span class="date">2026-04-27</span>
+  </div>
+  <h3 class="problem-title">Static numeric thresholds (`p95 &gt; 1000ms`, `cpu &gt; 80%`) generate floods of false positives during off-hours and miss real anomalies during peak traffic. Real traffic isn't stationary; rules shouldn't pretend it is.</h3>
+
+  <div class="section-block">
+    <span class="block-label">Problem</span>
+    <div class="block-body">
+      <p>
+        Three rules in <code>roles/grafana/templates/alertrules.yml.j2</code>
+        — <code>HighP95Latency</code>, <code>HighKongP95Latency</code>,
+        <code>MediumCpuUsage</code> — used static thresholds (1000ms / 1000ms / 80%).
+        The audit on 2026-04-24 (<a href="alerts-audit.html">alerts-audit.html</a>)
+        showed these as the three flappiest rules in the dashboard, repeatedly
+        firing on noisy spikes (single-sample blips, traffic-volume swings) and
+        repeatedly being DISMISS'd by the LLM as "single-sample spike, p95 dropped
+        back to 340 ms within next scrape." The pattern is exactly what UEBA's
+        adaptive-threshold lesson (<a href="#d16">D16</a>) fixes: a 3am idle
+        baseline is fundamentally different from a 2pm peak, and any threshold
+        that ignores time-of-day is wrong half the day.
+      </p>
+      <p>
+        Static thresholds also mask real anomalies during high-traffic windows.
+        On Tuesday 2pm, baseline p95 might naturally sit at 800ms; a 1500ms
+        spike (almost 2× baseline) would fire — but a sustained 1100ms <em>regression</em>
+        (a deploy that made the service ~40% slower than yesterday) would NOT
+        fire because it's still under 1000ms. Static thresholds are tuned for
+        the worst hour of the week and miss everything subtle.
+      </p>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <span class="block-label">Reasoning</span>
+    <div class="block-body">
+      <p>
+        UEBA literature uses time-of-day, day-of-week, seasonal baselines.
+        The minimum viable version of this in Prometheus is the <em>same-hour-7-days-ago</em>
+        baseline — Tuesday 2pm compares to last Tuesday 2pm, not to a global
+        mean. PromQL has the necessary primitives:
+      </p>
+      <ul>
+        <li><code>avg_over_time(metric[1h:1m] offset 7d)</code> — average value
+        across a 1-hour window centered 7 days ago.</li>
+        <li><code>stddev_over_time(metric[1h:1m] offset 7d)</code> — standard
+        deviation of that same window. Captures normal variance.</li>
+        <li><code>+ 3 *</code> the stddev → adaptive ceiling. Anything
+        beyond 3σ above the same-hour baseline is statistically rare (&lt;0.3%
+        under normal variance).</li>
+      </ul>
+      <p>
+        Two design tradeoffs:
+      </p>
+      <ul>
+        <li><strong>Single-expression vs multi-step expression.</strong> Grafana's
+        rule schema supports multi-step expressions (refIds A through Z, with
+        math/threshold steps), but mixing those with PromQL subqueries adds
+        complexity at the rule-edit boundary. The chosen pattern keeps everything
+        in PromQL: <code>(current) - (baseline + 3σ or vector(static_floor))</code>,
+        threshold <code>gt 0</code>. Single-rule, single-query, easy to grep.</li>
+        <li><strong>Graceful fallback when 7d history is missing.</strong>
+        Fresh deploys don't have 7d of metric history; nor do environments after
+        a Prometheus restart that drops TSDB. The <code>or vector(N)</code> clause
+        falls back to the prior static threshold (1000ms / 80%) when
+        <code>avg_over_time(... offset 7d)</code> returns empty. So the rule
+        works on day 1, gradually becomes adaptive as history accumulates.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <span class="block-label">Solution</span>
+    <div class="block-body">
+      <p>Three rules rewritten with the same pattern:</p>
+      <pre><code># Pattern (illustrative — see alertrules.yml.j2 for the actual exprs):
+&lt;current_value&gt;
+-
+(
+  avg_over_time(&lt;current_value&gt;[1h:1m] offset 7d)
+  + 3 * stddev_over_time(&lt;current_value&gt;[1h:1m] offset 7d)
+  or vector(&lt;static_floor&gt;)
+)
+# Threshold: gt 0  (fires when current exceeds adaptive ceiling)</code></pre>
+      <p>Per-rule tuning:</p>
+      <ul>
+        <li><strong>HighP95Latency</strong> (spring-boot) — current p95 latency
+        in ms; baseline window 1h ± 7d ago; static fallback 1000ms.</li>
+        <li><strong>HighKongP95Latency</strong> (kong) — mirror of above on the
+        gateway-layer histogram; static fallback 1000ms.</li>
+        <li><strong>MediumCpuUsage</strong> (k3s-node) — per-instance CPU; static
+        fallback 80%. CPU is the most seasonal of the three: night-time idle
+        baselines (~5%) vs business-hours peaks (~50%) make the adaptive
+        threshold most valuable here.</li>
+      </ul>
+      <p>
+        Each rule gains a <code>adaptive_threshold: "true"</code> label so
+        downstream consumers (the triage service, the dashboard, future eval
+        tooling) can tell adaptive rules apart from static ones. The annotation
+        text was rewritten to describe the new behavior — operators reading the
+        Grafana UI see "above same-hour 7-day baseline by &gt;3σ" rather than
+        "above 1000ms."
+      </p>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <span class="block-label">Evaluation</span>
+    <div class="block-body">
+      <p>What we'll watch over the next 7-14 days:</p>
+      <ul>
+        <li><strong>False-positive reduction.</strong> The three rewritten rules
+        accounted for ~40% of all alerts in the 2026-04-24 audit. Expectation:
+        50%+ drop in fire frequency on the same workload, weighted toward
+        off-hours where the static thresholds were most miscalibrated.</li>
+        <li><strong>True-positive surface.</strong> Conversely, traffic-time
+        regressions (a deploy that's faster than 1000ms but slower than baseline+3σ)
+        will now fire when they didn't before. We'll see this as a slight uptick
+        in escalations during business hours, with concrete RCA pointing at recent
+        deploys (the deployment-history MCP, US-5.6, will eventually correlate
+        the cause automatically).</li>
+        <li><strong>Adaptive vs static fallback.</strong> The
+        <code>adaptive_threshold</code> label lets us split panels by which
+        regime fired the rule. Once we have 7+ days of history, the fallback
+        path should rarely fire — if it does, the baseline data is corrupted
+        (Prometheus restart, label change, etc.) and the operator should know.</li>
+      </ul>
+      <p>
+        Bigger-picture: this is the "no code change" cousin of the more involved
+        Epic 5 stories (US-5.1 per-service Drain3 baselines, US-5.3 closed-loop
+        feedback). Adaptive thresholds prove the UEBA framing in 2 hours of
+        PromQL work; the harder stories spend the rest of Epic 5 on multi-day
+        feature builds.
       </p>
     </div>
   </div>
