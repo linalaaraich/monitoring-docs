@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard Guide — CIRES Observability Platform</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --bg-soft: #13151e;
+    --card: #1a1d27;
+    --card-alt: #1e2230;
+    --border: #2a2d3a;
+    --border-hi: #3a3f52;
+    --text: #e4e6ee;
+    --text-soft: #c0c5d0;
+    --muted: #8890a0;
+    --accent-blue: #4ea8de;
+    --accent-green: #6bcf7f;
+    --accent-orange: #f0a050;
+    --accent-purple: #b07ee8;
+    --accent-red: #e06070;
+    --accent-cyan: #40d0d0;
+    --accent-yellow: #e0d060;
+    --accent-pink: #e88aa0;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { font-family:'Inter','Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); line-height:1.65; font-size:15px; -webkit-font-smoothing:antialiased; }
+  code, pre, .mono { font-family:'JetBrains Mono','Fira Code',ui-monospace,monospace; font-size:0.88em; }
+
+  .topnav { display:flex; align-items:center; gap:12px; padding:14px 40px; background:var(--bg-soft); border-bottom:1px solid var(--border); flex-wrap:wrap; }
+  .topnav span.nav-label { color:var(--muted); font-size:13px; font-weight:600; margin-right:4px; }
+  .navlink { display:inline-flex; align-items:center; gap:6px; padding:7px 14px; border-radius:8px; font-size:13px; font-weight:600; text-decoration:none; border:1px solid; transition:background .2s, transform .15s; }
+  .navlink:hover { transform:translateY(-1px); }
+  .navlink-home { color:var(--text); border-color:var(--border); background:var(--card); }
+  .navlink-arch { color:var(--accent-blue); border-color:rgba(78,168,222,.4); background:rgba(78,168,222,.08); }
+  .navlink-triage { color:var(--accent-purple); border-color:rgba(176,126,232,.4); background:rgba(176,126,232,.12); }
+  .navlink-active { color:var(--accent-pink); border-color:rgba(232,138,160,.4); background:rgba(232,138,160,.10); }
+
+  .hero { padding:56px 40px 40px; border-bottom:1px solid var(--border); background:linear-gradient(180deg, #13151e 0%, var(--bg) 100%); }
+  .hero .inner { max-width:1080px; margin:0 auto; }
+  .hero .eyebrow { font-size:11px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:var(--accent-pink); margin-bottom:12px; }
+  .hero h1 { font-size:38px; font-weight:800; letter-spacing:-.5px; margin-bottom:14px; line-height:1.2; }
+  .hero h1 span.accent { color:var(--accent-pink); }
+  .hero p.lead { font-size:16px; color:var(--text-soft); max-width:820px; line-height:1.7; margin-bottom:20px; }
+  .hero .pill-row { display:flex; gap:8px; flex-wrap:wrap; }
+  .pill { font-size:11px; font-weight:600; padding:4px 10px; border-radius:12px; border:1px solid; letter-spacing:.2px; }
+  .pill.cyan { color:var(--accent-cyan); border-color:rgba(64,208,208,.35); background:rgba(64,208,208,.08); }
+  .pill.purple { color:var(--accent-purple); border-color:rgba(176,126,232,.35); background:rgba(176,126,232,.08); }
+  .pill.green { color:var(--accent-green); border-color:rgba(107,207,127,.35); background:rgba(107,207,127,.08); }
+  .pill.orange { color:var(--accent-orange); border-color:rgba(240,160,80,.35); background:rgba(240,160,80,.08); }
+  .pill.red { color:var(--accent-red); border-color:rgba(224,96,112,.35); background:rgba(224,96,112,.08); }
+
+  .layout { max-width:1080px; margin:0 auto; padding:32px 40px 80px; display:grid; grid-template-columns: 240px 1fr; gap:40px; }
+  @media (max-width: 900px) { .layout { grid-template-columns:1fr; } .toc-sidebar { position:static; } }
+  .toc-sidebar { position:sticky; top:20px; align-self:start; font-size:13px; }
+  .toc-sidebar h4 { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--muted); margin-bottom:10px; }
+  .toc-sidebar ol { list-style:none; padding:0; }
+  .toc-sidebar li { margin-bottom:4px; }
+  .toc-sidebar a { color:var(--text-soft); text-decoration:none; border-bottom:1px dashed transparent; }
+  .toc-sidebar a:hover { color:var(--accent-pink); border-bottom-color:var(--accent-pink); }
+  .toc-sidebar li.sub { padding-left:14px; font-size:12px; }
+  .toc-sidebar li.sub a { color:var(--muted); }
+
+  .content h2 { font-size:26px; font-weight:700; margin:48px 0 16px; letter-spacing:-.3px; scroll-margin-top:24px; padding-bottom:8px; border-bottom:1px solid var(--border); }
+  .content h2:first-child { margin-top:0; }
+  .content h3 { font-size:18px; font-weight:700; margin:28px 0 10px; color:var(--text); scroll-margin-top:24px; }
+  .content h4 { font-size:14px; font-weight:700; margin:20px 0 6px; color:var(--text); }
+  .content p { margin-bottom:14px; color:var(--text-soft); }
+  .content p strong { color:var(--text); font-weight:600; }
+  .content ul, .content ol { margin:8px 0 16px 24px; color:var(--text-soft); }
+  .content li { margin-bottom:6px; }
+  .content code { background:var(--card); border:1px solid var(--border); padding:1px 6px; border-radius:4px; font-size:0.85em; color:var(--accent-cyan); }
+  .content pre { background:var(--card); border:1px solid var(--border); padding:14px 16px; border-radius:8px; margin:12px 0 18px; overflow-x:auto; line-height:1.5; }
+  .content pre code { background:none; border:none; padding:0; color:var(--text); font-size:0.85em; }
+  .content a { color:var(--accent-blue); text-decoration:none; border-bottom:1px dashed rgba(78,168,222,.35); }
+  .content a:hover { border-bottom-style:solid; }
+
+  .callout { border-left:3px solid; border-radius:0 8px 8px 0; padding:14px 18px; margin:16px 0; background:var(--card); }
+  .callout.note { border-color:var(--accent-blue); }
+  .callout.tip { border-color:var(--accent-green); }
+  .callout.warn { border-color:var(--accent-orange); }
+  .callout-label { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; margin-bottom:6px; }
+  .callout.note .callout-label { color:var(--accent-blue); }
+  .callout.tip .callout-label { color:var(--accent-green); }
+  .callout.warn .callout-label { color:var(--accent-orange); }
+
+  table { width:100%; border-collapse:collapse; margin:12px 0 20px; font-size:13px; }
+  table th, table td { padding:10px 14px; border-bottom:1px solid var(--border); text-align:left; vertical-align:top; }
+  table th { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--muted); background:var(--card); }
+  table tr:hover td { background:var(--card-alt); }
+  table td.code-cell { font-family:'JetBrains Mono',ui-monospace,monospace; font-size:12.5px; color:var(--accent-cyan); white-space:nowrap; }
+  table td.label-cell { font-weight:600; color:var(--text); white-space:nowrap; }
+
+  .glossary { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:18px 22px; margin:14px 0 22px; }
+  .glossary dt { font-family:'JetBrains Mono',ui-monospace,monospace; font-size:13px; color:var(--accent-cyan); margin-top:10px; }
+  .glossary dt:first-child { margin-top:0; }
+  .glossary dd { margin:4px 0 0 18px; color:var(--text-soft); font-size:14px; }
+
+  .scenario { background:var(--card-alt); border:1px solid var(--border-hi); border-radius:8px; padding:16px 20px; margin:14px 0; }
+  .scenario h4 { color:var(--accent-yellow); margin-top:0; font-size:14px; }
+  .scenario p { font-size:14px; }
+</style>
+</head>
+<body>
+
+<nav class="topnav">
+  <span class="nav-label">CIRES Observability Platform</span>
+  <a href="index.html" class="navlink navlink-home">🏠 Home</a>
+  <a href="architecture.html" class="navlink navlink-arch">🏗️ Architecture</a>
+  <a href="triage-service.html" class="navlink navlink-triage">🧠 Triage Service</a>
+  <a href="dashboard-guide.html" class="navlink navlink-active">📋 Dashboard Guide</a>
+  <a href="alerts-audit.html" class="navlink" style="color:var(--accent-orange); border-color:rgba(240,160,80,.4); background:rgba(240,160,80,.08);">🔍 Alerts Audit</a>
+  <a href="decisions-log.html" class="navlink" style="color:var(--accent-yellow); border-color:rgba(224,208,96,.4); background:rgba(224,208,96,.08);">📝 Decisions Log</a>
+</nav>
+
+<section class="hero">
+  <div class="inner">
+    <div class="eyebrow">Operator reference · every column, code, and abbreviation explained</div>
+    <h1>Dashboard <span class="accent">Guide</span></h1>
+    <p class="lead">
+      The triage dashboard at <code>http://adolin-wsl:8090/dashboard</code> packs a lot
+      of operator-facing detail into a few columns. This page is the legend: what each
+      column means, what every internal code translates to, and how to read a row
+      end-to-end. If a label is unclear in the UI, find it here.
+    </p>
+    <div class="pill-row">
+      <span class="pill cyan">Operator-facing</span>
+      <span class="pill purple">Triage UI</span>
+      <span class="pill green">Codes &amp; abbreviations</span>
+    </div>
+  </div>
+</section>
+
+<main class="layout">
+
+<aside class="toc-sidebar">
+  <h4>CONTENTS</h4>
+  <ol>
+    <li><a href="#orientation">1. Orientation</a></li>
+    <li><a href="#stats">2. Stats tiles</a></li>
+    <li><a href="#drain3-panel">3. Drain3 panel</a></li>
+    <li><a href="#table-columns">4. Table columns</a></li>
+    <li class="sub"><a href="#col-time">4.1 Time</a></li>
+    <li class="sub"><a href="#col-alert">4.2 Alert</a></li>
+    <li class="sub"><a href="#col-source">4.3 Source</a></li>
+    <li class="sub"><a href="#col-service">4.4 Service</a></li>
+    <li class="sub"><a href="#col-severity">4.5 Severity</a></li>
+    <li class="sub"><a href="#col-verdict">4.6 Verdict + quality</a></li>
+    <li class="sub"><a href="#col-action">4.7 Action</a></li>
+    <li class="sub"><a href="#col-duration">4.8 Duration</a></li>
+    <li><a href="#detail-panel">5. The detail panel</a></li>
+    <li><a href="#glossary">6. Codes &amp; abbreviations</a></li>
+    <li><a href="#email-layout">7. Email layout</a></li>
+    <li><a href="#scenarios">8. Reading common rows</a></li>
+  </ol>
+</aside>
+
+<article class="content">
+
+<h2 id="orientation">1. Orientation</h2>
+
+<p>
+  The dashboard shows the most-recent <strong>100 decisions</strong> the triage pipeline
+  has produced, newest first. Each row is one alert that was processed end-to-end —
+  the triage service queried Prometheus, Loki, Jaeger, and Drain3, ran the LLM,
+  validated the response, and persisted the result.
+</p>
+
+<div class="callout note">
+  <div class="callout-label">Where this lives</div>
+  <p>The dashboard is rendered by <code>app/main.py:dashboard()</code> from rows in
+  <code>rca_history</code> (SQLite at <code>/data/rca.db</code> inside the container).
+  Source for every label below is in the same file — search for <code>_humanize_*</code>
+  for the label maps and <code>_render_detail_panel</code> for the expanded row layout.</p>
+</div>
+
+<p>Page layout, top to bottom:</p>
+<ol>
+  <li><strong>Hero</strong> — title and refresh state.</li>
+  <li><strong>Stats tiles</strong> (5) — at-a-glance summary across the loaded window.</li>
+  <li><strong>Drain3 panel</strong> — log-template state from the in-memory analyzer.</li>
+  <li><strong>Filter bar + auto-refresh toggle</strong>.</li>
+  <li><strong>Decisions table</strong> — 9 columns; click any row to expand.</li>
+</ol>
+
+<h2 id="stats">2. Stats tiles</h2>
+
+<p>The five tiles count rows in the current window (last 100 decisions):</p>
+
+<table>
+  <thead><tr><th>Tile</th><th>Means</th><th>Source field</th></tr></thead>
+  <tbody>
+    <tr><td class="label-cell">Total decisions</td><td>Every row in the loaded window, including suppressed and timed-out.</td><td><code>len(rows)</code></td></tr>
+    <tr><td class="label-cell">Notified</td><td>Verdict was ESCALATE <em>and</em> the email was sent successfully.</td><td><code>action_taken == "emailed"</code></td></tr>
+    <tr><td class="label-cell">Dismissed</td><td>Verdict was DISMISS — alert judged not actionable, no email.</td><td><code>action_taken == "suppressed"</code></td></tr>
+    <tr><td class="label-cell">Deduped</td><td>Pre-LLM dedup hit — same alert fingerprint already seen inside the dedup window. The pipeline short-paths these (no LLM call).</td><td><code>triage_decision == "triage_suppressed"</code></td></tr>
+    <tr><td class="label-cell">Timed out</td><td>Pipeline exceeded its budget (currently 40 min total, 30 min per LLM call). Raw alert was forwarded with no LLM verdict.</td><td><code>action_taken == "emailed_raw"</code></td></tr>
+  </tbody>
+</table>
+
+<p>Hover any tile for the precise definition (the same definitions table-mapped above).</p>
+
+<h2 id="drain3-panel">3. Drain3 panel</h2>
+
+<p>
+  Drain3 is an online log-template miner that runs in-process. As Loki logs flow in
+  during context-gathering, Drain3 clusters lines into templates (e.g.
+  <code>"&lt;*&gt; ERROR connection pool exhausted"</code>). The panel shows live state:
+</p>
+
+<table>
+  <thead><tr><th>Field</th><th>Means</th></tr></thead>
+  <tbody>
+    <tr><td class="label-cell">Anomaly rate</td><td>Fraction of recent ingested lines that landed on a low-frequency template (<em>recent</em> = last ~window). Above ~5% suggests something genuinely novel is happening; near 0% means the system is in a known steady state.</td></tr>
+    <tr><td class="label-cell">Templates learned</td><td>Total distinct clusters in the in-memory state. Grows over time as new log shapes arrive. Persisted to disk every 30s so restarts don't reset learning.</td></tr>
+    <tr><td class="label-cell">Lines processed</td><td>Lifetime count of log lines fed through Drain3. Restarted every container restart unless the on-disk state is restored.</td></tr>
+    <tr><td class="label-cell">Anomalies flagged</td><td>Count of lines tagged <code>[ANOMALY]</code> by the analyzer — those whose template falls in the rare-frequency tail.</td></tr>
+    <tr><td class="label-cell">Most recent templates</td><td>Click "Show most recent templates" to expand. Each template is a regex-with-wildcards form — useful to see what kind of log shape Drain3 is currently fitting.</td></tr>
+  </tbody>
+</table>
+
+<h2 id="table-columns">4. Table columns</h2>
+
+<p>9 columns, left to right. The first is a chevron icon (click any row to expand it).</p>
+
+<h3 id="col-time">4.1 Time</h3>
+<p>
+  When the decision was persisted to <code>rca_history</code>, rendered in
+  <strong>Africa/Casablanca local zone (GMT+1)</strong>. Source: <code>rca_history.timestamp</code>
+  (stored as UTC ISO; rendered locally by <code>_to_local_time</code>).
+</p>
+
+<h3 id="col-alert">4.2 Alert</h3>
+<p>
+  The Grafana alert rule's <code>title</code> (e.g. <code>HighP95Latency</code>,
+  <code>TargetDown</code>, <code>OTelCollectorHighSpanDropRate</code>). Maps 1:1 to the
+  rule name in <code>monitoring-project/roles/grafana/templates/alertrules.yml.j2</code>.
+  Synthetic alerts (Drain3 self-bridge, replays from the startup-backfill) get
+  conventional names like <code>Drain3AnomalyDetected</code>.
+</p>
+
+<h3 id="col-source">4.3 Source</h3>
+<p>Where the alert came from. Two values today:</p>
+<ul>
+  <li><strong><code>grafana</code></strong> — the alert was POSTed to <code>/webhook/grafana</code> by Grafana's contact-point dispatcher.</li>
+  <li><strong><code>drain3</code></strong> — the alert was synthesized by the in-process Drain3 self-bridge (POSTed to <code>/webhook/drain3</code>) when the anomaly threshold was crossed.</li>
+</ul>
+
+<h3 id="col-service">4.4 Service</h3>
+<p>
+  The service the alert is about. Comes from <code>alert.labels.service</code> in the
+  webhook payload. Known values today: <code>spring-boot</code>, <code>kong</code>,
+  <code>otel-collector</code>, <code>monitoring</code> (= the Grafana host VM),
+  <code>k3s-node</code>, <code>loki</code>, <code>drain3</code>.
+</p>
+
+<h3 id="col-severity">4.5 Severity</h3>
+<p>Three values, color-coded:</p>
+<ul>
+  <li><span class="pill red">critical</span> — page now (today: TargetDown, OOMKill loops, OTel pipeline drop)</li>
+  <li><span class="pill orange">warning</span> — investigate within hours (most CPU/memory/latency rules)</li>
+  <li><span class="pill cyan">info</span> — context only, not paging-worthy (Drain3 anomalies, threshold-tuning hints)</li>
+</ul>
+
+<h3 id="col-verdict">4.6 Verdict + quality</h3>
+<p>Two stacked elements: the LLM's verdict (left pill) and the post-hoc RCA quality (right pill, smaller).</p>
+
+<p><strong>Verdict pill (LLM decision):</strong></p>
+<ul>
+  <li><strong>escalate</strong> — LLM thinks this is a real issue → email sent.</li>
+  <li><strong>dismiss</strong> — LLM thinks this is noise / self-resolving → no email.</li>
+  <li><strong>inconclusive</strong> — LLM couldn't pick. Treated as ESCALATE downstream (safer).</li>
+  <li><strong>timeout</strong> — pipeline exceeded the budget. No verdict; raw alert forwarded.</li>
+</ul>
+
+<p><strong>Quality pill (RCA quality, post-hoc tag):</strong></p>
+<ul>
+  <li><strong>fits</strong> (was <code>actionable</code>) — concrete RCA + at least one valid suggested action. The good case.</li>
+  <li><strong>thin</strong> (was <code>data_starved</code>) — model hedged or evidence was empty. Worth re-firing once data is richer.</li>
+  <li><strong>review</strong> (was <code>needs_review</code>) — confidence below the floor (0.30) or validator flagged the row. Surface to a human.</li>
+</ul>
+
+<h3 id="col-action">4.7 Action</h3>
+<p>
+  What the pipeline did downstream of the verdict. Renamed in 2026-04-27 from raw
+  pipeline codes to engineer-friendly labels (with the raw code preserved next to the
+  label in a small monospace tag for grep purposes).
+</p>
+
+<table>
+  <thead><tr><th>Label</th><th>Raw code</th><th>Means</th></tr></thead>
+  <tbody>
+    <tr><td class="label-cell">Notified</td><td class="code-cell">emailed</td><td>Triage emailed the on-call (LLM produced a verdict, validator passed, SMTP send succeeded).</td></tr>
+    <tr><td class="label-cell">Notified (no LLM)</td><td class="code-cell">emailed_raw</td><td>LLM was unavailable or timed out — raw alert forwarded for human review. Verdict column will show "timeout" or "—".</td></tr>
+    <tr><td class="label-cell">Suppressed</td><td class="code-cell">suppressed</td><td>Pre-LLM suppression — duplicate fingerprint inside the dedup window, or recent dismissed history. No email.</td></tr>
+    <tr><td class="label-cell">Dropped</td><td class="code-cell">drop_alert</td><td>Below severity threshold or matched a quiet-hours rule. No email, no LLM call.</td></tr>
+    <tr><td class="label-cell">—</td><td class="code-cell">(empty)</td><td>No action recorded — usually a row that's still in flight, or persisted before the column was added.</td></tr>
+  </tbody>
+</table>
+
+<h3 id="col-duration">4.8 Duration</h3>
+<p>
+  End-to-end pipeline duration, from webhook arrival to row persistence. Includes
+  MCP context-gathering (~1–5s) + LLM inference (typically 10–80s on the laptop GPU)
+  + validator + persistence. Dashboard format scales: under 1s shows ms, 1–60s shows
+  decimal s, over 60s shows "N min M s".
+</p>
+
+<h2 id="detail-panel">5. The detail panel</h2>
+
+<p>Click any row to expand. Sections, top-down:</p>
+
+<h3>Meta-grid (top tile cluster)</h3>
+<p>9 fields giving the row's identity and core LLM facts:</p>
+<ul>
+  <li><strong>Timestamp (local)</strong> — full timestamp with zone label.</li>
+  <li><strong>Decision ID</strong> — UUID, useful for cross-referencing with logs.</li>
+  <li><strong>Alert fingerprint</strong> — Grafana's stable hash over labels. Two fires of the same fingerprint are the same alert; collapsing on this is what dedup does.</li>
+  <li><strong>Service</strong> / <strong>Component / signal</strong> / <strong>Instance</strong> — labels from the webhook.</li>
+  <li><strong>Triage path</strong> — humanized label + raw <code>triage_decision</code> code. See <a href="#glossary">glossary</a>.</li>
+  <li><strong>LLM confidence / quality</strong> — confidence is a 0–1 float; quality is the post-hoc tag (fits/thin/review).</li>
+  <li><strong>Action</strong> + duration — the same Action column value with the duration appended.</li>
+</ul>
+
+<h3>Observed value + PromQL</h3>
+<p>
+  The lede card: the actual metric value at fire time and the PromQL expression that
+  produced it. Empty if the alert webhook didn't carry a value (rare but possible
+  for synthetic alerts).
+</p>
+
+<h3>Root-cause analysis</h3>
+<p>
+  The LLM's narrative. 2–5 sentences typically, starting with a restatement of the
+  observed value + PromQL (mandated by SYSTEM_PROMPT rule A), then the hypothesis,
+  then the supporting reasoning. 10-digit Unix timestamps embedded by the LLM are
+  auto-converted to <code>&lt;unix&gt; (&lt;Casablanca&gt;)</code> at render time.
+</p>
+
+<h3>Reasoning</h3>
+<p>
+  A separate field for the model's "thinking" — usually a longer-form expansion of the
+  RCA. Not always populated.
+</p>
+
+<h3>Suggested actions</h3>
+<p>
+  <strong>Remediations only.</strong> As of 2026-04-27, the LLM is constrained to emit
+  state-changing commands (<code>kubectl rollout restart</code>, <code>helm rollback</code>,
+  <code>docker restart</code>, <code>systemctl restart</code>, <code>kubectl set
+  resources</code>, <code>terraform apply</code>, etc.) — never read-only inspections like
+  <code>kubectl get</code> or <code>Query Grafana: ...</code>. The triage service has
+  already inspected the telemetry; that data is in evidence/RCA.
+</p>
+<p>
+  Empty list = the model didn't have a concrete remediation. The pipeline falls back
+  to <code>app/suggested_actions.yaml</code> templates keyed by alertname × deployment
+  type. For Drain3 alerts with no correlation, the fallback is a "Shelved — awaiting
+  recurrence" marker (see <a href="#scenarios">scenarios</a>).
+</p>
+
+<h3>Evidence</h3>
+<p>
+  Specific metric values, log lines, or trace IDs the LLM cited. Each entry must be
+  concrete (a number with units, a quoted log line, a trace ID) — vague entries like
+  "Prometheus metrics" or "Log patterns" get rejected by the validator.
+</p>
+
+<h3>Drain3 anomaly summary</h3>
+<p>
+  If the alert was sourced by Drain3, this section shows the anomalous templates that
+  triggered the fire (e.g. <code>"java.lang.OutOfMemoryError &lt;*&gt;"</code> with frequency
+  count). For Grafana-sourced alerts where Drain3 found anomalies in the gathered
+  Loki context, those are also listed here.
+</p>
+
+<h3>Correlated alerts (±5 min)</h3>
+<p>
+  Other alerts that fired within ±5 minutes of this one. The LLM is required (SYSTEM_PROMPT
+  rule H) to address these in the RCA — either "X caused Y", "they share cause Z", or
+  "coincident timing." A sortable mini-table; columns: When · Alert · Service · Verdict · Quality.
+</p>
+
+<h3>Queries to paste into Grafana Explore</h3>
+<p>
+  Pre-built LogQL/PromQL the operator can copy. These are <em>references</em> for the
+  operator's own deeper investigation, not part of the triage decision (suggested actions
+  must be remediations; the queries here are a courtesy).
+</p>
+
+<h2 id="glossary">6. Codes &amp; abbreviations</h2>
+
+<h3>Internal codes (raw enum values stored in SQLite)</h3>
+<dl class="glossary">
+  <dt>action_taken</dt>
+  <dd><code>emailed</code> · <code>emailed_raw</code> · <code>suppressed</code> · <code>drop_alert</code>. See <a href="#col-action">column 4.7</a>.</dd>
+
+  <dt>triage_decision</dt>
+  <dd>Higher-level pipeline path. <code>investigate</code> = ran the full LLM pipeline. <code>triage_suppressed</code> = pre-LLM dedup short-path. <code>dismiss</code> / <code>escalate</code> = LLM verdict (echoed). <code>dismiss_shelved</code> = Drain3 anomaly with no correlation, awaiting recurrence. <code>timeout_passthrough</code> = pipeline exceeded budget.</dd>
+
+  <dt>rca_quality</dt>
+  <dd><code>actionable</code> (label: <em>fits</em>) · <code>data_starved</code> (label: <em>thin</em>) · <code>needs_review</code> (label: <em>review</em>). Post-hoc tag, classified by <code>_classify_rca_quality</code> in <code>app/pipeline.py</code>.</dd>
+
+  <dt>alert_source</dt>
+  <dd><code>grafana</code> (POST to <code>/webhook/grafana</code>) or <code>drain3</code> (POST to <code>/webhook/drain3</code> from the Drain3 self-bridge).</dd>
+
+  <dt>severity</dt>
+  <dd><code>critical</code> / <code>warning</code> / <code>info</code>. Comes from <code>alert.severity</code> or the LLM's overridden severity in the decision.</dd>
+
+  <dt>llm_verdict</dt>
+  <dd><code>ESCALATE</code> · <code>DISMISS</code> · <code>INCONCLUSIVE</code>. Stored uppercase. Pipeline treats <code>INCONCLUSIVE</code> as ESCALATE downstream.</dd>
+
+  <dt>deployment_type</dt>
+  <dd><code>k8s</code> (k3s pod) · <code>docker-vm</code> (Grafana / Loki / Jaeger on the monitoring VM via docker-compose) · <code>systemd</code> (host daemons like node-exporter on bare metal) · <code>external</code> (RDS, etc.) · <code>unknown</code>. Drives the architecture-mismatch validator and template selection.</dd>
+</dl>
+
+<h3>Acronyms used in the UI and emails</h3>
+<dl class="glossary">
+  <dt>RCA</dt>
+  <dd>Root-cause analysis — the LLM's narrative explaining why the alert fired.</dd>
+
+  <dt>MCP</dt>
+  <dd>Model Context Protocol — the contract by which the triage service queries Prometheus, Loki, Jaeger, Drain3, and rca-history. Each pillar runs as its own server (5 MCPs total, all containerized on the laptop).</dd>
+
+  <dt>p95 / p99</dt>
+  <dd>The 95th / 99th percentile of a latency distribution over a window. <code>histogram_quantile(0.95, ...)</code> in PromQL.</dd>
+
+  <dt>OTel / OTLP</dt>
+  <dd>OpenTelemetry / OTLP = the wire protocol it uses. Spring-boot ships traces via OTLP; otel-collector receives them and exports to Jaeger.</dd>
+
+  <dt>LogQL / PromQL</dt>
+  <dd>Loki's log query language / Prometheus' metric query language.</dd>
+
+  <dt>refId (A / B / C)</dt>
+  <dd>Grafana alert rules are 3-step pipelines: A=query, B=reduce, C=threshold-as-boolean. The <em>observed value</em> is the B step (the actual number); C is just a 0/1 indicator. The triage service picks B explicitly via <code>pick_primary_value()</code> (was a bug pre-2026-04-24 where the alphabetically-last refId was picked).</dd>
+
+  <dt>fingerprint</dt>
+  <dd>Stable hash Grafana computes over alert labels. Two webhooks with the same fingerprint represent the same logical alert (perhaps re-fired). Used by the dedup layer.</dd>
+
+  <dt>kill chain / cascade</dt>
+  <dd>A sequence of related alerts firing in close succession (e.g. disk-fills → DB-slow → connection-pool-exhaust → 503s). The correlated-alerts section is meant to surface this.</dd>
+
+  <dt>shelved</dt>
+  <dd>Drain3-specific verdict: anomaly was detected but no correlation with metric/trace data was found. The decision is logged with <code>triage_decision=dismiss_shelved</code>; if the same template recurs ≥3 times in 7 days, the LLM is told to escalate on pattern alone.</dd>
+
+  <dt>data_starved / thin</dt>
+  <dd>Quality tag indicating the LLM hedged because evidence was empty. Triggers a one-time bounded-agency retry: the LLM can request one additional MCP query from a whitelist (Prometheus, Loki, Jaeger, rca-history) before re-deciding.</dd>
+</dl>
+
+<h2 id="email-layout">7. Email layout</h2>
+
+<p>
+  Escalation emails mirror the dashboard's structure but front-load the actionable
+  bits. Layout:
+</p>
+
+<ol>
+  <li><strong>Hero strip</strong> — alert name + service + severity badge.</li>
+  <li><strong>Observed value card</strong> — the lede number with PromQL.</li>
+  <li><strong>Alert details</strong> — table of name/service/component/severity/instance/environment/fired-at/status. "Fired at" shows local time with the raw ISO in a smaller mute span.</li>
+  <li><strong>RCA verdict card</strong> — Decision · Confidence · Quality (humanized: "fits" / "thin" / "review"). Reason and full RCA narrative below. Suggested actions and evidence as bullet lists.</li>
+  <li><strong>Collected context</strong> — metrics preview · top log patterns (Drain3-ranked) · top traces by duration.</li>
+  <li><strong>Correlated alerts</strong> — same ±5 min table as the dashboard.</li>
+  <li><strong>Deep links</strong> — Grafana alerting list (other deep-links were removed because Grafana 13's URL format is unstable).</li>
+  <li><strong>History</strong> — recurrence count of this alert in the last 7 days.</li>
+</ol>
+
+<p>
+  Empty actions lists no longer print "Review the alert manually" (misleading
+  post-philosophy-fix); they print "(no concrete remediation proposed — see RCA above;
+  treat as a heads-up)". Empty evidence prints "(no specific evidence cited — RCA
+  reasoned from the observed value alone)".
+</p>
+
+<h2 id="scenarios">8. Reading common rows</h2>
+
+<div class="scenario">
+  <h4>Scenario A — clean ESCALATE on a Java service</h4>
+  <p>
+    Verdict: <strong>escalate</strong>. Quality: <strong>fits</strong>. Action:
+    <strong>Notified</strong>. Confidence ≥0.7. Suggested actions list two or three
+    <code>kubectl set resources</code> / <code>kubectl rollout restart</code> commands.
+    Evidence cites a specific Loki line (<code>"java.lang.OutOfMemoryError"</code>) and a
+    metric value (<code>0.984</code>). The on-call has a clear next step; pipeline did its job.
+  </p>
+</div>
+
+<div class="scenario">
+  <h4>Scenario B — DISMISS on a noisy threshold</h4>
+  <p>
+    Verdict: <strong>dismiss</strong>. Quality: <strong>fits</strong>. Action:
+    <strong>Dismissed</strong> (no email). RCA explains the metric briefly crossed the
+    threshold and immediately fell back. Suggested actions point at the alertrules
+    YAML — raise the threshold or add a <code>for: 2m</code> clause. This is the
+    LLM telling you the rule is too tight; tune it.
+  </p>
+</div>
+
+<div class="scenario">
+  <h4>Scenario C — Drain3 anomaly, shelved</h4>
+  <p>
+    Source: <strong>drain3</strong>. Verdict: <strong>dismiss</strong>. Triage path:
+    <strong>Shelved</strong> (raw: <code>dismiss_shelved</code>). Suggested actions
+    contain one entry: "Shelved — no correlation between this log-template novelty and
+    metric/trace anomalies in the same window…". RCA explains the new template that
+    fired, what it might describe, and that no metric/trace correlation was found.
+    No action this round; the system will escalate automatically if the same template
+    recurs ≥3 times in 7 days.
+  </p>
+</div>
+
+<div class="scenario">
+  <h4>Scenario D — Deduped row</h4>
+  <p>
+    Triage path: <strong>Deduped</strong>. Verdict: empty. Action: <strong>Suppressed</strong>.
+    RCA empty; reasoning empty. The detail panel's "Action" line will say
+    <code>see_previous_rca:&lt;prior_id&gt;</code>. Click that previous decision to see
+    the full RCA — this row is just a marker that the same fingerprint refired inside
+    the dedup window.
+  </p>
+</div>
+
+<div class="scenario">
+  <h4>Scenario E — Timed out (Notified, no LLM)</h4>
+  <p>
+    Verdict: <strong>timeout</strong>. Action: <strong>Notified (no LLM)</strong>.
+    The pipeline exceeded its budget. No RCA, no suggested actions — the raw alert
+    was forwarded. Investigate Ollama health if you see a cluster of these
+    (<code>docker logs ai-ollama</code> on the laptop). Most common cause: GPU
+    memory contention or Ollama-loading-a-cold-model latency.
+  </p>
+</div>
+
+<div class="scenario">
+  <h4>Scenario F — thin RCA (data_starved)</h4>
+  <p>
+    Verdict: <strong>escalate</strong>. Quality: <strong>thin</strong>. RCA hedges
+    because Loki had 0 lines or Jaeger was empty. The pipeline already retried once
+    with bounded-agency (the LLM gets to request one more MCP query). If the row is
+    still thin after that, it usually means the alert is for a service that doesn't
+    log through the app pipeline (k3s-node, monitoring-vm, etc.) — expected.
+  </p>
+</div>
+
+<div class="callout tip">
+  <div class="callout-label">When in doubt</div>
+  <p>The <strong>Action</strong> column tells you what the system did downstream;
+  the <strong>Verdict + Quality</strong> tells you what the LLM thought; the
+  <strong>Triage path</strong> in the detail panel tells you which pipeline branch
+  the alert took. If those three disagree (e.g. verdict=escalate but action=Suppressed),
+  the row is interesting — open it and read the reasoning.</p>
+</div>
+
+</article>
+
+</main>
+
+</body>
+</html>
