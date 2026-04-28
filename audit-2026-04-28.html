@@ -212,10 +212,10 @@
 <p>Probes run from <code>claude-controller</code> (100.86.159.84) over Tailscale on 2026-04-28 around 09:30–09:40 UTC.</p>
 
 <ul>
-  <li><strong>Tailnet</strong> — <code>tailscale status</code>, four nodes online (controller, adolin, adolin-wsl, observability-rca-monitoring).</li>
+  <li><strong>Tailnet</strong> — <code>tailscale status</code>, four nodes online at audit time (controller, adolin, adolin-wsl, observability-rca-monitoring). <em>Updated 2026-04-28 PM:</em> k3s joined the tailnet later in the day as <code>observability-rca-k3s</code> (100.104.90.72) — see the Tailnet section below.</li>
   <li><strong>Laptop (adolin-wsl)</strong> — SSH as <code>lina@</code> with <code>~/.ssh/ansible_key</code>; <code>docker ps</code>, <code>docker inspect</code>, container-side <code>du</code>.</li>
   <li><strong>Monitoring VM</strong> — SSH as <code>deploy@observability-rca-monitoring</code>; <code>docker ps</code>, <code>df</code>, <code>ps aux</code>.</li>
-  <li><strong>k3s host</strong> — SSH as <code>deploy@52.5.239.234</code> (NOT on tailnet); <code>k3s kubectl get pods -A</code>, <code>k3s kubectl top nodes</code>.</li>
+  <li><strong>k3s host</strong> — at audit time, SSH as <code>deploy@52.5.239.234</code> via public IP. <em>Updated 2026-04-28 PM:</em> k3s now on tailnet, so <code>ssh deploy@observability-rca-k3s</code> over WireGuard; <code>k3s kubectl get pods -A</code>, <code>k3s kubectl top nodes</code>.</li>
   <li><strong>Grafana</strong> — <code>curl admin:admin@observability-rca-monitoring:3000/api/v1/provisioning/alert-rules</code> + <code>/api/prometheus/grafana/api/v1/rules</code> for evaluation health.</li>
   <li><strong>Triage</strong> — <code>curl http://adolin-wsl:8090/decisions?limit=200</code>, <code>/health</code>, <code>/metrics</code>.</li>
   <li><strong>Code</strong> — local checkouts of <code>monitoring-triage-service</code>, <code>monitoring-project</code>, <code>monitoring-docs</code> on the controller.</li>
@@ -455,16 +455,22 @@
 <h2 id="tailnet">Tailnet</h2>
 
 <table>
-  <thead><tr><th>Hostname</th><th>IP</th><th>OS</th><th>Last activity</th></tr></thead>
+  <thead><tr><th>Hostname</th><th>IP</th><th>OS</th><th>Notes</th></tr></thead>
   <tbody>
     <tr><td>claude-controller</td><td>100.86.159.84</td><td>linux</td><td class="tag-ok">this session</td></tr>
     <tr><td>adolin-wsl</td><td>100.117.118.70</td><td>linux</td><td class="tag-ok">idle, recent tx/rx</td></tr>
     <tr><td>adolin (laptop Windows host)</td><td>100.101.132.78</td><td>windows</td><td>—</td></tr>
     <tr><td>observability-rca-monitoring</td><td>100.74.21.104</td><td>linux</td><td>—</td></tr>
+    <tr><td>observability-rca-k3s</td><td>100.104.90.72</td><td>linux</td><td class="tag-ok">joined 2026-04-28 PM</td></tr>
   </tbody>
 </table>
 
-<p>k3s host (<code>52.5.239.234</code>) is intentionally NOT on the tailnet — reach via public-IP SSH with the ansible key.</p>
+<div class="callout tip">
+  <div class="callout-label">Tailnet expansion 2026-04-28 PM</div>
+  <p style="margin-bottom:0">
+    The k3s host joined the tailnet later in the same day this audit was written, via the existing <code>roles/tailscale</code> ansible role with a hostname override (<code>-e tailscale_hostname=observability-rca-k3s</code>). Same time, k3s public SSH (port 22) and the operator kubectl ingress (6443 from <code>allowed_ssh_cidrs</code>) were both removed from the security group — k3s is now reachable only via WireGuard. The internal API-server access from the monitoring SG was preserved so Prometheus's <code>kubernetes_sd_configs</code> scrape still works. The <code>monitoring-vm</code> SSH allowlist was also tightened from <code>0.0.0.0/0</code> to the operator's <code>/32</code> in <code>provisioning-monitoring-infra@9d3b04e</code>; tailnet remains the always-available fallback regardless of what's in the SG.
+  </p>
+</div>
 
 <!-- ============================================================== -->
 <h2 id="improvement-plan">Improvement plan</h2>

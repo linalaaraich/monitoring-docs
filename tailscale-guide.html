@@ -144,7 +144,7 @@
   </p>
 </div>
 
-<h2>The CIRES tailnet as of 2026-04-23</h2>
+<h2>The CIRES tailnet as of 2026-04-28</h2>
 
 <table>
   <thead>
@@ -166,8 +166,8 @@
     <tr>
       <td>k3s VM</td>
       <td><code>observability-rca-k3s</code></td>
-      <td>varies</td>
-      <td>Spring Boot + MySQL + Kong in k3s pods (monitored app)</td>
+      <td>100.104.90.72</td>
+      <td>Spring Boot + MySQL + Kong in k3s pods (monitored app). <strong>Joined tailnet 2026-04-28</strong> via the existing <code>roles/tailscale</code> ansible role with <code>-e tailscale_hostname=observability-rca-k3s</code>. Public SSH (port 22) closed in the SG at the same time; reach via <code>ssh deploy@observability-rca-k3s</code>.</td>
     </tr>
     <tr>
       <td>Laptop (Windows host)</td>
