@@ -471,6 +471,60 @@
 </p>
 
 <!-- ============================================================== -->
+<h3 id="round-3-verify">Round-3 live-verify (after F-1.5 + F-3 widen + Drain3 blocklist deployed)</h3>
+
+<p>Three real RCAs captured between 13:18 and 13:30 with the full kitchen-sink build (<code>revision=f51ca7d</code>) live:</p>
+
+<table>
+  <thead><tr><th>RCA</th><th>Verdict / conf</th><th>Cause-first?</th><th>F-4 clamp?</th><th>F-1.5 override?</th><th>Net</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>HighKongP95Latency</code> 13:18:45</td>
+      <td>escalate / <strong>0.92</strong></td>
+      <td>✅ "Kong's end-to-end p95 latency is high, but the majority of this delay originates in the upstream service" — names cause, cites kong p95 vs upstream delta</td>
+      <td>not triggered (RCA is genuinely good)</td>
+      <td>n/a (not a Drain3 alert)</td>
+      <td><strong>Philosophy chain working</strong></td>
+    </tr>
+    <tr>
+      <td><code>HighKongP95Latency</code> 13:21:56</td>
+      <td>escalate / <strong>0.40</strong> (clamped)</td>
+      <td>⚠️ "The alert indicates that there are no valid latency samples..." — surface-only LEDE slipped through (regex missed `alert` as a noun)</td>
+      <td>✅ F-4 clamped to 0.40</td>
+      <td>n/a</td>
+      <td>Operator sees low conf → scrutinise. <strong>Net: caught.</strong> Late-PM widening adds <code>alert | rule | webhook | fire | firing</code> to the regex (commit <code>e96deb5</code>).</td>
+    </tr>
+    <tr>
+      <td><code>Drain3AnomalyDetected</code> 13:29:52 → in flight</td>
+      <td>pending</td>
+      <td>pending</td>
+      <td>pending</td>
+      <td>✅ Pipeline log: <em>"Drain3 self-fire: overrode anomaly_summary with webhook's rich evidence (3570 chars)"</em></td>
+      <td><strong>F-1.5 structural fix verified end-to-end</strong> — the prompt now actually carries the 7 distinct templates + sample lines instead of the empty Loki-fallback summary.</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>
+  Per-service Drain3 (US-5.1 Phase A) is also visibly live: <code>/drain3/stats</code>
+  shows <code>services=[spring-boot, nginx, proxy, drain3]</code>. The chaos
+  injection produced 7 new clusters in spring-boot's per-service miner (visible
+  in the saving-state log lines 11→17 within seconds of the injection). No more
+  global pool blending.
+</p>
+
+<div class="callout tip">
+  <div class="callout-label">What this proves</div>
+  The philosophy chain is closing — F-4 clamps low-quality output even when
+  the LEDE regex misses; F-1.5 makes Drain3 prompts carry actual evidence;
+  per-service Drain3 sharpens the novelty signal. The remaining gap is the
+  LEDE regex coverage (each new shape needs a new pattern), which is a
+  reactive-not-proactive process. Long-term structural fix is rule J
+  extension or a stronger model — see SESSION_HANDOFF for the deferred
+  GPU migration plan.
+</div>
+
+<!-- ============================================================== -->
 <h2 id="related">Related</h2>
 
 <ul>
