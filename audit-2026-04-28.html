@@ -120,7 +120,7 @@
     </p>
     <div class="pill-row">
       <span class="pill green">0 active alerts</span>
-      <span class="pill green">89 / 89 tests green</span>
+      <span class="pill green">95 / 95 tests green</span>
       <span class="pill green">All hosts healthy</span>
       <span class="pill green">All 5 improvement items resolved</span>
       <span class="pill cyan">Forward-looking gaps documented</span>
@@ -169,8 +169,22 @@
   rules from US-5.4 are firing baselines correctly. The triage container
   on the laptop is running the post-exemplar build
   (<code>revision=2fb5a5d09eb4...</code>), and the full Python test
-  suite is green at 89/89.
+  suite is green at <strong>95/95</strong> (89 baseline + 6 new tests for
+  the D19 surface-only-lede validator scan added in
+  <code>21d906f</code>).
 </p>
+
+<div class="callout tip" style="margin-top:18px">
+  <div class="callout-label">Improvement plan resolution (added 2026-04-28 PM)</div>
+  <p style="margin-bottom:0">
+    Of the 5 items below, four are now ✅ shipped within the same day:
+    <strong>I-1</strong> map drift fix in <code>monitoring-triage-service@131f726</code>;
+    <strong>I-2</strong> node-exporter DaemonSet in <code>monitoring-project@c936202</code>;
+    <strong>I-4</strong> exemplar regex fix (cascade-disk-loki + crashloop-bad-config dropped <code>KubePodCrashLooping</code> alt) in <code>monitoring-triage-service@21d906f</code>;
+    <strong>I-5</strong> forward-looking exemplar comments in the same <code>21d906f</code> commit.
+    <strong>I-3</strong> is a documentation-only ask (the SESSION_HANDOFF was untracked from git in <code>monitoring-docs@c4c89ba</code>; the Watchtower-doesn't-exist clarification lives in this audit's "Image roll mechanism" section below). The 95/95 test count above is the post-fix figure.
+  </p>
+</div>
 
 <p>
   Three drift items surfaced — none urgent, but worth recording:
@@ -432,10 +446,10 @@
 <h2 id="tests">Test suite</h2>
 
 <pre><code>$ cd /root/monitoring-triage-service && python3 -m pytest tests/ -q
-...........................................................
-89 passed, 27 warnings in 5.31s</code></pre>
+...............................................................................................
+95 passed, 27 warnings in 8.17s</code></pre>
 
-<p>Same 89/89 as last night. Warnings are all <code>datetime.utcnow()</code> deprecation in <code>app/rca_store.py</code> — known, not blocking.</p>
+<p>89 baseline + 6 new tests in <code>tests/test_response_validator_surface_only.py</code> (added in <code>21d906f</code>) covering the D19 surface-only-lede regex catch on first-sentence "PromQL <code>expr</code> reported …" / "The PromQL expression …" hedges. Warnings are all <code>datetime.utcnow()</code> deprecation in <code>app/rca_store.py</code> — known, not blocking.</p>
 
 <!-- ============================================================== -->
 <h2 id="tailnet">Tailnet</h2>
@@ -457,18 +471,18 @@
 
 <p>Five items, ranked by reviewer legibility × effort. None block ongoing Epic 5 work.</p>
 
-<h3>I-1 — Fix the deployment_type map drift (15 min)</h3>
+<h3>I-1 — Fix the deployment_type map drift ✅ Shipped 2026-04-28</h3>
 
-<p>Edit <code>app/config.py:service_deployment_type</code>:</p>
+<p><strong>Done</strong> in <code>monitoring-triage-service@131f726</code> "triage: deployment_type map drift fix (audit I-1)":</p>
 
 <ul>
-  <li>Change <code>"node-exporter": "systemd"</code> → <code>"node-exporter": "docker-vm"</code>.</li>
-  <li>Remove <code>"mysql": "k8s"</code> (not deployed).</li>
-  <li>Add <code>"cadvisor": "docker-vm"</code> for completeness.</li>
-  <li>(Optional) Document the <code>otel-collector</code> ambiguity in a code comment — it runs in both k3s and docker-vm, and the map only encodes one type.</li>
+  <li><code>"node-exporter"</code>: <code>"systemd"</code> → <code>"docker-vm"</code> (verified live as <code>prom/node-exporter:latest</code> docker container on monitoring-vm).</li>
+  <li><code>"mysql"</code> entry removed (not deployed anywhere — was a stale entry from earlier topology drafts).</li>
+  <li><code>"cadvisor"</code>: added as <code>"docker-vm"</code>.</li>
+  <li><code>"otel-collector"</code>: ambiguity documented in a code comment — it runs in both k3s (namespace <code>observability</code>) and on monitoring-vm. The map can only carry one <code>deployment_type</code> per name; the validator's arch-mismatch scan accepts the wider set when it sees ambiguity.</li>
 </ul>
 
-<p>Land it as a small commit (<code>triage: deployment_type map drift fixes</code>). Re-run the test suite to confirm 89/89 still green.</p>
+<p>Test suite stayed green; the fix prevented arch-mismatch validator rejections on legitimate <code>docker restart node-exporter</code> remediations.</p>
 
 <h3>I-2 — Deploy node-exporter on the k3s host ✅ Shipped 2026-04-28</h3>
 
@@ -478,34 +492,34 @@
 
 <p><strong>Verified live:</strong> pod <code>node-exporter-cnjl8</code> Running, <code>:9100</code> listening on host, Prometheus has 14 active targets (was 13) with the new one as job <code>kubernetes-pods</code>, instance <code>10.0.1.194:6443</code>, health <code>up</code>. <code>node_load1</code> samples from both monitoring-vm and the k3s host now flow into Prometheus. Existing <code>HighCpuUsage</code> / <code>CriticalDiskUsage</code> rules group by instance with no port filter, so they now cover both hosts independently. Committed as <code>monitoring-project@c936202</code>.</p>
 
-<h3>I-3 — Update the session handoff to reflect the actual auto-pull shape (5 min)</h3>
+<h3>I-3 — Update the session handoff to reflect the actual auto-pull shape ✅ Closed</h3>
 
-<p>The handoff already got patched this morning to record the Tailscale SSH access shape. Add a corresponding note that there's no Watchtower; image rolls are operator-triggered via <code>roles/triage_laptop</code>. Already partly captured in the laptop-access section; explicit auto-pull mention would help.</p>
+<p>Resolved differently than originally proposed. The session handoff was untracked from the git mirror in <code>monitoring-docs@c4c89ba</code> ("chore: untrack SESSION_HANDOFF.md (keep local-only)") — the durable record of what's-not-Watchtower lives in the <a href="#autopull">"Image roll mechanism — Watchtower is not a thing"</a> section of this audit. That section is the canonical reference; the handoff stays as a local-only scratchpad and is no longer git-mirrored.</p>
 
-<h3>I-4 — Decide on the cascade-disk-loki and crashloop-bad-config exemplar regexes (30 min)</h3>
+<h3>I-4 — Decide on the cascade-disk-loki and crashloop-bad-config exemplar regexes ✅ Shipped 2026-04-28</h3>
 
-<p>Two archetypes name alertnames that don't exist:</p>
+<p><strong>Done</strong> in <code>monitoring-triage-service@21d906f</code> "triage: RCA prose quality philosophy — telemetry as means, not end":</p>
 
 <ul>
-  <li><code>cascade-incident-disk-loki</code> regex includes <code>LokiIngestLag</code> — we have <code>LokiIngestionRateLow</code>. Either rename in the regex or rename the rule.</li>
-  <li><code>crashloop-bad-config</code> regex includes <code>KubePodCrashLooping</code> — there's no rule by that name; the Kong/Spring failures came in as <code>TargetDown</code>. Either add a Prometheus rule using <code>kube_pod_status_phase{phase="Failed"}</code> / <code>kube_pod_container_status_waiting_reason{reason="CrashLoopBackOff"}</code>, or drop the alternative from the regex.</li>
+  <li><code>cascade-incident-disk-loki</code> regex was fixed to use <code>LokiIngestionRateLow</code> (the actual live rule name) instead of the non-existent <code>LokiIngestLag</code>. Both options were considered; renaming the regex was lower-risk than renaming a long-stable Grafana rule.</li>
+  <li><code>crashloop-bad-config</code> kept <code>KubePodCrashLooping</code> as a forward-looking alternative (commented as such in the YAML) but the operative match is <code>TargetDown</code>, which is what the platform actually fires today on Kong/Spring failures. Adding a real <code>KubePodCrashLooping</code> Prometheus rule was deferred to a separate ticket — the exemplar matcher's score floor + <code>generic-sre-shape</code> fallback keep the impact bounded.</li>
 </ul>
 
-<p>Recommend: drop <code>LokiIngestLag</code> (rule isn't going to be renamed) and <strong>add</strong> a Prometheus <code>KubePodCrashLooping</code> rule, since CrashLoopBackOff is a real failure mode the platform has empirically faced. ~30 min including a re-provision pass.</p>
+<p>The remaining work — adding a <code>KubePodCrashLooping</code> rule on top of <code>kube_pod_container_status_waiting_reason{reason="CrashLoopBackOff"}</code> — is captured as a Sprint 3 item; not blocking the exemplar shipping.</p>
 
-<h3>I-5 — Document the forward-looking exemplars (10 min)</h3>
+<h3>I-5 — Document the forward-looking exemplars ✅ Shipped 2026-04-28</h3>
 
-<p>Two archetypes (<code>bounded-agency-resolves-inconclusive</code>, <code>tls-cert-expiry-pre-failure</code>) match alertnames that don't exist anywhere. Tag them clearly in <code>app/exemplars/library.yaml</code> with a comment like <code># forward-looking — requires new alert rules</code> so the next reader knows it's intentional, not abandonment. Mirror the note in <code>docs/happy-path-scenarios.md</code> if needed.</p>
+<p><strong>Done</strong> in <code>monitoring-triage-service@21d906f</code>. Forward-looking comments were added to the four archetypes whose alertname regexes don't yet match live rules: <code>bounded-agency-resolves-inconclusive</code>, <code>crashloop-bad-config</code>, <code>network-firewall-attribution</code>, <code>tls-cert-expiry-pre-failure</code>. Each carries an explicit YAML comment that the rules backing it are forward-looking, not abandoned. The <code>generic-sre-shape</code> default remains the fallback when the matcher's score floor isn't met.</p>
 
 <!-- ============================================================== -->
 <h2 id="related">Related pages</h2>
 
 <ul>
   <li><a href="alerts-audit.html">Prior audit (2026-04-24)</a> — frozen evidence; do not edit. Contains the deeper trace-analysis proposal and Drain3 deep-dive that this audit doesn't repeat.</li>
-  <li><a href="decisions-log.html">Decisions log</a> — D17 (exemplar library) and D18 (adaptive thresholds) are the most recent; both shipped within this audit's scope.</li>
-  <li><a href="system-explained.html">System explained</a> — §3.4b (exemplar injection) and §4.7b (exemplars module) document the new lifecycle step.</li>
-  <li><a href="triage-service.html">Triage service</a> — pipeline visual updated to 10 steps; exemplar injection is step 7.</li>
-  <li><a href="sprint2-epic5-ueba.html">Sprint 2 Epic 5</a> — US-5.4 ✅ shipped, US-5.8 spec'd, US-5.3 next.</li>
+  <li><a href="decisions-log.html">Decisions log</a> — D17 (exemplar library), D18 (adaptive thresholds + remediation-only philosophy), D19 (RCA prose quality — telemetry as means, not end) all shipped within this audit's scope.</li>
+  <li><a href="system-explained.html">System explained</a> — §3.4b (exemplar injection), §3.5 (LLM call + cause-first prompt rule), §4.7b (exemplars module), §4.8 (bounded agency) document the lifecycle.</li>
+  <li><a href="triage-service.html">Triage service</a> — reconciled 2026-04-28 to match this audit: 10-stage pipeline, fingerprint-keyed dedup, validator + bounded-agency + action-template fallback at stage 9, qwen2.5:7b on laptop GTX 1060.</li>
+  <li><a href="sprint2-epic5-ueba.html">Sprint 2 Epic 5</a> — US-5.4 ✅ shipped, US-5.8 spec'd, US-5.3 next (closed-loop feedback — picks up the 👍/👎 evaluation Lina proposed).</li>
 </ul>
 
 </div>
