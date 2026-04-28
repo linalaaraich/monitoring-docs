@@ -196,6 +196,8 @@
     <tr><td class="label-cell">Notified</td><td>Verdict was ESCALATE <em>and</em> the email was sent successfully.</td><td><code>action_taken == "emailed"</code></td></tr>
     <tr><td class="label-cell">Dismissed</td><td>Verdict was DISMISS — alert judged not actionable, no email.</td><td><code>action_taken == "suppressed"</code></td></tr>
     <tr><td class="label-cell">Deduped</td><td>Pre-LLM dedup hit — same alert fingerprint already seen inside the dedup window. The pipeline short-paths these (no LLM call).</td><td><code>triage_decision == "triage_suppressed"</code></td></tr>
+    <tr><td class="label-cell">Gated (under threshold)</td><td>US-5.8 pre-LLM recurrence gate: opted-in alert (e.g. MediumCpuUsage / MediumMemoryUsage) fired within its 2h window but the cumulative count is below the gate threshold. No LLM call, no email — cheap dashboard row that becomes a real LLM call once the count crosses.</td><td><code>triage_decision == "recurrence_gated_pre_llm"</code></td></tr>
+    <tr><td class="label-cell">Override-Escalated</td><td>Either US-5.3 closed-loop override (operator flagged a similar past alert as real via /feedback/override) OR US-5.8 post-LLM recurrence gate (LLM dismissed same fingerprint ≥2 times in window). LLM said DISMISS; the gate flipped it to ESCALATE so a human decides.</td><td><code>triage_decision == "override_forced_escalate"</code> or <code>"recurrence_gated_post_llm_force_escalate"</code></td></tr>
     <tr><td class="label-cell">Timed out</td><td>Pipeline exceeded its budget (currently 40 min total, 30 min per LLM call). Raw alert was forwarded with no LLM verdict.</td><td><code>action_taken == "emailed_raw"</code></td></tr>
   </tbody>
 </table>
