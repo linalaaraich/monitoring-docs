@@ -308,6 +308,39 @@
       <li>New Prometheus metric <code>triage_baseline_sigma{service,metric}</code> exported for observability</li>
     </ul>
   </div>
+  <div class="story-section" style="background:rgba(78,168,222,.05); border-left:3px solid var(--accent-blue); padding:10px 14px; border-radius:0 6px 6px 0; margin-top:10px;">
+    <h4 style="color:var(--accent-blue); margin-top:0;">Detailed implementation plan (drafted 2026-04-28)</h4>
+    <p><strong>Surfaces:</strong></p>
+    <ul>
+      <li><code>app/drain_analyzer.py</code> — convert <code>self._miner</code> from a single <code>TemplateMiner</code> to <code>self._miners: dict[str, TemplateMiner]</code> keyed by service. New helper <code>_get_or_create_miner(service)</code>. <code>analyze(line, service=None)</code> picks the right miner (defaults to a global "_unknown" miner when service can't be extracted from the Loki stream). Per-service FilePersistence at <code>{drain3_state_dir}/{service}.bin</code>.</li>
+      <li><code>app/drain_analyzer.py:_ingest_loop</code> — parse Loki stream labels per record (the existing call already returns <code>{stream: {labels}, values: [[ts, line]]}</code>) and call <code>analyze(line, service=labels.get("service_name", "_unknown"))</code>.</li>
+      <li><code>app/entity_baselines.py</code> (NEW) — <code>get_baseline(service, metric, window) → BaselineFacts(mean, stddev, p50, p95, sample_count)</code>. Implementation queries Prometheus over the service's metric using <code>quantile_over_time(metric[7d])</code> + <code>stddev_over_time</code>. Cached per (service, metric) for <code>baseline_cache_ttl_seconds</code> (default 300s) — Prometheus query cost is non-trivial.</li>
+      <li><code>app/metric_interpreter.py:interpret()</code> — calls <code>get_baseline()</code> when <code>service ≠ "_unknown"</code>, attaches a <code>baseline</code> field to <code>MetricFacts</code>. The <code>as_prompt_block()</code> output gains a "Behavioral baseline" line: <em>"Service spring-boot's 30-day p95 baseline: 850 ms (σ=250 ms). Current 8487 ms = 30.5σ above baseline."</em></li>
+      <li><code>app/main.py:/drain3/stats</code> — accept optional <code>?service=</code> query param. Without it, returns all-services aggregate; with it, returns just that service's miner stats.</li>
+      <li><code>app/metrics.py</code> — new <code>triage_baseline_sigma{service, metric}</code> Gauge, set by metric_interpreter when a baseline-aware metric fact is emitted.</li>
+    </ul>
+    <p><strong>Schema changes:</strong> none in SQLite. Drain3 state files multiply (one per service) but are additive — existing <code>drain3_state.bin</code> migrates to <code>_unknown.bin</code> on first start so prior history isn't lost.</p>
+    <p><strong>Phasing (proposed sequencing):</strong></p>
+    <ol>
+      <li>Phase A (~3h): per-service Drain3 storage + analyze routing + tests.</li>
+      <li>Phase B (~3h): <code>app/entity_baselines.py</code> module + Prometheus query helpers + tests with a stub Prometheus client.</li>
+      <li>Phase C (~2h): wire baselines into <code>metric_interpreter</code> + <code>MetricFacts.as_prompt_block</code> + a new exemplar block prose pattern.</li>
+    </ol>
+    <p><strong>Risks + mitigations:</strong></p>
+    <ul>
+      <li><strong>Memory</strong>: 11 services × 257 clusters/service today × ~1KB/cluster ≈ 3 MB total. Fine for the laptop. If we go to 50 services × 1000 clusters that's 50 MB — still fine.</li>
+      <li><strong>Cold-start sparsity</strong>: a fresh service with &lt;7d history can't compute a meaningful baseline. <code>get_baseline()</code> returns <code>BaselineFacts(sample_count &lt; 100)</code> as a sentinel, and <code>as_prompt_block()</code> degrades gracefully — falls back to "no behavioral baseline available yet (only N samples in 7d)".</li>
+      <li><strong>Prometheus query cost</strong>: 7-day quantile_over_time over 1m resolution = 10080 samples per query. We cache results per (service, metric) for 5 minutes (configurable). With 4–6 services × 5 metrics = ~30 baselines → 30 queries every 5 min = ~6 RPS to Prometheus. Negligible.</li>
+    </ul>
+    <p><strong>Tests:</strong></p>
+    <ul>
+      <li><code>test_per_service_drain3_isolation</code> — same line on different services produces different cluster IDs.</li>
+      <li><code>test_baseline_returns_none_when_history_thin</code> — fresh service falls back gracefully.</li>
+      <li><code>test_baseline_cache_ttl</code> — second call within window doesn't re-query Prometheus.</li>
+      <li><code>test_metric_facts_includes_baseline_when_available</code> — prompt-block output contains the σ-claim.</li>
+    </ul>
+    <p><strong>Composes with:</strong> <a href="decisions-log.html#d17">D17 (exemplars)</a> — exemplar prose can now reference baselines naturally; <a href="decisions-log.html#d19">D19 (RCA prose philosophy)</a> — "Xσ above baseline" is exactly the cause-first kind of evidence the philosophy demands.</p>
+  </div>
 </div>
 
 <!-- US-5.2 -->
@@ -342,6 +375,47 @@
       <li>The LLM RCA references the causal chain explicitly (rule H of SYSTEM_PROMPT already enforces this for dyads; extend to N)</li>
       <li>New metric <code>triage_incidents_total{size}</code> tracks incident-size distribution</li>
     </ul>
+  </div>
+  <div class="story-section" style="background:rgba(78,168,222,.05); border-left:3px solid var(--accent-blue); padding:10px 14px; border-radius:0 6px 6px 0; margin-top:10px;">
+    <h4 style="color:var(--accent-blue); margin-top:0;">Detailed implementation plan (drafted 2026-04-28)</h4>
+    <p><strong>The hard problem:</strong> incident assignment is a streaming clustering decision. Alert N arrives — does it join an existing open incident, start a new one, or get its own (because no neighbours)? Three signals matter: time proximity, service affinity, label overlap.</p>
+    <p><strong>Surfaces:</strong></p>
+    <ul>
+      <li><code>app/incident_correlator.py</code> (NEW) — <code>find_or_create_incident(alert, store) → (incident_id, is_new)</code>. Logic: query <code>incidents</code> table for OPEN incidents where <code>latest_alert_at &gt; now - window_seconds</code>. For each, score the alert against the incident on (service overlap, label-set Jaccard similarity, alertname-class match). Highest-scoring incident wins if score ≥ <code>incident_join_threshold</code> (default 0.4); otherwise create a new incident.</li>
+      <li><code>app/rca_store.py</code> — new <code>incidents</code> table: <code>id, status (open|closed), created_at, last_alert_at, alert_ids_json, services_json, severity, rca_report, llm_verdict, email_sent_at</code>. New methods: <code>create_incident</code>, <code>add_alert_to_incident</code>, <code>get_open_incidents_in_window</code>, <code>close_incident</code>. Migrate-on-startup like the feedback table did.</li>
+      <li><code>app/pipeline.py:_process_alert</code> — after dedup + suppression, call <code>find_or_create_incident()</code>. Stash <code>alert.incident_id</code>. The LLM call is gated: <strong>only the alert that creates a new incident triggers the LLM</strong> — subsequent alerts joining an existing incident <strong>amend</strong> the open RCA in place (re-call LLM with the full alert set every Nth join, or on a debounced timer, default 60s).</li>
+      <li><code>app/llm_client.py:_build_prompt</code> — when alert is part of an incident, render a new <code>## Co-firing alerts in this incident</code> section (replaces / augments the existing <code>Neighboring alerts</code> block). Alert ordering matters: earliest-fired first so the LLM can reason about the chain causally.</li>
+      <li><code>app/notifier.py</code> — for incident escalations, send ONE email with ALL alerts as a sub-list rather than one per alert. Subject: <em>"INCIDENT [4 alerts]: spring-boot OOM cascade impacting kong/frontend"</em>.</li>
+      <li><code>app/main.py</code> — dashboard rendering: incidents become parent rows with children indented when expanded. New endpoint <code>GET /incidents?limit=20&amp;status=open</code>.</li>
+      <li><code>app/metrics.py</code> — <code>triage_incidents_total{size_bucket}</code> Counter (size buckets: 1, 2-3, 4-7, 8+); <code>triage_incident_open_count</code> Gauge.</li>
+    </ul>
+    <p><strong>Schema:</strong> new <code>incidents</code> table; <code>rca_history.incident_id</code> column added (nullable, FK to incidents).</p>
+    <p><strong>Phasing (proposed):</strong></p>
+    <ol>
+      <li>Phase A (~4h): incidents table + correlator module + tests for the join-vs-new decision logic. No LLM/email integration yet — just classification correctness.</li>
+      <li>Phase B (~4h): pipeline integration. First-alert-creates-incident, subsequent alerts ammend, debounced re-LLM logic. Tests with mocked LLM.</li>
+      <li>Phase C (~3h): notifier consolidates emails, dashboard parent/child rendering, <code>/incidents</code> endpoint. End-to-end live verification with the chaos harness (run two tests back-to-back within the window — should produce one incident, not two).</li>
+      <li>Phase D (~2h): metric exports + D21 in decisions-log + sprint2-epic5-ueba marked shipped.</li>
+    </ol>
+    <p><strong>Risks + mitigations:</strong></p>
+    <ul>
+      <li><strong>Wrong incident joins (false aggregation)</strong>: an unrelated alert lumped into an active incident makes the RCA harder, not easier. Mitigation: scoring threshold tuned conservatively (default 0.4); a "force-split" operator endpoint that breaks an alert out into its own incident. Tracked via a new <code>triage_decision = incident_split</code> value.</li>
+      <li><strong>LLM context blow-up</strong>: 8+ alerts × full evidence each blows past 16K tokens. Mitigation: when incident size &gt; <code>incident_max_alerts_in_prompt</code> (default 5), the prompt summarises older alerts as one-liners and quotes only the 5 most recent in full.</li>
+      <li><strong>Email rate-limiting interaction</strong>: today the notifier debounces per-alert; for incidents the debounce key becomes <code>incident_id</code> not alert fingerprint. Could cause stale incident emails if an incident grows mid-debounce — accepted, document the behaviour, surface in the dashboard with a "alert added since last email" badge.</li>
+      <li><strong>Closed-loop feedback (US-5.3) integration</strong>: <code>/feedback/override</code> on an incident-scoped decision should override the whole incident, not just one alert. The feedback row's <code>decision_id</code> should reference the incident's RCA, not any individual alert. Tested explicitly.</li>
+    </ul>
+    <p><strong>Tests:</strong></p>
+    <ul>
+      <li><code>test_two_alerts_within_window_join_one_incident</code></li>
+      <li><code>test_alerts_outside_window_get_separate_incidents</code></li>
+      <li><code>test_unrelated_services_dont_join</code> (low scoring threshold rejects)</li>
+      <li><code>test_debounced_relay_to_llm</code> (multiple joins → one new LLM call after debounce)</li>
+      <li><code>test_email_consolidates_multiple_alerts</code></li>
+      <li><code>test_incident_size_bucket_metric</code></li>
+      <li><code>test_feedback_override_on_incident_decision_id</code></li>
+    </ul>
+    <p><strong>Composes with:</strong> <a href="#us-5-3">US-5.3</a> — feedback now operates at incident level; <a href="decisions-log.html#d17">D17</a> — exemplar <code>cascade-incident-disk-loki</code> already encodes the kill-chain pattern, becomes the canonical structural target for incident RCAs; <a href="decisions-log.html#d19">D19</a> — incident RCAs naturally lead with the kill-chain root, satisfying cause-first by construction.</p>
+    <p><strong>This is the biggest demo moment</strong> — "you induced 4 alerts, you got 1 email with the kill chain explained" lands viscerally with the jury. Slot it after US-5.8 because US-5.8's recurrence-gate composes simply, and after the chaos harness because the live verification (induce two alerts within 12 min) is exactly a chaos-runner two-test invocation.</p>
   </div>
 </div>
 
@@ -614,6 +688,59 @@ Then: z-score each pod against the mean + stddev of its siblings.</code></pre>
       </tbody>
     </table>
     <p>Different windows, different layers, different signals. Each catches what the others miss; no overlap.</p>
+  </div>
+  <div class="story-section" style="background:rgba(78,168,222,.05); border-left:3px solid var(--accent-blue); padding:10px 14px; border-radius:0 6px 6px 0; margin-top:10px;">
+    <h4 style="color:var(--accent-blue); margin-top:0;">Detailed implementation plan (drafted 2026-04-28)</h4>
+    <p><strong>Surfaces:</strong></p>
+    <ul>
+      <li><code>app/recurrence_gate.py</code> (NEW) — two pure async functions:
+        <ul>
+          <li><code>async def pre_llm_gate(alert, store, settings) → GateResult | None</code> — returns a non-None result with <code>triage_decision="recurrence_gated_pre_llm"</code> if (a) the alert opted in via annotation, (b) it's not critical-severity, and (c) prior fires of the same fingerprint within the window are below the threshold.</li>
+          <li><code>async def post_llm_gate(alert, decision, store, settings) → GateResult | None</code> — runs only when decision.decision == DISMISS. Counts prior LLM-seen dismissals on the same fingerprint within the window; if ≥ threshold, force-flips to ESCALATE with <code>triage_decision="recurrence_gated_post_llm_force_escalate"</code>.</li>
+          <li><code>parse_recurrence_annotation(annotation_str) → RecurrenceConfig</code> — parses the annotation format <code>pre_llm=N,llm_dismiss=M,window=2h</code>; returns sentinel "no opt-in" if absent or malformed.</li>
+        </ul>
+      </li>
+      <li><code>app/pipeline.py:_process_alert</code> — two new gate calls:
+        <ul>
+          <li>After dedup + L2 suppression but BEFORE <code>_investigate_and_act</code>: call <code>pre_llm_gate</code>. If it fires, persist a short-path record and return early — same shape as the existing dedup short-path.</li>
+          <li>Inside <code>_investigate_and_act</code>, AFTER the post-LLM override gate (US-5.3 Step 6c) but BEFORE recording: call <code>post_llm_gate</code>. If it fires, flip decision.decision to ESCALATE and prepend a "Force-escalated by recurrence gate" note to rca/reason (matching the US-5.3 override-gate shape exactly so the prose is consistent).</li>
+        </ul>
+      </li>
+      <li><code>app/rca_store.py</code> — one new method <code>count_recent_decisions_by_fingerprint(fingerprint, llm_verdict, window_seconds) → int</code>. Used by both gates; saves repeating the SELECT pattern inline.</li>
+      <li><code>app/models.py</code> — <code>RecurrenceConfig</code> dataclass (annotation parse result), <code>GateResult</code> dataclass (gate fire output).</li>
+      <li><code>app/metrics.py</code> — three new counters: <code>triage_recurrence_gated_pre_llm_total</code>, <code>triage_recurrence_force_escalated_total</code>, <code>triage_recurrence_critical_bypassed_total</code> (the safety check fired — important to monitor since it indicates a misconfigured rule).</li>
+      <li><code>app/main.py</code> — humanize entries for the two new <code>triage_decision</code> values; dashboard column rendering.</li>
+      <li><code>roles/grafana/templates/alertrules.yml.j2</code> — opt in <code>MediumCpuUsage</code> and <code>MediumMemoryUsage</code> only. Critical-severity rules must NOT carry the annotation.</li>
+      <li><code>monitoring-docs/dashboard-guide.html</code> — codes glossary entries + scenario #7 "recurrence-gated row".</li>
+      <li><code>monitoring-docs/decisions-log.html</code> — D21 entry.</li>
+    </ul>
+    <p><strong>Schema changes:</strong> none — the gate reads existing rca_history rows. New <code>triage_decision</code> values are TEXT so additive.</p>
+    <p><strong>Phasing:</strong></p>
+    <ol>
+      <li>Phase A (~1.5h): <code>recurrence_gate.py</code> module + <code>parse_recurrence_annotation</code> + the two gate functions + tests with mocked store. Pure-logic; no pipeline integration yet.</li>
+      <li>Phase B (~1.5h): pipeline wiring + dashboard humanizer + integration tests using the existing TriagePipeline test fixtures.</li>
+      <li>Phase C (~1h): grafana rule annotations + ansible re-provision + live verification. Run the chaos harness's <code>high_cpu</code> test 3× back-to-back to verify the pre-LLM gate fires + then the post-LLM force-escalate fires.</li>
+      <li>Phase D (~1h): D21 + dashboard guide + sprint2-epic5 marked shipped.</li>
+    </ol>
+    <p><strong>Risks + mitigations:</strong></p>
+    <ul>
+      <li><strong>Operator confusion if the gate silently absorbs alerts.</strong> Mitigation: pre-LLM-gated rows STILL appear in the dashboard (they're cheap rows); the action humanizer makes their state obvious; the metrics are on the triage Grafana dashboard so the operator can see "we silently absorbed N alerts in the last hour."</li>
+      <li><strong>Misconfigured rule opts in critical-severity.</strong> Defense in depth: <code>pre_llm_gate</code> checks <code>alert.severity in ("critical", "page")</code> and bypasses regardless of annotation. The bypass increments <code>triage_recurrence_critical_bypassed_total</code> so an operator can wire an alert on it.</li>
+      <li><strong>Storage cost.</strong> The window query joins on fingerprint + timestamp — small, indexed, no concern.</li>
+      <li><strong>Interaction with US-5.3 override gate.</strong> Both gates flip DISMISS → ESCALATE. Order matters: US-5.3 (operator override on similar past alert) runs first; recurrence gate (LLM dismissed this fingerprint too many times) runs second. If both fire, US-5.3's note dominates the email since it's the more specific signal.</li>
+    </ul>
+    <p><strong>Tests:</strong></p>
+    <ul>
+      <li><code>test_pre_llm_gate_fires_under_threshold</code></li>
+      <li><code>test_pre_llm_gate_passes_through_when_count_reached</code></li>
+      <li><code>test_pre_llm_gate_bypasses_critical_severity</code></li>
+      <li><code>test_pre_llm_gate_no_opt_in_no_gate</code></li>
+      <li><code>test_post_llm_gate_force_escalates_after_n_dismissals</code></li>
+      <li><code>test_post_llm_gate_doesnt_touch_escalates</code></li>
+      <li><code>test_recurrence_critical_bypass_metric_increments</code></li>
+      <li><code>test_annotation_parse_handles_malformed</code></li>
+    </ul>
+    <p><strong>Composes with:</strong> <a href="decisions-log.html#d9">D9 (fingerprint dedup)</a> — different window, different signal; <a href="#us-5-3">US-5.3 (closed-loop feedback)</a> — both gates flip verdict, recurrence-gate runs after override-gate; <a href="decisions-log.html#d8">D8 (Drain3 7d-recurrence)</a> — same recurrence intuition applied at log-template granularity. The composition table above is correct; this plan is just the implementation underneath it.</p>
   </div>
 </div>
 
