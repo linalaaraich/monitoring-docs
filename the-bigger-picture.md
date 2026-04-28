@@ -31,13 +31,29 @@ This document is a snapshot from 2026-04-13 / 2026-04-22 of Sprint 2's pre-deadl
 - **`service_deployment_type` map drift** (audit I-1) — `node-exporter` corrected `systemd`→`docker-vm`; `mysql` removed (not deployed); `cadvisor` added; `otel-collector` ambiguity (k3s + docker-vm) documented.
 - **Audit improvements I-3, I-4, I-5** — Watchtower-doesn't-exist note (the laptop image rolls via the `triage_laptop` ansible role, not a polling daemon); cascade-incident-disk-loki regex fixed to match `LokiIngestionRateLow`; forward-looking comments on the 4 partially/fully forward-looking exemplars.
 
-**Epic 5 status (post-2026-04-28):**
+**Epic 5 status (end of 2026-04-28):**
 - ✅ US-5.4 adaptive thresholds (shipped 04-27)
-- 📋 US-5.8 recurrence gate (spec'd; ~4–6h to implement)
-- 📋 US-5.3 closed-loop feedback (designed; ~½ day)
-- 📋 US-5.2 incident correlator (designed; ~1–2 days, biggest demo moment)
-- 📋 US-5.1 per-service Drain3 + baselines (designed; ~1 day)
+- ✅ US-5.3 closed-loop feedback (shipped 04-28; D20)
+- ✅ US-5.8 recurrence gate (shipped 04-28; D21; Grafana opt-in applied for MediumCpuUsage / MediumMemoryUsage)
+- ✅ US-5.1 per-service Drain3 + baselines + prompt wiring (all 3 phases shipped 04-28; D23)
+- 📋 US-5.2 incident correlator (designed; ~1–2 days; deferred — biggest single remaining effort, paired with chaos-test verification of the 4-alert-collapse demo)
 - 📋 US-5.5 / US-5.6 / US-5.7 stretch (peer grouping / deployment-history MCP / labeled corpus)
+
+**Closing 2026-04-28 PM** (Tier A/B/C run-through after operator audit):
+
+| Tier | What | Outcome |
+|---|---|---|
+| A1 | Apply US-5.8 Grafana opt-in | ✅ MediumCpuUsage + MediumMemoryUsage now carry the recurrence_gate annotation; engine actively gating |
+| A2 | Scrub SESSION_HANDOFF.md from public history | ✅ git filter-repo + force-push; verified 404 on raw.githubusercontent; D22 entry |
+| A3 | Live-verify philosophy chain | ✅ 3 induced rounds; surfaced + fixed F-1.5 (Drain3 evidence flow), F-3 widening (Based on context, The alert indicates), Drain3 hallucination blocklist; round-3 RCA cited verbatim chaos templates as evidence (genuine win); F-4 confidence clamp fired correctly each time low-quality output landed |
+| B1 | Fix 4 chaos test inducers | ✅ kill PID 1, mem 256Mi+load, 16 burners, 6 distinct templates |
+| B2 | F-5 exemplar fixes | ✅ 2 new exemplars + cascade widen; 8/24 → 16/24 strong matches |
+| C1 | US-5.1 Phase A per-service Drain3 | ✅ /drain3/stats?service= returns `[spring-boot, nginx, proxy, drain3]` live |
+| C2 | I-6 ansible playbook end-to-end | ✅ pull task ran clean, container rolled, `/health` healthy |
+
+Skipped per operator (D-tier deferred): US-5.2 implementation (~13h), GPU migration to us-west-2 (~3-5d).
+
+Test suite went 95 (start of day) → **174/174**. ~40 commits across 3 repos.
 
 **AWS state:** G+VT quota approved 2026-04-27 in us-west-2 only (limit 4 = exactly one g5.xlarge). us-east-1 still 0. GPU stand-up is unblocked but deferred — laptop GTX 1060 + qwen2.5:7b is sufficient for current cycle (~68 s cold / ~35 s warm).
 
