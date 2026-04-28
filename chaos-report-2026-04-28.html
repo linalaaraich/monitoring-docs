@@ -24,8 +24,6 @@
 <body>
 <nav class="topnav">
   <a href="index.html">🏠 Home</a>
-  <a href="rca-quality-audit-2026-04-28.html">📋 RCA Audit</a>
-  <a href="audit-2026-04-28.html">📋 Sweep audit</a>
   <a href="decisions-log.html">📝 Decisions Log</a>
 </nav>
 <section class="hero">
@@ -34,7 +32,7 @@
   <p><span class="pill red">Overall grade: <strong>F</strong> (0.00)</span>
      <span class="pill green">0/4 alerts captured</span>
      <span class="pill green">4/4 teardowns clean</span>
-     <span class="pill orange">Run started: 2026-04-28T11:42:30</span></p>
+     <span class="pill orange">Run started: 2026-04-28T14:12:56</span></p>
 </section>
 <table>
 <thead>
@@ -43,7 +41,7 @@
 <tbody>
 <tr>
   <td><strong>target_down</strong><br><small>TargetDown</small></td>
-  <td>⚠ teardown ok, no RCA<br><small>371s</small></td>
+  <td>⚠ teardown ok, no RCA<br><small>372s</small></td>
   <td><span style="color:#e06070;font-size:24px;font-weight:700;">F</span><br>
       <small>0.00</small></td>
   <td>cause-first: 0.0<br>
@@ -59,7 +57,7 @@
 </tr>
 <tr>
   <td><strong>high_memory</strong><br><small>HighMemoryUsage</small></td>
-  <td>⚠ teardown ok, no RCA<br><small>668s</small></td>
+  <td>⚠ teardown ok, no RCA<br><small>672s</small></td>
   <td><span style="color:#e06070;font-size:24px;font-weight:700;">F</span><br>
       <small>0.00</small></td>
   <td>cause-first: 0.0<br>
@@ -75,7 +73,7 @@
 </tr>
 <tr>
   <td><strong>high_cpu</strong><br><small>HighCpuUsage</small></td>
-  <td>⚠ teardown ok, no RCA<br><small>545s</small></td>
+  <td>⚠ teardown ok, no RCA<br><small>562s</small></td>
   <td><span style="color:#e06070;font-size:24px;font-weight:700;">F</span><br>
       <small>0.00</small></td>
   <td>cause-first: 0.0<br>
@@ -91,7 +89,7 @@
 </tr>
 <tr>
   <td><strong>drain3_anomaly</strong><br><small>Drain3AnomalyDetected</small></td>
-  <td>⚠ teardown ok, no RCA<br><small>368s</small></td>
+  <td>⚠ teardown ok, no RCA<br><small>373s</small></td>
   <td><span style="color:#e06070;font-size:24px;font-weight:700;">F</span><br>
       <small>0.00</small></td>
   <td>cause-first: 0.0<br>
@@ -109,6 +107,6 @@
 <div class="footer">
   Tests live at <code>monitoring-project/scripts/chaos/tests/</code>.
   Run <code>./scripts/chaos/runner.py --tests &lt;short_names&gt;</code> from the controller.
-  See <a href="rca-quality-audit-2026-04-28.html" style="color:#4ea8de;">RCA Quality Audit</a> for the failure-mode taxonomy these tests measure against.
+  Failure-mode taxonomy lives in the private <code>monitoring-audit-results</code> repo (manual RCA quality audits).
 </div>
 </body></html>
