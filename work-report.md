@@ -316,7 +316,7 @@ Three substantive batches across four repos (11 commits total):
 
 ### 2026-04-28 — Audit + RCA prose philosophy + k3s host metrics
 
-Full-sweep audit (`audit-2026-04-28.html`) followed by execution of all 5 surfaced improvement items.
+Full-sweep audit (`monitoring-audit-results/audits/2026-04-28-sweep.md`, private) followed by execution of all 5 surfaced improvement items.
 
 | Stream | Outcome |
 |---|---|

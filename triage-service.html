@@ -167,7 +167,7 @@
 
 <div style="background:rgba(107,207,127,.08); border-bottom:2px solid #6bcf7f; padding:14px 32px; font-size:13px; line-height:1.6;">
   <strong style="color:#6bcf7f; text-transform:uppercase; font-size:11px; letter-spacing:2px;">Refreshed 2026-04-28</strong> —
-  Page reconciled with the <a href="audit-2026-04-28.html" style="color:#6bcf7f">full-sweep audit</a>. The pipeline is now <strong>10 stages</strong> (Drain3 annotation + exemplar injection were inserted in that order); <strong>response validator</strong>, <strong>bounded-agency retry</strong>, and <strong>action-template fallback</strong> are documented inside the LLM-investigation stage. LLM is <code>qwen2.5:7b-instruct</code> on the laptop (<code>adolin-wsl</code>, NVIDIA GTX 1060 · 6 GB VRAM) — see <a href="decisions-log.html#d17">D17</a> (exemplar library), <a href="decisions-log.html#d18">D18</a> (adaptive thresholds), <a href="decisions-log.html#d19">D19</a> (RCA prose philosophy). Dashboard at <code>http://adolin-wsl:8090/dashboard</code> over Tailscale.
+  Page reconciled with the 2026-04-28 full-sweep audit (in private <code>monitoring-audit-results</code> repo). The pipeline is now <strong>10 stages</strong> (Drain3 annotation + exemplar injection were inserted in that order); <strong>response validator</strong>, <strong>bounded-agency retry</strong>, and <strong>action-template fallback</strong> are documented inside the LLM-investigation stage. LLM is <code>qwen2.5:7b-instruct</code> on the laptop (<code>adolin-wsl</code>, NVIDIA GTX 1060 · 6 GB VRAM) — see <a href="decisions-log.html#d17">D17</a> (exemplar library), <a href="decisions-log.html#d18">D18</a> (adaptive thresholds), <a href="decisions-log.html#d19">D19</a> (RCA prose philosophy). Dashboard at <code>http://adolin-wsl:8090/dashboard</code> over Tailscale.
 </div>
 
 <div class="topnav">
@@ -686,7 +686,7 @@ Both layers are <em>optional</em> via env (<code>TRIAGE_SUPPRESSION_ENABLED=fals
 <!-- ───────────────────────────────────────── -->
 <h2 id="related"><span class="num">10.</span> Related pages</h2>
 <ul>
-  <li><a href="audit-2026-04-28.html">Full-sweep audit (2026-04-28)</a> — fresh systems-state pass that this page is reconciled against. Container state, Grafana rules, deployment-type map, exemplar coverage, storage, tailnet — and 5 improvement items (I-1 → I-5).</li>
+  <li>Full-sweep audit 2026-04-28 — internal sweep audit (in private <code>monitoring-audit-results</code> repo). Container state, Grafana rules, deployment-type map, exemplar coverage, storage, tailnet — and 5 improvement items (I-1 → I-5).</li>
   <li><a href="architecture.html">Architecture diagram</a> — where the triage service sits relative to monitoring VM, k3s, and the MCPs.</li>
   <li><a href="system-explained.html">System explained</a> — per-module deep dive (§3.4b exemplar injection, §3.5 LLM call, §4.7b exemplars module, §4.8 bounded agency).</li>
   <li><a href="dashboard-guide.html">Dashboard guide</a> — operator manual for every column, code, and abbreviation in <code>/dashboard</code>. Pair with <code>/dashboard/guide</code> on the running service.</li>

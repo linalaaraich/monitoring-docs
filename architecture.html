@@ -274,7 +274,7 @@
     <li><strong>Audit follow-on fixes (I-1, I-4, I-5).</strong> <code>service_deployment_type</code> map drift fixed: <code>node-exporter</code> mapped <code>systemd</code>→<code>docker-vm</code>, <code>mysql</code> dropped (not deployed), <code>cadvisor</code> added. Cascade-incident-disk-loki exemplar regex fixed to match the actual <code>LokiIngestionRateLow</code> rule (was the non-existent <code>LokiIngestLag</code>). Forward-looking comments added to the 4 archetypes whose alertname regexes don't yet match live rules — bounded-agency-resolves-inconclusive, crashloop-bad-config, network-firewall-attribution, tls-cert-expiry-pre-failure.</li>
   </ul>
   <p style="margin:0;color:#8890a0;font-size:12.5px;">
-    Full audit trail with all 5 I-x improvement items at <a href="audit-2026-04-28.html" style="color:#40d0d0">audit-2026-04-28.html</a>.
+    Full audit trail with all 5 I-x improvement items lives in the private <code>monitoring-audit-results</code> repo (<code>audits/2026-04-28-sweep.md</code>).
   </p>
 </div>
 
