@@ -1826,6 +1826,126 @@
   </div>
 </div>
 
+<h2 id="d21">D21 · Recurrence gate (US-5.8) — pre-LLM and post-LLM hysteresis for opted-in alerts</h2>
+<div class="decision">
+  <div class="decision-meta">
+    <span class="tag tag-fixed">✅ Shipped 2026-04-28</span>
+    <span class="date">2026-04-28</span>
+  </div>
+  <h3 class="problem-title">An alert that fires every 90 minutes is too slow for fingerprint dedup (10-min window) but too noisy to page someone every time. Each fire goes through the LLM and gets dismissed individually; on fire #5 the operator's mental model is "something IS going on" but the system is still treating each fire in isolation.</h3>
+
+  <div class="section-block">
+    <span class="block-label">Problem</span>
+    <div class="block-body">
+      <p>
+        Two existing recurrence-aware features cover specific cases:
+      </p>
+      <ul>
+        <li><a href="#d9">D9 fingerprint dedup</a> (10-min window) — collapses
+        identical refires inside the window.</li>
+        <li><a href="#d8">D8 Drain3 7-day recurrence</a> — escalates a Drain3
+        anomaly when its template fired ≥3 times in a week.</li>
+      </ul>
+      <p>
+        Gap in between: a metric alert (e.g., <code>MediumCpuUsage</code>) that
+        flaps every ~90 minutes — too slow for D9, not driven by Drain3 (so D8
+        doesn't apply), but recurring enough that paging on every fire is
+        operator-fatigue territory and dismissing every fire silently is
+        operator-blind territory. A third layer with a ~2h window covers it.
+      </p>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <span class="block-label">Reasoning</span>
+    <div class="block-body">
+      <p>
+        Three design tradeoffs:
+      </p>
+      <ul>
+        <li><strong>Pre-LLM gate vs always-LLM-with-suppression.</strong> The
+        pre-LLM gate is cheaper (no GPU cost on flap fires) but requires a
+        per-rule opt-in via Grafana annotation. We chose pre-LLM gate because
+        the cost of running the LLM on a flap that's been dismissed 4 times
+        already isn't worth the ~60s latency and GPU. The opt-in is necessary
+        so unannotated rules behave unchanged (no surprise regressions).</li>
+        <li><strong>Post-LLM force-escalate vs status-quo dismiss.</strong>
+        When the LLM has dismissed the same fingerprint M times in the
+        window, two reads are possible: (a) the alert really is noise — fine,
+        keep dismissing; (b) the LLM is missing a real signal that's
+        intermittent or context-sensitive. We chose to flip to ESCALATE on
+        the M+1th fire because the cost of one false-positive page is much
+        smaller than the cost of M+1 dismissals on a real degradation that
+        nobody noticed.</li>
+        <li><strong>Critical-severity hard bypass.</strong> Three layers of
+        protection: rule shouldn't carry the annotation; <code>parse_recurrence_annotation</code>
+        validates schema; <code>_is_critical</code> checks both
+        <code>alert.severity</code> and <code>alert.labels.severity</code>.
+        On bypass we increment <code>triage_recurrence_critical_bypassed_total</code>
+        so a misconfiguration surfaces to the operator's monitoring of
+        the triage service itself. Defense in depth — even if the first two
+        layers fail, the third still blocks the gate.</li>
+      </ul>
+      <p>
+        Annotation format: <code>recurrence_gate=pre_llm=4,llm_dismiss=2,window=2h</code>.
+        Permissive parser (unknown keys ignored, partial values default,
+        clamps to sane bounds), but malformed values disable the gate entirely
+        — the cost of a typo silently routing critical alerts wrong is much
+        higher than the cost of a typo turning the gate off until fixed.
+      </p>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <span class="block-label">Solution</span>
+    <div class="block-body">
+      <p>Six surfaces touched:</p>
+      <ol>
+        <li><code>app/recurrence_gate.py</code> (NEW) — pure-logic module
+        with <code>RecurrenceConfig</code> + <code>GateResult</code> dataclasses
+        and the three functions (parse + two gates). Async because the gates
+        consult the store.</li>
+        <li><code>app/rca_store.py</code> — new method
+        <code>count_recent_decisions_by_fingerprint(fingerprint, llm_verdict, window_seconds)</code>.
+        <code>llm_verdict=None</code> for the pre-LLM cap (any verdict counts);
+        <code>llm_verdict='dismiss'</code> for the post-LLM cap.</li>
+        <li><code>app/pipeline.py</code> — Step 1c (pre-LLM, after dedup +
+        before suppression check; persist as cheap row, skip LLM); Step 6c.5
+        (post-LLM, after the US-5.3 override gate; only flips DISMISS to
+        ESCALATE, leaves ESCALATE/INCONCLUSIVE alone).</li>
+        <li><code>app/metrics.py</code> — three new counters as listed above.</li>
+        <li>(Pending follow-up) <code>roles/grafana/templates/alertrules.yml.j2</code> —
+        opt in <code>MediumCpuUsage</code> + <code>MediumMemoryUsage</code> only.
+        Critical rules MUST NOT carry the annotation.</li>
+        <li>(Pending follow-up) <code>monitoring-docs/dashboard-guide.html</code> —
+        codes glossary entries for the two new <code>triage_decision</code> values.</li>
+      </ol>
+      <p>19 new tests in <code>tests/test_recurrence_gate.py</code> covering
+      annotation parsing (full / partial / malformed / clamps / unknown keys),
+      pre-LLM gate (under/over threshold, no opt-in, critical bypass via
+      top-level + labels.severity, missing fingerprint), post-LLM gate
+      (threshold met / not met, only DISMISS verdicts touched, no opt-in,
+      critical bypass).</p>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <span class="block-label">Evaluation</span>
+    <div class="block-body">
+      <p>
+        Empirical effect lands when the Grafana opt-in ships (follow-up commit
+        on <code>monitoring-project</code>). Until then the code is dormant —
+        no rule carries the annotation, no gate fires. That's intentional:
+        ship the engine first, opt in rules incrementally, watch the metrics.
+      </p>
+      <p>
+        Suite 132 → 151. Composes cleanly with the existing recurrence-aware
+        layers — different windows, different signals, no overlap.
+      </p>
+    </div>
+  </div>
+</div>
+
 </div>
 </main>
 

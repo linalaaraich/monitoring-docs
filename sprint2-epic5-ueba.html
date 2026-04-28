@@ -626,8 +626,13 @@ Then: z-score each pod against the mean + stddev of its siblings.</code></pre>
     <div class="story-title">Recurrence gate — two-tier hysteresis for known-flappy alerts</div>
   </div>
   <div class="story-meta-row">
-    <span class="meta-tag meta-prio-core">Core · structured noise suppression</span>
-    <span class="meta-tag meta-effort-med">Medium effort · ~4–6 hours</span>
+    <span class="meta-tag meta-prio-core" style="background:rgba(107,207,127,.15); color:var(--accent-green); border-color:rgba(107,207,127,.4);">✅ Shipped 2026-04-28 · see <a href="decisions-log.html#d21" style="color:var(--accent-green);">D21</a></span>
+    <span class="meta-tag meta-effort-low">Low effort · ~4 hours actual</span>
+  </div>
+  <div class="story-section" style="background:rgba(107,207,127,.06); border-left:3px solid var(--accent-green); padding:10px 14px; border-radius:0 6px 6px 0; margin-bottom:10px;">
+    <h4 style="color:var(--accent-green); margin-top:0;">What shipped</h4>
+    <p>New <code>app/recurrence_gate.py</code> module with <code>parse_recurrence_annotation</code>, <code>pre_llm_gate</code>, and <code>post_llm_gate</code>. Annotation parser handles malformed values defensively (typo never silently misroutes critical alerts) and clamps thresholds + windows to sane bounds. Both gates check critical-severity defensively — a misconfigured rule that opts in critical-severity gets bypassed AND increments a counter so operators see the misconfiguration. Pipeline gains two new steps: 1c (pre-LLM gate after dedup) and 6c.5 (post-LLM gate after the US-5.3 override gate). Two new <code>triage_decision</code> values: <code>recurrence_gated_pre_llm</code> + <code>recurrence_gated_post_llm_force_escalate</code>. Three new metrics: <code>triage_recurrence_gated_pre_llm_total</code>, <code>triage_recurrence_force_escalated_total</code>, <code>triage_recurrence_critical_bypassed_total</code>. New store method <code>count_recent_decisions_by_fingerprint</code>. 19 new tests covering annotation parse + both gates + critical bypass + edge cases. Suite went 132 → 151.</p>
+    <p>Composes with <a href="decisions-log.html#d9">D9 fingerprint dedup</a> (10-min window, identical refire), <a href="decisions-log.html#d8">D8 Drain3 7d-recurrence</a> (template-level), and <a href="#us-5-3">US-5.3 closed-loop feedback</a> (override gate runs first, takes precedence over recurrence heuristic).</p>
   </div>
   <div class="story-section">
     <h4>UEBA lesson</h4>
