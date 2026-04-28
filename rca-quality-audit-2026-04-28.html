@@ -387,6 +387,47 @@
 </ol>
 
 <!-- ============================================================== -->
+<h2 id="f5-coverage">F-5 exemplar coverage — 24-combination matrix (added later same day)</h2>
+
+<p>
+  Cross-checked all 12 exemplars against 24 (alertname, service, deployment_type, signal) tuples
+  representing the realistic firing surface of the 18 Grafana rules. Run via
+  <code>app.exemplars.find_for_alert</code> + scoring helper:
+</p>
+
+<table>
+  <thead><tr><th>Tier</th><th>Count</th><th>Examples</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>Strong (≥0.90)</strong></td>
+      <td><span class="tag-ok">8 / 24</span></td>
+      <td>HighMemoryUsage / spring-boot → oom-loop (1.10); HighP95Latency / spring-boot → service-self-p95-saturation (1.00); HighKongP95Latency / kong → upstream-latency-attribution (1.00); TargetDown / k8s services → crashloop-bad-config (1.00).</td>
+    </tr>
+    <tr>
+      <td><strong>Weak (0.60–0.89)</strong></td>
+      <td><span class="tag-minor">9 / 24</span></td>
+      <td>HighCpuUsage family → adaptive-threshold-noop (0.70 — services list = `*` so deployment_type doesn't score); HighDiskUsage / monitoring → cascade-incident-disk-loki (0.80); Drain3AnomalyDetected → drain3-novelty-post-deploy (0.70 — same wildcard issue).</td>
+    </tr>
+    <tr>
+      <td><strong>Poor (&lt;0.60, fallback)</strong></td>
+      <td><span class="tag-major">7 / 24</span></td>
+      <td>CriticalCpuUsage (regex doesn't include "Critical"); CriticalDiskUsage / DiskFillingUp / LokiCriticalDiskUsage / LokiDiskFillingUp (cascade exemplar regex doesn't cover them); OTelCollectorHighSpanDropRate / OTelCollectorDown (no exemplar exists at all).</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>Specific gaps to fix</h3>
+
+<ol>
+  <li><strong>OTel collector exemplar missing</strong> — both <code>OTelCollectorHighSpanDropRate</code> and <code>OTelCollectorDown</code> fall to <code>generic-sre-shape</code>. They're real failure modes (otel-collector OOM, exporter backpressure, batch buffer overflow) and the LLM has no calibration target. Add a new <code>otel-collector-degradation</code> exemplar with the specific evidence shape: span drop rate, exporter queue depth, memory growth.</li>
+  <li><strong>Cascade-incident regex too narrow</strong> — only matches <code>HighDiskUsage</code> + <code>LokiIngestionRateLow</code>. The 4 disk-pressure variants (<code>CriticalDiskUsage</code>, <code>DiskFillingUp</code>, <code>LokiCriticalDiskUsage</code>, <code>LokiDiskFillingUp</code>) all miss. Widen the regex to include all 6 disk-related alertnames AND add <code>monitoring</code>/<code>loki</code> to services to make scores ≥0.90.</li>
+  <li><strong>Adaptive-threshold-noop regex misses Critical</strong> — only matches <code>^(High|Medium)CpuUsage$</code>, so <code>CriticalCpuUsage</code> falls through. Adaptive-threshold-noop isn't the right exemplar for Critical (those are real, not seasonal noise) — better to add a separate <code>service-resource-saturation</code> exemplar for Critical CPU/Memory cases.</li>
+  <li><strong>Wildcard services lower scores</strong> — exemplars that use <code>services: ["*"]</code> (synthetic-blip-dismiss, drain3-novelty-post-deploy, adaptive-threshold-noop) score 0.70 instead of 1.00 because the matcher gives 0.40 for "service in services" and only 0.10 for service mismatch. The wildcard is intentional design (these archetypes are service-agnostic); just worth documenting that 0.70 is the natural ceiling for them.</li>
+</ol>
+
+<p>These gaps are <strong>not</strong> shipped yet — documenting here for the next code session. None are urgent: the F-1/F-2/F-3/F-4 fixes already shipped today address the bulk of regression cases.</p>
+
+<!-- ============================================================== -->
 <h2 id="related">Related</h2>
 
 <ul>
