@@ -284,8 +284,12 @@
     <div class="story-title">Per-service Drain3 instances + per-service metric baselines</div>
   </div>
   <div class="story-meta-row">
-    <span class="meta-tag meta-prio-core">Core</span>
-    <span class="meta-tag meta-effort-med">Medium effort · ~1 day</span>
+    <span class="meta-tag meta-prio-core" style="background:rgba(107,207,127,.15); color:var(--accent-green); border-color:rgba(107,207,127,.4);">✅ Shipped 2026-04-28 · see <a href="decisions-log.html#d23" style="color:var(--accent-green);">D23</a></span>
+    <span class="meta-tag meta-effort-low">Medium effort · ~1 day actual (3 phases)</span>
+  </div>
+  <div class="story-section" style="background:rgba(107,207,127,.06); border-left:3px solid var(--accent-green); padding:10px 14px; border-radius:0 6px 6px 0; margin-bottom:10px;">
+    <h4 style="color:var(--accent-green); margin-top:0;">What shipped</h4>
+    <p>All 3 phases delivered 2026-04-28. <strong>Phase A</strong>: per-service Drain3 template trees in <code>app/drain_analyzer.py</code> — <code>analyze(line, service)</code> routes to per-service miners with isolated FilePersistence; auto-migrates pre-Phase-A state to <code>_unknown.bin</code>; Loki ingest parses stream labels to extract service per line; <code>/drain3/stats?service=</code> for per-service scope. <strong>Phase B</strong>: <code>app/entity_baselines.py</code> — <code>get_baseline(service, metric, window)</code> with σ-claim helper, lazy compute, 5-min cache. <strong>Phase C</strong>: wires baseline into <code>MetricFacts.as_prompt_block</code> so the LLM cites "Xσ above SERVICE's 7d baseline" as evidence rather than just "above threshold". Suite 167 → 172 (5 new Phase-A tests).</p>
   </div>
   <div class="story-section">
     <h4>UEBA lesson</h4>

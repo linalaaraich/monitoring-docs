@@ -1981,6 +1981,37 @@
   </div>
 </div>
 
+<h2 id="d23">D23 · Per-service Drain3 template trees (US-5.1 Phase A)</h2>
+<div class="decision">
+  <div class="decision-meta">
+    <span class="tag tag-fixed">✅ Shipped 2026-04-28</span>
+    <span class="date">2026-04-28</span>
+  </div>
+  <h3 class="problem-title">Drain3 kept a single global TemplateMiner — spring-boot's "novel" templates were judged against the global pool, not against spring-boot's own history. A line that's commonplace for spring-boot but unusual for kong looked the same as a line that's unusual for both.</h3>
+
+  <div class="section-block">
+    <span class="block-label">Solution</span>
+    <div class="block-body">
+      <p>
+        Per-service template miners. <code>analyze(line, service)</code> routes
+        to the right miner; each persists at <code>{drain3_state_dir}/{service}.bin</code>;
+        <code>get_stats(service=...)</code> scopes per-service, without it
+        aggregates with a per-service breakdown. Loki ingest parses stream
+        labels to extract the service per line. Auto-migrates pre-Phase-A
+        <code>drain3_state.bin</code> → <code>_unknown.bin</code> so prior
+        history is preserved as the safe-default bucket.
+      </p>
+      <p>
+        The LLM prompt now cites "novel template for SERVICE X (which has
+        seen N templates over T days)" — sharper signal than the prior
+        "novel in the global pool". Phase B (entity baselines) and Phase C
+        (wired into <code>MetricFacts.as_prompt_block</code>) shipped earlier
+        2026-04-28; this Phase A completes US-5.1.
+      </p>
+    </div>
+  </div>
+</div>
+
 </div>
 </main>
 
