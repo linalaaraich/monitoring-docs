@@ -255,7 +255,7 @@ Every decision — escalate, dismiss, suppress, or timeout — is persisted in a
 </table>
 
 <!-- ───────────────────────────────────────── -->
-<h2 id="pipeline"><span class="num">2.</span> The 9-step pipeline</h2>
+<h2 id="pipeline"><span class="num">2.</span> The 10-step pipeline</h2>
 <p>
 Each Grafana alert the service accepts runs through these stages. Steps 1–2 are cheap and synchronous (dedup + suppression check); step 3 onward runs under an asyncio timeout with a safety fallback.
 </p>
@@ -318,6 +318,15 @@ Each Grafana alert the service accepts runs through these stages. Steps 1–2 ar
   <div class="pipeline-step ps-purple">
     <div class="pipeline-num">7</div>
     <div>
+      <div class="pipeline-title">Exemplar injection <span class="mini-tag">prompt-eng</span></div>
+      <div class="pipeline-desc">
+        <code>exemplars.find_for_alert()</code> picks the best-matching canonical "good RCA" archetype from <code>app/exemplars/library.yaml</code> (eleven curated archetypes — OOM-loop, upstream-latency, cascade incidents, network-firewall, TLS expiry, etc.). The matched exemplar is rendered into the prompt as a <code>## Reference exemplar</code> section, giving the LLM a structural template tailored to <em>this</em> alert before it sees the evidence. <a href="decisions-log.html#d17">D17</a> covers the why; the prose source lives at <code>monitoring-triage-service/docs/happy-path-scenarios.md</code>.
+      </div>
+    </div>
+  </div>
+  <div class="pipeline-step ps-purple">
+    <div class="pipeline-num">8</div>
+    <div>
       <div class="pipeline-title">LLM investigation</div>
       <div class="pipeline-desc">
         <code>LLMClient.investigate()</code> builds a JSON-schema prompt (<code>decision</code>, <code>severity</code>, <code>rca</code>, <code>reason</code>, <code>anomaly_summary</code>, <code>suggested_actions</code>, <code>evidence</code>), POSTs it to Ollama's <code>/api/generate</code>, and parses the response. Sloppy outputs (dict-in-list, missing fields) are coerced by <code>LLMDecision</code>'s pydantic validators rather than rejected — small quantized models are forgiving, and we'd rather take their signal than 500 on the user.
@@ -325,7 +334,7 @@ Each Grafana alert the service accepts runs through these stages. Steps 1–2 ar
     </div>
   </div>
   <div class="pipeline-step ps-red">
-    <div class="pipeline-num">8</div>
+    <div class="pipeline-num">9</div>
     <div>
       <div class="pipeline-title">Act on verdict</div>
       <div class="pipeline-desc">
@@ -334,7 +343,7 @@ Each Grafana alert the service accepts runs through these stages. Steps 1–2 ar
     </div>
   </div>
   <div class="pipeline-step ps-cyan">
-    <div class="pipeline-num">9</div>
+    <div class="pipeline-num">10</div>
     <div>
       <div class="pipeline-title">Persist to RCA history</div>
       <div class="pipeline-desc">
@@ -346,7 +355,7 @@ Each Grafana alert the service accepts runs through these stages. Steps 1–2 ar
 
 <div class="callout warn">
   <div class="callout-label">Timeout safety</div>
-  <p style="margin:0">Steps 4–9 run under <code>asyncio.wait_for(..., timeout=PIPELINE_TIMEOUT)</code>. If it fires, we (a) send the <em>raw</em> Grafana alert email as a fallback, (b) record a <code>timeout_passthrough</code> row, and (c) continue serving. The AI layer is never in the critical path for paging.</p>
+  <p style="margin:0">Steps 4–10 run under <code>asyncio.wait_for(..., timeout=PIPELINE_TIMEOUT)</code>. If it fires, we (a) send the <em>raw</em> Grafana alert email as a fallback, (b) record a <code>timeout_passthrough</code> row, and (c) continue serving. The AI layer is never in the critical path for paging.</p>
 </div>
 
 <!-- ───────────────────────────────────────── -->
@@ -654,7 +663,8 @@ Both layers are <em>optional</em> via env (<code>TRIAGE_SUPPRESSION_ENABLED=fals
 <h2 id="related"><span class="num">10.</span> Related pages</h2>
 <ul>
   <li><a href="architecture.html">Architecture diagram</a> — where the triage service sits relative to monitoring VM, k3s, and the MCPs.</li>
-  <li><a href="sprint3-backlog.md">Sprint 3 backlog §4 &amp; §5</a> — the GPU migration and native Ollama tool-calling work. Changes how steps 4–7 of the pipeline run, not <em>whether</em>.</li>
+  <li><a href="https://github.com/linalaaraich/monitoring-triage-service/blob/main/docs/happy-path-scenarios.md">Happy-path scenarios</a> — eleven detailed end-to-end RCA cycles the triage service is calibrated to produce. Source-of-truth for the exemplar library injected at step 7. See also <a href="decisions-log.html#d17">D17</a>.</li>
+  <li><a href="sprint3-backlog.md">Sprint 3 backlog §4 &amp; §5</a> — the GPU migration and native Ollama tool-calling work. Changes how steps 4–8 of the pipeline run, not <em>whether</em>.</li>
   <li><a href="sprint2-extension-guide.html">Sprint 2 extension guide</a> — the hardening work (circuit breaker, JSON schema enforcement, observability) that got the triage service to production-ish shape.</li>
   <li><a href="build-guide.html">Complete build guide</a> — the reference doc for every service in the stack. The triage service is covered end-to-end there too, but less deeply than this page.</li>
   <li><a href="reproducibility-guide.html">Reproducibility guide</a> — how to bring everything up from scratch, including the triage service container.</li>

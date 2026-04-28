@@ -372,15 +372,46 @@
 </p>
 
 <!-- 3.5 -->
+<h3 id="lifecycle-step4b">3.4b Exemplar injection → <span class="file-ref">exemplars/__init__.py:find_for_alert</span></h3>
+<p>
+  Before the LLM call, the prompt builder picks the best-matching <em>exemplar</em>
+  — a curated canonical "good RCA" shape — from
+  <code>app/exemplars/library.yaml</code> and injects it into the prompt as a
+  <code>## Reference exemplar</code> section. The exemplar gives the LLM a
+  structural template tailored to this alert's archetype on attempt 1 — no
+  agent loop, no extra latency. <a href="decisions-log.html#d17">See D17 in the
+  decisions log</a> for the why; <a href="https://github.com/linalaaraich/monitoring-triage-service/blob/main/docs/happy-path-scenarios.md">docs/happy-path-scenarios.md</a>
+  is the human-facing reference (eleven archetypes).
+</p>
+<p>
+  Match score = 0.10 (alertname regex base) + 0.40 (service ∈ services) + 0.30
+  (deployment_type match) + 0.20 (signal match) + 0.10 (severity match);
+  highest wins, ties broken by library order (deterministic). When no
+  archetype matches, the loader returns a <code>generic-sre-shape</code>
+  default with the same structural cues. The <code>closed-loop-feedback-override</code>
+  archetype is gated behind a sentinel regex (<code>^__pipeline_explicit__$</code>)
+  so it is fetched explicitly by id (when Epic 5 US-5.3 ships) rather than
+  auto-matched.
+</p>
+<p>
+  The library is the source of truth in code; the LLM-callable retry path
+  (<a href="#lifecycle-step6">§3.6 bounded-agency</a>) exposes
+  <code>rca_history.list_exemplars</code> and
+  <code>rca_history.get_exemplar</code> for the rare case where the
+  pre-injected archetype doesn't fit. Both are direct in-process calls (same
+  pattern as <code>rca_history.similar</code>) — no HTTP / MCP roundtrip.
+</p>
+
 <h3 id="lifecycle-step5">3.5 LLM + response validator → <span class="file-ref">pipeline.py:260</span></h3>
 <p>
   <code>LLMClient.investigate()</code>
   (<span class="file-ref">llm_client.py:256</span>) builds the prompt via
   <code>_build_prompt()</code> (<span class="file-ref">llm_client.py:396</span>):
   system message carries <code>SYSTEM_PROMPT</code> (rules A–H + schema
-  description + 3 few-shot examples); user message carries alert details,
-  <code>MetricFacts.as_prompt_block()</code>, correlated-alerts section,
-  pre-gathered context, history.
+  description + 3 few-shot examples + the exemplar-library policy paragraph);
+  user message carries alert details, <code>MetricFacts.as_prompt_block()</code>,
+  correlated-alerts section, the matched <code>## Reference exemplar</code>
+  (see §3.4b), pre-gathered context, history.
 </p>
 <p>
   <code>_call_ollama()</code> (<span class="file-ref">llm_client.py:592</span>)
@@ -564,6 +595,37 @@
   not "template explicitly empty."
 </p>
 
+<h3 id="mod-exemplars">4.7b <code>app/exemplars/</code></h3>
+<p>
+  Curated library of canonical "good RCA" shapes, injected into every LLM
+  prompt as a <code>## Reference exemplar</code> section. See <a href="decisions-log.html#d17">D17</a>
+  for the why; eleven archetypes are catalogued covering OOM-loop,
+  upstream-latency attribution, synthetic-blip dismiss, cascade incidents,
+  Drain3 novelty post-deploy, bounded-agency retry resolution,
+  adaptive-threshold no-op, closed-loop feedback override, CrashLoopBackOff,
+  network-firewall attribution, and TLS pre-failure expiry.
+</p>
+<ul>
+  <li><code>app/exemplars/library.yaml</code> — source of truth. Each entry: id,
+  archetype, match selectors (alertname regex, services, deployment_types,
+  signal, severity), decision, RCA paragraph, evidence shape, actions shape,
+  lesson, doc_anchor.</li>
+  <li><code>app/exemplars/__init__.py</code> — loader + matcher.
+  <code>find_for_alert(alertname, service, deployment_type, signal, severity)</code>
+  returns the highest-scoring exemplar (or the <code>generic-sre-shape</code>
+  default if none match). <code>format_for_prompt(exemplar)</code> renders as
+  the markdown block consumed by <code>llm_client._build_prompt</code>.
+  <code>list_all()</code> + <code>get_by_id()</code> serve the bounded-agency
+  tool surface.</li>
+</ul>
+<p>
+  The prose version of each archetype lives in
+  <code>monitoring-triage-service/docs/happy-path-scenarios.md</code> at the
+  anchor declared in <code>doc_anchor</code>. Adding a new archetype is a
+  single-file YAML edit + one new prose scenario — the matcher picks it up
+  automatically.
+</p>
+
 <h3 id="mod-agency">4.8 <code>app/bounded_agency.py</code></h3>
 <p>
   Whitelisted tools with per-tool Pydantic arg schemas:
@@ -573,6 +635,8 @@
   <li><code>LokiQueryRangeArgs(query, lookback_seconds=30–3600)</code></li>
   <li><code>JaegerGetTracesArgs(service, operation?, min_duration_ms, limit=1–20)</code></li>
   <li><code>RCAHistorySimilarArgs(alert_name, affected_service?, days=1–30, limit=1–10)</code></li>
+  <li><code>RCAHistoryListExemplarsArgs()</code> — no args; lists all curated archetypes from <a href="#mod-exemplars">§4.7b</a></li>
+  <li><code>RCAHistoryGetExemplarArgs(exemplar_id)</code> — fetch one archetype by id when the pre-injected one is the wrong fit</li>
 </ul>
 <p>
   <code>TOOLS_DESCRIPTION</code> is the user-facing catalog appended to the
