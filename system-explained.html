@@ -407,8 +407,10 @@
   <code>LLMClient.investigate()</code>
   (<span class="file-ref">llm_client.py:256</span>) builds the prompt via
   <code>_build_prompt()</code> (<span class="file-ref">llm_client.py:396</span>):
-  system message carries <code>SYSTEM_PROMPT</code> (rules A–H + schema
-  description + 3 few-shot examples + the exemplar-library policy paragraph);
+  system message carries <code>SYSTEM_PROMPT</code> (rules A–J + schema
+  description + 3 few-shot examples + the exemplar-library policy paragraph;
+  rules A and J encode the cause-first, plain-language RCA philosophy
+  formalised in <a href="decisions-log.html#d19">D19</a>);
   user message carries alert details, <code>MetricFacts.as_prompt_block()</code>,
   correlated-alerts section, the matched <code>## Reference exemplar</code>
   (see §3.4b), pre-gathered context, history.
@@ -429,6 +431,7 @@
 </p>
 <ol>
   <li><strong>Banned-phrase scan</strong> on rca + reason (<code>_BANNED_PHRASE_PATTERNS</code>) — catches "insufficient data", "cannot determine", etc. Matched phrases go into <code>report.banned_phrase_hits</code> so a retry can quote them back.</li>
+  <li><strong>Surface-only RCA scan</strong> (added <a href="decisions-log.html#d19">D19, 2026-04-28</a>) — first sentence of the RCA is checked against <code>_SURFACE_ONLY_LEDE_PATTERNS</code> (catches openings like <code>"PromQL `&lt;expr&gt;` reported &lt;value&gt;..."</code>, <code>"The PromQL expression..."</code>, or raw <code>metric{...}=value</code>); the full prose is checked against <code>_SURFACE_ONLY_HEDGE_PATTERNS</code> (catches "indicates that there are X experiencing Y" tails). Triggers a retry with cause-first feedback, since these patterns mean the model restated the alert rather than naming a cause.</li>
   <li><strong>Vague-action scan</strong> on suggested_actions — entries starting with <code>check|monitor|investigate|...</code> and lacking a concrete payload (backtick, URL, kubectl/ssh/docker/etc.) are pruned in place.</li>
   <li><strong>Architecture-mismatch scan</strong> — if deployment_type is <code>docker-vm</code> and an action contains <code>kubectl</code>, that specific action is pruned (with reason <code>arch_mismatch:k8s_command_for_docker-vm_service</code>).</li>
 </ol>
@@ -535,7 +538,7 @@
 
 <h3 id="mod-llm">4.3 <code>app/llm_client.py</code></h3>
 <table class="kv-table"><tbody>
-  <tr><td><code>SYSTEM_PROMPT</code> :23</td><td>Static string. Contains rules A–H, response schema description, 3 few-shot examples. Static-by-design so Ollama's KV-cache stays warm across alerts.</td></tr>
+  <tr><td><code>SYSTEM_PROMPT</code> :24</td><td>Static string. Contains rules A–J (rule A demands a cause-first lede; rule J demands plain-language translation of raw PromQL — see <a href="decisions-log.html#d19">D19</a>), response schema description, 3 few-shot examples (cause-first prose), exemplar-library policy paragraph. Static-by-design so Ollama's KV-cache stays warm across alerts.</td></tr>
   <tr><td><code>pick_primary_value()</code> :173</td><td>Skips the threshold-boolean refId and returns the real metric value. Used in 3 places.</td></tr>
   <tr><td><code>_format_observed_value()</code> :205</td><td>Renders <code>(ref, val)</code> as "X (refId=Y) [other refIds: ...]".</td></tr>
   <tr><td><code>_build_fallback_decision()</code> :223</td><td>Safe ESCALATE fallback when Ollama is unreachable.</td></tr>

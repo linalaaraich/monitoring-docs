@@ -489,6 +489,54 @@ None of those are on the current roadmap. Native tool calling is the right call 
 
 ---
 
+## 6. RCA prose quality — telemetry as the means, not the end <!-- SPRINT-3-RCA-PROSE -->
+
+**Priority:** Done · **Effort:** ~½ day actual · **Owner:** Claude (operator-paired)
+**Surfaced on:** 2026-04-28, during the post-exemplar-library audit. Operator review of live RCAs found the model leading every analysis with the PromQL expression and observed value, then concluding "this indicates that there are X experiencing Y" — restating the alert in different words instead of naming a cause.
+**Status:** ✅ Shipped 2026-04-28 — see [decisions-log D19](decisions-log.html#d19). Listed here for backlog completeness so the cross-reference from sprint2-epic5-ueba isn't dead.
+
+### Why this matters
+
+The RCA is the operator's first read on what is broken. If it just paraphrases the alert, the operator opens a dashboard and starts from scratch — the analysis added no value. A real RCA names a specific failing component (saturated connection pool, tripped circuit-breaker, recent regression, severed network path) and uses telemetry as supporting evidence. Telemetry is the means; naming the cause is the end.
+
+### What was already implemented (don't re-do)
+
+- The exemplar library ([D17](decisions-log.html#d17)) gave the model a structural calibration target.
+- The response validator ([D11](decisions-log.html#d11)) already enforced "no investigation in suggested_actions" and "deployment_type matches command family".
+- The Sprint 2 dashboard rewrites surfaced the prose to the operator at all (without that, this regression would have been invisible).
+
+### What was missing
+
+- `SYSTEM_PROMPT` rule A in `app/llm_client.py` literally instructed the model to start every RCA with the PromQL expression and observed value. Three of the four surfaces shaping the prose (rule A, the closing imperative, the few-shot examples) were pulling toward symptom-first.
+- The exemplar `rca` fields were good in spirit but several of them led with the metric value too — they didn't strongly counter rule A.
+- The validator had no check for surface-only opening shapes — once the model produced "PromQL `<expr>` reported `<value>`...", nothing rejected it.
+
+### What was shipped
+
+- `SYSTEM_PROMPT` rule A rewritten to demand a cause-first lede; new rule J added for plain-language translation of raw PromQL; closing imperative rewritten.
+- All three few-shot examples in `app/llm_client.py` rewritten to model cause-first prose.
+- All 11 exemplar `rca` fields in `app/exemplars/library.yaml` rewritten — the structural calibration target now demonstrates the desired shape.
+- `app/response_validator.py` gained a surface-only LEDE scan (regex on the first sentence) and a surface-only hedge scan (regex on the full prose). 6 new tests in `tests/test_response_validator_surface_only.py` lock in both checks plus a regression test proving cause-first prose with PromQL in evidence still passes.
+- `docs/happy-path-scenarios.md` gained a "RCA prose quality" header section documenting the philosophy.
+
+### Acceptance criteria (all met)
+
+- [x] Test suite green: 95/95 (89 prior + 6 new).
+- [x] Validator rejects "PromQL `<expr>` reported" lede, "The PromQL expression" lede, and "indicates that there are X experiencing Y" hedge.
+- [x] Validator passes cause-first prose even when PromQL appears later in the same RCA.
+- [x] Three reinforcing surfaces (system-prompt rules + exemplars + validator) all carry the same philosophy so future regressions are caught at multiple layers.
+
+### Related files
+
+- `monitoring-triage-service/app/llm_client.py` — SYSTEM_PROMPT + few-shot examples.
+- `monitoring-triage-service/app/exemplars/library.yaml` — all 11 archetypes' `rca` fields.
+- `monitoring-triage-service/app/response_validator.py` — surface-only LEDE + hedge regex sets.
+- `monitoring-triage-service/tests/test_response_validator_surface_only.py` — 6 tests.
+- `monitoring-triage-service/docs/happy-path-scenarios.md` — philosophy header.
+- `monitoring-docs/decisions-log.html#d19` — full decision rationale.
+
+---
+
 ## How to add items to this backlog
 
 When a Sprint 2 conversation surfaces a "let's do that in Sprint 3" follow-up, add a new numbered section here with:

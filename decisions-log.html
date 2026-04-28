@@ -1532,6 +1532,157 @@
   </li>
 </ul>
 
+<h2 id="d19">D19 · RCA prose quality — telemetry is the means, not the end</h2>
+<div class="decision">
+  <div class="decision-meta">
+    <span class="tag tag-fixed">✅ Shipped 2026-04-28</span>
+    <span class="date">2026-04-28</span>
+  </div>
+  <h3 class="problem-title">RCA outputs were restating the alert (PromQL + observed value + "this indicates that there are X experiencing Y") instead of naming a cause. The shape was being driven by the SYSTEM_PROMPT itself — rule A literally instructed the model to start RCAs with the PromQL expression and observed value.</h3>
+
+  <div class="section-block">
+    <span class="block-label">Problem</span>
+    <div class="block-body">
+      <p>
+        Operator review of live RCA outputs surfaced a recurring pattern: the
+        model was producing prose like <em>"PromQL `histogram_quantile(0.95,
+        sum(rate(kong_request_latency_ms_bucket[5m])) by (le))` reported a
+        p95 latency of 8487.9 ms at the time of firing, which is significantly
+        above the adaptive baseline. This indicates that there are requests
+        experiencing unusually high latencies."</em>
+      </p>
+      <p>
+        That is the alert restating itself in different words, not a root
+        cause analysis. The metric value, the PromQL, the threshold breach
+        — those are the <em>symptom</em>. Telemetry is the <em>means</em> of
+        diagnosis; it should not be the diagnosis. A real RCA names what is
+        broken: a saturated connection pool, a tripped circuit-breaker, a
+        recently deployed regression, a severed network path, a stalled
+        renewal pipeline.
+      </p>
+      <p>
+        The model wasn't malfunctioning — it was faithfully obeying
+        <code>SYSTEM_PROMPT</code> rule A, which read:
+        <em>"Always start your RCA by restating the rule's PromQL, the observed
+        value, and whether the value is materially above or below the
+        threshold."</em> Few-shot examples 2 and 3 also led with PromQL.
+        Even the new exemplars (<a href="#d17">D17</a>) didn't strongly
+        counter this — several of their <code>rca</code> fields opened with
+        the metric value too. Three reinforcing surfaces all pulled the model
+        toward symptom-first prose.
+      </p>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <span class="block-label">Reasoning</span>
+    <div class="block-body">
+      <p>
+        Three reinforcing surfaces means three places to fix:
+      </p>
+      <ul>
+        <li><strong>System prompt</strong> — rewrite rule A to demand a
+        cause-first lede; add rule J for plain-language translation of raw
+        PromQL ("p95 = 8487 ms" → "95% of requests took longer than 8.5
+        seconds"); replace the closing imperative
+        <em>"Start your RCA by restating the observed value and PromQL"</em>
+        with a cause-first version.</li>
+        <li><strong>Few-shot examples</strong> — rewrite Examples 1, 2, and
+        3 in <code>app/llm_client.py</code> to model the new shape. The
+        examples are how the model learns the calibration target — if Example
+        2 starts with PromQL, the model copies that.</li>
+        <li><strong>Exemplar library</strong> — rewrite all 11
+        <code>rca</code> paragraphs in <code>app/exemplars/library.yaml</code>
+        to lead with a named cause and demonstrate plain-language metric
+        translation. The exemplars are the structural calibration target the
+        prompt builder injects per-alert; they have to model the desired
+        shape.</li>
+      </ul>
+      <p>
+        Plus a validator safety net at the boundary: regex scans for the
+        known-bad opening shapes
+        (<code>^PromQL `&lt;expr&gt;`</code>, <code>^The PromQL expression</code>,
+        <code>^&lt;metric&gt;{...} = &lt;value&gt;</code>) and the known-bad
+        hedge tail (<em>"indicates that there are X experiencing Y"</em>).
+        When these match, the validator triggers a retry with feedback
+        explicitly quoting the rule A philosophy.
+      </p>
+      <p>
+        Why not rely on prompt rules alone? Same reason
+        <a href="#d15">D15 (bounded agency)</a>,
+        <a href="#d11">D11 (response validator)</a>,
+        and the remediation-only philosophy each have validator safety nets:
+        prompts shape behaviour, validators enforce it. If the LLM regresses
+        (model swap, prompt drift, edge case), the validator catches it before
+        the operator sees garbage output.
+      </p>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <span class="block-label">Solution</span>
+    <div class="block-body">
+      <p>Six surfaces touched:</p>
+      <ol>
+        <li><code>app/llm_client.py</code> — <code>SYSTEM_PROMPT</code>
+        rule A rewritten cause-first; new rule J added for plain-language
+        translation; closing imperative rewritten; all three few-shot
+        examples rewritten.</li>
+        <li><code>app/exemplars/library.yaml</code> — all 11 <code>rca</code>
+        fields rewritten cause-first; the default fallback rewritten too.</li>
+        <li><code>app/response_validator.py</code> — new
+        <code>_SURFACE_ONLY_LEDE_PATTERNS</code> and
+        <code>_SURFACE_ONLY_HEDGE_PATTERNS</code> regex sets; new check 1b
+        runs after the banned-phrase scan; <code>build_retry_feedback</code>
+        distinguishes surface-only feedback from data-thin feedback so the
+        retry guidance is correctly targeted.</li>
+        <li><code>tests/test_response_validator_surface_only.py</code> —
+        6 new tests covering both LEDE patterns and hedge patterns, plus
+        regression tests proving cause-first prose passes even with PromQL
+        in later sentences.</li>
+        <li><code>docs/happy-path-scenarios.md</code> — new
+        "RCA prose quality" header section documenting the philosophy and
+        pointing at the three enforcement surfaces.</li>
+        <li><code>monitoring-docs/sprint3-backlog.md</code> — backlog entry
+        marked complete (was Sprint-3-RCA-PROSE).</li>
+      </ol>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <span class="block-label">Evaluation</span>
+    <div class="block-body">
+      <p>
+        Test suite: 95/95 passing (89 prior + 6 new validator tests). The
+        six new tests cover the surface-only LEDE patterns
+        ("PromQL `expr` reported", "The PromQL expression", "metric{} =
+        value"), the hedge tails ("indicates that there are X experiencing
+        Y"), and a positive case ensuring cause-first prose with PromQL in
+        the evidence section is NOT flagged.
+      </p>
+      <p>
+        Live verification will need a fresh ESCALATE on a real alert
+        (currently 0 active alerts). Expectation: the next HighKongP95Latency
+        / HighP95Latency RCA leads with a named cause (kong upstream pool /
+        spring-boot connection pool / etc.), not with a PromQL paste. If the
+        model regresses, the validator triggers a retry with the new
+        cause-first feedback text quoted explicitly.
+      </p>
+      <p>
+        This decision composes with <a href="#d17">D17 (exemplar library)</a>
+        and the
+        <a href="#d11">D11 (response validator)</a>
+        philosophy: D17 says "give the LLM a quality target", D19 says
+        "make sure the target itself is the right shape". The combined effect
+        should be measurable in
+        <a href="sprint2-epic5-ueba.html#us-5-3">US-5.3 (closed-loop
+        feedback)</a> — once precision/recall metrics land, the surface-only
+        regression rate becomes a measurable proxy for prose quality.
+      </p>
+    </div>
+  </div>
+</div>
+
 </div>
 </main>
 
