@@ -286,3 +286,46 @@ All 40 triage service tests pass after all fixes. Terraform passes `terraform fm
 ```
 
 **Estimated remaining manual effort:** 2-3 days (mostly waiting for AWS provisioning and debugging GPU setup).
+
+---
+
+## Sprint 2 wrap + Epic 5 follow-on (2026-04-23 → 2026-04-28)
+
+This original report froze at the 2026-04-13 audit pass. The work below covers what shipped after Sprint 2's deadline (which Sprint 2 hit on schedule 2026-04-23), through the Epic 5 first wave and the post-audit hygiene pass.
+
+### 2026-04-23 → 2026-04-26 — Sprint 2 close-out + early Epic 5
+
+- Triage pipeline reached steady-state operation: real LLM verdicts on real alerts, dashboard live at `http://adolin-wsl:8090/dashboard`, all four pillars (Prometheus, Loki, Jaeger, Drain3) feeding the LLM via the 5-MCP fan-out.
+- Drain3 baseline lifecycle proven (S3 functions exist, scheduling deferred to Sprint 3 §1).
+- Audit at `alerts-audit.html` documented every RCA the pipeline had produced through 2026-04-24, including the open question of why Drain3 had not yet self-fired despite ingesting >120k log lines.
+- AWS G+VT quota request escalated; approval landed 2026-04-27 in us-west-2 only (limit 4 = exactly one g5.xlarge). Stand-up deferred — laptop GTX 1060 + qwen2.5:7b is currently sufficient.
+
+### 2026-04-27 — Epic 5 first wave + plumbing hygiene
+
+Three substantive batches across four repos (11 commits total):
+
+| Batch | Files / scope | Decision-log entry |
+|---|---|---|
+| Suggested-actions philosophy | `app/llm_client.py` SYSTEM_PROMPT rules E + I; `app/response_validator.py` investigation-only scan (32/32 patterns validated); `app/suggested_actions.yaml` rewrites | [D18 (philosophy)](decisions-log.html#d18) |
+| Dashboard + email readability | Humanized action codes (`emailed`→Notified, etc.), Unix-timestamp post-processing in RCA prose, `/dashboard/guide` operator manual at the triage service | [Dashboard guide](dashboard-guide.html) |
+| Adaptive thresholds (Epic 5 US-5.4) | `roles/grafana/templates/alertrules.yml.j2` — 3 rules use `same-hour-7d + 3σ` baselines with `or vector(static_floor)` fallback | [D18](decisions-log.html#d18) |
+| Plumbing fixes | `noDataState=OK + execErrState=Error` on all 18 rules; permissive Grafana webhook schema (0 422s); compose env-flow fix; `RequestValidationError` logging | — |
+| Exemplar library (Epic 5 substrate) | `app/exemplars/library.yaml` (11 archetypes), `app/exemplars/__init__.py` (matcher), `_build_prompt` injection, bounded-agency tools (`list_exemplars`, `get_exemplar`) | [D17](decisions-log.html#d17) |
+| Test-fixture repair | 18 pre-existing failures green; suite 63/18 → 89/0 | — |
+| US-5.8 recurrence gate spec | Full design landed in [sprint2-epic5-ueba.html#us-5-8](sprint2-epic5-ueba.html#us-5-8) | — |
+
+### 2026-04-28 — Audit + RCA prose philosophy + k3s host metrics
+
+Full-sweep audit (`audit-2026-04-28.html`) followed by execution of all 5 surfaced improvement items.
+
+| Stream | Outcome |
+|---|---|
+| Full-sweep audit | All 18 Grafana rules `health=ok`, 0 active alerts, all hosts healthy, tests 89/89 going in. 5 improvement items surfaced + 3 minor drift items. |
+| **RCA prose philosophy** ([D19](decisions-log.html#d19)) | After operator review found surface-only RCA prose ("PromQL `expr` reported value above threshold; this indicates that there are X experiencing Y"), three reinforcing surfaces rewritten to demand a cause-first lede: `SYSTEM_PROMPT` rule A + new rule J; all 11 exemplar `rca` fields; all 3 few-shot examples; new validator regex sets (`_SURFACE_ONLY_LEDE_PATTERNS`, `_SURFACE_ONLY_HEDGE_PATTERNS`); `build_retry_feedback` distinguishes surface-only from data-thin. 6 new tests; suite 95/95. |
+| I-1 deployment_type map | `node-exporter` `systemd`→`docker-vm`; `mysql` removed; `cadvisor` added; `otel-collector` ambiguity documented. |
+| **I-2 node-exporter DaemonSet on k3s** | New `manifests/node-exporter/daemonset.yaml` — hostNetwork + hostPID + control-plane toleration. Discovered by existing `kubernetes-pods` scrape job via annotations. Pod `node-exporter-cnjl8` Running, `node_load1` flowing from both hosts. Existing `HighCpuUsage`-style rules now cover the k3s node. |
+| I-4 cascade-incident regex | `LokiIngestLag`→`LokiIngestionRateLow` (matches the actually-provisioned rule). |
+| I-5 forward-looking comments | Tagged the 4 archetypes whose alertname regexes don't yet match live rules (`bounded-agency-resolves-inconclusive`, `crashloop-bad-config`, `network-firewall-attribution`, `tls-cert-expiry-pre-failure`). |
+| Production deploy | Image `revision=131f726` rolled to laptop via `triage_laptop` ansible role. Found I-6 footgun en route: `docker compose pull` (no service arg) breaks because of locally-built `cires/mcp-*:laptop-dev` images. Worked around manually; tracked for follow-up. |
+
+**Repo state going forward:** Sprint 2 closed; Epic 5 in flight (US-5.4 ✅, US-5.8 spec'd, US-5.3 next at ~½ day, US-5.2 biggest-demo at ~1–2 days). Sprint 3 backlog at [`sprint3-backlog.md`](sprint3-backlog.md) — 6 items, RCA prose marked complete.

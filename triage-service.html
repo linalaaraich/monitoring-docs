@@ -165,11 +165,9 @@
 </head>
 <body>
 
-<div style="background:rgba(78,168,222,.08); border-bottom:2px solid #4ea8de; padding:14px 32px; font-size:13px; line-height:1.6;">
-  <strong style="color:#4ea8de; text-transform:uppercase; font-size:11px; letter-spacing:2px;">Heads-up (2026-04-24)</strong> —
-  This overview is accurate but the pipeline has had P0/P0.5/P1 hardening shipped. For the per-module deep-dive see
-  <a href="system-explained.html" style="color:#4ea8de">System Explained</a> and for the live audit findings see
-  <a href="alerts-audit.html" style="color:#4ea8de">Alerts Audit</a>. Dashboard is at <code>http://adolin-wsl:8090/dashboard</code> or <code>http://100.117.118.70:8090/dashboard</code> (laptop only — no cloud GPU EIP today).
+<div style="background:rgba(107,207,127,.08); border-bottom:2px solid #6bcf7f; padding:14px 32px; font-size:13px; line-height:1.6;">
+  <strong style="color:#6bcf7f; text-transform:uppercase; font-size:11px; letter-spacing:2px;">Refreshed 2026-04-28</strong> —
+  Page reconciled with the <a href="audit-2026-04-28.html" style="color:#6bcf7f">full-sweep audit</a>. The pipeline is now <strong>10 stages</strong> (Drain3 annotation + exemplar injection were inserted in that order); <strong>response validator</strong>, <strong>bounded-agency retry</strong>, and <strong>action-template fallback</strong> are documented inside the LLM-investigation stage. LLM is <code>qwen2.5:7b-instruct</code> on the laptop (<code>adolin-wsl</code>, NVIDIA GTX 1060 · 6 GB VRAM) — see <a href="decisions-log.html#d17">D17</a> (exemplar library), <a href="decisions-log.html#d18">D18</a> (adaptive thresholds), <a href="decisions-log.html#d19">D19</a> (RCA prose philosophy). Dashboard at <code>http://adolin-wsl:8090/dashboard</code> over Tailscale.
 </div>
 
 <div class="topnav">
@@ -187,14 +185,16 @@
     <div class="eyebrow">AI RCA · Service Reference</div>
     <h1>The <span class="accent">Triage Service</span> — how it thinks about your alerts</h1>
     <p class="lead">
-      A FastAPI service that turns a raw Grafana webhook into a structured root-cause verdict in seconds. Built on Ollama + five MCP servers + Drain3 anomaly detection, with dedup, pre-LLM suppression, and a timeout-safe fallback path. This page documents the pipeline, HTTP surface, data model, dashboard, and the metrics it exposes — everything you need to navigate <code>/decisions</code>, the dashboard, and the logs with confidence.
+      A FastAPI service that turns a raw Grafana webhook into a structured root-cause verdict in seconds. Built on Ollama + five MCP servers + Drain3 anomaly detection, with fingerprint-keyed dedup, two-layer suppression, an exemplar-injected prompt, a four-scan response validator, a bounded-agency retry path, action-template fallback, and a timeout-safe escape hatch. This page documents the 10-stage pipeline, HTTP surface, data model, dashboard, and the metrics it exposes — everything you need to navigate <code>/decisions</code>, the dashboard, and the logs with confidence.
     </p>
     <div class="pill-row">
       <span class="pill purple">FastAPI</span>
-      <span class="pill blue">Ollama</span>
+      <span class="pill blue">qwen2.5:7b · Ollama</span>
       <span class="pill green">Prometheus · Loki · Jaeger MCPs</span>
       <span class="pill orange">Drain3</span>
       <span class="pill cyan">SQLite RCA store</span>
+      <span class="pill purple">Exemplar library (11)</span>
+      <span class="pill orange">Bounded agency</span>
     </div>
   </div>
 </div>
@@ -204,7 +204,7 @@
   <h4>On this page</h4>
   <ol>
     <li><a href="#overview">Overview</a></li>
-    <li><a href="#pipeline">The 9-step pipeline</a></li>
+    <li><a href="#pipeline">The 10-stage pipeline</a></li>
     <li><a href="#api">HTTP API</a></li>
     <li><a href="#decisions">The <code>/decisions</code> endpoint</a></li>
     <li><a href="#models">Data model</a></li>
@@ -221,17 +221,18 @@
 <h2 id="overview"><span class="num">1.</span> Overview</h2>
 
 <p>
-The triage service is the <strong>brain</strong> of the AI RCA pipeline. Grafana (or Drain3's anomaly webhook) POSTs an alert at it; the service spends at most <code>PIPELINE_TIMEOUT</code> seconds gathering correlated context from Prometheus, Loki, and Jaeger, asking an LLM to reason over the evidence, and storing the resulting verdict. Downstream, <strong>one of four things</strong> happens:
+The triage service is the <strong>brain</strong> of the AI RCA pipeline. Grafana (or Drain3's anomaly webhook) POSTs an alert at it; the service spends at most <code>PIPELINE_TIMEOUT</code> seconds gathering correlated context from Prometheus, Loki, and Jaeger, picking the best canonical RCA archetype from an exemplar library, asking an LLM to reason over the evidence, validating the response, and storing the verdict. Downstream, <strong>one of five things</strong> happens:
 </p>
 <ul>
-  <li><strong>Escalate</strong> — verdict "something's genuinely wrong" → email the on-call engineer an HTML report with RCA, suggested actions, and evidence.</li>
+  <li><strong>Escalate</strong> — verdict "something's genuinely wrong" → email the on-call engineer an HTML report with RCA, remediation-only suggested actions, and evidence.</li>
   <li><strong>Dismiss</strong> — verdict "expected / noise" → record the decision, send no email, the pager stays quiet.</li>
-  <li><strong>Suppress (pre-LLM)</strong> — a second instance of an alert we just dismissed; we reuse the prior verdict without paying the Ollama cost.</li>
-  <li><strong>Timeout passthrough</strong> — the LLM didn't return in time → we forward the raw Grafana alert as a safety fallback. <em>Alerting never gets blocked by the AI layer.</em></li>
+  <li><strong>Suppress (Layer 1 fingerprint)</strong> — same Grafana fingerprint re-fired inside the dedup window; we persist a short-path <code>suppressed_duplicate</code> row linked to the prior decision and skip the LLM.</li>
+  <li><strong>Suppress (Layer 2 history)</strong> — different fingerprint but same <code>(alertname, service)</code> recently dismissed; we replay that verdict without paying the GPU cost.</li>
+  <li><strong>Timeout passthrough</strong> — the asyncio guard fired before the LLM returned → we forward the raw Grafana alert as a safety fallback. <em>Alerting never gets blocked by the AI layer.</em></li>
 </ul>
 
 <p>
-Every decision — escalate, dismiss, suppress, or timeout — is persisted in a local SQLite RCA history. That history doubles as (a) the dashboard, (b) the Layer 2 suppression signal, and (c) the "how often does this alert fire" context for future LLM prompts.
+Every decision — escalate, dismiss, suppress, or timeout — is persisted in a local SQLite RCA history. That history doubles as (a) the dashboard at <code>/dashboard</code>, (b) the Layer 2 suppression signal, (c) the "how often does this alert fire" context for future LLM prompts, and (d) the storage shape that the planned closed-loop feedback (<a href="sprint2-epic5-ueba.html#us-5-3">US-5.3</a>) writes into.
 </p>
 
 <div class="callout note">
@@ -244,20 +245,25 @@ Every decision — escalate, dismiss, suppress, or timeout — is persisted in a
 <h3>At-a-glance</h3>
 <table class="field-table">
   <tbody>
-    <tr><td class="name">Listen port</td><td class="desc"><code>:8090</code> (published via docker-compose)</td></tr>
+    <tr><td class="name">Listen port</td><td class="desc"><code>:8090</code> (published via docker-compose on <code>adolin-wsl</code>)</td></tr>
     <tr><td class="name">Repo</td><td class="desc"><a href="https://github.com/linalaaraich/monitoring-triage-service">linalaaraich/monitoring-triage-service</a></td></tr>
     <tr><td class="name">Entry point</td><td class="desc"><code>app/main.py</code> — FastAPI app + endpoint declarations</td></tr>
-    <tr><td class="name">Pipeline</td><td class="desc"><code>app/pipeline.py</code> — the 9-step flow below</td></tr>
-    <tr><td class="name">Context fan-out</td><td class="desc"><code>app/context.py</code> — parallel calls to the 3 pillar MCPs</td></tr>
-    <tr><td class="name">Storage</td><td class="desc"><code>app/rca_store.py</code> — SQLite (<code>rca_history</code> table)</td></tr>
-    <tr><td class="name">LLM target</td><td class="desc">Ollama REST (<code>/api/generate</code>) — model picked by <code>OLLAMA_MODEL</code> env</td></tr>
+    <tr><td class="name">Pipeline</td><td class="desc"><code>app/pipeline.py</code> — the 10-stage flow below</td></tr>
+    <tr><td class="name">Context fan-out</td><td class="desc"><code>app/context_window.py</code> — parallel calls to the 3 pillar MCPs anchored on <code>alert.startsAt</code></td></tr>
+    <tr><td class="name">Exemplar library</td><td class="desc"><code>app/exemplars/library.yaml</code> — 11 canonical archetypes; <code>app/exemplars/__init__.py</code> matcher</td></tr>
+    <tr><td class="name">Response validator</td><td class="desc"><code>app/response_validator.py</code> — banned-phrase, vague-action, investigation-only, arch-mismatch, and <em>surface-only-lede</em> scans</td></tr>
+    <tr><td class="name">Bounded-agency retry</td><td class="desc"><code>app/bounded_agency.py</code> — 6-tool whitelist (Prometheus / Loki / Jaeger / RCA history × 3) for one-shot retry on data-starved verdicts</td></tr>
+    <tr><td class="name">Action-template fallback</td><td class="desc"><code>app/suggested_actions.yaml</code> — remediation-only templates keyed by alertname × deployment_type</td></tr>
+    <tr><td class="name">Deployment-type map</td><td class="desc"><code>app/config.py:service_deployment_type</code> — drives validator arch-mismatch + action-template selection</td></tr>
+    <tr><td class="name">Storage</td><td class="desc"><code>app/rca_store.py</code> — SQLite (<code>rca_history</code> table at <code>/data/rca_history.db</code>)</td></tr>
+    <tr><td class="name">LLM target</td><td class="desc">Ollama REST (<code>/api/generate</code>) — model is <code>qwen2.5:7b-instruct</code> (Q4_K_M, ~4.7 GB), <code>temperature=0</code>, structured outputs, stable-prefix prompt cache. Runs on <code>adolin-wsl</code> NVIDIA GTX 1060 (6 GB VRAM); ~25 s warm / 68 s cold typical.</td></tr>
   </tbody>
 </table>
 
 <!-- ───────────────────────────────────────── -->
-<h2 id="pipeline"><span class="num">2.</span> The 10-step pipeline</h2>
+<h2 id="pipeline"><span class="num">2.</span> The 10-stage pipeline</h2>
 <p>
-Each Grafana alert the service accepts runs through these stages. Steps 1–2 are cheap and synchronous (dedup + suppression check); step 3 onward runs under an asyncio timeout with a safety fallback.
+Each Grafana alert the service accepts runs through these stages. Stages 1–3 are cheap and synchronous (webhook receipt + dedup + Layer 2 history check); stages 4–10 run under <code>asyncio.wait_for(..., timeout=PIPELINE_TIMEOUT)</code> with a raw-alert fallback path if the budget elapses. End-to-end budget defaults to <code>2400 s</code>; the single-LLM-call sub-budget is <code>1800 s</code>; typical end-to-end on the laptop GPU is 60–95 s.
 </p>
 
 <div class="pipeline">
@@ -273,9 +279,9 @@ Each Grafana alert the service accepts runs through these stages. Steps 1–2 ar
   <div class="pipeline-step ps-green">
     <div class="pipeline-num">2</div>
     <div>
-      <div class="pipeline-title">Deduplication <span class="mini-tag">Layer 1</span></div>
+      <div class="pipeline-title">Deduplication <span class="mini-tag">Layer 1 · fingerprint</span></div>
       <div class="pipeline-desc">
-        An in-memory fingerprint of <code>(alertname, instance, status)</code> with a TTL of <code>DEDUP_WINDOW_SECONDS</code>. Grafana re-fires the same alert while it's active; we only run the pipeline once per window. <code>triage_alerts_deduplicated_total</code> increments when a dup is dropped.
+        <code>DedupManager.check(fingerprint, status)</code> keys on <strong>Grafana's stable label-hash <code>fingerprint</code></strong> (not <code>alertname</code> + <code>instance</code>) with a TTL of <code>DEDUP_WINDOW_SECONDS</code> (default 600 s / 10 min). Returns <code>(is_duplicate, first_decision_id)</code>. On a duplicate, the pipeline persists a short-path <code>suppressed_duplicate</code> row linked to <code>first_decision_id</code> and exits — Grafana keeps re-firing while an alert is active; we only pay GPU once per window. After a fresh fingerprint produces an RCA, <code>record_first_decision()</code> writes the link back so subsequent dups know which prior decision to point at. <code>triage_alerts_deduplicated_total</code> increments per drop.
       </div>
     </div>
   </div>
@@ -291,9 +297,9 @@ Each Grafana alert the service accepts runs through these stages. Steps 1–2 ar
   <div class="pipeline-step ps-orange">
     <div class="pipeline-num">4</div>
     <div>
-      <div class="pipeline-title">Context gather <span class="mini-tag">parallel</span></div>
+      <div class="pipeline-title">Context fan-out <span class="mini-tag">parallel · 3 MCPs</span></div>
       <div class="pipeline-desc">
-        <code>ContextGatherer.gather()</code> fires three <code>httpx.AsyncClient</code> calls in parallel — to <code>prometheus-mcp</code>, <code>loki-mcp</code>, and <code>jaeger-mcp</code> — <strong>anchored on the alert's <code>startsAt</code></strong>, not on wall-clock "now". All three pillars share an absolute time window of <code>[startsAt − 8&nbsp;min, startsAt + 2&nbsp;min]</code> (clamped to ≤ now). That correlation is why metrics, logs, and traces all describe the <em>same incident</em>, not three different ones.
+        <code>context_window.gather(alert)</code> fires three <code>httpx.AsyncClient</code> calls in parallel — to <code>prometheus-mcp :8091</code>, <code>loki-mcp :8092</code>, and <code>jaeger-mcp :8093</code> — <strong>anchored on the alert's <code>startsAt</code></strong>, not on wall-clock "now". All three pillars share an absolute time window of <code>[startsAt − 5&nbsp;min, startsAt + 2&nbsp;min]</code> (clamped to ≤ now). MCP timestamps come back in three different units (Prometheus float-seconds, Loki nanoseconds, Jaeger microseconds); the gatherer normalises them. Typical per-MCP latency is 150–280 ms. The correlation is why metrics, logs, and traces all describe the <em>same incident</em>, not three different ones.
       </div>
     </div>
   </div>
@@ -302,52 +308,62 @@ Each Grafana alert the service accepts runs through these stages. Steps 1–2 ar
     <div>
       <div class="pipeline-title">Drain3 log annotation</div>
       <div class="pipeline-desc">
-        Raw Loki log lines are handed to <code>DrainAnalyzer.annotate_lines()</code>. Drain3 clusters each line against a learned template set; outliers are tagged <code>[ANOMALY]</code> and surfaced as <code>anomaly_summary</code>. The LLM then sees pre-digested log signals instead of a 200-line raw dump.
+        Raw Loki log lines are handed to <code>DrainAnalyzer.analyze()</code>. Drain3 clusters each line against a learned template set, returning <code>{cluster_id, template, is_new_pattern, match_count}</code>. New clusters or rare templates (<code>match_count &lt; drain3_anomaly_threshold</code>, default 5) are tagged <code>[ANOMALY]</code> and surfaced as <code>anomaly_summary</code>. The LLM then sees pre-digested log signals instead of a raw dump. Drain3 also <em>self-fires</em> when the per-window anomaly rate exceeds <code>drain3_alert_rate_threshold</code> (default 0.10) over <code>drain3_alert_min_lines</code> (default 100); that hits <code>/webhook/drain3</code> as a synthetic <code>Drain3AnomalyDetected</code> alert and re-enters the pipeline at stage 1.
       </div>
     </div>
   </div>
   <div class="pipeline-step ps-purple">
     <div class="pipeline-num">6</div>
     <div>
-      <div class="pipeline-title">Historical frequency lookup</div>
+      <div class="pipeline-title">Historical frequency + Drain3 recurrence lookup</div>
       <div class="pipeline-desc">
-        <code>RCAStore.get_alert_frequency()</code> counts how many times this <code>alertname</code> has fired in the past 7 days and grabs its last-seen timestamp. The LLM prompt gets "<em>this alert has fired N times in the last 7 days — last seen {ts}</em>" so its verdict can be flaky-test-aware.
+        <code>RCAStore.get_alert_frequency()</code> counts how many times this <code>alertname</code> has fired in the past 7 days and grabs its last-seen timestamp. The LLM prompt gets "<em>this alert has fired N times in the last 7 days — last seen {ts}</em>" so its verdict can be flaky-test-aware. Drain3-sourced alerts additionally pull a 7-day recurrence count for the matched template — three or more recurrences within 7 days flips the prompt's framing toward escalation per <a href="decisions-log.html#d8">D8</a>.
       </div>
     </div>
   </div>
   <div class="pipeline-step ps-purple">
     <div class="pipeline-num">7</div>
     <div>
-      <div class="pipeline-title">Exemplar injection <span class="mini-tag">prompt-eng</span></div>
+      <div class="pipeline-title">Exemplar injection <span class="mini-tag">D17 · prompt-eng</span></div>
       <div class="pipeline-desc">
-        <code>exemplars.find_for_alert()</code> picks the best-matching canonical "good RCA" archetype from <code>app/exemplars/library.yaml</code> (eleven curated archetypes — OOM-loop, upstream-latency, cascade incidents, network-firewall, TLS expiry, etc.). The matched exemplar is rendered into the prompt as a <code>## Reference exemplar</code> section, giving the LLM a structural template tailored to <em>this</em> alert before it sees the evidence. <a href="decisions-log.html#d17">D17</a> covers the why; the prose source lives at <code>monitoring-triage-service/docs/happy-path-scenarios.md</code>.
+        <code>exemplars.find_for_alert(alertname, service, deployment_type, signal, severity)</code> scores all 11 archetypes in <code>app/exemplars/library.yaml</code> using a weighted match (alertname regex 0.10 + services 0.40 + deployment_type 0.30 + signal 0.20 + severity 0.10) and returns the highest. The matched exemplar is rendered as a <code>## Reference exemplar</code> section <strong>before</strong> the <code>## Pre-Gathered Context</code> in the prompt, giving the LLM a structural target tailored to <em>this</em> alert before it sees the evidence. The 11 archetypes: <code>oom-loop</code>, <code>upstream-latency-attribution</code>, <code>synthetic-blip-dismiss</code>, <code>cascade-incident-disk-loki</code>, <code>drain3-novelty-post-deploy</code>, <code>bounded-agency-resolves-inconclusive</code>, <code>adaptive-threshold-noop</code>, <code>closed-loop-feedback-override</code>, <code>crashloop-bad-config</code>, <code>network-firewall-attribution</code>, <code>tls-cert-expiry-pre-failure</code>. Default fallback is <code>generic-sre-shape</code>. See <a href="decisions-log.html#d17">D17</a>; full prose at <a href="https://github.com/linalaaraich/monitoring-triage-service/blob/main/docs/happy-path-scenarios.md"><code>monitoring-triage-service/docs/happy-path-scenarios.md</code></a>.
       </div>
     </div>
   </div>
   <div class="pipeline-step ps-purple">
     <div class="pipeline-num">8</div>
     <div>
-      <div class="pipeline-title">LLM investigation</div>
+      <div class="pipeline-title">LLM investigation <span class="mini-tag">qwen2.5:7b · temp=0</span></div>
       <div class="pipeline-desc">
-        <code>LLMClient.investigate()</code> builds a JSON-schema prompt (<code>decision</code>, <code>severity</code>, <code>rca</code>, <code>reason</code>, <code>anomaly_summary</code>, <code>suggested_actions</code>, <code>evidence</code>), POSTs it to Ollama's <code>/api/generate</code>, and parses the response. Sloppy outputs (dict-in-list, missing fields) are coerced by <code>LLMDecision</code>'s pydantic validators rather than rejected — small quantized models are forgiving, and we'd rather take their signal than 500 on the user.
+        <code>LLMClient.investigate()</code> assembles the SYSTEM_PROMPT (philosophy + rules A–J, including <a href="decisions-log.html#d19">D19</a>'s cause-first rule and remediation-only rule) plus the rendered exemplar plus pre-gathered context, POSTs to Ollama's <code>/api/generate</code> with structured-output mode and a stable prefix prompt cache, and parses into <code>LLMDecision</code> (<code>decision</code>, <code>severity</code>, <code>confidence</code>, <code>rca</code>, <code>reason</code>, <code>anomaly_summary</code>, <code>suggested_actions</code>, <code>evidence</code>). Sloppy outputs (dict-in-list, missing fields, unit drift on timestamps) are coerced by <code>LLMDecision</code>'s pydantic validators rather than rejected — small quantized models are forgiving and we'd rather take their signal than 500 on the user.
       </div>
     </div>
   </div>
   <div class="pipeline-step ps-red">
     <div class="pipeline-num">9</div>
     <div>
-      <div class="pipeline-title">Act on verdict</div>
+      <div class="pipeline-title">Validate &amp; salvage <span class="mini-tag">5 scans · retry · fallback</span></div>
       <div class="pipeline-desc">
-        If <code>decision == ESCALATE</code>, build a polished HTML email (see <code>app/notifier.py</code>) and send via SMTP. If the notifier crashes (SMTP hiccup, template bug), we <strong>log and continue</strong> — the RCA record must still land in step 9. If <code>decision == DISMISS</code>, no email; the record still goes to history so Layer 2 can learn from it.
+        <code>response_validator.validate(decision, alert)</code> mutates the LLM output through five scans:
+        <ul style="margin:6px 0 0 18px;">
+          <li><strong>banned-phrases</strong> — known hedges that hide a real verdict ("metrics suggest", "potentially indicates"…) get logged and counted.</li>
+          <li><strong>vague-action</strong> — <em>action</em> entries that read like prose rather than an executable command get pruned.</li>
+          <li><strong>investigation-only</strong> — read-only "actions" (<code>kubectl get</code>, <code>docker logs</code>, <code>Query Grafana: …</code>, <code>ssh … 'top'</code>) get pruned per the <a href="decisions-log.html#d18">D18</a> remediation-only philosophy. Validated against 32/32 representative pairs.</li>
+          <li><strong>arch-mismatch</strong> — actions whose syntax doesn't match the affected service's <code>service_deployment_type</code> get pruned (no <code>docker restart spring-boot</code> when spring-boot is a k3s pod).</li>
+          <li><strong>surface-only-lede</strong> (<a href="decisions-log.html#d19">D19</a>) — first-sentence regex catches RCAs that lead with raw PromQL or restate the alert; triggers a one-shot retry with a stricter cause-first prompt.</li>
+        </ul>
+        If after validator the verdict is <strong>data_starved</strong> AND <code>triage_bounded_agency_enabled=true</code>, the pipeline does one <strong>bounded-agency retry</strong>: the LLM is given access to a 6-tool whitelist (<code>prometheus.range_query</code>, <code>loki.query</code>, <code>jaeger.search</code>, <code>rca_history.similar</code>, <code>rca_history.list_exemplars</code>, <code>rca_history.get_exemplar</code>) and asked to issue exactly one MCP call before re-deciding. <code>triage_bounded_agency_invocations_total</code> counts these retries.
+        <br><br>
+        If <code>suggested_actions</code> is still empty after validator + retry, the <strong>action-template fallback</strong> at <code>app/suggested_actions.yaml</code> fills it from a remediation-only YAML keyed on alertname × deployment_type. <code>triage_fallback_total</code> counts these. <em>The pipeline never escalates with an empty action list.</em>
       </div>
     </div>
   </div>
   <div class="pipeline-step ps-cyan">
     <div class="pipeline-num">10</div>
     <div>
-      <div class="pipeline-title">Persist to RCA history</div>
+      <div class="pipeline-title">Egress + persist</div>
       <div class="pipeline-desc">
-        <code>RCAStore.save_decision()</code> writes the full <code>RCARecord</code> — verdict, reasoning, RCA text, duration, all of it — to the SQLite <code>rca_history</code> table. That row is what powers <code>/decisions</code>, the dashboard, and the next pipeline's suppression check.
+        If <code>decision == ESCALATE</code>, build a polished HTML email (<code>app/notifier.py</code>) — including correlated alerts in the same incident window — and send via SMTP. A notifier failure (SMTP hiccup, template bug) is <strong>logged and swallowed</strong> so the next step still runs. <code>RCAStore.save_decision(record)</code> then writes the full <code>RCARecord</code> to the SQLite <code>rca_history</code> table. Finally, if the alert had a fingerprint, <code>DedupManager.record_first_decision(fingerprint, record.id)</code> writes the dedup back-link so subsequent dups inside the window persist short-path rows pointing at this RCA. That row is what powers <code>/decisions</code>, the dashboard, the Layer 2 suppression check, and the closed-loop feedback storage shape (<a href="sprint2-epic5-ueba.html#us-5-3">US-5.3</a>).
       </div>
     </div>
   </div>
@@ -355,7 +371,7 @@ Each Grafana alert the service accepts runs through these stages. Steps 1–2 ar
 
 <div class="callout warn">
   <div class="callout-label">Timeout safety</div>
-  <p style="margin:0">Steps 4–10 run under <code>asyncio.wait_for(..., timeout=PIPELINE_TIMEOUT)</code>. If it fires, we (a) send the <em>raw</em> Grafana alert email as a fallback, (b) record a <code>timeout_passthrough</code> row, and (c) continue serving. The AI layer is never in the critical path for paging.</p>
+  <p style="margin:0">Stages 4–10 run under <code>asyncio.wait_for(..., timeout=PIPELINE_TIMEOUT)</code>. If it fires, we (a) send the <em>raw</em> Grafana alert email as a fallback, (b) record a <code>timeout_passthrough</code> row, and (c) continue serving. There's also a <code>circuit_breaker</code> in front of the LLM call (<code>app/llm_client.py</code>): three consecutive Ollama failures open the circuit for <code>OLLAMA_CIRCUIT_OPEN_SECONDS</code> seconds, during which the pipeline short-circuits to the raw-alert path. The AI layer is never in the critical path for paging.</p>
 </div>
 
 <!-- ───────────────────────────────────────── -->
@@ -525,7 +541,7 @@ The two highlighted lines are the ones to watch: the model's verdict (<code>dism
 <p>One row per pipeline run. Defined in <code>app/models.py</code>. Every field is pre-flattened (no nested objects), which is what makes the SQLite schema straightforward. See the table in <a href="#decisions">§4</a> for field meanings — the <code>/decisions</code> response is a list of these.</p>
 
 <h3><code>LLMDecision</code> — what Ollama returns</h3>
-<p>The LLM is asked for a structured JSON object matching this shape. It's merged into <code>RCARecord</code> in step 8 of the pipeline.</p>
+<p>The LLM is asked for a structured JSON object matching this shape. It's produced at stage 8, mutated by the validator at stage 9, and merged into <code>RCARecord</code> at stage 10.</p>
 <table class="field-table">
   <thead><tr><th>Field</th><th>Type</th><th>Meaning</th></tr></thead>
   <tbody>
@@ -586,7 +602,7 @@ The two highlighted lines are the ones to watch: the model's verdict (<code>dism
 <div class="callout note">
   <div class="callout-label">Where to open it</div>
   <p style="margin:0">
-    On the laptop smoke test: <code>http://localhost:8090/dashboard</code> in your Windows browser, or <code>http://&lt;laptop-tailscale-ip&gt;:8090/dashboard</code> from any tailnet peer. On the cloud GPU box: <code>http://&lt;gpu-eip&gt;:8090/dashboard</code> once the operator CIDRs are opened in the security group (see staging Terraform).
+    From the laptop's Windows host: <code>http://localhost:8090/dashboard</code>. From any tailnet peer: <code>http://adolin-wsl:8090/dashboard</code> (MagicDNS, preferred) or <code>http://100.117.118.70:8090/dashboard</code> (raw tailnet IP). The operator manual lives at <code>/dashboard/guide</code> — a sage-themed quick reference for every column, code, and abbreviation. There is no cloud GPU box today; the laptop GTX 1060 is the only host that runs the dashboard.
   </p>
 </div>
 
@@ -610,6 +626,14 @@ The two highlighted lines are the ones to watch: the model's verdict (<code>dism
     <tr><td class="name">triage_pipeline_timeouts_total</td><td class="type">counter</td><td class="desc">How often the <code>PIPELINE_TIMEOUT</code> asyncio guard fired — i.e. we shipped a raw-alert fallback.</td></tr>
     <tr><td class="name">triage_email_sent_total</td><td class="type">counter</td><td class="desc">Labelled by <code>status</code> (<code>sent</code> | <code>failed</code> | <code>skipped</code>). Non-fatal: SMTP failure is logged, pipeline continues.</td></tr>
     <tr><td class="name">triage_queue_depth</td><td class="type">gauge</td><td class="desc">Live count of alerts currently in the <em>investigate</em> stage. A leading indicator of GPU saturation.</td></tr>
+    <tr><td class="name">triage_fallback_total</td><td class="type">counter</td><td class="desc">Counts action-template fallback hits at stage 9 — i.e. how often the LLM + bounded-agency retry both produced an empty <code>suggested_actions</code> list and the YAML template had to fill it.</td></tr>
+    <tr><td class="name">triage_bounded_agency_invocations_total</td><td class="type">counter</td><td class="desc">Counts data-starved retries that triggered the 6-tool bounded-agency loop. Watch this go down as exemplar-library coverage improves.</td></tr>
+    <tr><td class="name">ollama_request_duration_seconds</td><td class="type">histogram</td><td class="desc">Per-Ollama-call latency. Tighter than <code>triage_llm_investigation_seconds</code> — excludes prompt assembly + response parsing.</td></tr>
+    <tr><td class="name">ollama_requests_total</td><td class="type">counter</td><td class="desc">Labelled by <code>status</code>. Tracks LLM availability against the circuit-breaker threshold.</td></tr>
+    <tr><td class="name">ollama_circuit_state</td><td class="type">gauge</td><td class="desc"><code>0</code> = closed (healthy), <code>1</code> = open (raw-alert fallback active). Flips on three consecutive Ollama failures; closes after <code>OLLAMA_CIRCUIT_OPEN_SECONDS</code>.</td></tr>
+    <tr><td class="name">drain3_clusters</td><td class="type">gauge</td><td class="desc">Number of Drain3 log-template clusters currently learned. Grows over time; resets only on state-file deletion.</td></tr>
+    <tr><td class="name">drain3_anomalies_total</td><td class="type">counter</td><td class="desc">Labelled by <code>service</code>. Increments when Drain3 sees a new template or one with low <code>match_count</code>.</td></tr>
+    <tr><td class="name">drain3_lines_processed_total</td><td class="type">counter</td><td class="desc">Total log lines Drain3 has analyzed since startup. Sanity check that the background poll is actually polling.</td></tr>
   </tbody>
 </table>
 
@@ -620,12 +644,12 @@ The two highlighted lines are the ones to watch: the model's verdict (<code>dism
 
 <h3>Layer 1 — in-memory dedup (<code>app/dedup.py</code>)</h3>
 <p>
-A <code>DedupManager</code> with a TTL fingerprint of <code>(alertname, instance, status)</code>. Window is <code>DEDUP_WINDOW_SECONDS</code> (default 120s). While an alert is actively firing, Grafana will re-POST it every <em>group wait</em>; we skip all but the first within the window. Cheap, deterministic, process-local.
+A <code>DedupManager</code> keyed on <strong>Grafana's stable <code>fingerprint</code></strong> (a hash over the alert's labels) plus its current <code>status</code>. Window is <code>DEDUP_WINDOW_SECONDS</code> (default 600 s / 10 min). While an alert is actively firing, Grafana re-POSTs it every <em>group wait</em>; we skip all but the first within the window. The earlier <code>(alertname, instance, status)</code> shape was retired during the P1.6 work — fingerprint is more reliable because it survives label tweaks and avoids collisions when two unrelated alerts share an alertname. The manager returns <code>(is_duplicate, first_decision_id)</code> so a duplicate persists a short-path <code>suppressed_duplicate</code> row pointing at the original RCA. Cheap, deterministic, process-local.
 </p>
 
 <h3>Layer 2 — pre-LLM suppression (<code>pipeline._check_suppression</code>)</h3>
 <p>
-Queries <code>rca_history</code> for the same <code>(alertname, service)</code> in the last <code>TRIAGE_HISTORY_LOOKBACK_MINUTES</code> (default 30m). If we recently produced a <code>dismiss</code> verdict, or suppressed it for the same reason, <strong>we replay that decision without calling Ollama</strong>. This is the mechanism that keeps a flaky-test noise pattern from consuming GPU cycles repeatedly.
+Queries <code>rca_history</code> for the same <code>(alertname, service)</code> in the last <code>TRIAGE_HISTORY_LOOKBACK_MINUTES</code> (default 30 m). If we recently produced a <code>dismiss</code> verdict, or suppressed it for the same reason, <strong>we replay that decision without calling Ollama</strong>. This is the mechanism that keeps a flaky-test noise pattern from consuming GPU cycles repeatedly. The planned closed-loop feedback (<a href="sprint2-epic5-ueba.html#us-5-3">US-5.3</a>) extends this with a similarity check that lets operator <code>thumbs-down</code> verdicts re-weight future suppression decisions; the planned recurrence gate (<a href="sprint2-epic5-ueba.html#us-5-8">US-5.8</a>) adds a per-rule "suppress fires 1–4, then force-escalate fire 5" hysteresis for opted-in flappy alerts.
 </p>
 
 <p>
@@ -662,13 +686,16 @@ Both layers are <em>optional</em> via env (<code>TRIAGE_SUPPRESSION_ENABLED=fals
 <!-- ───────────────────────────────────────── -->
 <h2 id="related"><span class="num">10.</span> Related pages</h2>
 <ul>
+  <li><a href="audit-2026-04-28.html">Full-sweep audit (2026-04-28)</a> — fresh systems-state pass that this page is reconciled against. Container state, Grafana rules, deployment-type map, exemplar coverage, storage, tailnet — and 5 improvement items (I-1 → I-5).</li>
   <li><a href="architecture.html">Architecture diagram</a> — where the triage service sits relative to monitoring VM, k3s, and the MCPs.</li>
-  <li><a href="https://github.com/linalaaraich/monitoring-triage-service/blob/main/docs/happy-path-scenarios.md">Happy-path scenarios</a> — eleven detailed end-to-end RCA cycles the triage service is calibrated to produce. Source-of-truth for the exemplar library injected at step 7. See also <a href="decisions-log.html#d17">D17</a>.</li>
-  <li><a href="sprint3-backlog.md">Sprint 3 backlog §4 &amp; §5</a> — the GPU migration and native Ollama tool-calling work. Changes how steps 4–8 of the pipeline run, not <em>whether</em>.</li>
-  <li><a href="sprint2-extension-guide.html">Sprint 2 extension guide</a> — the hardening work (circuit breaker, JSON schema enforcement, observability) that got the triage service to production-ish shape.</li>
-  <li><a href="build-guide.html">Complete build guide</a> — the reference doc for every service in the stack. The triage service is covered end-to-end there too, but less deeply than this page.</li>
+  <li><a href="system-explained.html">System explained</a> — per-module deep dive (§3.4b exemplar injection, §3.5 LLM call, §4.7b exemplars module, §4.8 bounded agency).</li>
+  <li><a href="dashboard-guide.html">Dashboard guide</a> — operator manual for every column, code, and abbreviation in <code>/dashboard</code>. Pair with <code>/dashboard/guide</code> on the running service.</li>
+  <li><a href="decisions-log.html">Decisions log</a> — D17 (exemplar library), D18 (adaptive thresholds + remediation-only philosophy), D19 (RCA prose quality — telemetry as means, not end) cover the recent shipping work.</li>
+  <li><a href="sprint2-epic5-ueba.html">Sprint 2 Epic 5</a> — UEBA-inspired user stories. US-5.4 ✅ shipped (adaptive thresholds), US-5.3 next (closed-loop feedback), US-5.8 spec'd (recurrence gate).</li>
+  <li><a href="https://github.com/linalaaraich/monitoring-triage-service/blob/main/docs/happy-path-scenarios.md">Happy-path scenarios</a> — eleven detailed end-to-end RCA cycles the triage service is calibrated to produce. Source-of-truth for the exemplar library injected at stage 7.</li>
+  <li><a href="sprint3-backlog.md">Sprint 3 backlog</a> — Sprint 2 closed; Sprint 3 picks include closed-loop feedback evaluation, peer-grouping, deployment-history MCP.</li>
   <li><a href="reproducibility-guide.html">Reproducibility guide</a> — how to bring everything up from scratch, including the triage service container.</li>
-  <li>Source of truth: <a href="https://github.com/linalaaraich/monitoring-triage-service">github.com/linalaaraich/monitoring-triage-service</a> — <code>app/main.py</code>, <code>app/pipeline.py</code>, <code>app/context.py</code> are the three files that implement most of what this page describes.</li>
+  <li>Source of truth: <a href="https://github.com/linalaaraich/monitoring-triage-service">github.com/linalaaraich/monitoring-triage-service</a> — <code>app/main.py</code>, <code>app/pipeline.py</code>, <code>app/context_window.py</code>, <code>app/exemplars/</code>, <code>app/response_validator.py</code>, <code>app/bounded_agency.py</code> are the files that implement what this page describes.</li>
 </ul>
 
 </main>

@@ -3,10 +3,43 @@
 > **Project:** AI-Powered Observability Platform with Root Cause Analysis
 > **Organization:** CIRES Technologies, Tanger Med (Digital Factory Observability Service)
 > **Author:** Lina Laaraich
-> **Last Updated:** 2026-04-13
-> **Sprint 2 Deadline:** ~~April 9, 2026~~ **Extended to April 23, 2026**
+> **Last Updated:** 2026-04-28 (post-Sprint-2 + Epic 5 in flight)
+> **Sprint 2 Deadline:** ~~April 9, 2026~~ ~~April 23, 2026~~ **Sprint 2 closed 2026-04-23; Epic 5 (UEBA-inspired stories) is the active workstream**
 > **Jira Project:** SCRUM | **Jira Source:** `github.com/linalaaraich/jira`
 > **Repositories:** 6 (monitoring-project, provisioning-monitoring-infra, monitoring-docs, monitoring-mcp-servers, monitoring-triage-service, jira)
+
+---
+
+## 2026-04-28 close-out — what shipped after Sprint 2
+
+This document is a snapshot from 2026-04-13 / 2026-04-22 of Sprint 2's pre-deadline state. Sprint 2 closed on schedule 2026-04-23. Two further substantive batches landed since:
+
+**2026-04-27 — Epic 5 first wave + dashboard rewrite + plumbing.**
+- Suggested-actions philosophy: remediations only, never investigations ([D18 in decisions-log](decisions-log.html#d18)).
+- Adaptive thresholds shipped (Epic 5 [US-5.4](sprint2-epic5-ueba.html#us-5-4)) — `HighP95Latency`, `HighKongP95Latency`, `MediumCpuUsage` now use same-hour-7-days-ago + 3·σ baselines.
+- Exemplar library shipped ([D17](decisions-log.html#d17)) — 11 canonical RCA archetypes pre-injected into every LLM prompt.
+- Drain3 self-fire path got a dedicated playbook (investigate → correlate → verdict, with 7-day recurrence as escalation signal).
+- Grafana `noDataState=OK + execErrState=Error` provisioned across all 18 alert rules — phantom DatasourceNoData alerts cleared.
+- Permissive Grafana webhook schema — 0 422s on the validation test (was several per failure cycle).
+- Compose timeout env-flow fix — ansible-managed `.env` no longer silently overridden by hardcoded values.
+- US-5.8 (recurrence gate) spec landed for next implementation pass.
+
+**2026-04-28 — RCA prose philosophy + audit-driven hygiene.**
+- Full-sweep audit shipped at [`audit-2026-04-28.html`](audit-2026-04-28.html) — system in healthy steady state, all 18 Grafana rules `health=ok`, tests 89/89 (now 95/95 after the philosophy work).
+- **RCA prose quality philosophy** ([D19](decisions-log.html#d19)) — "telemetry is the means, not the end." After live RCAs were leading with PromQL expressions and concluding "this indicates that there are X experiencing Y," three reinforcing surfaces were rewritten to demand a cause-first lede: `SYSTEM_PROMPT` rule A + new rule J, all 11 exemplar `rca` paragraphs, all three few-shot examples, and a new validator surface-only LEDE/hedge regex set with 6 dedicated tests.
+- **node-exporter DaemonSet on k3s** (audit I-2) — closes the host-metrics gap on the k3s node. `HighCpuUsage` / `CriticalDiskUsage` now cover both hosts independently. Manifest at `monitoring-project/manifests/node-exporter/daemonset.yaml`.
+- **`service_deployment_type` map drift** (audit I-1) — `node-exporter` corrected `systemd`→`docker-vm`; `mysql` removed (not deployed); `cadvisor` added; `otel-collector` ambiguity (k3s + docker-vm) documented.
+- **Audit improvements I-3, I-4, I-5** — Watchtower-doesn't-exist note (the laptop image rolls via the `triage_laptop` ansible role, not a polling daemon); cascade-incident-disk-loki regex fixed to match `LokiIngestionRateLow`; forward-looking comments on the 4 partially/fully forward-looking exemplars.
+
+**Epic 5 status (post-2026-04-28):**
+- ✅ US-5.4 adaptive thresholds (shipped 04-27)
+- 📋 US-5.8 recurrence gate (spec'd; ~4–6h to implement)
+- 📋 US-5.3 closed-loop feedback (designed; ~½ day)
+- 📋 US-5.2 incident correlator (designed; ~1–2 days, biggest demo moment)
+- 📋 US-5.1 per-service Drain3 + baselines (designed; ~1 day)
+- 📋 US-5.5 / US-5.6 / US-5.7 stretch (peer grouping / deployment-history MCP / labeled corpus)
+
+**AWS state:** G+VT quota approved 2026-04-27 in us-west-2 only (limit 4 = exactly one g5.xlarge). us-east-1 still 0. GPU stand-up is unblocked but deferred — laptop GTX 1060 + qwen2.5:7b is sufficient for current cycle (~68 s cold / ~35 s warm).
 
 ---
 

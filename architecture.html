@@ -260,7 +260,22 @@
 
 <div class="title-bar">
   <h1>Observability Platform Architecture</h1>
-  <p>AWS us-east-1 &nbsp;|&nbsp; 2 EC2 + RDS + S3/CloudFront &nbsp;|&nbsp; AI stack on laptop (tailnet) &nbsp;|&nbsp; updated 2026-04-27</p>
+  <p>AWS us-east-1 &nbsp;|&nbsp; 2 EC2 + RDS + S3/CloudFront &nbsp;|&nbsp; AI stack on laptop (tailnet) &nbsp;|&nbsp; updated 2026-04-28</p>
+</div>
+
+<div style="max-width:1100px;margin:20px auto;padding:18px 22px;background:rgba(64,208,208,.07);border-left:3px solid #40d0d0;border-radius:0 8px 8px 0;">
+  <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#40d0d0;margin-bottom:8px;">2026-04-28 — RCA prose philosophy + k3s host metrics</div>
+  <p style="margin:0 0 10px;color:#c0c5d0;line-height:1.6;">
+    Two changes worth reading the diagrams with in mind. The data flows are unchanged; what changed is the <em>shape</em> of what comes out at the LLM and the <em>completeness</em> of what goes in at the metric layer.
+  </p>
+  <ul style="margin:0 0 10px 20px;color:#c0c5d0;line-height:1.7;">
+    <li><strong>RCA prose quality philosophy — telemetry is the means, not the end</strong> (<a href="decisions-log.html#d19" style="color:#40d0d0">D19</a>). After operator review found the LLM leading every analysis with <code>"PromQL `expr` reported value above threshold"</code> and concluding <code>"this indicates that there are X experiencing Y"</code> — i.e., restating the alert in different words — three reinforcing surfaces were rewritten to demand a cause-first lede. <code>SYSTEM_PROMPT</code> rule A now requires the first sentence to NAME a component / link / process / queue / config / change; new rule J requires plain-language translation of raw PromQL ("p95 = 8487 ms" → "95% of requests took longer than 8.5 seconds"); all 11 exemplar <code>rca</code> fields rewritten to model the new shape; few-shot examples rewritten; <code>app/response_validator.py</code> gained surface-only LEDE / hedge regex sets that trigger a retry with cause-first feedback. 6 new tests, suite 95/95.</li>
+    <li><strong>node-exporter DaemonSet on k3s</strong> (audit 2026-04-28, I-2). The 2026-04-28 audit found no host-level scrape on the k3s node — <code>HighCpuUsage</code> / <code>CriticalDiskUsage</code> / <code>HighMemoryUsage</code> rules only fired for the monitoring VM. Closed the gap with <code>manifests/node-exporter/daemonset.yaml</code> in <code>monitoring-project</code>: hostNetwork + hostPID + /proc, /sys, /rootfs hostPath mounts; control-plane toleration so it schedules on the single-node cluster. Discovery via the existing <code>kubernetes-pods</code> Prometheus scrape job (annotation-based, API-server-proxy routing) — no <code>prometheus.yml.j2</code> changes. Verified: pod <code>node-exporter-cnjl8</code> Running, <code>node_load1</code> samples now flow from both hosts.</li>
+    <li><strong>Audit follow-on fixes (I-1, I-4, I-5).</strong> <code>service_deployment_type</code> map drift fixed: <code>node-exporter</code> mapped <code>systemd</code>→<code>docker-vm</code>, <code>mysql</code> dropped (not deployed), <code>cadvisor</code> added. Cascade-incident-disk-loki exemplar regex fixed to match the actual <code>LokiIngestionRateLow</code> rule (was the non-existent <code>LokiIngestLag</code>). Forward-looking comments added to the 4 archetypes whose alertname regexes don't yet match live rules — bounded-agency-resolves-inconclusive, crashloop-bad-config, network-firewall-attribution, tls-cert-expiry-pre-failure.</li>
+  </ul>
+  <p style="margin:0;color:#8890a0;font-size:12.5px;">
+    Full audit trail with all 5 I-x improvement items at <a href="audit-2026-04-28.html" style="color:#40d0d0">audit-2026-04-28.html</a>.
+  </p>
 </div>
 
 <div style="max-width:1100px;margin:20px auto;padding:18px 22px;background:rgba(232,138,160,.07);border-left:3px solid #e88aa0;border-radius:0 8px 8px 0;">
