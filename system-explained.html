@@ -664,22 +664,27 @@
   <code>_cleanup()</code> drops expired entries on every check.
 </p>
 
-<h3 id="mod-drain">4.10 <code>app/drain_analyzer.py</code></h3>
+<h3 id="mod-drain">4.10 <code>app/drain_analyzer.py</code> — per-service template miners (US-5.1 Phase A, 2026-04-28)</h3>
 <p>
-  Wraps <code>drain3.TemplateMiner</code>. Key methods:
+  Wraps <code>drain3.TemplateMiner</code> with a per-service router. Each service gets its own
+  <code>TemplateMiner</code> instance + <code>FilePersistence</code> at <code>{drain3_state_dir}/{service}.bin</code>,
+  so spring-boot's templates don't blend with kong's. Key methods:
 </p>
 <ul>
-  <li><code>analyze(log_line)</code> — single-line template matching. Increments <code>_total_anomalies</code> when a new cluster is created OR when <code>match_count &lt; settings.drain3_anomaly_threshold</code>.</li>
-  <li><code>annotate_lines(lines)</code> — batch-mode <code>[ANOMALY]</code>/<code>[KNOWN]</code> prefix for the LLM prompt.</li>
-  <li><code>seed_from_loki()</code> — startup ingestion of recent Loki lines.</li>
-  <li><code>start_background_ingestion()</code> — async task that polls Loki every <code>settings.drain3_poll_interval</code> s.</li>
-  <li><code>_ingest_batch_sync(lines)</code> — CPU-bound work offloaded via <code>asyncio.to_thread</code> to avoid blocking the event loop (was the 2026-04-22 <code>/drain3/stats</code>-hangs bug).</li>
-  <li><code>maybe_fire_alert(batch_total, anomalous)</code> — P1.7 self-bridge. Posts to <code>settings.drain3_self_webhook_url</code> when rate crosses threshold + cooldown elapsed.</li>
-  <li><code>save_snapshot_to_file()</code> + <code>upload_snapshot_to_s3()</code> — Drain3 state checkpointing.</li>
+  <li><code>analyze(log_line, service="_unknown")</code> — routes to the per-service miner (lazily creates one if not yet seen). Counters tracked per-service in <code>_lines_per_service</code> + <code>_anomalies_per_service</code>.</li>
+  <li><code>annotate_lines(lines, service="_unknown")</code> — batch-mode prefix for the LLM prompt. All lines in a batch attribute to one service.</li>
+  <li><code>get_stats(service=None)</code> — without arg returns aggregate (across all services) plus per-service breakdown; with arg returns just that service's miner stats. Backs <code>/drain3/stats?service=</code>.</li>
+  <li><code>_get_or_create_miner(service)</code> — lazy per-service instantiation.</li>
+  <li><code>_service_from_stream_labels(labels)</code> — extracts the service name from a Loki stream's label dict (tries <code>service_name → service → k8s_app → app_kubernetes_io_name → app</code>; falls back to <code>_unknown</code>; sanitizes for filename).</li>
+  <li><code>seed_from_loki()</code> + <code>_ingest_loop()</code> — both now group lines by service before ingesting, so polled Loki batches respect per-service template trees.</li>
+  <li><code>maybe_fire_alert(batch_total, anomalous, new_templates)</code> — P1.7 self-bridge. Posts to <code>settings.drain3_self_webhook_url</code> when rate crosses threshold + cooldown elapsed. Carries actual new template strings (F-1 fix 2026-04-28).</li>
 </ul>
 <p>
-  Thread safety: every read/write of <code>self._miner</code>,
-  <code>_total_lines</code>, <code>_total_anomalies</code> goes through
+  <strong>Migration</strong>: pre-Phase-A <code>drain3_state.bin</code> auto-renames to <code>_unknown.bin</code> on first start so prior cluster history isn't lost (becomes the safe-default bucket for unlabelled traffic).
+</p>
+<p>
+  Thread safety: every read/write of <code>self._miners</code>,
+  <code>_lines_per_service</code>, <code>_anomalies_per_service</code> goes through
   <code>self._lock</code> (<code>threading.Lock</code>, not async) because
   the offloaded work runs in the thread pool.
 </p>
