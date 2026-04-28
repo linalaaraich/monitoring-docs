@@ -122,8 +122,8 @@
       <span class="pill green">0 active alerts</span>
       <span class="pill green">89 / 89 tests green</span>
       <span class="pill green">All hosts healthy</span>
-      <span class="pill orange">3 minor drift items</span>
-      <span class="pill cyan">5 forward-looking gaps documented</span>
+      <span class="pill green">All 5 improvement items resolved</span>
+      <span class="pill cyan">Forward-looking gaps documented</span>
     </div>
   </div>
 </section>
@@ -470,11 +470,13 @@
 
 <p>Land it as a small commit (<code>triage: deployment_type map drift fixes</code>). Re-run the test suite to confirm 89/89 still green.</p>
 
-<h3>I-2 — Deploy node-exporter on the k3s host (1 hour)</h3>
+<h3>I-2 — Deploy node-exporter on the k3s host ✅ Shipped 2026-04-28</h3>
 
-<p>The role exists; just needs to be applied to the k3s inventory. Add <code>observability-rca-k3s</code> as a target group in the ansible inventory (or include the host in <code>monitoring</code> group), then <code>ansible-playbook -t node_exporter</code>. Verify by checking <code>/api/datasources/proxy/uid/prometheus/api/v1/targets</code> for a <code>k3s-node-exporter</code> job.</p>
+<p><strong>Original estimate of "1 hour, role exists, just apply it" was wrong</strong> — the existing <code>roles/node_exporter</code> is a placeholder that emits a debug message; the actual node-exporter on monitoring-vm is launched by the unified docker-compose stack, which doesn't apply to the k3s host. Real options were considered: DaemonSet on k3s (~½ day, architecturally correct), systemd via ansible buildout (~2h), or standalone docker container (~1h).</p>
 
-<p>Once it's scraping, host-level CPU / memory / disk alerts will cover the k3s node too. Worth doing before US-5.5 (peer grouping) lands, since per-pod z-scores need a baseline of stable host metrics.</p>
+<p><strong>Chosen path: DaemonSet on k3s.</strong> Manifests at <code>monitoring-project/manifests/node-exporter/daemonset.yaml</code>; corresponding ansible task block in <code>playbooks/k8s-manifests.yml</code> (tag <code>node-exporter</code>). hostNetwork + hostPID + /proc, /sys, /rootfs hostPath mounts; tolerations for the control-plane taint so the DaemonSet schedules on the single-node cluster. Discovered by the existing <code>kubernetes-pods</code> Prometheus scrape job via <code>prometheus.io/scrape</code> annotations through the k3s API-server proxy — no <code>prometheus.yml.j2</code> changes required.</p>
+
+<p><strong>Verified live:</strong> pod <code>node-exporter-cnjl8</code> Running, <code>:9100</code> listening on host, Prometheus has 14 active targets (was 13) with the new one as job <code>kubernetes-pods</code>, instance <code>10.0.1.194:6443</code>, health <code>up</code>. <code>node_load1</code> samples from both monitoring-vm and the k3s host now flow into Prometheus. Existing <code>HighCpuUsage</code> / <code>CriticalDiskUsage</code> rules group by instance with no port filter, so they now cover both hosts independently. Committed as <code>monitoring-project@c936202</code>.</p>
 
 <h3>I-3 — Update the session handoff to reflect the actual auto-pull shape (5 min)</h3>
 
