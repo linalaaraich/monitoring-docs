@@ -428,6 +428,49 @@
 <p>These gaps are <strong>not</strong> shipped yet — documenting here for the next code session. None are urgent: the F-1/F-2/F-3/F-4 fixes already shipped today address the bulk of regression cases.</p>
 
 <!-- ============================================================== -->
+<h2 id="live-verify-pm">Live verification 2026-04-28 PM — three more regressions found and fixed</h2>
+
+<p>
+  After deploying the morning's F-1/F-3/F-4 work, I induced two real Drain3 alerts
+  to live-verify the philosophy chain end-to-end. Both produced surface-only RCAs
+  that the validators didn't catch. Three additional fixes shipped:
+</p>
+
+<table>
+  <thead><tr><th>#</th><th>Failure</th><th>Root cause</th><th>Fix shipped</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>F-1.5</td>
+      <td>F-1 was leaky — Drain3 RCAs still lacked the rich webhook content despite the F-1 fix.</td>
+      <td>The prompt builder reads <code>drain_summary</code> from <code>ctx.anomaly_summary</code>, which is set by <code>ctx.gather()</code> re-querying Loki for <code>service=drain3</code> (empty — the lines are emitted from <code>service=spring-boot</code> stdout). The webhook's rich description sat in <code>alert.annotations["description"]</code> but didn't flow into the primary anomaly-evidence path.</td>
+      <td><code>app/pipeline.py</code>: when <code>alertname=Drain3AnomalyDetected</code> and <code>source=drain3</code>, override <code>ctx.anomaly_summary</code> with the rich description so the LLM sees the actual templates + sample lines.</td>
+    </tr>
+    <tr>
+      <td>F-3 widen</td>
+      <td><code>"Based on the context provided, ..."</code> slipped past the surface-only LEDE regex.</td>
+      <td>Original regex matched <code>observed | repeated | reported | metric | PromQL | query | log entries | logs | trace | values | frequency | rate | elevated | high | increased | recurring</code>. Did not include <code>context | information | data | input | history | provided | prompt | alert | prior | available</code>.</td>
+      <td><code>app/response_validator.py</code>: widened noun list with the missing words. 4 new tests reproducing the verbatim regression cases.</td>
+    </tr>
+    <tr>
+      <td>F-3 Drain3</td>
+      <td>Model hallucinated a Prometheus / PromQL detection mechanism for what's actually log-template novelty: <em>"Prometheus query: <code>{alertname=\"Drain3Alert\"}</code> == 8 times in the last 7 days"</em>.</td>
+      <td>The hallucination blocklist had entries for <code>HighP95Latency</code> and <code>HighKongP95Latency</code> but not for Drain3-class alerts. The LLM grasped at PromQL as a familiar shape because it didn't know how Drain3 actually works.</td>
+      <td><code>app/hallucination_blocklist.yaml</code>: new <code>Drain3AnomalyDetected</code> section rejecting any <code>\bPromQL\b</code>, <code>\bPrometheus query\b</code>, or hallucinated alertname (<code>Drain3Alert | Drain3Threshold | Drain3Anomaly</code>). 3 new tests.</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="callout note">
+  <div class="callout-label">F-4 worked</div>
+  The confidence clamp from this morning DID fire on the Drain3 RCA at 13:11:49 — <code>conf=0.40</code> visible in <code>/decisions</code>. Operator sees a low-confidence + actionable row and knows to scrutinise. That's the F-4 design intent.
+</div>
+
+<p>
+  Suite went 160 → 167. Production deployed. Will re-verify with another live alert
+  and document those findings if more regressions surface.
+</p>
+
+<!-- ============================================================== -->
 <h2 id="related">Related</h2>
 
 <ul>
