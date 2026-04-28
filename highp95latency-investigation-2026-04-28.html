@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HighP95Latency Investigation 2026-04-28 — CIRES Observability Platform</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --bg-soft: #13151e;
+    --card: #1a1d27;
+    --card-alt: #1e2230;
+    --border: #2a2d3a;
+    --border-hi: #3a3f52;
+    --text: #e4e6ee;
+    --text-soft: #c0c5d0;
+    --muted: #8890a0;
+    --accent-blue: #4ea8de;
+    --accent-green: #6bcf7f;
+    --accent-orange: #f0a050;
+    --accent-purple: #b07ee8;
+    --accent-red: #e06070;
+    --accent-cyan: #40d0d0;
+    --accent-yellow: #e0d060;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { font-family:'Inter','Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); line-height:1.65; font-size:15px; -webkit-font-smoothing:antialiased; }
+  code, pre, .mono { font-family:'JetBrains Mono','Fira Code',ui-monospace,monospace; font-size:0.88em; }
+
+  .topnav { display:flex; align-items:center; gap:12px; padding:14px 40px; background:var(--bg-soft); border-bottom:1px solid var(--border); flex-wrap:wrap; }
+  .topnav span.nav-label { color:var(--muted); font-size:13px; font-weight:600; margin-right:4px; }
+  .navlink { display:inline-flex; align-items:center; gap:6px; padding:7px 14px; border-radius:8px; font-size:13px; font-weight:600; text-decoration:none; border:1px solid; transition:background .2s, transform .15s; }
+  .navlink:hover { transform:translateY(-1px); }
+  .navlink-home { color:var(--text); border-color:var(--border); background:var(--card); }
+  .navlink-log { color:var(--accent-orange); border-color:rgba(240,160,80,.4); background:rgba(240,160,80,.08); }
+  .navlink-sys { color:var(--accent-cyan); border-color:rgba(64,208,208,.4); background:rgba(64,208,208,.08); }
+  .navlink-triage { color:var(--accent-purple); border-color:rgba(176,126,232,.4); background:rgba(176,126,232,.12); }
+  .navlink-prev { color:var(--accent-yellow); border-color:rgba(224,208,96,.4); background:rgba(224,208,96,.08); }
+
+  .hero { padding:56px 40px 40px; border-bottom:1px solid var(--border); background:linear-gradient(180deg, #13151e 0%, var(--bg) 100%); }
+  .hero .inner { max-width:1040px; margin:0 auto; }
+  .hero .eyebrow { font-size:11px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:var(--accent-purple); margin-bottom:12px; }
+  .hero h1 { font-size:36px; font-weight:800; letter-spacing:-.5px; margin-bottom:14px; line-height:1.2; }
+  .hero h1 span.accent { color:var(--accent-purple); }
+  .hero p.lead { font-size:16px; color:var(--text-soft); max-width:820px; line-height:1.7; margin-bottom:20px; }
+  .hero .pill-row { display:flex; gap:8px; flex-wrap:wrap; }
+  .pill { font-size:11px; font-weight:600; padding:4px 10px; border-radius:12px; border:1px solid; letter-spacing:.2px; }
+  .pill.red { color:var(--accent-red); border-color:rgba(224,96,112,.35); background:rgba(224,96,112,.08); }
+  .pill.orange { color:var(--accent-orange); border-color:rgba(240,160,80,.35); background:rgba(240,160,80,.08); }
+  .pill.green { color:var(--accent-green); border-color:rgba(107,207,127,.35); background:rgba(107,207,127,.08); }
+  .pill.purple { color:var(--accent-purple); border-color:rgba(176,126,232,.35); background:rgba(176,126,232,.08); }
+
+  .stats-row { display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:14px; margin:28px 0 24px; }
+  .stat { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:16px 20px; }
+  .stat .n { font-size:28px; font-weight:700; color:var(--text); }
+  .stat .lbl { font-size:11px; font-weight:600; letter-spacing:1px; text-transform:uppercase; color:var(--muted); margin-bottom:4px; }
+  .stat.good { border-left:3px solid var(--accent-green); }
+  .stat.warn { border-left:3px solid var(--accent-orange); }
+  .stat.bad { border-left:3px solid var(--accent-red); }
+
+  .layout { max-width:1040px; margin:0 auto; padding:32px 40px 80px; }
+  .content h2 { font-size:24px; font-weight:700; margin:40px 0 14px; letter-spacing:-.3px; scroll-margin-top:24px; padding-bottom:8px; border-bottom:1px solid var(--border); }
+  .content h2:first-child { margin-top:0; }
+  .content h3 { font-size:17px; font-weight:700; margin:24px 0 8px; color:var(--text); }
+  .content h4 { font-size:13px; font-weight:700; margin:14px 0 4px; letter-spacing:1px; text-transform:uppercase; color:var(--muted); }
+  .content p { margin-bottom:14px; color:var(--text-soft); }
+  .content p strong { color:var(--text); font-weight:600; }
+  .content ul, .content ol { margin:8px 0 16px 24px; color:var(--text-soft); }
+  .content li { margin-bottom:6px; }
+  .content code { background:var(--card); border:1px solid var(--border); padding:1px 6px; border-radius:4px; font-size:0.85em; color:var(--accent-cyan); }
+  .content pre { background:var(--card); border:1px solid var(--border); padding:14px 16px; border-radius:8px; margin:12px 0 18px; overflow-x:auto; line-height:1.5; font-size:12.5px; }
+  .content pre code { background:none; border:none; padding:0; color:var(--text); font-size:1em; }
+  .content a { color:var(--accent-blue); text-decoration:none; border-bottom:1px dashed rgba(78,168,222,.35); }
+  .content a:hover { border-bottom-style:solid; }
+
+  .callout { border-left:3px solid; border-radius:0 8px 8px 0; padding:14px 18px; margin:16px 0; background:var(--card); }
+  .callout.note { border-color:var(--accent-blue); }
+  .callout.tip { border-color:var(--accent-green); }
+  .callout.warn { border-color:var(--accent-orange); }
+  .callout.critical { border-color:var(--accent-red); }
+  .callout-label { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; margin-bottom:6px; }
+  .callout.note .callout-label { color:var(--accent-blue); }
+  .callout.tip .callout-label { color:var(--accent-green); }
+  .callout.warn .callout-label { color:var(--accent-orange); }
+  .callout.critical .callout-label { color:var(--accent-red); }
+
+  table { width:100%; border-collapse:collapse; margin:12px 0 20px; font-size:13px; }
+  table th, table td { padding:10px 12px; border-bottom:1px solid var(--border); text-align:left; vertical-align:top; }
+  table th { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--muted); background:var(--card); }
+  table tr:hover td { background:var(--card-alt); }
+  .tag-ok { color:var(--accent-green); font-weight:600; }
+  .tag-minor { color:var(--accent-orange); font-weight:600; }
+  .tag-major { color:var(--accent-red); font-weight:600; }
+
+  blockquote { border-left:3px solid var(--accent-orange); margin:16px 0; padding:8px 18px; background:rgba(240,160,80,.05); color:var(--text-soft); font-style:italic; line-height:1.7; }
+  blockquote p { margin-bottom:0; }
+</style>
+</head>
+<body>
+
+<nav class="topnav">
+  <span class="nav-label">CIRES Observability Platform</span>
+  <a href="index.html" class="navlink navlink-home">🏠 Home</a>
+  <a href="audit-2026-04-28.html" class="navlink navlink-prev">📋 Audit (today)</a>
+  <a href="decisions-log.html" class="navlink navlink-log">📝 Decisions Log</a>
+  <a href="system-explained.html" class="navlink navlink-sys">🔬 System Explained</a>
+  <a href="triage-service.html" class="navlink navlink-triage">🧠 Triage Service</a>
+</nav>
+
+<section class="hero">
+  <div class="inner">
+    <div class="eyebrow">Investigation · 2026-04-28</div>
+    <h1>HighP95Latency <span class="accent">Investigation</span></h1>
+    <p class="lead">
+      Step 4 of the 2026-04-28 work plan: investigate the recurring
+      <code>HighP95Latency</code> rows on the dashboard — some are operator
+      tests, some aren't. Confirm the <a href="decisions-log.html#d19">RCA prose
+      philosophy (D19)</a> shipped this morning is actually changing what the
+      LLM produces in production. Spoiler: the philosophy partly worked but
+      the validator's regex set was too narrow to catch the model's actual
+      regression shape, and the exemplar matcher was picking the wrong
+      archetype for spring-boot p95. Both fixed in <code>monitoring-triage-service@261537f</code>.
+    </p>
+    <div class="pill-row">
+      <span class="pill purple">20 rows reviewed</span>
+      <span class="pill orange">2 post-philosophy regressions</span>
+      <span class="pill green">Validator widened + new exemplar shipped</span>
+      <span class="pill green">Suite 102 / 102</span>
+    </div>
+  </div>
+</section>
+
+<main class="layout">
+<div class="content">
+
+<div class="stats-row">
+  <div class="stat warn">
+    <div class="lbl">Total HighP95Latency rows</div>
+    <div class="n">20</div>
+  </div>
+  <div class="stat warn">
+    <div class="lbl">Operator-test runs</div>
+    <div class="n">~12</div>
+  </div>
+  <div class="stat warn">
+    <div class="lbl">Real-incident rows</div>
+    <div class="n">~5</div>
+  </div>
+  <div class="stat bad">
+    <div class="lbl">Pipeline timeouts</div>
+    <div class="n">3</div>
+  </div>
+  <div class="stat bad">
+    <div class="lbl">Surface-only post-philosophy</div>
+    <div class="n">2 / 2</div>
+  </div>
+  <div class="stat good">
+    <div class="lbl">Bugs found + fixed</div>
+    <div class="n">2</div>
+  </div>
+</div>
+
+<!-- ============================================================== -->
+<h2 id="setup">The question</h2>
+
+<blockquote>
+  Investigate the dashboard HighP95Latency rows. Some are operator tests, some aren't.
+</blockquote>
+
+<p>
+  Two questions to separate from each other:
+</p>
+
+<ol>
+  <li>For each row: was it a real production event, or a test run / chaos
+    injection? (Operational: tells the operator which to ignore on the
+    dashboard.)</li>
+  <li>For each row: did the LLM produce a useful RCA, or a surface-level
+    restating-the-alert RCA? (Quality: tells us whether the philosophy
+    work shipped this morning is having effect.)</li>
+</ol>
+
+<p>
+  Both questions answered below from the <code>/decisions?limit=200</code>
+  endpoint on the laptop triage service, plus a verification of which
+  exemplar the matcher picked for each row.
+</p>
+
+<!-- ============================================================== -->
+<h2 id="data">The 20 rows</h2>
+
+<p>Pulled from the running triage at 2026-04-28 ~10:25 UTC, sorted oldest first:</p>
+
+<table>
+  <thead><tr><th>Timestamp (UTC)</th><th>Verdict</th><th>Conf</th><th>rca_quality</th><th>Action</th><th>Dur (ms)</th><th>Likely cause</th></tr></thead>
+  <tbody>
+    <tr><td>2026-04-23 21:35:37</td><td>dismiss</td><td>—</td><td>—</td><td>suppressed</td><td>79929</td><td>Pre-LLM dedup hit (matched a recent dismiss)</td></tr>
+    <tr><td>2026-04-24 09:20:03</td><td>escalate</td><td>—</td><td>actionable</td><td>emailed</td><td>238561</td><td>Real (early Sprint-2 close-out testing window)</td></tr>
+    <tr><td>2026-04-24 09:23:34</td><td>escalate</td><td>—</td><td>actionable</td><td>emailed</td><td>142483</td><td>Real (same window)</td></tr>
+    <tr><td>2026-04-24 09:34:59</td><td>escalate</td><td>—</td><td>actionable</td><td>emailed</td><td>300911</td><td>Real (same window)</td></tr>
+    <tr><td>2026-04-24 09:35:19</td><td>escalate</td><td>—</td><td>actionable</td><td>emailed</td><td>844708</td><td>Real (same window) — slow 14m run, possible LLM retry</td></tr>
+    <tr><td>2026-04-24 09:40:21</td><td>escalate</td><td>—</td><td>actionable</td><td>emailed</td><td>759653</td><td>Real (same window)</td></tr>
+    <tr><td>2026-04-24 11:21:18</td><td>escalate</td><td>0.00</td><td>actionable</td><td>emailed</td><td>59507</td><td>LLM-fallback row (conf=0.00 → action-template kicked in)</td></tr>
+    <tr><td>2026-04-24 12:51:06</td><td>None</td><td>—</td><td>data_starved</td><td>emailed_raw</td><td>900002</td><td><strong>Pipeline timeout (900s old budget)</strong> — pre-2026-04-27 timeout fix</td></tr>
+    <tr><td>2026-04-24 12:51:20</td><td>escalate</td><td>0.00</td><td>actionable</td><td>emailed</td><td>300667</td><td>LLM-fallback row</td></tr>
+    <tr><td>2026-04-24 12:52:21</td><td>escalate</td><td>0.00</td><td>actionable</td><td>emailed</td><td>300579</td><td>LLM-fallback row</td></tr>
+    <tr><td>2026-04-24 13:08:48</td><td>escalate</td><td>0.95</td><td>actionable</td><td>emailed</td><td>385723</td><td>Real (12h after the OOM-fix; dashboard was being load-tested)</td></tr>
+    <tr><td>2026-04-24 14:32:49</td><td>None</td><td>—</td><td>data_starved</td><td>emailed_raw</td><td>900005</td><td><strong>Pipeline timeout</strong> (old budget)</td></tr>
+    <tr><td>2026-04-24 14:44:29</td><td>escalate</td><td>0.95</td><td>actionable</td><td>emailed</td><td>381665</td><td>Real (post-OOM-fix re-test)</td></tr>
+    <tr><td>2026-04-24 19:29:24</td><td>None</td><td>—</td><td>data_starved</td><td>emailed_raw</td><td>900001</td><td><strong>Pipeline timeout</strong> (old budget)</td></tr>
+    <tr><td>2026-04-27 15:42:56</td><td>escalate</td><td>0.00</td><td>actionable</td><td>emailed</td><td>601642</td><td>Test run during Epic 5 work (LLM-fallback)</td></tr>
+    <tr><td>2026-04-27 15:44:39</td><td>escalate</td><td>0.00</td><td>actionable</td><td>emailed</td><td>601645</td><td>Test run (LLM-fallback)</td></tr>
+    <tr><td>2026-04-27 16:40:28</td><td>escalate</td><td>0.95</td><td>actionable</td><td>emailed</td><td>655099</td><td>Validation test (post-2026-04-27 push)</td></tr>
+    <tr><td>2026-04-27 20:51:22</td><td>escalate</td><td>0.95</td><td>actionable</td><td>emailed</td><td>660776</td><td>Real (last firing before sleep)</td></tr>
+    <tr style="background:rgba(176,126,232,.08);"><td>2026-04-28 10:12:28</td><td>escalate</td><td>0.85</td><td>actionable</td><td>emailed</td><td>1081195</td><td><strong>Post-philosophy</strong> — surface-only (case 1)</td></tr>
+    <tr style="background:rgba(176,126,232,.08);"><td>2026-04-28 10:13:59</td><td>escalate</td><td>0.95</td><td>actionable</td><td>emailed</td><td>861217</td><td><strong>Post-philosophy</strong> — surface-only (case 2)</td></tr>
+  </tbody>
+</table>
+
+<p>
+  Triage container restarted at <code>09:22 UTC</code> with image
+  <code>revision=131f726</code> (post-philosophy build). The two purple-highlighted
+  rows are the first HighP95Latency events that hit that build. They are the
+  most important rows for evaluating the philosophy work — and they regressed.
+</p>
+
+<!-- ============================================================== -->
+<h2 id="categorization">Tests vs. real, and surface-only vs. cause-first</h2>
+
+<p>
+  Categorisation by hand from timestamps and operator memory of test windows:
+</p>
+
+<table>
+  <thead><tr><th>Category</th><th>Count</th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr><td>Operator test windows</td><td>~12</td><td>2026-04-24 09:20→09:40 (post-OOM validation), 12:51→14:44 (post-fix re-test), 2026-04-27 15:42→16:40 (Epic 5 work)</td></tr>
+    <tr><td>Real production-shape events</td><td>~5</td><td>2026-04-27 20:51, 2026-04-28 10:12, 10:13, plus the early 2026-04-24 13:08 / 14:44 retests that showed real adaptive-threshold-style spikes</td></tr>
+    <tr><td>Pre-LLM dedup hits</td><td>1</td><td>2026-04-23 21:35 — fingerprint dedup, no LLM ran</td></tr>
+    <tr><td>Pipeline timeouts (pre-04-27 budget)</td><td>3</td><td>All 900s exact — the prior <code>PIPELINE_TIMEOUT</code> ceiling. 2026-04-27 commit raised this to 2400s.</td></tr>
+  </tbody>
+</table>
+
+<p>
+  Quality split — only the rows where the LLM actually produced an RCA
+  (15 rows excluding dedup, fallback-templates, and timeouts):
+</p>
+
+<table>
+  <thead><tr><th>Quality</th><th>Count</th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr><td>Cause-first prose with named mechanism</td><td>~8</td><td>Rows where the LLM cited specific evidence (GC pauses, OOM, deploy correlation) — the OOM-detection prose worked well.</td></tr>
+    <tr><td>Surface-only / "value above threshold" restatement</td><td>~5</td><td>Mostly the conf=0.00 LLM-fallback rows where the LLM call effectively failed and the action-template fallback fired.</td></tr>
+    <tr><td><strong>Surface-only POST-philosophy (the regressions)</strong></td><td><strong>2</strong></td><td>2026-04-28 10:12 + 10:13. Both ran on the new prompt + new exemplars + new validator and still produced surface-level output that the validator did not catch. Detailed below.</td></tr>
+  </tbody>
+</table>
+
+<!-- ============================================================== -->
+<h2 id="regressions">The 2 regressions — what they actually said</h2>
+
+<h3>Row 1 — 2026-04-28 10:12:28 (HighP95Latency on spring-boot, conf 0.85)</h3>
+
+<blockquote>
+  Based on the repeated log entries for actuator health and prometheus
+  queries, it appears that there is a recurring issue with the system's
+  health checks or metrics collection. The logs indicate that these
+  requests are being made frequently without any errors, suggesting
+  potential performance degradation or resource contention issues.
+  Specifically, the repeated calls to /actuator/health and
+  /actuator/prometheus endpoints could be indicative of either an
+  application misconfiguration or a backend service issue affecting
+  the availability or responsiveness of these endpoints.
+</blockquote>
+
+<h3>Row 2 — 2026-04-28 10:13:59 (HighP95Latency on spring-boot, conf 0.95)</h3>
+
+<blockquote>
+  Based on the observed metric values and PromQL queries, it appears
+  that the Spring Boot application is frequently querying actuator
+  endpoints such as /actuator/health and /actuator/prometheus. This
+  behavior suggests that either the application itself is performing
+  these checks for monitoring purposes, or there might be an external
+  system (e.g., a monitoring tool) making these requests. The repeated
+  nature of this activity over multiple days indicates a persistent
+  issue that requires further investigation.
+</blockquote>
+
+<p>Both ledes:</p>
+
+<ul>
+  <li>Open with <code>"Based on the (observed | repeated) ..."</code> — surface-level framing rather than a named cause.</li>
+  <li>Hedge with <code>"it appears that"</code>, <code>"suggesting potential"</code>, <code>"could be indicative of either ... or ..."</code>, <code>"requires further investigation"</code> — every standard SRE-bullshit-bingo phrase.</li>
+  <li>Do not name a single cause — the LLM constructed a narrative around the most-frequent log lines (actuator endpoints), which is itself a hallucinated correlation: actuator endpoints are scraped <em>by Prometheus</em>, not by users. They have nothing to do with user-visible p95 latency.</li>
+</ul>
+
+<!-- ============================================================== -->
+<h2 id="why-validator-missed">Why the validator missed both</h2>
+
+<p>
+  The 2026-04-28 morning shipping (<a href="decisions-log.html#d19">D19</a>)
+  added two regex sets to <code>app/response_validator.py</code>:
+</p>
+
+<ul>
+  <li><code>_SURFACE_ONLY_LEDE_PATTERNS</code> — matched <code>^PromQL `&lt;expr&gt;`</code>, <code>^The PromQL expression</code>, raw <code>metric{}=value</code> ledes.</li>
+  <li><code>_SURFACE_ONLY_HEDGE_PATTERNS</code> — matched <code>"indicates that there are X experiencing Y"</code>, <code>"suggests (high|elevated|increased)"</code>, <code>"appears to be experiencing"</code>.</li>
+</ul>
+
+<p>
+  Both regex sets were calibrated against the operator's literal example
+  (the HighKongP95Latency RCA pasted in the morning's review). The model's
+  actual regression shape was less specific:
+</p>
+
+<ul>
+  <li>Lede: <code>"Based on the repeated log entries..."</code> — does not start with <code>PromQL</code> or <code>The PromQL expression</code>; doesn't match any LEDE pattern.</li>
+  <li>Hedges: <code>"appears that there is a recurring issue"</code>, <code>"suggesting potential performance degradation"</code>, <code>"could be indicative of either ... or ..."</code>, <code>"indicates a persistent issue that requires further investigation"</code> — none of these match the narrow patterns in the original set.</li>
+</ul>
+
+<p>
+  In short: the validator caught the exact bad output Lina cited, but not the
+  broader hedge class the model actually produces under load. That's the
+  classic regex-too-narrow failure mode.
+</p>
+
+<!-- ============================================================== -->
+<h2 id="why-prompt-didnt-help">Why the new prompt + exemplars didn't fully fix it</h2>
+
+<p>
+  The exemplar matcher scores by:
+</p>
+
+<pre><code>alertname-regex 0.10 + service 0.40 + deployment_type 0.30 + signal 0.20 + severity 0.10</code></pre>
+
+<p>
+  For <code>HighP95Latency</code> on <code>spring-boot</code>:
+</p>
+
+<table>
+  <thead><tr><th>Exemplar</th><th>alertname</th><th>service</th><th>deploy</th><th>signal</th><th>Score</th></tr></thead>
+  <tbody>
+    <tr><td>upstream-latency-attribution</td><td>0.10 ✓</td><td><strong>0.00 ✗</strong> (services=[kong])</td><td>0.30 ✓</td><td>0.20 ✓</td><td><strong>0.60</strong></td></tr>
+    <tr><td>generic-sre-shape (default)</td><td>fallback</td><td>—</td><td>—</td><td>—</td><td>0 (only used if nothing scores)</td></tr>
+  </tbody>
+</table>
+
+<p>
+  So the model received <code>upstream-latency-attribution</code> as its
+  calibration target. That exemplar is calibrated for the Kong-as-alert-subject
+  pattern (<em>"Kong itself is healthy: kong_proxy_latency_ms p95 is in
+  single-digit ms; the observed p95 is upstream time inside a downstream
+  service"</em>) — which is the wrong shape for the alert-on-spring-boot case.
+  The LLM correctly recognised that the exemplar didn't match its evidence and
+  fell back to its training-data regression: surface-level paraphrase.
+</p>
+
+<!-- ============================================================== -->
+<h2 id="fix">The fix shipped today (revision 261537f)</h2>
+
+<p>Both gaps closed in <code>monitoring-triage-service@261537f</code>:</p>
+
+<h3>1. Validator regex set widened</h3>
+
+<p>New patterns added to <code>app/response_validator.py</code>:</p>
+
+<ul>
+  <li><code>^Based on (the) (observed|repeated|reported|metric|PromQL|log entries)...</code> LEDE</li>
+  <li><code>^Looking at (the) (metrics|data|observations)...</code> LEDE</li>
+  <li><code>indicates a (persistent|recurring|potential|ongoing) issue</code></li>
+  <li><code>appears (that there is | to be) ... issue/problem/concern</code></li>
+  <li><code>suggests (potential|possible|some kind of)</code></li>
+  <li><code>could be indicative of</code></li>
+  <li><code>could be (related|due|caused) by either/some/various</code></li>
+  <li><code>might be (a|an) X (issue|problem|concern)</code></li>
+  <li><code>requires further investigation/review/analysis</code></li>
+  <li><code>(potential|possible) (performance degradation | resource contention)</code></li>
+  <li><code>either ... is ... or there might be ...</code> dual-hedge</li>
+</ul>
+
+<p>
+  Plus a positive test (<code>test_named_cause_with_indicates_does_not_match_recurring_issue_pattern</code>)
+  guarding against false positives on legitimate causal prose like
+  <code>"this indicates that the JDBC pool's max=20 setting is the bottleneck"</code>.
+</p>
+
+<h3>2. New exemplar — <code>service-self-p95-saturation</code></h3>
+
+<p>
+  Added to <code>app/exemplars/library.yaml</code> (12 archetypes total now,
+  was 11). Specifically calibrated for HighP95Latency / CriticalP95Latency on
+  <code>spring-boot</code>, <code>spring-boot-app</code>, <code>springboot-app</code>, <code>frontend</code> with
+  <code>signal=metric</code>:
+</p>
+
+<blockquote>
+  The alerted service itself is the bottleneck — there is no upstream layer
+  to redirect attribution to (unlike the Kong-says-upstream pattern). The
+  diagnosis is "what inside this service is slow," and the trace breakdown
+  will name it: a connection-pool-acquisition wait points at JDBC pool size;
+  a long single-span on a downstream call points at a saturated dependency
+  or query-plan regression; long gaps between spans point at JVM GC pauses;
+  a uniform slowdown across spans points at thread-pool saturation.
+</blockquote>
+
+<p>
+  Score for <code>HighP95Latency</code> on <code>spring-boot</code> with this
+  new exemplar: alertname 0.10 + service 0.40 + deploy 0.30 + signal 0.20 =
+  <strong>1.00</strong> — wins decisively over <code>upstream-latency-attribution</code>'s
+  0.60 for the same alert.
+</p>
+
+<h3>3. Tests</h3>
+
+<p>
+  6 new tests in <code>tests/test_response_validator_surface_only.py</code>
+  — both production regressions reproduced verbatim, plus 4 standalone
+  pattern checks. Existing exemplar count assertions
+  (<code>test_list_all_returns_all_exemplars</code> and
+  <code>test_execute_list_exemplars_returns_catalogue</code>) updated 11 → 12.
+</p>
+
+<p>Suite: <strong>102 / 102</strong> (was 95 + 7 new − 0 broken).</p>
+
+<!-- ============================================================== -->
+<h2 id="what-to-watch">What to watch on the next HighP95Latency fire</h2>
+
+<p>
+  Production runs <code>revision=261537f</code> as of 2026-04-28 10:36 UTC.
+  Verification is empirical: the next live HighP95Latency on spring-boot
+  should produce a cause-first lede that names one of {JDBC pool, GC pauses,
+  downstream call, thread pool} or be rejected by the widened validator and
+  retried. Sample the next 3–5 RCAs and check:
+</p>
+
+<ol>
+  <li>Does the first sentence name a specific failing component?</li>
+  <li>If yes, does the trace evidence support that diagnosis (e.g., a long
+    single-span ID with a named operation)?</li>
+  <li>If no, did the validator catch it? (Look for
+    <code>banned_phrase_hits</code> with <code>surface-only</code> tags in
+    the triage logs.)</li>
+</ol>
+
+<p>
+  If the validator fires correctly but the retry produces the same shape, the
+  next move is rule J in the <code>SYSTEM_PROMPT</code> (currently focused on
+  PromQL translation) — extend it to require an explicit "named-cause first"
+  sentence template. Last resort: switch from qwen2.5:7b to qwen2.5:14b on the
+  laptop (won't fit in 6 GB VRAM — would need the GPU stand-up that AWS
+  approved this week in us-west-2).
+</p>
+
+<!-- ============================================================== -->
+<h2 id="outstanding">Outstanding items beyond the prose</h2>
+
+<table>
+  <thead><tr><th>Item</th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr><td>Confidence calibration</td><td>The model self-reported <code>conf=0.95</code> on Row 2's bad RCA. Confidence is uncalibrated against actual quality. Could be addressed by tying confidence to validator-pass-rate (e.g., if any surface-only pattern matched, force <code>confidence ≤ 0.4</code>) — track as a follow-up.</td></tr>
+    <tr><td>Adaptive-threshold history</td><td><code>HighP95Latency</code> shipped with adaptive thresholds 2026-04-27 (<a href="decisions-log.html#d18">D18</a>). The 7-day baseline window is still warming up — expect a less-noisy alert profile by 2026-05-04. The 18 historical fires were under the static-threshold regime.</td></tr>
+    <tr><td>Actuator-endpoint hallucination</td><td>The LLM constructed a narrative around <code>/actuator/health</code> and <code>/actuator/prometheus</code> log frequency in both regressions. Those endpoints are scraped by Prometheus and have no causal link to user-visible p95. The exemplar's <code>evidence_shape</code> for the new <code>service-self-p95-saturation</code> exemplar should help by pointing the LLM at trace span breakdowns instead of log line frequency.</td></tr>
+    <tr><td>Pre-2026-04-27 timeout rows</td><td>3 rows (12:51, 14:32, 19:29) timed out at exactly 900s — the prior <code>PIPELINE_TIMEOUT</code>. Already fixed in <code>monitoring-gpu-migration@dcb47db</code> (env-flow placeholder). Confirmed live: post-fix rows complete in 60-1100s; no new exact-900s timeouts.</td></tr>
+  </tbody>
+</table>
+
+<!-- ============================================================== -->
+<h2 id="related">Related</h2>
+
+<ul>
+  <li><a href="audit-2026-04-28.html">Full-sweep audit (2026-04-28)</a> — the parent audit that surfaced this investigation.</li>
+  <li><a href="decisions-log.html#d19">D19 (Decisions log)</a> — RCA prose quality philosophy. Updated with surface-only validator + exemplar gap discoveries.</li>
+  <li><a href="decisions-log.html#d18">D18</a> — adaptive thresholds. Once the 7-day baseline warms up, the HighP95Latency rule itself should fire less.</li>
+  <li><a href="decisions-log.html#d17">D17</a> — exemplar library. The <code>service-self-p95-saturation</code> exemplar adds the 12th archetype.</li>
+</ul>
+
+</div>
+</main>
+
+</body>
+</html>
