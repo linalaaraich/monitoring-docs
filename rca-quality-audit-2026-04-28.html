@@ -495,12 +495,12 @@
       <td>Operator sees low conf → scrutinise. <strong>Net: caught.</strong> Late-PM widening adds <code>alert | rule | webhook | fire | firing</code> to the regex (commit <code>e96deb5</code>).</td>
     </tr>
     <tr>
-      <td><code>Drain3AnomalyDetected</code> 13:29:52 → in flight</td>
-      <td>pending</td>
-      <td>pending</td>
-      <td>pending</td>
+      <td><code>Drain3AnomalyDetected</code> 13:36:07</td>
+      <td>escalate / <strong>0.40</strong> (clamped)</td>
+      <td>⚠️ "Based on the context provided, we observe that there are repeated error messages..." LEDE — validator DID catch it (verified offline) but pipeline only retries on <code>data_starved</code>; surface-only hits clamp conf via F-4 but don't trigger LLM re-prompt. <strong>However</strong>: the body of the RCA cites the ACTUAL chaos templates verbatim — "Deadlock detected on table inventory rows=42 victim=tx_id=99" + "Rate-limit threshold reached" + "anomaly rate 26.60% with new log templates" — content the round-1 and round-2 RCAs lacked entirely.</td>
+      <td>✅ F-4 clamped to 0.40 (surface-only hit)</td>
       <td>✅ Pipeline log: <em>"Drain3 self-fire: overrode anomaly_summary with webhook's rich evidence (3570 chars)"</em></td>
-      <td><strong>F-1.5 structural fix verified end-to-end</strong> — the prompt now actually carries the 7 distinct templates + sample lines instead of the empty Loki-fallback summary.</td>
+      <td><strong>F-1.5 structural fix verified end-to-end</strong>. Compared to round-1/round-2 which had NO actual templates cited, round-3 names specific failure shapes (deadlocks, rate-limiting) from MY chaos injection. The prompt evidence path is fixed. <strong>Net: chain is working.</strong> Outstanding nit: surface-only LEDE doesn't trigger retry; tracked as a small follow-up.</td>
     </tr>
   </tbody>
 </table>
