@@ -1683,6 +1683,149 @@
   </div>
 </div>
 
+<h2 id="d20">D20 · Closed-loop feedback (US-5.3) — operator decisions become routing signal</h2>
+<div class="decision">
+  <div class="decision-meta">
+    <span class="tag tag-fixed">✅ Shipped 2026-04-28</span>
+    <span class="date">2026-04-28</span>
+  </div>
+  <h3 class="problem-title">Operator overrides on RCAs were lost. The LLM produced a verdict, the operator either agreed or didn't, and the system never learned. Without that signal, every prompt/exemplar/threshold change is unmeasurable — there's no ground truth.</h3>
+
+  <div class="section-block">
+    <span class="block-label">Problem</span>
+    <div class="block-body">
+      <p>
+        <code>rca_history</code> was write-once from the operator's perspective.
+        The LLM read past RCAs as context but didn't LEARN from analyst
+        decisions. Three concrete consequences:
+      </p>
+      <ul>
+        <li>If the LLM was systematically wrong about the same alert pattern
+        (e.g., dismissing weekend-batch alerts as noise when they're a real
+        ETL failure on Saturdays), the operator caught it manually but the
+        next fire repeated the mistake.</li>
+        <li>No measurable proxy for output quality. Improvements like
+        <a href="#d17">D17 (exemplar library)</a>, <a href="#d18">D18 (adaptive
+        thresholds)</a>, and <a href="#d19">D19 (RCA prose philosophy)</a> were all
+        shipped on the merits of code review and test outcomes — there was no
+        precision/recall metric saying "did this change actually help?"</li>
+        <li>The <a href="sprint2-epic5-ueba.html#us-5-7">future US-5.7 evaluation
+        dashboard</a> needed feedback signal as its substrate. Without it,
+        running the corpus through the pipeline says how the model behaves but
+        not whether the operator agrees.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <span class="block-label">Reasoning</span>
+    <div class="block-body">
+      <p>
+        Three design tradeoffs for closed-loop feedback in a system this size:
+      </p>
+      <ul>
+        <li><strong>Idempotency on (decision_id, feedback_type).</strong> An
+        operator who marks a row as override and then changes their mind to
+        confirm shouldn't double-count in the metrics. SQLite UPSERT on the
+        unique constraint gives the natural shape: the most-recent intent wins.
+        Same decision can carry both an override AND a confirm (if the operator
+        wanted to flip then ratify) — different feedback_type values, two rows.</li>
+        <li><strong>Pre-LLM gate vs post-LLM gate for the override behaviour.</strong>
+        Two valid designs: (a) detect the override before calling the LLM and
+        skip straight to ESCALATE, or (b) let the LLM run and post-process the
+        verdict. We chose (b) for transparency — the operator gets to see the
+        LLM's actual diagnosis on the next fire and decide whether the
+        override is still warranted. Skipping the LLM would hide regressions
+        the operator might want to see.</li>
+        <li><strong>Lazy metric compute vs background task.</strong>
+        <code>triage_precision</code> and <code>triage_recall</code> are gauges, so
+        they need a value at scrape time. Two ways to get one: a 60s background
+        loop that recomputes, or a lazy compute on <code>/metrics</code>. We
+        picked lazy: 4 lightweight COUNT queries per scrape (every 15s by
+        default) is cheaper than maintaining a background task and avoids the
+        cache-staleness window that always exists with periodic refresh.</li>
+      </ul>
+      <p>
+        Time-of-day matching on the override gate (±2 hours, wrap-around at
+        midnight) is the core of the "similar alert" definition. Same
+        alertname + same service is necessary but not sufficient — Tuesday
+        9am and Tuesday 3am have different baselines, so an override flagged
+        at 9am shouldn't force-escalate a 3am fire. The wrap-around handling
+        (23:30 vs 00:30 = 60 min, not 1380 min) is tested explicitly.
+      </p>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <span class="block-label">Solution</span>
+    <div class="block-body">
+      <p>Six surfaces touched:</p>
+      <ol>
+        <li><code>app/rca_store.py</code> — new <code>feedback</code> table with
+        UNIQUE(decision_id, feedback_type), composite indices on (decision_id)
+        and (feedback_type, active_until). Migration runs in
+        <code>init_db()</code>. Five new methods: <code>record_feedback()</code>,
+        <code>get_active_overrides_for_alert()</code>,
+        <code>count_feedback_in_window()</code>,
+        <code>count_decisions_by_verdict()</code>,
+        <code>get_feedback_for_decision()</code>.</li>
+        <li><code>app/models.py</code> — Pydantic schemas
+        <code>FeedbackRequest</code> and <code>FeedbackResponse</code>.</li>
+        <li><code>app/main.py</code> — endpoints <code>POST /feedback/override</code> +
+        <code>POST /feedback/confirm</code>, both idempotent on the same
+        decision_id. The <code>/metrics</code> handler refreshes the precision +
+        recall gauges before serving (see lazy-compute tradeoff above).</li>
+        <li><code>app/pipeline.py</code> — Step 6c gate runs after LLM verdict +
+        retry resolution: if verdict is DISMISS, look up active overrides; if any
+        match (alertname + service + ±2h TOD), flip to ESCALATE, prepend an
+        operator-facing explanation to the rca/reason, set
+        <code>triage_decision = "override_forced_escalate"</code>, and increment
+        <code>triage_override_forced_escalations_total</code>.</li>
+        <li><code>app/metrics.py</code> — three new metrics:
+        <code>override_forced_escalations</code> Counter,
+        <code>triage_precision</code> + <code>triage_recall</code> Gauges.</li>
+        <li><code>app/config.py</code> — <code>feedback_metrics_window_days</code>
+        (default 7), matches the alert-frequency lookback so a week of operator
+        habits is the unit of measurement.</li>
+      </ol>
+      <p>14 new tests in <code>tests/test_feedback_us53.py</code> covering schema,
+      CRUD, idempotency, the four exclusion paths on the override gate
+      (different alertname / different service / expired / outside TOD window),
+      midnight wrap-around, and the count primitives that drive the metrics.
+      Suite went 102 → 116.</p>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <span class="block-label">Evaluation</span>
+    <div class="block-body">
+      <p>
+        Empirical effect lands in two waves. <strong>Immediate:</strong> any
+        active override now visibly changes the next fire's routing — the
+        operator gets paged on what the LLM thought was noise, with a clear
+        explanation of why. <strong>Lagging:</strong> precision and recall
+        become real numbers as soon as 2-3 confirms or overrides land in the
+        window. From a fresh deploy the gauges read 0 / 0 (intentional — sane
+        rather than NaN); they begin reflecting reality on the first feedback
+        POST.
+      </p>
+      <p>
+        Composes with <a href="#d19">D19 (RCA prose philosophy)</a> directly:
+        the surface-only validator catches output quality regressions at write
+        time, and the precision/recall gauges measure operator agreement at
+        decision time. Together they give the
+        <a href="sprint2-epic5-ueba.html#us-5-7">US-5.7 evaluation dashboard</a>
+        the substrate it needs without any additional plumbing.
+      </p>
+      <p>
+        Recurrence-gate (<a href="sprint2-epic5-ueba.html#us-5-8">US-5.8</a>) will
+        layer on top of this storage shape — the post-LLM override IS a
+        feedback signal, so US-5.8 can use the same <code>feedback</code> table.
+      </p>
+    </div>
+  </div>
+</div>
+
 </div>
 </main>
 

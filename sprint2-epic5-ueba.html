@@ -352,8 +352,12 @@
     <div class="story-title">Closed-loop feedback from analyst verdicts</div>
   </div>
   <div class="story-meta-row">
-    <span class="meta-tag meta-prio-core">Core · lowest effort, highest signal</span>
-    <span class="meta-tag meta-effort-low">Low effort · ~half-day</span>
+    <span class="meta-tag meta-prio-core" style="background:rgba(107,207,127,.15); color:var(--accent-green); border-color:rgba(107,207,127,.4);">✅ Shipped 2026-04-28 · see <a href="decisions-log.html#d20" style="color:var(--accent-green);">D20</a></span>
+    <span class="meta-tag meta-effort-low">Low effort · ~half-day actual</span>
+  </div>
+  <div class="story-section" style="background:rgba(107,207,127,.06); border-left:3px solid var(--accent-green); padding:10px 14px; border-radius:0 6px 6px 0; margin-bottom:10px;">
+    <h4 style="color:var(--accent-green); margin-top:0;">What shipped</h4>
+    <p>New <code>feedback</code> table in the SQLite RCA store with one row per <code>(decision_id, feedback_type)</code>. Two endpoints: <code>POST /feedback/override</code> and <code>POST /feedback/confirm</code> — both idempotent. Pre-LLM gate added at <code>app/pipeline.py</code> (Step 6c): if the LLM verdict is DISMISS and an active operator override matches on alertname + service + ±2h time-of-day, the verdict flips to ESCALATE with a <code>triage_decision = override_forced_escalate</code> tag and the email gets a prepended note explaining why the operator was paged on what the LLM thought was noise. Two new Prometheus gauges <code>triage_precision</code> and <code>triage_recall</code> are recomputed lazily on each <code>/metrics</code> scrape from the rca_history + feedback tables (no background task). Counter <code>triage_override_forced_escalations_total</code> increments per gate fire. 14 new tests in <code>tests/test_feedback_us53.py</code>; suite went 102 → 116. Active window default 14 days, configurable per-call via <code>active_for_days</code>.</p>
   </div>
   <div class="story-section">
     <h4>UEBA lesson</h4>
