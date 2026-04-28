@@ -1946,6 +1946,41 @@
   </div>
 </div>
 
+<h2 id="d22">D22 · SESSION_HANDOFF kept controller-local, scrubbed from public history</h2>
+<div class="decision">
+  <div class="decision-meta">
+    <span class="tag tag-fixed">✅ Shipped 2026-04-28</span>
+    <span class="date">2026-04-28</span>
+  </div>
+  <h3 class="problem-title"><code>SESSION_HANDOFF.md</code> is operator/agent scratch — sprint context, account state, internal narrative — not platform documentation. It got committed to <code>monitoring-docs</code> earlier in the project as a convenience for cross-machine sync; once the repo became public-by-default it had to come back out, including from git history.</h3>
+
+  <div class="section-block">
+    <span class="block-label">Solution</span>
+    <div class="block-body">
+      <p>
+        Two-step removal. First (earlier 2026-04-28): <code>git rm --cached</code>
+        + <code>.gitignore</code> entry to take the file off HEAD and prevent
+        accidental re-commit. Second (2026-04-28 PM): <code>git filter-repo
+        --path SESSION_HANDOFF.md --invert-paths</code> to scrub the file from
+        every prior commit, then a force-push to <code>origin/main</code>.
+      </p>
+      <p>
+        After the scrub: the file is 404 on
+        <code>raw.githubusercontent.com/.../SESSION_HANDOFF.md</code>, the file
+        does not appear in <code>git log -p</code> on a fresh clone, and any
+        former clone is broken (must re-clone). GitHub's loose-object garbage
+        collection will eventually purge the orphaned blobs.
+      </p>
+      <p>
+        The canonical <code>SESSION_HANDOFF.md</code> now lives only on the
+        operator's controller at <code>/root/SESSION_HANDOFF.md</code>. The
+        <code>.gitignore</code> entry remains so any future accidental copy in
+        the working tree won't be tracked.
+      </p>
+    </div>
+  </div>
+</div>
+
 </div>
 </main>
 
