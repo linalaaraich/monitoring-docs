@@ -202,7 +202,7 @@
     <tr><td><code>monitoring-mcp-servers</code></td><td>5 MCP HTTP bridges: prometheus-mcp, loki-mcp, jaeger-mcp, drain3-mcp, rca-history-mcp.</td></tr>
     <tr><td><code>monitoring-project</code></td><td>Ansible — Grafana/Prometheus/Loki/Jaeger/OTel config, alert rules, contact points.</td></tr>
     <tr><td><code>provisioning-monitoring-infra</code></td><td>Terraform — the AWS EC2s + security groups that host the observability stack.</td></tr>
-    <tr><td><code>gpu-migration-staging</code> (aka <code>cires-ai</code>)</td><td>Docker-compose for the laptop AI stack: Ollama + triage + MCPs + Watchtower.</td></tr>
+    <tr><td><code>gpu-migration-staging</code> (compose dir <code>~/cires-ai/</code> on the laptop)</td><td>Docker-compose for the laptop AI stack: Ollama + triage + 5 MCPs. Image rolls are operator-triggered via the <code>roles/triage_laptop</code> ansible playbook from <code>claude-controller</code> — no Watchtower or polling daemon (audit I-3, 2026-04-28).</td></tr>
     <tr><td><code>monitoring-docs</code></td><td>You are here.</td></tr>
     <tr><td><code>monitoring-load-tests</code> + <code>monitoring-chaos-tests</code></td><td>Load generators + chaos scenarios.</td></tr>
   </tbody>
@@ -256,8 +256,9 @@
   │  │ rca-history    :8095 │◀──┤                      │                 │
   │  └──────────────────────┘   └──────────────────────┘                 │
   │                                                                      │
-  │  Watchtower polls GHCR every 60 s; auto-rolls on new :main tag.      │
-  │  docker-compose up from gpu-migration-staging/compose/docker-compose │
+  │  Image rolls: operator runs `ansible-playbook playbooks/laptop.yml`  │
+  │  from claude-controller (roles/triage_laptop). No Watchtower; no     │
+  │  polling daemon. Compose dir on laptop: ~/cires-ai/                  │
   └──────────────────────────────────────────────────────────────────────┘
 </pre>
 
@@ -829,7 +830,7 @@
 <h4>Ollama + LLM</h4>
 <table class="kv-table"><tbody>
   <tr><td>OLLAMA_URL</td><td>http://ollama:11434 — via compose network</td></tr>
-  <tr><td>OLLAMA_MODEL</td><td>qwen2.5:7b (production), llama3.2:3b (CPU fallback)</td></tr>
+  <tr><td>OLLAMA_MODEL</td><td>qwen2.5:7b (current — laptop GTX 1060, GPU-only). No CPU fallback configured today; if the GPU is unavailable the service circuit-breaks rather than degrading to a smaller CPU model.</td></tr>
   <tr><td>OLLAMA_REQUEST_TIMEOUT</td><td>30 s for single chat call — short because circuit breaker</td></tr>
   <tr><td>OLLAMA_TIMEOUT</td><td>300 s full pipeline budget alias</td></tr>
 </tbody></table>
@@ -1030,12 +1031,14 @@
 </div>
 
 <div class="callout note">
-  <div class="callout-label">Watchtower doesn't re-read compose env</div>
+  <div class="callout-label">Env changes require a compose redeploy</div>
   <p>
-    Watchtower just restarts containers with a new image. It inherits the
-    env already attached to the running container. Changing env in
-    <code>docker-compose.yml</code> requires <code>docker compose up -d</code> —
-    Watchtower alone won't pick it up.
+    Image rolls are operator-triggered via <code>roles/triage_laptop</code>
+    (no Watchtower or auto-pull daemon — audit I-3, 2026-04-28). Changing
+    env in <code>docker-compose.yml</code> or <code>.env</code> requires a
+    full <code>docker compose up -d</code> from <code>~/cires-ai/</code> on
+    the laptop, or rerunning <code>ansible-playbook playbooks/laptop.yml</code>
+    from <code>claude-controller</code>.
   </p>
 </div>
 
