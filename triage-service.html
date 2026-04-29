@@ -634,6 +634,18 @@ The two highlighted lines are the ones to watch: the model's verdict (<code>dism
     <tr><td class="name">drain3_clusters</td><td class="type">gauge</td><td class="desc">Number of Drain3 log-template clusters currently learned. Grows over time; resets only on state-file deletion.</td></tr>
     <tr><td class="name">drain3_anomalies_total</td><td class="type">counter</td><td class="desc">Labelled by <code>service</code>. Increments when Drain3 sees a new template or one with low <code>match_count</code>.</td></tr>
     <tr><td class="name">drain3_lines_processed_total</td><td class="type">counter</td><td class="desc">Total log lines Drain3 has analyzed since startup. Sanity check that the background poll is actually polling.</td></tr>
+    <tr><td class="name">triage_context_gathering_seconds</td><td class="type">histogram</td><td class="desc">Pillar fan-out duration — time spent calling Prometheus + Loki + Jaeger MCPs in parallel before the LLM. Subtract from <code>triage_pipeline_duration_seconds</code> minus <code>triage_llm_investigation_seconds</code> to find non-MCP/non-LLM overhead.</td></tr>
+    <tr><td class="name">triage_emails_sent_total</td><td class="type">counter</td><td class="desc">Older pipeline-level email counter, labelled by <code>type</code> (<code>escalation</code> | <code>escalation_failed</code> | <code>timeout</code>). Tracks the call-site path; <code>triage_email_sent_total</code> (singular) is the newer notifier-side counter with <code>status</code> labels — both are live; new dashboards should prefer the singular.</td></tr>
+
+    <!-- Closed-loop feedback (US-5.3, shipped 2026-04-28) -->
+    <tr><td class="name">triage_override_forced_escalations_total</td><td class="type">counter</td><td class="desc">US-5.3 closed-loop feedback. Increments whenever the pre-LLM override gate flips a DISMISS verdict to ESCALATE because an active operator <code>/feedback/override</code> matches on alertname + service + ±2h time-of-day.</td></tr>
+    <tr><td class="name">triage_precision</td><td class="type">gauge (lazy)</td><td class="desc">US-5.3. <code>true_positives / (escalations)</code>, recomputed from <code>rca_history</code> + <code>feedback</code> tables on every <code>/metrics</code> scrape (no background task). High value = the system is escalating things operators agree with.</td></tr>
+    <tr><td class="name">triage_recall</td><td class="type">gauge (lazy)</td><td class="desc">US-5.3. <code>true_positives / all_confirmed_incidents</code>, lazy like <code>triage_precision</code>. High value = the system is catching the incidents operators care about.</td></tr>
+
+    <!-- Recurrence gates (US-5.8, shipped 2026-04-28) -->
+    <tr><td class="name">triage_recurrence_gated_pre_llm_total</td><td class="type">counter</td><td class="desc">US-5.8 pre-LLM recurrence gate fires (Pipeline Step 1c). Labelled by <code>alertname</code>. Increments when an opted-in flappy alert is short-circuited at the dedup-frequency threshold before any LLM call.</td></tr>
+    <tr><td class="name">triage_recurrence_force_escalated_total</td><td class="type">counter</td><td class="desc">US-5.8 post-LLM gate fires (Step 6c.5). Increments when a sustained pattern of LLM-DISMISS verdicts gets force-escalated by the recurrence rule despite the model's call.</td></tr>
+    <tr><td class="name">triage_recurrence_critical_bypassed_total</td><td class="type">counter</td><td class="desc">US-5.8 misconfiguration counter. Increments when an opted-in rule fires at <code>severity=critical</code> — gates explicitly skip critical alerts; this counter surfaces the misconfig to operators.</td></tr>
   </tbody>
 </table>
 
