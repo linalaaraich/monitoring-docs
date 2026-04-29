@@ -489,8 +489,8 @@ Based on the CSV gap (SCRUM-68 through SCRUM-71 missing = 4 stories) and the SPR
 2. Configure containerd with nvidia runtime
 3. Deploy NVIDIA device plugin DaemonSet (k8s-device-plugin v0.15.0)
 4. Test pod with `nvidia.com/gpu: 1` request
-5. Document GPU decision: same EC2 or separate g4dn.xlarge
-6. If separate: node taint + Ollama toleration
+5. ~~Document GPU decision: same EC2 or separate g4dn.xlarge~~ — **superseded 2026-04-23**: AI moved off k3s onto laptop GTX 1060 (current); future GPU host is `g5.xlarge` in us-west-2 (deferred — see `sprint3-backlog.md` §4).
+6. If separate (future g5.xlarge): node taint + Ollama toleration
 7. Add troubleshooting guide to monitoring-docs
 8. **SPIKE: budget 1-1.5 days for debugging**
 

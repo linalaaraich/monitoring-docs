@@ -769,19 +769,18 @@ Then: z-score each pod against the mean + stddev of its siblings.</code></pre>
     largest immediate false-positive reduction; visible in Grafana now.
   </li>
   <li>
-    <strong>US-5.8 (recurrence gate)</strong> — 4–6 hours, structured
-    noise suppression with safety guardrails. Slot here because it's
-    the natural follow-up to adaptive thresholds: where adaptive
-    thresholds reduce raw fire frequency, the recurrence gate decides
-    which fires actually deserve a human's attention. Pairs cleanly
-    with US-5.3 (the post-LLM override IS a feedback signal).
+    <strong>✅ US-5.8 (recurrence gate) — shipped 2026-04-28.</strong>
+    See <a href="decisions-log.html#d21">D21</a>. Two-tier hysteresis,
+    pre+post LLM gates, critical-severity bypass; pipeline gained
+    Steps 1c + 6c.5. Suite went 132 → 151.
   </li>
   <li>
-    <strong>US-5.3 (closed-loop feedback)</strong> — half-day, zero
-    new infrastructure. Get <code>triage_precision</code> and
-    <code>triage_recall</code> exported so every future change can be
-    measured. Couples well with US-5.8 — both rely on the same
-    "LLM-was-wrong" signal.
+    <strong>✅ US-5.3 (closed-loop feedback) — shipped 2026-04-28.</strong>
+    See <a href="decisions-log.html#d20">D20</a>.
+    <code>/feedback/override</code> + <code>/feedback/confirm</code>
+    endpoints, lazy <code>triage_precision</code> +
+    <code>triage_recall</code> gauges on each <code>/metrics</code>
+    scrape. Active-window gate at <code>pipeline.py</code> Step 6c.
   </li>
   <li>
     <strong>US-5.2 (incident correlator)</strong> — 1–2 days, biggest
