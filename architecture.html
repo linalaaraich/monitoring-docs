@@ -543,11 +543,11 @@
       </div>
     </div>
 
-    <!-- ===== AI / LLM VM ===== -->
+    <!-- ===== AI / LLM host ===== -->
     <div class="vm-box vm-ai vm-full">
       <div class="vm-header">
-        <span>AI / LLM VM <span class="gpu-badge">GPU</span></span>
-        <span class="ip">AWS g4dn.xlarge &nbsp;|&nbsp; T4 16 GB VRAM</span>
+        <span>AI / LLM host <span class="gpu-badge">GPU</span></span>
+        <span class="ip">Laptop · GTX 1060 6 GB &nbsp;|&nbsp; future: g5.xlarge A10G 24 GB (us-west-2, deferred)</span>
       </div>
       <div class="vm-body">
         <div class="svc pillar-ai">
@@ -1018,9 +1018,9 @@ const archData = {
         ]
       },
       {
-        "name": "AI / LLM VM",
-        "aws_type": "g4dn.xlarge",
-        "specs": "4 vCPU, 16 GB RAM, T4 GPU (16 GB VRAM), 50 GB gp3",
+        "name": "AI / LLM host (laptop)",
+        "host_type": "Lina's laptop · WSL2 + Docker · over Tailscale",
+        "specs": "GTX 1060 6 GB VRAM · qwen2.5:7b (current); future host g5.xlarge A10G 24 GB in us-west-2 (deferred — see sprint3-backlog.md §4)",
         "role": "ai-rca",
         "services": [
           {
@@ -1264,7 +1264,7 @@ const archData = {
       },
       "layer_3_llm": {
         "technology": "Ollama (self-hosted) :11434",
-        "gpu": "NVIDIA T4 16 GB VRAM (g4dn.xlarge)",
+        "gpu": "NVIDIA GTX 1060 6 GB VRAM (laptop, current); g5.xlarge A10G 24 GB in us-west-2 (future, deferred)",
         "mcp_bridges": [
           {"name": "Prometheus MCP", "port": 8091, "purpose": "Query metrics, check rates, get history"},
           {"name": "Loki MCP", "port": 8092, "purpose": "Search logs, filter by service, log volume"},
