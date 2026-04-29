@@ -494,19 +494,23 @@ In rough priority order:
 
 ## How to import to Jira
 
-The companion file `sprint3-jira-import.csv` is ready to import:
+The Jira-import CSV lives in the dedicated Jira repo: **`linalaaraich/jira/Sprint3-additions.csv`** (matches the Sprint 2 `Jira-additions.csv` format with 13 columns including `Work item Id`, `Work type`, and `Parent` — the column shape Jira's importer requires).
 
 1. Jira → Settings → System → External System Import → CSV
-2. Upload `sprint3-jira-import.csv`
-3. Column mapping (Jira will guess most):
-   - `Issue Type` → Issue Type
+2. Upload `Sprint3-additions.csv` from the Jira repo
+3. Column mapping (Jira will recognize most automatically since this matches the Sprint 2 import):
+   - `Work item Id` → Work item ID
    - `Summary` → Summary
-   - `Description` → Description
-   - `Epic Name` → Epic Name (Epic rows only)
-   - `Epic Link` → Epic Link (Story rows; references Epic Name)
+   - `Work type` → Work type (Epic / Story)
    - `Status` → Status
-   - `Story Points` → Story point estimate (custom field)
-   - `Sprint` → Sprint (custom field — create "Sprint 3" with start 2026-04-23 / end 2026-05-08 first if it doesn't exist)
    - `Priority` → Priority
    - `Labels` → Labels
-4. Run import; verify row count matches CSV (4 Epics + 13 Epic-1 stories + 3 Epic-2 + 3 Epic-3 + 9 Epic-4 = 32 issues)
+   - `Description` → Description
+   - `Sprint` → Sprint (create "SCRUM Sprint 3" with start 2026-04-23 / end 2026-05-08 first if it doesn't exist)
+   - `Story Points` → Story point estimate
+   - `Parent` → Parent (links stories to their epic via `Work item Id`)
+   - `Reporter` → Reporter
+   - `Assignee` → Assignee
+   - `Due date` → Due date
+4. Run import; verify count: **32 work items** = 4 Epics (EPIC5/6/7/8) + 28 Stories (S3-CO-01..13, S3-FB-01..03, S3-DR-01..03, S3-HF-01..09).
+5. Each story description carries a `Cross-reference: US-3.X` line in its metadata footer, mapping the Jira ID back to the US-3.X IDs used throughout this plan document.
