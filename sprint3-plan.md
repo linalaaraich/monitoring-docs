@@ -1,21 +1,24 @@
-# Sprint 3 Plan — RCA Quality v2 + Operator Feedback Loop
+# Sprint 3 Plan — RCA Quality v2 + Operator Feedback Loop + Hallucination Firewall
 
-> **Sprint window:** 2026-04-23 → 2026-05-07 (2 weeks)
-> **Status:** Day 7 of 14 — Epic 1 mostly Done, Epics 2–3 starting week 2
-> **Repos in scope:** `monitoring-triage-service` · `monitoring-docs` · `monitoring-mcp-servers` · `provisioning-monitoring-infra`
-> **Capacity:** ~70 SP total (49 SP shipped under Epic 1 close-out + ~20 SP new work in Epics 2–3)
+> **Sprint window:** 2026-04-23 → 2026-05-08 (16 days)
+> **Status:** Day 7 of 16 — Epic 1 mostly Done, Epics 2–4 starting week 2
+> **Repos in scope:** `monitoring-triage-service` · `monitoring-docs` · `monitoring-mcp-servers` · `monitoring-project` · `provisioning-monitoring-infra`
+> **Capacity:** ~77 SP total (49 SP shipped under Epic 1 close-out + ~28 SP new work in Epics 2–4 across remaining 9 days, 3-engineer team)
 
 ---
 
 ## Sprint goal
 
 1. **Close out the RCA-quality work** that started inside Sprint 2 ("Epic 5") under a clean Sprint 3 epic — the historical record matches when the work actually shipped.
-2. **Ship the operator feedback loop + curated RAG** on top of the existing US-5.3 feedback infrastructure, so the model learns from operator thumbs-up/down + corrections.
+2. **Ship the operator feedback loop** on top of the existing US-5.3 feedback infrastructure, so the model learns from operator thumbs-up/down + corrections. (Curated RAG retrieval/curation deferred to Sprint 4.)
 3. **Wire up the Drain3 baseline lifecycle** — S3 plumbing already exists in `drain_analyzer.py` (built in Sprint 2, never invoked). Add scheduling, boot-time restore, and three operator-facing endpoints.
+4. **Close the hallucination-firewall gap** exposed by the 2026-04-29 HighKongP95Latency `0b215ef3` incident — enforce MCP-only data access (no direct DB / Prometheus / in-process reads anywhere the LLM sees data) and wire trace-depth drilling through the existing `get_trace` MCP tool that was never invoked.
 
 ## Why this framing
 
-~10 working days of substantive work happened between Sprint 2's official close (2026-04-23) and today (2026-04-29). It doesn't fit Sprint 2's Epic 5 scope (UEBA-flavored) and is too coherent to attribute to nothing. Sprint 3 absorbs it as **Epic 1 — RCA Quality v2**, alongside two forward-looking epics (2 and 3) for the remaining week.
+~10 working days of substantive RCA-quality work happened between Sprint 2's official close (2026-04-23) and 2026-04-29. It doesn't fit Sprint 2's Epic 5 scope (UEBA-flavored) and is too coherent to attribute to nothing. Sprint 3 absorbs it as **Epic 1 — RCA Quality v2**, alongside three forward-looking epics (2, 3, 4) for the remaining 9 days.
+
+**Epic 4 was added on 2026-04-29** after the `0b215ef3` decision shipped templated kubectl OOMKill remediations on a Kong p95 latency alert at 0.40 confidence. Root-cause analysis surfaced two structural gaps: (a) the F-4 confidence clamp adjusted the trust signal but didn't strip the offending templated actions, and (b) the pipeline gathers trace data at the service-boundary level only — it never calls `get_trace(trace_id)` to drill into spring-boot's spans, so the LLM correctly identified "upstream is slow" but couldn't name what was slow. Three additional code paths were found violating the MCP-only invariant (entity_baselines direct Prometheus, bounded_agency direct DB + in-process exemplars). Epic 4 closes all of these.
 
 ---
 
@@ -23,13 +26,15 @@
 
 | Item | Reason |
 |---|---|
-| **US-5.2 Incident correlator** | 1–2 days; was Tier-1 but would crowd out feedback-loop work. Pull in next sprint. |
+| **US-5.2 Incident correlator** | 1–2 days; was Tier-1 but would crowd out feedback-loop + hallucination-firewall work. Pull in next sprint. |
 | **GPU migration to us-west-2 + qwen2.5:14b** | Laptop @ 32 GB still serves qwen2.5:7b adequately; defer until tool-calling rewrite needs it. |
 | **MCP native tool-calling rewrite** (backlog #5) | 5 SP rewrite, gates on GPU. |
+| **Tier 3 — Iterative agentic gather (hypothesis-tree state)** | 3-5 day rewrite of `bounded_agency.py`; gates on Sprint 3's Tier 4 measurement scaffold (US-3.17) being green first. |
 | **Planner → Executor → Writer** (backlog #2c) | Gates on tool-calling. |
 | **Trace-ID linkage from log anomalies** (backlog #2a) | 2 SP, attractive but additive — no sprint capacity. |
 | **RCA playbook templates** (backlog #2b) | Complements Epic 2 but additive. |
-| **US-5.7 Labeled corpus + F1 tracking** | 2-day estimate is optimistic; plan separately. |
+| **US-5.7 Labeled corpus expansion + F1 tracking** | Sprint 3's US-3.17 seeds the corpus + CI gate; broader F1 measurement is Sprint 4. |
+| **Curated RAG retrieval + weekly curation job** (was US-3.3, US-3.4) | Deferred — depends on accumulated feedback volume; corpus needs to grow before retrieval improves outcomes. |
 | **O-9 webhook auth, O-10 nightly RCA-history S3 backup, O-11 ansible-vault** | Friday-slot hardening or Sprint 4. |
 | **`monitoring-project/CLAUDE.md` + PNG diagram refresh** | Single doc-debt commit, anytime. |
 
@@ -59,19 +64,19 @@
 
 ---
 
-## Epic 2 — Operator feedback → curated RAG
+## Epic 2 — Operator feedback loop
 
-**Goal:** Capture per-decision operator feedback (thumbs ↑/↓ + structured tags + free-text correction) and feed it back into the LLM prompt as similar-case examples.
+**Goal:** Capture per-decision operator feedback (thumbs ↑/↓ + structured tags + free-text correction) so future RCAs can learn from operator signal.
 
-**Why:** The exemplar library is a frozen seed of 11 archetypes. As real US-5.3 `feedback` accumulates (override/confirm), there's no closed loop bringing that signal into future LLM prompts. Epic 2 closes that loop without abandoning the existing schema.
+**Why:** The exemplar library is a frozen seed of 11 archetypes. As real US-5.3 `feedback` accumulates (override/confirm), there's no closed loop bringing operator thumbs-up/down + corrections into the system. Epic 2 captures the signal and exposes it through MCP. Curated-RAG retrieval (formerly US-3.3 + US-3.4) is deferred to Sprint 4 — it depends on accumulated feedback volume.
 
-**Net effort:** 14 SP.
+**Net effort:** 7 SP (was 14 SP before Sprint 4 deferral).
 
-**Dependency order:** 3.1 → (3.2 ∥ 3.3) → 3.4 → 3.5
+**Dependency order:** 3.1 → 3.2 → 3.5
 
-### US-3.1 — Extend feedback schema + endpoint *(3 SP)*
+### US-3.1 — Extend feedback schema + endpoint *(4 SP)*
 
-**Repo:** `monitoring-triage-service`
+**Repo:** `monitoring-triage-service` + `monitoring-mcp-servers`
 
 **Approach:** Extend the existing `feedback` table — do **not** create v2. Adds operator-quality-vote alongside the existing override/confirm behavioral signal.
 
@@ -102,18 +107,20 @@ New endpoint: `POST /decisions/{id}/feedback`
 
 Validation: `tags` and `actual_root_cause` rejected when `rating=='up'`. `tags` must be a subset of the 5 allowed enum values.
 
-New MCP tools (read-only, on `monitoring-mcp-servers/rca_history_mcp/`):
+**4 read-only MCP tools** on `monitoring-mcp-servers/rca_history_mcp/` (combined scope with US-3.14):
 - `get_feedback_stats` — counts by rating, top tags, rater frequency
-- `get_high_rated_examples(limit, since_days)` — returns up-rated decisions for inspection
+- `get_high_rated_examples(limit, since_days)` — up-rated decisions for prompt injection
+- `get_similar_decisions(alert_name, days, min_quality, min_confidence)` — quality-filtered lookup (replaces direct-DB call in `bounded_agency.py:rca_history.similar`)
+- `get_low_rated_examples_for_alert(alert_name, days)` — anti-examples ("here's what we got wrong before")
 
 **Files:**
 - `app/rca_store.py` — schema migration + `record_rating()` method
 - `app/models.py` — `RatingFeedbackRequest` Pydantic schema
 - `app/main.py` — new endpoint
 - `tests/test_feedback_rating.py` — CRUD + validation; complement `test_feedback_us53.py`
-- `monitoring-mcp-servers/rca_history_mcp/main.py` — 2 new tools
+- `monitoring-mcp-servers/rca_history_mcp/main.py` — 4 new tools
 
-**Done when:** Migration is idempotent; endpoint rejects invalid combos; MCP tools return sane stats over a seeded test DB; existing US-5.3 endpoints unaffected.
+**Done when:** Migration is idempotent; endpoint rejects invalid combos; all 4 MCP tools return sane stats over a seeded test DB; existing US-5.3 endpoints unaffected.
 
 ### US-3.2 — Operator rating UI *(2 SP)*
 
@@ -132,77 +139,13 @@ Email integration: `app/email_renderer.py` appends a "Rate this decision" link w
 
 **Done when:** Email link → form → submit → row in `feedback` table → confirmation. Dashboard "Rate" link works for any decision listed.
 
-### US-3.3 — Weekly curation job *(3 SP)*
-
-**Repo:** `monitoring-triage-service`
-
-**Approach:** APScheduler in-process (no separate cron container). Add `apscheduler` to `requirements.txt`.
-
-`app/exemplars/curate.py`:
-
-```python
-def curate_weekly() -> None:
-    """Read SQLite feedback → emit library_curated.yaml."""
-    positives = _select_positives(db)   # rating='up', age < 90 days, cap 200
-    anti      = _select_anti(db)        # rating='down' + actual_root_cause non-null, age < 90 days, cap 50
-    yaml_path = APP_DIR / "exemplars" / "library_curated.yaml"
-    yaml_path.write_text(_render(positives, anti))
-```
-
-Scheduled in `app/main.py:lifespan()`:
-
-```python
-scheduler.add_job(curate_weekly, "cron", day_of_week="sun", hour=2, minute=0)
-```
-
-Curated YAML schema mirrors `library.yaml` with two extra fields: `source: "curated"` and `polarity: "positive" | "anti"`.
-
-**Files:** `app/exemplars/curate.py`, `app/exemplars/__init__.py` (export), `app/main.py` (scheduler wiring), `tests/test_curate.py`.
-
-**Done when:** Job runs against a seeded DB, produces a YAML file matching seed-format schema; cap limits enforced; no exception on empty feedback table.
-
-### US-3.4 — RAG retrieval into prompt *(5 SP)*
-
-**Repo:** `monitoring-triage-service`
-
-**Approach:** **BM25 first** (lexical, no model load). Only fall back to sentence-transformers if a 2-week A/B shows BM25 underperforming.
-
-`app/exemplars/loader.py` reads `library.yaml` + `library_curated.yaml` into a unified record set (`source`, `polarity`).
-
-`app/exemplars/retriever.py`:
-- BM25 over each record's concatenated `(alert_pattern + context_keywords + hypothesis)`
-- Top-K=3 positives + top-K=2 anti-examples
-- Cached on disk (`/data/retriever_index.pkl`); rebuilt when curated YAML mtime changes
-
-In `app/llm_client.py:_build_prompt()`:
-
-```text
-## Past similar cases that were rated correct:
-- {hypothesis} | {evidence} | {action}
-
-## Past mistakes — do NOT repeat:
-- Alert: {alertname}
-  Previous wrong hypothesis: {text}
-  Actual root cause: {actual_root_cause}
-```
-
-Conditional ST upgrade (gated, **not in this sprint unless BM25 underperforms**): if `RETRIEVER_BACKEND=sentence-transformers`, load `all-MiniLM-L6-v2` (~80 MB) and use cosine similarity over precomputed embeddings.
-
-A/B harness: every prompt build records `rag_examples_retrieved{polarity}` metric and the chosen exemplar IDs in the decision row.
-
-**Files:** `app/exemplars/loader.py`, `app/exemplars/retriever.py`, `app/llm_client.py` (prompt injection), `app/config.py` (`RETRIEVER_BACKEND`), `tests/test_retriever.py`.
-
-**Done when:** Real LLM prompt for a chaos `PodHighMemoryUsage` alert includes ≥1 retrieved example; metric increments; validator-pass-rate not regressed on the chaos suite.
-
 ### US-3.5 — Feedback observability *(1 SP)*
 
 New Prometheus metrics:
 - `feedback_total{rating}`
 - `feedback_tag_total{tag}`
-- `rag_examples_retrieved{polarity}`
-- `curate_run_total{status}` and `curate_run_duration_seconds`
 
-New Grafana panel on `triage-service-health` dashboard: feedback volume + tag breakdown + curate-job freshness.
+New Grafana panel on `triage-service-health` dashboard: feedback volume + tag breakdown.
 
 **Files:** `app/metrics.py`, `roles/grafana/templates/dashboards/triage-service-health.json`.
 
@@ -273,32 +216,253 @@ Three new endpoints on the triage service:
 
 ---
 
+## Epic 4 — Hallucination firewall + trace depth
+
+**Goal:** Close the structural gap exposed by the 2026-04-29 `0b215ef3` HighKongP95Latency incident along two dimensions: **MCP-only data access** (every data source the LLM sees must come through an MCP bridge — no direct DB / Prometheus / in-process reads) and **trace depth** (drill into per-span attributes via the existing `get_trace` MCP tool that was never wired up).
+
+**Why:** The `0b215ef3` decision emailed `kubectl set resources --limits=memory=2Gi` + `kubectl rollout restart deploy/spring-boot` as remediation for a Kong p95 latency alert. Investigation found three structural causes: (a) the F-4 confidence clamp adjusted the trust signal but didn't strip templated kubectl actions; (b) the pipeline never called `get_trace(trace_id)` so the LLM saw only service-boundary trace summaries — it correctly identified "upstream is slow" but couldn't name what was slow inside spring-boot; (c) several code paths read data directly (entity_baselines → Prometheus, bounded_agency → SQLite, exemplars → in-process import), bypassing the MCP hallucination firewall. Epic 4 ships fixes for all three on top of a measurement scaffold (US-3.17) so Sprint 4's Tier 3 agentic loop can be built and measured cleanly.
+
+**MCP-only invariant** (durable architectural rule, applies to all future work): every data source the LLM sees must come through an MCP bridge. Direct `httpx`/`requests`/DB calls are forbidden outside the MCP servers themselves and the sanctioned `_mcp_call` helper. Boot-time/migration code (lifespan, schema init) is exempt — it never feeds the LLM.
+
+**Tier mapping:**
+- **Tier 0** (US-3.9): F-4 clamp strips actions → ships immediately, ~45 min
+- **Tier 1** (US-3.15): trace drill via `get_trace` MCP → the structural fix
+- **Tier 2** (US-3.11): hypothesis-menu validator → backstop
+- **Tier 4** (US-3.17): chaos scorer 5th axis + corpus seed + CI gate → measurement scaffold for Sprint 4
+- **MCP integrity** (US-3.12, US-3.13, US-3.14, US-3.16): four code-path refactors + a CI lint
+- **Bug** (US-3.10): wrong-archetype lookup neutralized by Tier 0 but worth fixing at the source
+
+**Net effort:** 15 SP.
+
+**Dependency order:** 3.9 ∥ 3.10 (both unblocking) → 3.11 ∥ 3.12 ∥ 3.13 → 3.14 → 3.15 → 3.16 → 3.17
+
+### US-3.9 — Tier 0: Diagnostic-only actions on F-4 clamp *(1 SP, Highest)*
+
+**Repo:** `monitoring-triage-service`
+
+When the F-4 confidence clamp fires (`pipeline.py:650-673`), strip `decision.suggested_actions` and emit read-only diagnostic verbs in a **new** `decision.diagnostic_steps` field instead. Keeps templated/bad actions out of operator emails while clearly signaling "investigate, don't remediate."
+
+Schema change:
+
+```python
+class LLMDecision(BaseModel):
+    # ... existing fields ...
+    suggested_actions: list[str]            # state-changing remediations (existing)
+    diagnostic_steps: list[str] = Field(default_factory=list)   # NEW
+```
+
+Diagnostic verbs are alert-aware. For `HighP95Latency` / `HighKongP95Latency`:
+- "Open Jaeger and inspect the slowest trace for service=`{service}` in the last 15 min"
+- spring-boot pivots: `hikaricp_connections_active / hikaricp_connections_max`, `rate(jvm_gc_pause_seconds_sum[5m])`
+- kong pivots: `kong_upstream_latency_ms` vs `kong_proxy_latency_ms` p95
+- Explicit "do NOT run kubectl rollout/scale/set commands until a specific cause is named"
+
+Email + dashboard updates: `notifier.py:_build_escalation_body` and dashboard renderer split into two cards — "Suggested actions" (suppressed when clamped) and "Diagnostic steps" (always shown when populated).
+
+**Validation case:** replay decision `0b215ef3-74fa-4e1f-88a4-057437f04d0e` through the patched pipeline. Assert: confidence=0.40, `suggested_actions=[]`, `diagnostic_steps[0].startswith("Open Jaeger")`, no `kubectl` substring anywhere in either field.
+
+**Files:** `app/pipeline.py` (Step 6d), `app/models.py` (LLMDecision), `app/clamp_actions.py` (new — diagnostic verb generator), `app/notifier.py` (email template), `app/main.py` (dashboard /decisions endpoint), `tests/test_pipeline_clamp.py` (new).
+
+**Done when:** Replay test passes; no in-flight decisions email kubectl actions at confidence ≤ 0.4.
+
+### US-3.10 — Bug: HighKongP95Latency wrong-archetype lookup *(1 SP, Highest)*
+
+**Repo:** `monitoring-triage-service`
+
+`HighKongP95Latency` matched the OOMKill action template (`suggested_actions.yaml:67-68`) during the `0b215ef3` incident — emitted `kubectl set resources --limits=memory=2Gi` + `kubectl rollout restart`. Investigate `app/action_templates.py` and `app/suggested_actions.yaml` to find the keying bug (likely a wildcard/fallback match firing for an alert that should have no template). Fix.
+
+Add unit test asserting `HighKongP95Latency` (and `HighP95Latency`) do NOT return any `kubectl set resources` / `kubectl rollout restart` actions from the template lookup.
+
+**Files:** `app/action_templates.py`, `app/suggested_actions.yaml`, `tests/test_action_templates.py`.
+
+**Done when:** Test passes; lookup either returns latency-appropriate actions or empty (Tier 0 fills with diagnostic_steps in either case).
+
+### US-3.11 — Tier 2: Hypothesis-menu validator + cause-evidence rule *(2 SP, High)*
+
+**Repo:** `monitoring-triage-service`
+
+Add `_HYPOTHESIS_MENU_PATTERNS` to `app/response_validator.py` to flag prose listing alternatives without committing — `"possibly X or Y"`, `"either A or B"`, `"may be due to (a slow query|pool saturation)"`, `"could be one of"`. Add cause-must-share-token-with-evidence rule: tokenize the RCA's first sentence (4+ char words), tokenize `decision.evidence`, fail if intersection minus stopwords is empty.
+
+Both rules ship **aggressive behind a feature flag** `triage_hypothesis_menu_strict` (default `True`), with a new Prometheus metric `triage_validator_retries_total{reason}`. If FP rate exceeds ~5% in production, dial back via the flag without redeploying.
+
+Hits trigger the existing retry path (`pipeline.py:444-566`); Tier 0 clamp is the safety net for retries that still fail.
+
+**Files:** `app/response_validator.py` (patterns + 2 new check blocks), `app/config.py` (feature flag), `app/metrics.py` (counter), `tests/test_response_validator.py` (8+ new cases including FP/TP boundaries).
+
+**Done when:** Replay `0b215ef3` RCA → `should_retry=True` due to "hypothesis-menu" hit. New unit cases cover legitimate `or`-prose that should NOT trigger.
+
+### US-3.12 — MCP integrity: route entity_baselines through prometheus_mcp *(1 SP, High)*
+
+**Repo:** `monitoring-triage-service` + possibly `monitoring-mcp-servers`
+
+`app/entity_baselines.py:144` calls `httpx.AsyncClient.get(prometheus_url + "/api/v1/query")` directly — violates the MCP-only invariant. Refactor to call `prometheus_mcp` instead. Verify the existing `prometheus_mcp /tools/query` covers `quantile_over_time(...[7d])` efficiently; if not, extend the MCP tool surface with a dedicated endpoint.
+
+Update the call site in `app/pipeline.py:360-390` to pass the MCP URL not the raw Prometheus URL.
+
+This story also closes US-5.1 Phase B's verification dependency (US-3-CO2) — once baselines flow through observable MCP traffic, we can confirm baseline-σ claims appear in real RCAs by inspecting MCP request logs.
+
+**Files:** `app/entity_baselines.py`, `app/pipeline.py`, `app/config.py` (URL setting), possibly `monitoring-mcp-servers/prometheus_mcp/main.py`.
+
+**Done when:** No `httpx` calls in `entity_baselines.py`; baseline fetches show up in `prometheus_mcp` request logs; existing baseline tests still pass.
+
+### US-3.13 — MCP integrity: route bounded_agency rca_history through MCP *(1 SP, High)*
+
+**Repo:** `monitoring-triage-service`
+
+`app/bounded_agency.py:222-242` does direct DB lookup for `rca_history.similar` and direct in-process import for `rca_history.list_exemplars` / `rca_history.get_exemplar`. Refactor all three to HTTP calls against `rca_history_mcp` on port 8095.
+
+Existing `rca_history_mcp` tools cover `search_rcas` (similar shape). For `list_exemplars` / `get_exemplar`, add tools to `rca_history_mcp` exposing the curated exemplar library (move `app/exemplars/` data into a location the MCP server can load, OR expose a read-only API on the triage service that the MCP wraps — pick whichever is cleaner during implementation).
+
+After this lands, the entire `bounded_agency.py` tool whitelist routes through MCP servers exclusively.
+
+**Files:** `app/bounded_agency.py`, `monitoring-mcp-servers/rca_history_mcp/main.py` (new exemplar tools), tests.
+
+**Done when:** No direct `store.*` or `from app import exemplars` calls remain in `bounded_agency.py`; existing bounded-agency tests pass against the MCP-routed paths.
+
+### US-3.14 — Quality-rated rca_history MCP tools *(2 SP, High)*
+
+**Repo:** `monitoring-mcp-servers`
+
+Combined with US-3.1's planned MCP additions. Adds quality-aware tools so the LLM can prefer high-rated similar decisions and learn from low-rated ones:
+
+- `get_similar_decisions(alert_name, days, min_quality, min_confidence)` — filter by `rca_quality` ∈ {actionable, data_starved, needs_review} and minimum `llm_confidence`. Replaces the direct-DB call in US-3.13.
+- `get_low_rated_examples_for_alert(alert_name, days)` — anti-examples (rating='down' from US-3.1's feedback table) for the prompt's "Past mistakes — do NOT repeat" section.
+
+Plus US-3.1's `get_feedback_stats` and `get_high_rated_examples`. All 4 land in one `rca_history_mcp` PR.
+
+**Files:** `monitoring-mcp-servers/rca_history_mcp/main.py`, `tests/test_rca_history_mcp.py`.
+
+**Done when:** All 4 tools return sane results over a seeded test DB; integration test exercises `min_quality='actionable'` filtering + low-rated-example retrieval.
+
+### US-3.15 — Tier 1: Deeper trace gather via get_trace MCP *(3 SP, High)*
+
+**Repo:** `monitoring-triage-service`
+
+`app/context.py:_fetch_jaeger` (lines 274-301) currently calls `find_traces` (summary-only) and never drills. Extend to call the existing `jaeger_mcp /tools/get_trace` endpoint on top-K slowest + any error traces (default `K=3`, parallel via `asyncio.gather`).
+
+Add new models in `app/models.py`:
+
+```python
+class TraceSpanSummary(BaseModel):
+    trace_id: str
+    span_id: str
+    operation: str
+    service: str
+    duration_ms: float
+    parent_operation: str | None = None
+    db_statement: str | None = None    # tags["db.statement"], truncated 200 chars
+    http_target: str | None = None
+    http_status: str | None = None
+    error: bool = False
+
+class TraceDrillResult(BaseModel):
+    trace_id: str
+    total_duration_ms: float
+    span_count: int
+    dominant_service: str | None
+    dominant_service_pct: float | None
+    slowest_span: TraceSpanSummary | None
+    db_call_count: int = 0
+    db_total_ms: float = 0.0
+    has_errors: bool = False
+
+# GatheredContext gains: trace_drills: Optional[list[TraceDrillResult]] = None
+```
+
+New prompt section in `app/llm_client.py` rendering: dominant service + percentage + db_call_count + db_total_ms, plus the slowest span line with `operation`, `db.statement` (if present, truncated), `http.target` + status, error flag.
+
+**Pre-implementation step (per Q5=B):** sample 10 spring-boot traces in production via `curl http://jaeger-mcp:8094/tools/get_trace?trace_id=...`, eyeball `db.statement` values to confirm JDBC parameterization. **Default assumption:** parameterized — no PII redaction needed. **If literal values appear:** add a regex redactor stripping numeric literals (`\d{3,}`), email-shaped tokens, UUIDs before the `db.statement` field lands in evidence/email.
+
+**Files:** `app/context.py` (`_fetch_jaeger` + new helpers `_pick_drill_candidates`, `_summarize_trace`), `app/models.py` (new dataclasses), `app/llm_client.py` (prompt section), `app/config.py` (`jaeger_drill_top_k`, `jaeger_drill_min_duration_ms`), `tests/test_context_jaeger_drill.py` (new).
+
+**Done when:** Replay `0b215ef3-…` window — prompt sent to LLM includes a "Trace span breakdown" section with `dominant=spring-boot 99%, db_calls=N, db_total=Xms, slowest span: SELECT … = Yms`. New chaos test `high_p95_latency` (deferred to Sprint 4) will be the end-to-end verifier.
+
+### US-3.16 — MCP integrity: CI lint forbidding direct data access *(2 SP, High)*
+
+**Repos:** all (CI rule applies repo-wide)
+
+Add a CI check (ruff custom rule, semgrep pattern, or a grep-based pre-commit) that forbids `httpx`/`requests`/`aiosqlite`/raw-SQL calls outside the allowed boundaries:
+
+**Allowed:** `monitoring-mcp-servers/*` (the MCP layer itself), `app/context.py:_mcp_call` (the only sanctioned bridge from triage-service to MCPs).
+
+**Exempt boundary** (per Q3=B): lifespan/startup/migration code — `app/main.py:lifespan`, `app/rca_store.py:_init_schema`, drain3 boot restore in US-3.6's `download_baseline_from_s3()`. These are operator-tier and never feed the LLM.
+
+**Forbidden everywhere else:** any module that runs during request handling and could reach the LLM prompt.
+
+Document the rule in a new `monitoring-docs/architectural-invariants.md` page so it survives team turnover.
+
+**Files:** `.github/workflows/lint.yml` (or equivalent CI config), `pyproject.toml` (ruff config), `monitoring-docs/architectural-invariants.md` (new doc), pre-commit hook.
+
+**Done when:** CI fails the build when a PR adds a forbidden direct call; a deliberate test PR with a `httpx` call in `app/pipeline.py` is rejected.
+
+### US-3.17 — Tier 4: Chaos scorer 5th axis + corpus seed + CI gate *(2 SP, Medium)*
+
+**Repos:** `monitoring-project` (chaos scorer) + `monitoring-triage-service` (corpus + CI)
+
+**Why this must land before Sprint 4's Tier 3:** Tier 3 (iterative agentic loop with hypothesis-tree state) is a high-cost, high-risk change. Without a binary "did the RCA name the actual injected cause?" metric and a corpus regression gate, you ship Tier 3 unmeasured. Tier 4 is the scoreboard.
+
+**Chaos scorer extension** (`monitoring-project/scripts/chaos/lib/rca_scorer.py`):
+
+```python
+@dataclass
+class QualityScore:
+    cause_first_lede: float
+    named_cause: float
+    specific_evidence: float
+    state_changing_action: float
+    cited_injected_cause: float    # NEW — 0.0 or 1.0
+    notes: list[str]
+```
+
+Add `expected_cause_tokens: list[str]` to the `ChaosTest` base class. Score 1.0 if any token appears in `decision.rca_report` or `decision.evidence`; 0.0 otherwise.
+
+**Corpus seed:** `monitoring-triage-service/tests/corpus/labeled/bad/hypothesis_only_clamp_leak.json` — full payload from `0b215ef3-74fa-4e1f-88a4-057437f04d0e` plus expected_violations, expected_post_clamp_actions_must_not_contain (`kubectl rollout`, `kubectl set resources`), expected_post_clamp_actions_must_contain_any_of (`Open Jaeger`, `hikaricp_connections_active`, `jvm_gc_pause_seconds`).
+
+**CI regression gate:** `tests/test_corpus_regression.py` — every JSON in `corpus/labeled/bad/*` must trigger ≥1 violation from `validate()`.
+
+**Files:** `monitoring-project/scripts/chaos/lib/rca_scorer.py`, `monitoring-project/scripts/chaos/tests/base.py`, `monitoring-triage-service/tests/corpus/labeled/bad/hypothesis_only_clamp_leak.json` (new seed), `monitoring-triage-service/tests/test_corpus_regression.py` (new), CI config.
+
+**Done when:** Chaos report shows new `cited_injected_cause` column with binary pass/fail per test row. A deliberate test PR weakening the validator (removing the hypothesis-menu pattern) fails the corpus regression gate.
+
+---
+
 ## Story summary
 
 | Story | Epic | SP | Status | Repo |
 |---|---|---|---|---|
 | US-3-CO1..CO12 | 1 | 48 | Done / In Progress | various |
 | US-3-CO13 (policy.py cleanup) | 1 | 1 | To Do | triage-service |
-| US-3.1 Feedback schema + endpoint | 2 | 3 | To Do | triage-service + mcp-servers |
+| US-3.1 Feedback schema + 4 MCP tools | 2 | 4 | To Do | triage-service + mcp-servers |
 | US-3.2 Rating UI | 2 | 2 | To Do | triage-service |
-| US-3.3 Weekly curation job | 2 | 3 | To Do | triage-service |
-| US-3.4 RAG retrieval into prompt | 2 | 5 | To Do | triage-service |
 | US-3.5 Feedback observability | 2 | 1 | To Do | triage-service + monitoring-project |
 | US-3.6 Scheduled snapshots + boot restore | 3 | 3 | To Do | triage-service |
 | US-3.7 Operator endpoints | 3 | 2 | To Do | triage-service |
 | US-3.8 IAM + Grafana panel | 3 | 1 | To Do | provisioning-infra + monitoring-project |
-| **Total** |  | **69** |  |  |
+| US-3.9 Tier 0 diagnostic-only on clamp | 4 | 1 | To Do | triage-service |
+| US-3.10 HighKongP95Latency wrong-archetype bug | 4 | 1 | To Do | triage-service |
+| US-3.11 Tier 2 hypothesis-menu validator | 4 | 2 | To Do | triage-service |
+| US-3.12 MCP integrity — entity_baselines | 4 | 1 | To Do | triage-service + mcp-servers |
+| US-3.13 MCP integrity — bounded_agency rca_history | 4 | 1 | To Do | triage-service |
+| US-3.14 Quality-rated rca_history MCP tools | 4 | 2 | To Do | mcp-servers |
+| US-3.15 Tier 1 deeper trace gather | 4 | 3 | To Do | triage-service |
+| US-3.16 MCP integrity CI lint | 4 | 2 | To Do | all repos + monitoring-docs |
+| US-3.17 Tier 4 chaos scorer + corpus seed | 4 | 2 | To Do | monitoring-project + triage-service |
+| **Total** |  | **77** |  |  |
 
-**Capacity check:** 21 SP new work in 7 remaining days = ~3 SP/day. Tight but achievable at the pace of the past week. The cleanup ticket (US-3-CO13) lands first; Epic 2 in parallel; Epic 3 in week-2-end if Epic 2 wraps early.
+**Capacity check:** 28 SP new+changed work in 9 remaining days = ~3.1 SP/day across a 3-engineer team. Comfortable. Tier 0 (US-3.9) + the wrong-archetype bug (US-3.10) ship Day 1. MCP-integrity stories (US-3.12, US-3.13) parallelize across engineers. US-3.14 + US-3.1 should be claimed by the same engineer to keep `rca_history_mcp` PR cohesive. US-3.15 (deepest change) takes the most calendar time but no upstream deps after US-3.13 lands.
 
 ---
 
-## Cross-cutting decisions (apply across Epics 2–3)
+## Cross-cutting decisions (apply across Epics 2–4)
 
 - **Cron mechanism:** APScheduler in-process. One less container to manage. `apscheduler` → `requirements.txt`.
 - **No new infra in Epic 2.** All work is in `monitoring-triage-service` + small additions to `monitoring-mcp-servers`.
 - **Epic 3 needs Loki retention ≥ 7 days** (verify before US-3.6) and S3 IAM on the existing bucket.
 - **No new metrics namespace.** Everything goes under `triage_*` to match existing conventions.
+- **MCP-only data access invariant** (Epic 4, durable rule): every data source the LLM sees must come through an MCP bridge. Direct `httpx`/`requests`/DB calls are forbidden in any module that can reach an LLM prompt. Boot-time/migration code is exempt. Enforced by the US-3.16 CI lint and documented in `architectural-invariants.md`.
+- **Diagnostic-action schema** (Epic 4, Q1=B): `LLMDecision` gains a new `diagnostic_steps: list[str]` field separate from `suggested_actions`. Email + dashboard render them as distinct cards. Forward-compatible with Sprint 4's per-decision diagnostic-vs-remediation routing.
+- **Hypothesis-menu validator strictness** (Epic 4, Q2=C): aggressive patterns ship behind `triage_hypothesis_menu_strict=True` flag with `triage_validator_retries_total{reason}` metric. Dial back if FP rate >5%.
+- **MCP-integrity lint scope** (Epic 4, Q3=B): exempt boot-time code (lifespan, schema init, drain3 boot restore). Strict everywhere else.
 
 ---
 
@@ -307,18 +471,24 @@ Three new endpoints on the triage service:
 In rough priority order:
 
 1. **US-5.2 Incident correlator** — 4-alert kill-chain RCA email (carryover from Sprint 2 Tier-1)
-2. **Pod-level alert rule fixes** — memory cgroup-churn aggregation + CPU label-mismatch (~30 min each)
-3. **Sentence-transformers retriever** (US-3.4 fallback) — only if BM25 underperforms in A/B
-4. **O-9 webhook auth + O-10 nightly RCA-history S3 backup** — Friday-slot hardening
-5. **GPU migration to us-west-2 + qwen2.5:14b** (deferred 3–5 day effort)
-6. **MCP native tool-calling rewrite** (sprint3-backlog #5) — gates on GPU
-7. **Trace-ID linkage from log anomalies** (sprint3-backlog #2a)
-8. **RCA playbook templates** (sprint3-backlog #2b)
-9. **US-5.7 Labeled corpus + F1 tracking**
-10. **L2/L3 chaos scenarios** (O-12)
-11. **Drain3 self-monitoring loop allowlist** (`service_name=drain3` exclusion)
-12. **Pipeline duration instrumentation** per-stage
-13. **Doc debt:** `monitoring-project/CLAUDE.md` + stale architecture PNGs
+2. **Tier 3 — Iterative agentic gather (hypothesis-tree state)** — replaces single-shot `bounded_agency` retry with a 3-iteration tool-call loop. Lands ON TOP of Sprint 3's Tier 4 scoreboard. Design choices documented:
+   - **Iterative budget** (Q6=A for v1): global `max_iterations=3`. *Perspective for v2:* per-severity (critical=5, warning=3, info=2) — better-tuned but more knobs. Promote if v1 measurement shows critical alerts consistently exhausting budget without narrowing.
+   - **Tree-narrowed definition** (Q7=B): `len(confirmed) >= 1 and len(open) == 0` — supports cascade RCAs (multiple contributing causes). Strict "exactly one confirmed" rejected because real chaos runs (cgroup-churn) involve compound diagnoses.
+   - **Cost ceiling** (Q8=A for v1): no ceiling beyond `max_iterations`. *Perspective for v2:* per-decision token cap (e.g., 20k tokens) with hard fail to investigate-only — auditable and predictable. Promote if token spend grows materially or per-decision cost SLO is set.
+3. **Curated RAG retrieval** (was US-3.4, deferred from Sprint 3) — BM25 over feedback-curated YAML, top-K=3 positives + K=2 anti-examples injected into LLM prompt
+4. **Weekly curation job** (was US-3.3, deferred from Sprint 3) — APScheduler in-process, Sundays 02:00 UTC, reads SQLite feedback → emits `library_curated.yaml`
+5. **Pod-level alert rule fixes** — memory cgroup-churn aggregation + CPU label-mismatch (~30 min each)
+6. **Sentence-transformers retriever** (RAG fallback) — only if BM25 underperforms in A/B
+7. **O-9 webhook auth + O-10 nightly RCA-history S3 backup** — Friday-slot hardening
+8. **GPU migration to us-west-2 + qwen2.5:14b** (deferred 3–5 day effort)
+9. **MCP native tool-calling rewrite** (sprint3-backlog #5) — gates on GPU
+10. **Trace-ID linkage from log anomalies** (sprint3-backlog #2a)
+11. **RCA playbook templates** (sprint3-backlog #2b)
+12. **US-5.7 Labeled corpus expansion + F1 tracking** — builds on US-3.17's seed
+13. **L2/L3 chaos scenarios** (O-12)
+14. **Drain3 self-monitoring loop allowlist** (`service_name=drain3` exclusion)
+15. **Pipeline duration instrumentation** per-stage
+16. **Doc debt:** `monitoring-project/CLAUDE.md` + stale architecture PNGs
 
 ---
 
@@ -336,7 +506,7 @@ The companion file `sprint3-jira-import.csv` is ready to import:
    - `Epic Link` → Epic Link (Story rows; references Epic Name)
    - `Status` → Status
    - `Story Points` → Story point estimate (custom field)
-   - `Sprint` → Sprint (custom field — create "Sprint 3" with start 2026-04-23 / end 2026-05-07 first if it doesn't exist)
+   - `Sprint` → Sprint (custom field — create "Sprint 3" with start 2026-04-23 / end 2026-05-08 first if it doesn't exist)
    - `Priority` → Priority
    - `Labels` → Labels
-4. Run import; verify row count matches CSV (3 Epics + 13 Epic-1 stories + 5 Epic-2 + 3 Epic-3 = 24 issues)
+4. Run import; verify row count matches CSV (4 Epics + 13 Epic-1 stories + 3 Epic-2 + 3 Epic-3 + 9 Epic-4 = 32 issues)
