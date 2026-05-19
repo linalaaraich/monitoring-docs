@@ -48,7 +48,7 @@
 | Epic 1 — RCA Quality v2 close-out | 1 SP | 12/13 stories Done; US-3-CO13 cleanup pending (codify `app/policy.py` + `app/bypass_llm.yaml`, behaviour-unchanged refactor) |
 | Epic 2 — Operator feedback loop | 7 SP | Not started. Dependency chain US-3.1 → US-3.2 → US-3.5. Schema extension on existing `feedback` table; curated RAG explicitly deferred to Sprint 4 |
 | Epic 3 — Drain3 baseline lifecycle | 6 SP | Not started. Wires the dormant S3 plumbing in `drain_analyzer.py` (5 functions exist, never called) + APScheduler weekly snapshot + 3 operator endpoints |
-| Epic 4 — Hallucination firewall + trace depth | 11 SP | 4/15 SP Done (S3-HF-01/02/03 shipped 2026-04-29). Remaining: S3-HF-04 (entity_baselines → `prometheus-mcp`, the unblocker), S3-HF-05 (bounded_agency → MCP), S3-HF-06 (quality-rated MCP tools), S3-HF-07 (`get_trace(trace_id)` deep trace gather), S3-HF-08 (MCP integrity CI lint), S3-HF-09 (chaos scorer 5th axis + corpus seed) |
+| Epic 4 — Hallucination firewall + trace depth | **0 SP (15/15 Done)** | All 9 stories shipped. S3-HF-01/02/03 same-day as the 0b215ef3 incident (2026-04-29); S3-HF-04/05/06/07/08/09 in the focused 2026-05-19 working session per commit `b75b5a5`. Three MCP-only-invariant bypasses closed; `get_trace(trace_id)` deep gather live; CI lint enforcing the invariant on new code; chaos scorer 5th axis + corpus seed (`0b215ef3`) gating regressions. |
 
 **Resumption day (2026-05-19) — Tier 1 hygiene:**
 
@@ -59,7 +59,7 @@
 - ✅ Sprint 4 plan simplified: GPU migration to us-west-2 + larger model dropped on cost grounds (~$720/month for a g5.xlarge vs. laptop GTX 1060 holding steady at 25+ days). See [sprint-history.html §Removed from the Sprint 4 plan](sprint-history.html#sprint-4-removed). MCP native tool-calling rewrite no longer gated by GPU.
 - Triage favicon shipped on the side (`02fa96f` + `a1733bd` in `monitoring-triage-service`) — chevron-drilling-to-dot in dashboard accent blue. Not on the Sprint 3 board; lightweight polish.
 
-**Next step:** S3-HF-04 (1 SP) — route `entity_baselines.py:144` through `prometheus-mcp`. Plan flags it as the unblocker for the remainder of Epic 4. Pre-investigated during the prototyping window — straightforward refactor, no design surprises expected.
+**Next step:** Epic 2 (operator feedback loop) or Epic 3 (Drain3 baseline lifecycle) — 13 SP combined still untouched. Supervisor call on whether to absorb into the current sprint or roll to Sprint 4. With Epic 4 fully shipped on 2026-05-19, the hallucination firewall is no longer on the critical path; the remaining work is feature-shaped rather than safety-shaped.
 
 **Resilience improvements proposed for Sprint 4** (surfaced during the 20-day investigation window):
 

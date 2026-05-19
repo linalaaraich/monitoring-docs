@@ -157,7 +157,7 @@
       <h3>RCA quality + feedback loop + hallucination firewall</h3>
       <div class="dates">2026-04-23 → 2026-05-19 (extended; 04-30 → 05-19 investigation window)</div>
       <div class="one-line">Quality close-out of Epic 5, operator feedback schema extension, Drain3 baseline lifecycle, MCP-only invariant enforcement — with a 20-day prototyping window mid-sprint to A/B several RCA-output ideas before committing to Epic 4's refactors.</div>
-      <span class="status in-flight">IN FLIGHT — Epic 1 closing, Epic 4 5/15 SP, Epic 2/3 next; doc refresh shipped</span>
+      <span class="status in-flight">IN FLIGHT — Epic 1 closing, Epic 4 15/15 SP shipped, Epic 2/3 next; doc refresh shipped</span>
     </div>
     <div class="roadmap-cell s4">
       <div class="label">Sprint 4</div>
@@ -386,32 +386,48 @@
 <!-- ─────────────────── SPRINT 4 ─────────────────── -->
 <h2 id="sprint-4">Sprint 4 — Planned scope</h2>
 
-<p><strong>Sprint goal (working draft).</strong> Build the iterative agentic gather (Tier 3) on top of Sprint-3's Tier-4 measurement scoreboard, ship the incident correlator carried from Sprint 2's deferred Tier-1, introduce curated-RAG retrieval over operator-feedback-curated examples, and close the remaining pod-rule and operational-hardening items.</p>
+<p><strong>Sprint goal.</strong> Make the RCA output something a dev would actually read and act on. Sprint 3 closed the structural-quality work (Epic 4 hallucination firewall). Sprint 4 closes the <strong>output-quality</strong> work — the prose, the latency, the suppression behaviour, the diagnostic-step generation — using the evidence from the 2026-05-19 real-load investigation. The 12 findings (P0–P11) are integrated below with the existing carry-forward items, ranked by <em>(impact × frequency) ÷ effort</em>.</p>
 
-<p><strong>Dates.</strong> TBD — finalised at the Sprint 3 retro after the supervisor's return. Window will be the standard 2-week shape unless we choose to absorb Sprint-3 carry-forward + the new scope into a longer cycle.</p>
+<p><strong>Dates.</strong> TBD at the Sprint 3 retro. <strong>Estimated total effort: 10–14 d for one engineer</strong> if scoped to items 1–12 below.</p>
 
-<h3>Sprint 4 candidates — ranked priority list (from <code>sprint3-plan.md</code>)</h3>
+<div class="callout note">
+  <div class="callout-label">P0 reframed 2026-05-19 — no GPU migration</div>
+  <p>The original P0 was the GPU migration to us-west-2 + <code>qwen2.5:14b</code>. <strong>Dropped on cost grounds 2026-05-19.</strong> The latency problem (6-23 min per RCA) is now attacked as a <em>bundle of smaller fixes</em> rather than a single hardware swap: hard pipeline timeout (P9), per-stage instrumentation, Ollama concurrency cap, and the MCP native tool-calling rewrite (smaller prompt → faster inference). Combined target: median ≤ 90s, worst ≤ 240s.</p>
+</div>
+
+<h3>Sprint 4 candidates — ranked priority list (RCA findings P0–P11 integrated + existing carry-forward)</h3>
 
 <table>
-  <thead><tr><th>#</th><th>Story / Item</th><th>Effort</th><th>Origin</th><th>Gates</th></tr></thead>
+  <thead><tr><th>#</th><th>Story / Item</th><th>Effort</th><th>P-tag</th><th>Origin</th><th>Gates</th></tr></thead>
   <tbody>
-    <tr><td>1</td><td><strong>US-5.2 Incident correlator</strong> — 4-alert kill-chain RCA collapsed into one coherent email</td><td>1–2 d</td><td>Sprint 2 carry-forward (was Tier-1 priority)</td><td>None</td></tr>
-    <tr><td>2</td><td><strong>Tier 3 — Iterative agentic gather</strong> (3-iteration tool-call loop with hypothesis-tree state)</td><td>3–5 d</td><td>Replaces single-shot <code>bounded_agency</code> retry</td><td>Sprint 3 Tier 4 (S3-HF-09) scoreboard green</td></tr>
-    <tr><td>3</td><td><strong>Curated RAG retrieval</strong> (BM25 over feedback-curated YAML, top-K=3 positives + K=2 anti-examples)</td><td>was US-3.4</td><td>Sprint 3 deferral</td><td>Sprint 3 Epic 2 feedback table populated</td></tr>
-    <tr><td>4</td><td><strong>Weekly curation job</strong> — APScheduler, Sundays 02:00 UTC, reads SQLite feedback → emits <code>library_curated.yaml</code></td><td>was US-3.3</td><td>Sprint 3 deferral</td><td>Feedback volume</td></tr>
-    <tr><td>5</td><td><strong>Pod-level alert rule fixes</strong> — memory cgroup-churn aggregation + CPU label-mismatch (2 query bugs)</td><td>~30 min each</td><td>Sprint 3 close-out (US-3-CO9 noted them at ship time)</td><td>None</td></tr>
-    <tr><td>6</td><td>Sentence-transformers retriever (RAG fallback)</td><td>—</td><td>only if BM25 underperforms in A/B</td><td>Item #3 ships first</td></tr>
-    <tr><td>7</td><td><strong>O-9 webhook auth</strong> + <strong>O-10 nightly RCA-history S3 backup</strong> — Friday-slot hardening</td><td>~30 min each</td><td>Sprint 3 persistent reminders</td><td>None</td></tr>
-    <tr><td>8</td><td><strong>MCP native tool-calling rewrite</strong></td><td>5 SP</td><td>sprint3-backlog #5</td><td>Was previously gated on GPU migration; with GPU dropped, can proceed on the laptop runner directly</td></tr>
-    <tr><td>9</td><td>Trace-ID linkage from log anomalies</td><td>2 SP</td><td>sprint3-backlog #2a</td><td>None</td></tr>
-    <tr><td>10</td><td>RCA playbook templates</td><td>—</td><td>sprint3-backlog #2b</td><td>Complements Epic 2 feedback work</td></tr>
-    <tr><td>11</td><td><strong>US-5.7 Labeled corpus expansion + F1 tracking</strong></td><td>—</td><td>Sprint 3 seeded the corpus via S3-HF-09</td><td>S3-HF-09 ships</td></tr>
-    <tr><td>12</td><td>L2/L3 chaos scenarios (O-12)</td><td>—</td><td>Backlog</td><td>None</td></tr>
-    <tr><td>13</td><td>Drain3 self-monitoring loop allowlist (<code>service_name=drain3</code> exclusion)</td><td>~30 min</td><td>Behavioral concern surfaced 2026-04-29</td><td>None</td></tr>
-    <tr><td>14</td><td>Pipeline duration per-stage instrumentation</td><td>1–2 h</td><td>Recent fires took 5–13× documented typical (323–1081 s)</td><td>None</td></tr>
-    <tr><td>15</td><td>Doc debt — <code>monitoring-project/CLAUDE.md</code> refresh + stale architecture PNGs replaced</td><td>1–2 h</td><td>Carried in audit reports</td><td>None</td></tr>
+    <tr><td>1</td><td><strong>Latency bundle</strong> — hard 180s pipeline timeout + per-stage instrumentation + Ollama concurrency cap (1/serial). Combined: pulls median from 6 min → ~90s on laptop.</td><td>~5 h total</td><td><strong>P0 + P9</strong></td><td>2026-05-19 evidence: median 6-7 min, worst 23 min, queue blowup observed under heavy load</td><td>None</td></tr>
+    <tr><td>2</td><td><strong>Suppression-cascade fixes</strong> (3 sub-fixes): exclude <code>audit-live-*</code>/<code>chaos-*</code> fingerprints from suppression lookup · tighten <code>TRIAGE_HISTORY_LOOKBACK_MINUTES</code> 30 → 10 · widen recurrence-gate annotation to also cover <code>TargetDown</code>, <code>HighP95Latency</code>, <code>HighKongP95Latency</code></td><td>~1.5 h</td><td><strong>P2</strong></td><td>2026-05-19 evidence: one dismiss silenced 4-10 follow-up real fires; 2 separate observations same day</td><td>None — cheapest impact in the plan</td></tr>
+    <tr><td>3</td><td><strong>PromQL / numerical-noise scrubber</strong> — new validator rule rejecting prose with PromQL function calls, raw floats &gt;4 sig figs, Z-score equations, metric names ending in <code>...</code>. New <code>translate_value(value, unit)</code> helper. Strip Prometheus output formatting noise from context before LLM sees it.</td><td>~4 h</td><td><strong>P1</strong></td><td>RCAs contain <code>"Z-score: (6.72-6.3)/0.65"</code>, <code>"histogram_quantile(0.95) = 8203.846153846154 ms"</code>, raw 16-digit floats</td><td>None</td></tr>
+    <tr><td>4</td><td><strong>Deterministic diagnostic-steps generator</strong> — move out of LLM into <code>app/diagnostic_steps_for_alert(alert, ctx)</code>. Templates from concrete evidence (trace_id, service, window, observed value). LLM still writes RCA prose + actions.</td><td>~6 h</td><td><strong>P3</strong></td><td>Two TargetDown RCAs from different fires have word-for-word identical diagnostic_steps</td><td>None</td></tr>
+    <tr><td>5</td><td><strong>US-5.2 Incident correlator</strong> — 4-alert kill-chain RCA collapsed into one coherent email</td><td>1–2 d</td><td><strong>P10</strong></td><td>Sprint 2 carry-forward (was Tier-1 priority); 2026-05-19 evidence: 4 MediumCpuUsage in 5min + 4 TargetDown in 15min treated independently</td><td>None</td></tr>
+    <tr><td>6</td><td><strong>Drain3 + empty-actions auto-downgrade</strong> — post-LLM gate: if <code>verdict=escalate</code> AND <code>suggested_actions=[]</code> AND no service named → auto-downgrade to dismiss. Plus: <code>Drain3AnomalyDetected</code> requires ≥2 novel templates in 5-min window before escalating.</td><td>2–3 h</td><td><strong>P5</strong></td><td>2026-04-29 <code>73784801</code> Drain3 escalate with no real cause ("Shelved — awaiting recurrence") — false page</td><td>None</td></tr>
+    <tr><td>7</td><td><strong>Hallucination on truncated metric names</strong> — context sanitizer drops lines ending in <code>(truncated)</code> or <code>...]</code>. New validator cross-checks cited metric names against <code>app/metrics.py</code> + Prom registry.</td><td>~4 h</td><td><strong>P4</strong></td><td>2026-04-29 <code>d763a9c9</code> invented metric name <code>"jvm_threads_daem"</code> from a truncation artefact</td><td>None</td></tr>
+    <tr><td>8</td><td><strong>Tighter <code>_classify_rca_quality</code></strong> — actionable requires (≥1 specific evidence item) AND (named cause in prose) AND (≥1 action OR explicit "dismiss with reasoning").</td><td>1 h</td><td><strong>P11</strong></td><td>RCAs with no real cause currently tagged <code>actionable</code>; degrades the new MCP <code>get_similar_decisions</code> exemplar pool</td><td>None</td></tr>
+    <tr><td>9</td><td><strong>Corpus reclassification + nightly post-hoc</strong> — manually demote <code>0b215ef3</code> + clear its actions; nightly job re-runs current validator over last 7 days of stored RCAs, demoting any that would now fail.</td><td>4 h</td><td><strong>P8</strong></td><td>The 2026-04-29 bad incident still in rca_history with <code>quality=actionable</code> + wrong-archetype kubectl OOM remediations — pollutes <code>get_similar_decisions(min_quality='actionable')</code></td><td>P11 first (the tighter classifier defines what "would fail" means)</td></tr>
+    <tr><td>10</td><td><strong>MCP native tool-calling rewrite</strong> — replaces prompt-engineered JSON-schema output with native tool-call API. Smaller prompts → faster inference → helps the latency bundle (#1) further.</td><td>5 SP</td><td>—</td><td>sprint3-backlog #5; GPU gate removed so can proceed on laptop</td><td>Pair with #1 for compounding latency win</td></tr>
+    <tr><td>11</td><td><strong>Exemplar prose rewrites + overlap-detection validator</strong> — exemplars use <code>{INSTANCE}</code>, <code>{N}</code>, <code>{TIMESTAMP}</code> placeholders the LLM must substitute. Validator rejects RCAs with &gt;80% char-overlap to their matched exemplar.</td><td>~1 d</td><td><strong>P6</strong></td><td>2026-05-19 TargetDown RCAs are near-identical to each other and to the exemplar prose; template leakage</td><td>None</td></tr>
+    <tr><td>12</td><td><strong>Tier 3 — Iterative agentic gather</strong> (3-iteration tool-call loop with hypothesis-tree state)</td><td>3–5 d</td><td>—</td><td>Replaces single-shot <code>bounded_agency</code> retry; gated on Sprint 3 Tier 4 (S3-HF-09) scoreboard which now exists</td><td>S3-HF-09 ✓ (shipped 2026-05-19)</td></tr>
+    <tr><td>13</td><td><strong>Curated RAG retrieval</strong> (BM25 over feedback-curated YAML, top-K=3 positives + K=2 anti-examples)</td><td>was US-3.4</td><td>—</td><td>Sprint 3 deferral; unblocked by S3-HF-06 + Epic 2 feedback table</td><td>Sprint 3 Epic 2 feedback table populated</td></tr>
+    <tr><td>14</td><td><strong>Weekly curation job</strong> — APScheduler, Sundays 02:00 UTC, reads SQLite feedback → emits <code>library_curated.yaml</code></td><td>was US-3.3</td><td>—</td><td>Sprint 3 deferral</td><td>Feedback volume</td></tr>
+    <tr><td>15</td><td><strong>Dashboard <code>dismiss_with_recommendation</code> colour</strong> — amber for "dismiss but rule needs fixing" vs grey for "dismiss, ignore." Schema migration on <code>rca_history</code>.</td><td>2 h</td><td><strong>P7</strong></td><td><code>36c23530</code> correctly identified a static-threshold misfire and recommended editing the alert rule; operator skimming dismiss misses the actions</td><td>P11 (the new classifier emits the flag)</td></tr>
+    <tr><td>16</td><td><strong>Pod-level alert rule fixes</strong> — memory cgroup-churn aggregation + CPU label-mismatch (2 query bugs)</td><td>~30 min each</td><td>—</td><td>Sprint 3 close-out (US-3-CO9 noted them at ship time)</td><td>None</td></tr>
+    <tr><td>17</td><td><strong>O-9 webhook auth</strong> + <strong>O-10 nightly RCA-history S3 backup</strong> — Friday-slot hardening</td><td>~30 min each</td><td>—</td><td>Sprint 3 persistent reminders</td><td>None</td></tr>
+    <tr><td>18</td><td>Sentence-transformers retriever (RAG fallback)</td><td>—</td><td>—</td><td>only if BM25 underperforms in A/B</td><td>Item #13 ships first</td></tr>
+    <tr><td>19</td><td>Trace-ID linkage from log anomalies</td><td>2 SP</td><td>—</td><td>sprint3-backlog #2a</td><td>None</td></tr>
+    <tr><td>20</td><td>RCA playbook templates</td><td>—</td><td>—</td><td>sprint3-backlog #2b</td><td>Complements Epic 2 feedback work</td></tr>
+    <tr><td>21</td><td><strong>US-5.7 Labeled corpus expansion + F1 tracking</strong></td><td>—</td><td>—</td><td>Sprint 3 seeded the corpus via S3-HF-09</td><td>S3-HF-09 ✓</td></tr>
+    <tr><td>22</td><td>L2/L3 chaos scenarios (O-12)</td><td>—</td><td>—</td><td>Backlog</td><td>None</td></tr>
+    <tr><td>23</td><td>Drain3 self-monitoring loop allowlist (<code>service_name=drain3</code> exclusion)</td><td>~30 min</td><td>—</td><td>Behavioral concern surfaced 2026-04-29</td><td>None</td></tr>
+    <tr><td>24</td><td>Doc debt — <code>monitoring-project/CLAUDE.md</code> refresh + stale architecture PNGs replaced</td><td>1–2 h</td><td>—</td><td>Carried in audit reports</td><td>None</td></tr>
   </tbody>
 </table>
+
+<p><strong>Suggested execution order for week 1 of Sprint 4:</strong> items 1 → 2 → 3 → 4 + 8 (paired). Items 1 + 2 + 8 together are ~8 hours of effort and deliver the biggest perceived-quality improvement. Items 3 + 4 are the "now the prose is honest" work. Items 5–7 close the false-positive escalation paths. Items 9–24 are wave 2.</p>
 
 <h3 id="sprint-4-removed">Removed from the Sprint 4 plan (2026-05-19)</h3>
 

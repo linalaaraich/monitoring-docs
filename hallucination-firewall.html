@@ -213,14 +213,14 @@
   such bypasses in the production code; closing them is the
   Sprint-3 Epic-4 scope.</p>
 
-  <h3 class="sub">Three bypasses caught by the 0b215ef3 forensic analysis</h3>
+  <h3 class="sub">Three bypasses caught by the 0b215ef3 forensic analysis — all closed</h3>
 
   <table>
     <thead><tr><th>Code path</th><th>Bypass type</th><th>Closed by</th></tr></thead>
     <tbody>
-      <tr><td><code>app/entity_baselines.py:144</code></td><td>Direct <code>httpx</code> to Prometheus <code>/api/v1/query</code></td><td>S3-HF-04 · 1 SP</td></tr>
-      <tr><td><code>app/bounded_agency.py</code></td><td>Direct <code>aiosqlite</code> reads of <code>rca_history</code></td><td>S3-HF-05 · 1 SP (blocked by S3-HF-06)</td></tr>
-      <tr><td><code>app/llm_client.py</code> + exemplar consumers</td><td>In-process <code>from app.exemplars import …</code></td><td>Wrapped into the exemplar-MCP design under S3-HF-06</td></tr>
+      <tr><td><code>app/entity_baselines.py:144</code></td><td>Direct <code>httpx</code> to Prometheus <code>/api/v1/query</code></td><td>S3-HF-04 · shipped 2026-05-19</td></tr>
+      <tr><td><code>app/bounded_agency.py</code></td><td>Direct <code>aiosqlite</code> reads of <code>rca_history</code></td><td>S3-HF-05 · shipped 2026-05-19</td></tr>
+      <tr><td><code>app/llm_client.py</code> + exemplar consumers</td><td>In-process <code>from app.exemplars import …</code></td><td>Wrapped into the exemplar-MCP work under S3-HF-06 · shipped 2026-05-19</td></tr>
     </tbody>
   </table>
 
@@ -229,22 +229,23 @@
   — had never been called from the pipeline. The context gather was
   operating at the service-boundary level: it knew "upstream is slow"
   but could not name <em>what</em> was slow because it had not pulled
-  the spans of the offending trace. Closing this is the Tier-1 story
-  <strong>S3-HF-07</strong>, with a 12-span feasibility scan during
-  the investigation window confirming <code>db.statement</code> uses
-  bind parameters (so PII redaction is not a blocker).</p>
+  the spans of the offending trace. Story <strong>S3-HF-07</strong>
+  shipped on 2026-05-19 wiring deep-trace gather into the pipeline; a
+  12-span feasibility scan during the investigation window confirmed
+  <code>db.statement</code> uses bind parameters (so PII redaction is
+  not a blocker for the live path).</p>
 
-  <h2 class="section" id="ci-lint">The CI lint — making the rule mechanical</h2>
+  <h2 class="section" id="ci-lint">The CI lint — the rule made mechanical</h2>
 
   <p>Social enforcement (code review + audit reports) is the first
   layer; the second is mechanical. Story <strong>S3-HF-08</strong>
-  adds a continuous-integration lint that forbids the bypass
+  shipped the continuous-integration lint that forbids the bypass
   patterns: <code>httpx</code>/<code>requests</code>/direct-DB calls
   outside the <code>_mcp_call</code> helpers and the MCP servers
-  themselves. The order of operations matters — the lint cannot fire
-  until S3-HF-04 and S3-HF-05 have closed the existing offenders,
-  because a lint that fails on existing code is one the team will
-  work around rather than fix.</p>
+  themselves. The lint sequencing was deliberate — it only ran on
+  green after S3-HF-04 and S3-HF-05 had closed the existing offenders,
+  so it never had to fail on legacy code (a lint that fails on existing
+  code is one the team works around rather than fixes).</p>
 
   <h2 class="section" id="measurement">How we know it's working</h2>
 
@@ -268,12 +269,12 @@
     </tbody>
   </table>
 
-  <p>The future <strong>S3-HF-09</strong> story adds a 5th axis to the
-  chaos scorer (MCP-provenance) and seeds the labelled corpus with the
-  <code>0b215ef3</code> RCA itself. Once that lands, the firewall is
-  measured continuously against regression in CI — the lower-bound
-  guarantee that the next prompt change doesn't quietly break the
-  rubric.</p>
+  <p><strong>S3-HF-09</strong> shipped 2026-05-19 — the chaos scorer
+  now carries a 5th MCP-provenance axis, the labelled corpus is seeded
+  with the <code>0b215ef3</code> RCA, and the regression gate runs in
+  CI on the chaos-replay set. The firewall is now measured continuously
+  against regression: the lower-bound guarantee that the next prompt
+  change doesn't quietly break the rubric.</p>
 
   <h2 class="section" id="see-also">See also</h2>
 

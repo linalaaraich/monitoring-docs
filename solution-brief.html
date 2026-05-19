@@ -150,6 +150,7 @@
     <li class="sub"><a href="#bounded">5.5 Bounded-agency retry</a></li>
     <li><a href="#archetypes">6. The 14 archetypes</a></li>
     <li><a href="#case-study">7. Case study — 0b215ef3</a></li>
+    <li><a href="#known-issues">7.5 Known output-quality issues + Sprint-4 fixes</a></li>
     <li><a href="#asks">8. What we need from you</a></li>
     <li><a href="#study-plan">9. Recommended reading</a></li>
     <li><a href="#glossary">10. Glossary</a></li>
@@ -486,6 +487,36 @@ than we'd like and is a signal that an archetype is missing.
     <li><strong>S3-HF-04/05 (Sprint 3):</strong> close the three remaining MCP-only invariant bypasses so the hallucination firewall is genuinely complete.</li>
   </ul>
 </div>
+
+<!-- ────────────────────── 7.5 ────────────────────── -->
+<h2 id="known-issues">Known output-quality issues + Sprint-4 fixes</h2>
+
+<p>Drafted 2026-05-19 from a real-load investigation: 95 production RCAs across 2026-04-28 → 2026-05-19, plus a heavy real-load test that produced two real <code>TargetDown</code> RCAs. Twelve findings, ranked P0–P11 below. Full plan: <a href="sprint-history.html#sprint-4">Sprint 4 candidates table</a>.</p>
+
+<div class="callout warn">
+  <div class="callout-label">Honest framing for an SRE reviewer</div>
+  <p>The system is structurally sound — verdicts are right more often than wrong, the safety mechanisms fire as designed. But the <em>output prose</em> is not yet trustworthy for an unsupervised dev workflow. Three deep problems compound: <strong>(1) latency</strong> (median 6 min, worst 23 min), <strong>(2) PromQL/numerical noise leaking into prose</strong>, <strong>(3) suppression cascade</strong> over-eagerly silencing real follow-up fires. These are the Sprint 4 anchors.</p>
+</div>
+
+<table>
+  <thead><tr><th>P-tag</th><th>Problem</th><th>Evidence</th><th>Proposed fix</th><th>Effort</th></tr></thead>
+  <tbody>
+    <tr><td><strong>P0</strong></td><td>Pipeline latency unworkable for dev workflow</td><td>Median 6-7 min, worst 23 min (<code>PodHighMemoryUsage</code> 2026-04-29). Queue blowup observed under sustained load.</td><td>Bundle: per-stage instrumentation + hard 180s timeout + Ollama serial concurrency + MCP native tool-calling rewrite. GPU migration was on the table but dropped on cost.</td><td>~5 h + 5 SP</td></tr>
+    <tr><td><strong>P1</strong></td><td>PromQL / floats / Z-score equations leak into cause-prose</td><td>RCAs literally contain <code>"Z-score: (6.72-6.3)/0.65 = +0.6σ"</code>, <code>"histogram_quantile(0.95) = 8203.846153846154 ms"</code>, <code>"sum by(le)(rate(...))"</code></td><td>New validator rule rejects telemetry-in-prose. <code>translate_value(value, unit)</code> helper pre-renders metric values. Strip <code># TYPE</code> / <code># HELP</code> / <code>...truncated...</code> from context before LLM sees it.</td><td>~4 h</td></tr>
+    <tr><td><strong>P2</strong></td><td>Suppression cascade silences real follow-up fires</td><td>2026-05-19: one synthetic dismiss → 4 real <code>MediumCpuUsage</code> suppressed. One real dismiss → 3 real <code>TargetDown</code> suppressed.</td><td>3 sub-fixes: exclude <code>audit-live-*</code> fingerprints from suppression lookup · tighten 30 → 10 min window · widen recurrence-gate to TargetDown + HighP95Latency.</td><td>~1.5 h</td></tr>
+    <tr><td><strong>P3</strong></td><td>Diagnostic steps are boilerplate, not incident-specific</td><td>Two TargetDown RCAs (<code>111ded21</code> + <code>a4555bdd</code>) have word-for-word identical 4-step diagnostic blocks.</td><td>Move diagnostic-steps generation out of the LLM into <code>app/diagnostic_steps_for_alert(alert, ctx)</code>. Templates from concrete evidence (trace_id, service, window).</td><td>~6 h</td></tr>
+    <tr><td><strong>P4</strong></td><td>Hallucination on truncated metric names</td><td>2026-04-29 <code>d763a9c9</code>: invented cause around <code>"jvm_threads_daem"</code> — a Prometheus output truncation artefact, not a metric.</td><td>Context sanitizer drops lines ending in <code>(truncated)</code> or <code>...]</code>. Validator cross-checks cited metric names against known registry.</td><td>~4 h</td></tr>
+    <tr><td><strong>P5</strong></td><td>False-positive escalations (Drain3, empty actions)</td><td>2026-04-29 <code>73784801</code> escalated for "GET /robots.txt and Kong deprecation warnings" — no causal connection, "shelved" actions.</td><td>Post-LLM gate auto-downgrades escalations with no actions + no service named. <code>Drain3AnomalyDetected</code> requires ≥2 novel templates before escalating.</td><td>2-3 h</td></tr>
+    <tr><td>P6</td><td>Generic templated prose (same alert → same words)</td><td>Today's TargetDown RCAs are near-identical to each other and to the exemplar prose.</td><td>Exemplar rewrites with <code>{INSTANCE}</code>, <code>{N}</code>, <code>{TIMESTAMP}</code> placeholders. Validator rejects RCAs with &gt;80% char-overlap to exemplar.</td><td>~1 d</td></tr>
+    <tr><td>P7</td><td>Dismiss-with-recommendation visually buried</td><td><code>36c23530</code>: correct dismiss + 2 valid suggested actions (fix the alert rule). Operator skimming "dismiss" misses the actions.</td><td>New verdict bucket / dashboard amber colour for "dismiss but rule needs fixing."</td><td>2 h</td></tr>
+    <tr><td>P8</td><td>0b215ef3 still in corpus at <code>quality=actionable</code></td><td>The famous bad incident is a positive exemplar for <code>get_similar_decisions(min_quality='actionable')</code> with the wrong-archetype kubectl OOM remediations.</td><td>Manual SQL reclassify to <code>needs_review</code> + clear actions. Nightly post-hoc job runs current validator over last 7 days.</td><td>4 h</td></tr>
+    <tr><td>P9</td><td>Unbounded investigation duration</td><td>Same alert type (TargetDown) ranged 138s → 1099s. 8× variance. Can't SLO.</td><td>Hard 180s timeout (folded into P0 bundle). Cap retry to 1 fire + explicit timeout.</td><td>1-2 h</td></tr>
+    <tr><td>P10</td><td>No incident-pattern recognition across alert clusters</td><td>4 MediumCpuUsage in 5min + 4 TargetDown in 15min treated independently — real outages produce <em>clusters</em>, not lone alerts.</td><td>US-5.2 Incident correlator (already Sprint 4 candidate #5).</td><td>1-2 d</td></tr>
+    <tr><td>P11</td><td><code>rca_quality=actionable</code> has lost meaning</td><td>RCAs with no real cause currently tag as <code>actionable</code>; degrades the MCP exemplar pool.</td><td>Tighter <code>_classify_rca_quality</code>: requires named cause + specific evidence + (action OR explicit dismiss reasoning).</td><td>1 h</td></tr>
+  </tbody>
+</table>
+
+<p><strong>Anchor pair for Sprint 4 week 1:</strong> P0-bundle (latency) + P2 (suppression cascade). Combined ~8 hours, largest perceived-quality improvement. Then P1 + P3 in week 2 — the "now the prose is honest" work.</p>
 
 <!-- ────────────────────── 8 ────────────────────── -->
 <h2 id="asks"><span class="num-badge">8</span>What we need from you</h2>
