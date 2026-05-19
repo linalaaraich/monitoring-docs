@@ -45,9 +45,11 @@
   .hero p.lead { font-size:16px; color:var(--text-soft); max-width:820px; line-height:1.7; margin-bottom:20px; }
 
   .roadmap { max-width:1080px; margin:0 auto; padding:24px 40px 0; }
-  .roadmap-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; }
-  @media (max-width: 900px) { .roadmap-grid { grid-template-columns:1fr; } }
+  .roadmap-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:14px; }
+  @media (max-width: 1100px) { .roadmap-grid { grid-template-columns:repeat(2,1fr); } }
+  @media (max-width: 700px)  { .roadmap-grid { grid-template-columns:1fr; } }
   .roadmap-cell { padding:14px 16px; border-radius:8px; border:1px solid var(--border); background:var(--card); }
+  .roadmap-cell.s0 { border-color:rgba(64,208,208,.4); background:linear-gradient(180deg, rgba(64,208,208,.06), var(--card)); }
   .roadmap-cell.s1 { border-color:rgba(176,126,232,.4); background:linear-gradient(180deg, rgba(176,126,232,.06), var(--card)); }
   .roadmap-cell.s2 { border-color:rgba(78,168,222,.4); background:linear-gradient(180deg, rgba(78,168,222,.06), var(--card)); }
   .roadmap-cell.s3 { border-color:rgba(107,207,127,.4); background:linear-gradient(180deg, rgba(107,207,127,.06), var(--card)); }
@@ -129,6 +131,13 @@
 
 <div class="roadmap">
   <div class="roadmap-grid">
+    <div class="roadmap-cell s0">
+      <div class="label">Sprint 0</div>
+      <h3>Discovery &amp; problem framing</h3>
+      <div class="dates">2026-02 → early 2026-03</div>
+      <div class="one-line">Benchmarked monitoring solutions, learned SRE practice, interviewed employees, surfaced the actual problem: outages found by clients or after-the-fact human review, not by the system.</div>
+      <span class="status shipped">DELIVERED — problem statement + solution hypothesis</span>
+    </div>
     <div class="roadmap-cell s1">
       <div class="label">Sprint 1</div>
       <h3>Observability foundation</h3>
@@ -165,6 +174,7 @@
 <aside class="toc-sidebar">
   <h4>CONTENTS</h4>
   <ol>
+    <li><a href="#sprint-0">Sprint 0 — Discovery &amp; problem framing</a></li>
     <li><a href="#sprint-1">Sprint 1 — Observability foundation</a></li>
     <li><a href="#sprint-2">Sprint 2 — AWS + AI RCA MVP</a></li>
     <li class="sub"><a href="#s2-epic1">Epic 1 — AWS Infrastructure</a></li>
@@ -185,10 +195,35 @@
 
 <section class="content">
 
+<!-- ─────────────────── SPRINT 0 ─────────────────── -->
+<h2 id="sprint-0">Sprint 0 — Discovery &amp; problem framing (February → early March 2026)</h2>
+
+<p><strong>Sprint goal.</strong> Before writing any infrastructure code, figure out what was actually worth building. Two parallel tracks: <em>benchmark the existing monitoring landscape</em> (what's out there, what works, what doesn't) and <em>interview the people who would use this</em> (what problems are they actually living with day-to-day). Output: a problem statement strong enough to justify a multi-sprint build, and a solution hypothesis worth testing.</p>
+
+<p><strong>What the work looked like.</strong></p>
+
+<ul>
+  <li><strong>Monitoring-solution benchmarking.</strong> Read through and prototyped against the major open-source observability stacks. Prometheus + Loki + Jaeger emerged as the de-facto OSS combination — well-supported, broad community, deployable without vendor lock-in, and integrates with the existing JVM / Spring ecosystem without modification. SaaS alternatives (Datadog, New Relic, Honeycomb) were costed and ruled out for this engagement on a mix of budget and data-sovereignty grounds.</li>
+  <li><strong>SRE practice study.</strong> Worked through the Google SRE Book + Workbook, distinguishing the four golden signals (latency, traffic, errors, saturation), the difference between symptoms and causes in alerting, the SLO / SLI / error-budget framing, and the operational habits that make on-call sustainable. Translated SRE vocabulary into Tanger-Med's specific context (small team, mixed services, no dedicated on-call rotation).</li>
+  <li><strong>Field research with employees.</strong> Talked to the people closest to the production systems — what wakes them up, how they find out something is broken, what their first move is when an alert lands. The recurring answer was the inflection point of the whole project: <strong>"we find out things are broken because a client tells us, or because someone notices after the fact in a log review."</strong> Detection was lagging the actual breakage by hours or days. The team was reactive by structure, not by choice.</li>
+  <li><strong>Problem statement crystallised.</strong> <em>The team needs a way to detect production problems early — before they reach a client, and without requiring a human to be reading logs at the right moment.</em> Stated this way, the problem framed both halves of the eventual solution: (a) a real observability stack that produces signals worth acting on, and (b) something on top of that stack that does the human-attention work automatically.</li>
+  <li><strong>Solution-space exploration.</strong> Brainstormed and pressure-tested several architectures: a traditional rules-only alerting setup (rejected — already exists conceptually, doesn't address the "needs a human reading it" half); an AI-summarisation layer over raw alerts (closer); a full AI triage layer that turns alerts into RCAs with verdicts and remediation suggestions (the eventual choice). Recorded which parts of the AI-triage hypothesis were risky and what would have to be true for the project to succeed.</li>
+</ul>
+
+<div class="callout win">
+  <div class="callout-label">Sprint 0 outcome</div>
+  <p>A defensible <strong>problem statement</strong> (client-reported / after-the-fact detection is the actual pain) and a <strong>solution hypothesis</strong> (build a real observability stack, then layer AI triage on top so alerts arrive pre-investigated). Sprint 1 onwards is execution against that hypothesis. Without Sprint 0, Sprint 1 would have been a generic "set up Prometheus" project; with Sprint 0, every Sprint 1 decision was made in service of the proactive-detection goal.</p>
+</div>
+
+<div class="callout note">
+  <div class="callout-label">Why Sprint 0 belongs in the timeline</div>
+  <p>It's tempting to skip the discovery phase in a retrospective and start the timeline at "first code commit." Sprint 0 is the reason the rest of the work is coherent — every architectural choice in Sprint 1–3 (external instrumentation, MCP-bridged data access, exemplar-driven RCA prose, operator-feedback closure) traces back to the framing that came out of February's field research. The report needs this section so the "why this and not something else" question has an answer.</p>
+</div>
+
 <!-- ─────────────────── SPRINT 1 ─────────────────── -->
 <h2 id="sprint-1">Sprint 1 — Observability foundation (2026-03-10 → 2026-03-30)</h2>
 
-<p><strong>Sprint goal.</strong> Stand up a full-stack observability platform for a representative web stack (<code>mukundmadhav/react-springboot-mysql</code>) using open-source tools and deployable by anyone with the playbook. No AI yet — this is the pillar on which everything else is built.</p>
+<p><strong>Sprint goal.</strong> Execute on the first half of the Sprint-0 hypothesis: stand up a full-stack observability platform for a representative web stack (<code>mukundmadhav/react-springboot-mysql</code>) using open-source tools and deployable by anyone with the playbook. No AI yet — this is the pillar on which everything else is built.</p>
 
 <p><strong>Topology shipped.</strong> Three on-prem VMs in the <code>192.168.127.0/24</code> subnet:</p>
 
