@@ -3,10 +3,51 @@
 > **Project:** AI-Powered Observability Platform with Root Cause Analysis
 > **Organization:** CIRES Technologies, Tanger Med (Digital Factory Observability Service)
 > **Author:** Lina Laaraich
-> **Last Updated:** 2026-04-28 (post-Sprint-2 + Epic 5 in flight)
+> **Last Updated:** 2026-05-19 (Sprint 3 resumed after team-illness pause)
 > **Sprint 2 Deadline:** ~~April 9, 2026~~ ~~April 23, 2026~~ **Sprint 2 closed 2026-04-23; Epic 5 (UEBA-inspired stories) is the active workstream**
 > **Jira Project:** SCRUM | **Jira Source:** `github.com/linalaaraich/jira`
 > **Repositories:** 6 (monitoring-project, provisioning-monitoring-infra, monitoring-docs, monitoring-mcp-servers, monitoring-triage-service, jira)
+
+---
+
+## 2026-05-19 — Sprint 3 resumes after team-illness pause
+
+**Sprint 3 was paused 2026-04-30 → 2026-05-19 — both engineers and the supervisor were sick.** Nothing structural changed during the pause; the system carried itself.
+
+**What happened during the pause (system-side):**
+
+- **17 daily static audits ran** (most via cloud /schedule, some manual) and all show **226/226 tests green** with the same stable list of 7 minor doc-drift items carried forward each day. No new drift accumulated. No incidents observed. The AWS instances stayed up; the laptop ran the triage container against its `qwen2.5:7b` model with no measurement gap surfaced. See [`monitoring-audit-results`](https://github.com/linalaaraich/monitoring-audit-results) (private) for the full daily series.
+- **Zero code commits** across all six repos for 19 consecutive days (last commit before pause: `6c54a73` on 2026-04-29 in `monitoring-docs`). This is the longest no-commit stretch in the project's history, and is the direct cause of the staleness drift items in the audit reports.
+- **The live-audit cron stopped running.** `/var/log/audit-live.log` last entry is dated 2026-04-29; the crontab is still installed but the controller appears not to have been awake at 12:00 UTC on most days. The static audit ran via cloud-side automation independent of the controller's state, which is why static coverage held. **Resilience hole:** silent cron failure was invisible — no alert surfaced it. Filed as R-1 in the resumption plan (cron writes a heartbeat metric; Grafana fires `LiveAuditMissing` if heartbeat &gt; 36 h).
+
+**Outstanding Sprint 3 work as of resume:** ~24 SP across three epics. Sprint window (`2026-04-23 → 2026-05-08`) has elapsed; re-baseline call (extend vs. roll to Sprint 4) is a supervisor conversation pending their return.
+
+| Epic | SP remaining | Status |
+|---|---|---|
+| Epic 1 — RCA Quality v2 close-out | 1 SP | 12/13 stories Done; US-3-CO13 cleanup pending (codify `app/policy.py` + `app/bypass_llm.yaml`, behaviour-unchanged refactor) |
+| Epic 2 — Operator feedback loop | 7 SP | Not started. Dependency chain US-3.1 → US-3.2 → US-3.5. Schema extension on existing `feedback` table; curated RAG explicitly deferred to Sprint 4 |
+| Epic 3 — Drain3 baseline lifecycle | 6 SP | Not started. Wires the dormant S3 plumbing in `drain_analyzer.py` (5 functions exist, never called) + APScheduler weekly snapshot + 3 operator endpoints |
+| Epic 4 — Hallucination firewall + trace depth | 11 SP | 4/15 SP Done (S3-HF-01/02/03 shipped 2026-04-29). Remaining: S3-HF-04 (entity_baselines → `prometheus-mcp`, the unblocker), S3-HF-05 (bounded_agency → MCP), S3-HF-06 (quality-rated MCP tools), S3-HF-07 (`get_trace(trace_id)` deep trace gather), S3-HF-08 (MCP integrity CI lint), S3-HF-09 (chaos scorer 5th axis + corpus seed) |
+
+**Resumption day (2026-05-19) — Tier 1 hygiene:**
+
+- ✅ Leaked Tailscale auth key revoked (`tskey-auth-kSDZZQ1ASM11CNTRL-…`).
+- ✅ Audit pushed (`audits/2026-05-19.md`).
+- ✅ Doc paper-cut sweep — this entry resets the staleness clock; metric name/label mismatches in `triage-service.html` §7 fixed; archetype-count prose updated 11 → 14 with the 3 new archetypes named; `figma-architecture-prompt.md` deleted (not needed) + its card removed from `index.html`. Net effect: audit drift list 7 → 0.
+- ⏳ Live-audit cron diagnosis pending until 12:00 UTC slot today.
+- Triage favicon shipped on the side (`02fa96f` + `a1733bd` in `monitoring-triage-service`) — chevron-drilling-to-dot in dashboard accent blue. Not on the Sprint 3 board; lightweight polish.
+
+**Next step:** S3-HF-04 (1 SP) — route `entity_baselines.py:144` through `prometheus-mcp`. Plan flags it as the unblocker for the remainder of Epic 4.
+
+**Resilience improvements proposed for Sprint 4** (new, prompted by the 20-day silence):
+
+| ID | Hole exposed | Proposed fix |
+|---|---|---|
+| R-1 | Silent cron failure invisible for 20 days | Cron writes heartbeat metric → Grafana `LiveAuditMissing` if older than 36 h |
+| R-2 | `claude-controller` is ephemeral; if it dies we lose both the live cron and `SESSION_HANDOFF.md` | Move live audit to `observability-rca-monitoring` (durable EC2) via systemd timer; or bake a one-command rebuild script |
+| R-3 | Sprint plan staleness invisible (Sprint 3 window expired 2026-05-08 but nothing surfaced) | Tiny CI lint: fail PR check if any `sprint*-plan.md` window end-date is past today |
+| R-4 | `the-bigger-picture.md` staleness tracked in audits only | Promote to status badge in README — turns red at 14 d |
+| R-5 | `SESSION_HANDOFF.md` has no off-host backup | Fold into the planned O-10 nightly S3 backup work |
 
 ---
 
