@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Solution Brief — CIRES Observability Platform</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --bg-soft: #13151e;
+    --card: #1a1d27;
+    --card-alt: #1e2230;
+    --border: #2a2d3a;
+    --border-hi: #3a3f52;
+    --text: #e4e6ee;
+    --text-soft: #c0c5d0;
+    --muted: #8890a0;
+    --accent-blue: #4ea8de;
+    --accent-green: #6bcf7f;
+    --accent-orange: #f0a050;
+    --accent-purple: #b07ee8;
+    --accent-red: #e06070;
+    --accent-cyan: #40d0d0;
+    --accent-yellow: #e0d060;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { font-family:'Inter','Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); line-height:1.65; font-size:15px; -webkit-font-smoothing:antialiased; }
+  code, pre, .mono { font-family:'JetBrains Mono','Fira Code',ui-monospace,monospace; font-size:0.88em; }
+
+  .topnav { display:flex; align-items:center; gap:12px; padding:14px 40px; background:var(--bg-soft); border-bottom:1px solid var(--border); flex-wrap:wrap; }
+  .topnav span.nav-label { color:var(--muted); font-size:13px; font-weight:600; margin-right:4px; }
+  .navlink { display:inline-flex; align-items:center; gap:6px; padding:7px 14px; border-radius:8px; font-size:13px; font-weight:600; text-decoration:none; border:1px solid; transition:background .2s, transform .15s; }
+  .navlink:hover { transform:translateY(-1px); }
+  .navlink-home { color:var(--text); border-color:var(--border); background:var(--card); }
+  .navlink-arch { color:var(--accent-blue); border-color:rgba(78,168,222,.4); background:rgba(78,168,222,.08); }
+  .navlink-triage { color:var(--accent-purple); border-color:rgba(176,126,232,.4); background:rgba(176,126,232,.12); }
+  .navlink-sys { color:var(--accent-cyan); border-color:rgba(64,208,208,.4); background:rgba(64,208,208,.08); }
+  .navlink-dec { color:var(--accent-orange); border-color:rgba(240,160,80,.4); background:rgba(240,160,80,.08); }
+
+  .hero { padding:56px 40px 40px; border-bottom:1px solid var(--border); background:linear-gradient(180deg, #13151e 0%, var(--bg) 100%); }
+  .hero .inner { max-width:1080px; margin:0 auto; }
+  .hero .eyebrow { font-size:11px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:var(--accent-green); margin-bottom:12px; }
+  .hero h1 { font-size:38px; font-weight:800; letter-spacing:-.5px; margin-bottom:14px; line-height:1.2; }
+  .hero h1 span.accent { color:var(--accent-green); }
+  .hero p.lead { font-size:16px; color:var(--text-soft); max-width:820px; line-height:1.7; margin-bottom:20px; }
+  .hero .pill-row { display:flex; gap:8px; flex-wrap:wrap; }
+  .pill { font-size:11px; font-weight:600; padding:4px 10px; border-radius:12px; border:1px solid; letter-spacing:.2px; }
+  .pill.green { color:var(--accent-green); border-color:rgba(107,207,127,.35); background:rgba(107,207,127,.08); }
+  .pill.purple { color:var(--accent-purple); border-color:rgba(176,126,232,.35); background:rgba(176,126,232,.08); }
+  .pill.cyan { color:var(--accent-cyan); border-color:rgba(64,208,208,.35); background:rgba(64,208,208,.08); }
+  .pill.orange { color:var(--accent-orange); border-color:rgba(240,160,80,.35); background:rgba(240,160,80,.08); }
+
+  .layout { max-width:1080px; margin:0 auto; padding:32px 40px 80px; display:grid; grid-template-columns: 240px 1fr; gap:40px; }
+  @media (max-width: 900px) { .layout { grid-template-columns:1fr; } .toc-sidebar { position:static; } }
+  .toc-sidebar { position:sticky; top:20px; align-self:start; font-size:13px; }
+  .toc-sidebar h4 { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--muted); margin-bottom:10px; }
+  .toc-sidebar ol { list-style:none; padding:0; }
+  .toc-sidebar li { margin-bottom:4px; }
+  .toc-sidebar a { color:var(--text-soft); text-decoration:none; border-bottom:1px dashed transparent; }
+  .toc-sidebar a:hover { color:var(--accent-green); border-bottom-color:var(--accent-green); }
+  .toc-sidebar li.sub { padding-left:14px; font-size:12px; }
+  .toc-sidebar li.sub a { color:var(--muted); }
+
+  .content h2 { font-size:26px; font-weight:700; margin:48px 0 16px; letter-spacing:-.3px; scroll-margin-top:24px; padding-bottom:8px; border-bottom:1px solid var(--border); }
+  .content h2:first-child { margin-top:0; }
+  .content h3 { font-size:18px; font-weight:700; margin:28px 0 10px; color:var(--text); scroll-margin-top:24px; }
+  .content h4 { font-size:14px; font-weight:700; margin:20px 0 6px; color:var(--text); }
+  .content p { margin-bottom:14px; color:var(--text-soft); }
+  .content p strong { color:var(--text); font-weight:600; }
+  .content ul, .content ol { margin:8px 0 16px 24px; color:var(--text-soft); }
+  .content li { margin-bottom:6px; }
+  .content code { background:var(--card); border:1px solid var(--border); padding:1px 6px; border-radius:4px; font-size:0.85em; color:var(--accent-cyan); }
+  .content pre { background:var(--card); border:1px solid var(--border); padding:14px 16px; border-radius:8px; margin:12px 0 18px; overflow-x:auto; line-height:1.5; }
+  .content pre code { background:none; border:none; padding:0; color:var(--text); font-size:0.85em; }
+  .content a { color:var(--accent-blue); text-decoration:none; border-bottom:1px dashed rgba(78,168,222,.35); }
+  .content a:hover { border-bottom-style:solid; }
+
+  .callout { border-left:3px solid; border-radius:0 8px 8px 0; padding:14px 18px; margin:16px 0; background:var(--card); }
+  .callout.note { border-color:var(--accent-blue); }
+  .callout.ask { border-color:var(--accent-green); background:rgba(107,207,127,.04); }
+  .callout.warn { border-color:var(--accent-orange); }
+  .callout.story { border-color:var(--accent-purple); background:rgba(176,126,232,.04); }
+  .callout-label { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; margin-bottom:6px; }
+  .callout.note .callout-label { color:var(--accent-blue); }
+  .callout.ask .callout-label { color:var(--accent-green); }
+  .callout.warn .callout-label { color:var(--accent-orange); }
+  .callout.story .callout-label { color:var(--accent-purple); }
+
+  table { width:100%; border-collapse:collapse; margin:12px 0 20px; font-size:13px; }
+  table th, table td { padding:10px 14px; border-bottom:1px solid var(--border); text-align:left; vertical-align:top; }
+  table th { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--muted); background:var(--card); }
+  table tr:hover td { background:var(--card-alt); }
+
+  .ascii { background:var(--card); border:1px solid var(--border); padding:20px; border-radius:8px; font-family:monospace; font-size:11px; line-height:1.4; white-space:pre; overflow-x:auto; color:var(--text); }
+
+  .num-badge { display:inline-block; width:22px; height:22px; line-height:22px; text-align:center; border-radius:50%; background:var(--accent-green); color:#0f1117; font-weight:700; font-size:11px; margin-right:6px; }
+
+  .ask-list { list-style:none; padding:0; margin:14px 0 0; }
+  .ask-list li { padding:10px 14px; margin-bottom:8px; border-left:2px solid var(--accent-green); background:rgba(107,207,127,.04); border-radius:0 6px 6px 0; }
+  .ask-list li strong { color:var(--accent-green); }
+</style>
+</head>
+<body>
+
+<nav class="topnav">
+  <span class="nav-label">CIRES Observability Platform</span>
+  <a href="index.html" class="navlink navlink-home">🏠 Home</a>
+  <a href="system-explained.html" class="navlink navlink-sys">📖 System Explained</a>
+  <a href="architecture.html" class="navlink navlink-arch">🏗️ Architecture</a>
+  <a href="triage-service.html" class="navlink navlink-triage">🧠 Triage Service</a>
+  <a href="decisions-log.html" class="navlink navlink-dec">📝 Decisions Log</a>
+</nav>
+
+<section class="hero">
+  <div class="inner">
+    <div class="eyebrow">Solution brief · for SRE / DevOps review</div>
+    <h1>AI-driven RCA — what we built &amp; <span class="accent">where we need your eyes</span></h1>
+    <p class="lead">
+      A 15-minute orientation to the CIRES Observability Platform's AI-driven root-cause
+      analysis pipeline. Designed for an experienced SRE / DevOps engineer doing a
+      first-pass review. By the end of this page you should understand: what the
+      system does, how it does it, where it's been wrong, what we've built to keep
+      it honest, and the four concrete pieces of input we need from you.
+    </p>
+    <div class="pill-row">
+      <span class="pill green">15-min read</span>
+      <span class="pill purple">14 RCA archetypes</span>
+      <span class="pill cyan">10-step pipeline</span>
+      <span class="pill orange">Live system on Tailscale</span>
+    </div>
+  </div>
+</section>
+
+<main class="layout">
+
+<aside class="toc-sidebar">
+  <h4>CONTENTS</h4>
+  <ol>
+    <li><a href="#pitch">1. The 60-second pitch</a></li>
+    <li><a href="#what">2. What we built</a></li>
+    <li><a href="#shape">3. Shape of the system</a></li>
+    <li><a href="#pipeline">4. The 10-step pipeline</a></li>
+    <li><a href="#quality">5. How we keep it honest</a></li>
+    <li class="sub"><a href="#exemplars">5.1 Exemplar library</a></li>
+    <li class="sub"><a href="#hallucination">5.2 Hallucination blocklist</a></li>
+    <li class="sub"><a href="#validator">5.3 Surface-only &amp; menu validators</a></li>
+    <li class="sub"><a href="#clamp">5.4 Confidence clamp</a></li>
+    <li class="sub"><a href="#bounded">5.5 Bounded-agency retry</a></li>
+    <li><a href="#archetypes">6. The 14 archetypes</a></li>
+    <li><a href="#case-study">7. Case study — 0b215ef3</a></li>
+    <li><a href="#asks">8. What we need from you</a></li>
+    <li><a href="#study-plan">9. Recommended reading</a></li>
+    <li><a href="#glossary">10. Glossary</a></li>
+  </ol>
+</aside>
+
+<section class="content">
+
+<!-- ────────────────────── 1 ────────────────────── -->
+<h2 id="pitch"><span class="num-badge">1</span>The 60-second pitch</h2>
+
+<p>
+CIRES Technologies (Tanger Med, Digital Factory Observability Service) runs a
+small Java/Spring-Boot stack — 6 microservices behind Kong, on k3s, with a
+monitoring VM running Grafana / Prometheus / Loki / Jaeger. The alert volume is
+small (~10–40 fires per day in steady state) but every one of them hits the same
+small on-call team. Without an AI layer, every alert demands the same human
+investigation regardless of whether it's a real incident or a flake.
+</p>
+
+<p>
+The triage service consumes Grafana alert webhooks and a separate stream of
+Drain3-detected log anomalies, then for each one it: gathers metric / log /
+trace context through a wall of MCP servers, picks the closest of 14 RCA
+archetypes, asks a local LLM (<code>qwen2.5:7b-instruct</code> on a GTX 1060) to
+produce a cause-first root-cause analysis, runs the answer through three
+validators, and emits a verdict — <code>ESCALATE</code> (email the on-call) or
+<code>DISMISS</code> (record the reason and move on). Operators can override
+either way; their feedback flows back into the suppression layer.
+</p>
+
+<p>
+End-to-end latency on the laptop: ~60–95 s typical, with hard pipeline timeouts.
+The system is currently running steady-state and has been for ~25 days.
+</p>
+
+<!-- ────────────────────── 2 ────────────────────── -->
+<h2 id="what"><span class="num-badge">2</span>What we built (and what we deliberately didn't)</h2>
+
+<p>
+<strong>What we built:</strong> a single FastAPI service (<code>monitoring-triage-service</code>)
+that ingests webhooks, talks to five MCP servers (one each for Prometheus,
+Loki, Jaeger, the RCA history DB, and a deployment-events stub) over JSON-RPC,
+calls a local LLM via Ollama, persists decisions to SQLite, exposes a
+self-hosted dashboard, and emits 27 Prometheus metrics for its own
+observability. Around 9,500 lines of Python plus ~1,800 lines of declarative
+config (exemplar library, hallucination blocklist, alert-template fallback,
+recurrence-gate annotations).
+</p>
+
+<p>
+<strong>What we deliberately didn't build:</strong>
+</p>
+
+<ul>
+  <li>An agentic loop with multi-step planning. We make at most <em>one</em> retry call (bounded agency) before committing to a verdict. The cost ceiling is predictable and the system stays reproducible at <code>temperature=0</code>.</li>
+  <li>A vector-DB / RAG layer. The exemplar library is a curated YAML of 14 archetypes injected at prompt time; we explicitly chose a frozen seed over learned retrieval until we have enough operator feedback to curate well.</li>
+  <li>A microservice mesh of small AI services. One pipeline, one process, deterministic ordering. Easier to reason about; easier to validate.</li>
+  <li>Tool-calling. The LLM produces structured JSON via prompt-engineered output schemas, not native tool calls. We'll move to native tool-calling when we move off the laptop to a larger model.</li>
+</ul>
+
+<div class="callout note">
+  <div class="callout-label">Design bias to flag for review</div>
+  <p>The system prefers <strong>determinism + auditability</strong> over <strong>raw model capability</strong>. Every quality mechanism (validators, blocklist, clamp, exemplars) exists to make the LLM's mistakes recoverable. If you'd weight that trade-off differently, we want to know.</p>
+</div>
+
+<!-- ────────────────────── 3 ────────────────────── -->
+<h2 id="shape"><span class="num-badge">3</span>Shape of the system</h2>
+
+<p>The runtime topology, abridged:</p>
+
+<div class="ascii">
+  ┌────────────────────────────────────────────────────────────────────┐
+  │  AWS us-east-1                          Tailnet (WireGuard mesh)   │
+  │  ┌─────────────────────┐                                           │
+  │  │ observability-rca-  │   Grafana / Prom / Loki / Jaeger          │
+  │  │   monitoring (EC2)  │───┐ scrape app-spring-actuator, kong,     │
+  │  └─────────────────────┘   │ otel-collector, loki                  │
+  │                            │                                       │
+  │  ┌─────────────────────┐   │      webhook fires                    │
+  │  │ observability-rca-  │   │      ▼                                │
+  │  │   k3s (EC2)         │   │  ┌─────────────────────────────────┐  │
+  │  │  spring-boot, kong, │   │  │  monitoring-triage-service       │ │
+  │  │  frontend, otel-col │   │  │  (FastAPI, on lina's laptop      │ │
+  │  └─────────────────────┘   │  │   via Tailscale; future: EC2)    │ │
+  │                            │  │                                  │ │
+  └────────────────────────────┼──┤  Step 1  dedup                   │ │
+                               │  │  Step 1c recurrence gate         │ │
+                               │  │  Step 2  pre-LLM suppression     │ │
+                               │  │  Step 3  context gather (MCPs) ←─┼─┐
+                               │  │  Step 4  match exemplar archetype│ │ │
+                               │  │  Step 5  LLM call (Ollama,       │ │ │
+                               │  │           qwen2.5:7b)            │ │ │
+                               │  │  Step 6  validate                │ │ │
+                               │  │  Step 6c post-LLM recurrence gate│ │ │
+                               │  │  Step 6d confidence clamp        │ │ │
+                               │  │  Step 7  bounded-agency retry?   │ │ │
+                               │  │  Step 8  persist + emit metrics  │ │ │
+                               │  │  Step 9  email if ESCALATE       │ │ │
+                               │  │  Step 10 record + dashboard      │ │ │
+                               │  └─────────────┬────────────────────┘ │ │
+                               │                │ /feedback             │ │
+                               │                ▼                       │ │
+                               │  ┌──────────────────────────────────┐  │ │
+                               │  │  Operator                        │  │ │
+                               │  │  · Email link "Confirm / Override"│ │ │
+                               │  │  · /dashboard view + /rate form  │  │ │
+                               │  └──────────────────────────────────┘  │ │
+                               │                                        │ │
+                               │  ┌──────────────────────────────────┐  │ │
+                               │  │  MCP servers (5)                 │  │ │
+                               │  │  prometheus-mcp  loki-mcp        │──┘ │
+                               │  │  jaeger-mcp      rca-history-mcp │    │
+                               │  │  deploy-events-mcp (stub)        │    │
+                               │  └──────────────────────────────────┘    │
+                               └──────────────────────────────────────────┘
+</div>
+
+<p>
+The dashed line through the box is intentional: <strong>every external data
+source the LLM ever sees flows through an MCP server</strong>. There is no
+direct database read, no in-process Python module import of evidence, no
+ad-hoc <code>httpx</code> call to Prometheus. The MCP wall is the hallucination
+firewall — if the LLM tries to invent a metric name or a service that doesn't
+exist, the MCP call returns empty and the validator catches the unsupported
+claim downstream. (Three remaining code paths still bypass this; closing them
+is Sprint 3 Epic 4. See <a href="#asks">§8</a>.)
+</p>
+
+<!-- ────────────────────── 4 ────────────────────── -->
+<h2 id="pipeline"><span class="num-badge">4</span>The 10-step pipeline</h2>
+
+<p>
+Each alert flows through these in fixed order. Steps marked <em>(may short-circuit)</em>
+emit a verdict without calling the LLM at all — the cheap path matters because
+~40% of fires are dedup hits or recurrent-noise patterns.
+</p>
+
+<table>
+  <thead>
+    <tr><th>#</th><th>Step</th><th>Purpose</th><th>Catches</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>1</td><td>Dedup <em>(may short-circuit)</em></td><td>Drop alerts with the same Grafana <code>fingerprint</code> seen in the last 10 min</td><td>Repeated re-fires of the same active alert</td></tr>
+    <tr><td>1c</td><td>Recurrence gate (pre-LLM) <em>(may short-circuit)</em></td><td>For opted-in flappy rules, suppress fires 1–4 in a row; force-escalate fire 5</td><td>MediumCpu/MediumMem chronic noise; lets the LLM stay focused on novel patterns</td></tr>
+    <tr><td>2</td><td>Pre-LLM suppression <em>(may short-circuit)</em></td><td>Query <code>rca_history</code> for the same <code>(alertname, service)</code> in the last 30 min — if we recently dismissed, replay that verdict</td><td>Flapping alerts within a single incident window</td></tr>
+    <tr><td>3</td><td>Context gathering</td><td>Fan out to Prometheus / Loki / Jaeger / deploy-events MCPs in parallel; build a pre-gathered evidence pack</td><td>Pulls the data the LLM needs <em>before</em> the prompt is written, so the model isn't asked to imagine the system state</td></tr>
+    <tr><td>4</td><td>Match exemplar</td><td>Score all 14 archetypes by <code>(alertname regex, service, deployment_type, signal, severity)</code>; inject the winning one into the prompt as a "reference shape"</td><td>Tells the LLM what a <em>good</em> RCA looks like for this kind of alert — structurally, not factually</td></tr>
+    <tr><td>5</td><td>LLM call</td><td>Single Ollama call to <code>qwen2.5:7b-instruct</code> at temperature=0. Strict JSON schema for verdict, confidence, RCA prose, evidence list, suggested actions</td><td>Produces the first-pass RCA</td></tr>
+    <tr><td>6</td><td>Validate</td><td>Three validators run in series: (a) <strong>hallucination blocklist</strong> rejects alert-keyed banned phrases (e.g. <code>/actuator/*</code> in a <code>HighKongP95Latency</code>); (b) <strong>surface-only LEDE</strong> regex rejects RCAs that just restate the alert ("The HighP95Latency alert for kong indicates p95 is high"); (c) <strong>hypothesis-menu + cause-evidence</strong> rejects "possibly X or Y" hedging and unsupported causes</td><td>Symptom-only prose, restated-alert prose, hedged "could be either" prose</td></tr>
+    <tr><td>6c</td><td>Recurrence gate (post-LLM)</td><td>If the LLM said DISMISS but this is the Nth dismiss in a row for the same pattern, force-escalate anyway</td><td>The model being consistently wrong on a sustained pattern</td></tr>
+    <tr><td>6d</td><td>Confidence clamp</td><td>Force <code>confidence ≤ 0.4</code> and <strong>strip <code>suggested_actions</code></strong> (replacing them with read-only <code>diagnostic_steps</code>) if surface-only fired, or RCA quality is <code>data_starved</code>, or actions look templated. The clamp is the visible trust signal: a confidence of exactly 0.40 in the UI = "we don't trust this enough to recommend remediation"</td><td>The 2026-04-29 incident — wrong remediations at moderate confidence</td></tr>
+    <tr><td>7</td><td>Bounded-agency retry</td><td>If validators flagged the first pass, give the LLM <em>one</em> additional MCP call from a 6-tool whitelist (Prom instant query, Loki range, Jaeger get-traces, RCA-history lookup, deploy-events, get-trace). Whitelist + Pydantic schema + retry feedback string. Reprompt; revalidate; keep first-pass if retry is still bad</td><td>Genuinely data-starved RCAs where one extra gather closes the gap</td></tr>
+    <tr><td>8</td><td>Persist + emit</td><td>Write RCA + verdict + evidence to <code>rca_history</code> SQLite; emit 27 Prometheus metrics; update Drain3 self-monitoring</td><td>Reproducibility, dashboards, longitudinal analysis</td></tr>
+    <tr><td>9</td><td>Notify if ESCALATE</td><td>SMTP email to operator with full RCA, suggested actions (or "withheld — clamped" notice), and feedback links</td><td>Closes the loop with humans</td></tr>
+    <tr><td>10</td><td>Dashboard + feedback</td><td>Operator views <code>/dashboard</code>, can <code>/feedback/override</code> or <code>/feedback/confirm</code> on any decision; signal flows back to Step 2 suppression on subsequent fires</td><td>Continuous improvement without retraining</td></tr>
+  </tbody>
+</table>
+
+<!-- ────────────────────── 5 ────────────────────── -->
+<h2 id="quality"><span class="num-badge">5</span>How we keep it honest</h2>
+
+<p>
+Five reinforcing mechanisms catch different failure modes. Each one exists
+because a real RCA went wrong in a specific way; the mechanism was the fix.
+</p>
+
+<h3 id="exemplars">5.1 Exemplar library — structural scaffolding</h3>
+
+<p>
+Frozen seed of 14 RCA archetypes in <code>app/exemplars/library.yaml</code>.
+Each archetype carries a model RCA paragraph (3–5 sentences), an evidence
+pattern, a suggested-actions pattern, a confidence band, and an alertname-regex
+matcher. The pipeline picks the best-matching archetype before the LLM call and
+renders it as a <code>## Reference exemplar</code> section in the prompt. The
+LLM sees "this is what a good RCA for this kind of alert looks like,
+structurally" before it sees any evidence. The factual claims in the exemplar
+are <em>not</em> the answer — they're the shape.
+</p>
+
+<p>
+The 14 archetypes (see <a href="#archetypes">§6</a>) were curated by hand from
+real incident playbooks + Sprint 2's "happy-path scenarios." Three were added
+during the 2026-04-28 audit cycle after coverage gaps surfaced.
+</p>
+
+<h3 id="hallucination">5.2 Hallucination blocklist — alert-keyed phrase rejection</h3>
+
+<p>
+YAML at <code>app/hallucination_blocklist.yaml</code>. Per-alertname banned
+phrase list. Examples:
+</p>
+<ul>
+  <li><code>HighP95Latency</code> + <code>HighKongP95Latency</code> reject <code>/actuator/*</code> in the RCA — actuator endpoints are scrape-internal, citing them is always a tell that the LLM is reading the wrong evidence.</li>
+  <li><code>Drain3AnomalyDetected</code> rejects <code>PromQL</code>, <code>Prometheus query</code>, <code>Drain3Alert</code>, <code>Drain3Threshold</code> — log-anomaly RCAs that lead with metric prose are leading with the wrong evidence pillar.</li>
+</ul>
+<p>
+A hit triggers a retry with an alert-specific HINT in the feedback string. The
+LLM doesn't get to ignore the violation; it has to address it explicitly.
+</p>
+
+<h3 id="validator">5.3 Surface-only LEDE + hypothesis-menu validators</h3>
+
+<p>
+The surface-only LEDE regex catches RCAs that restate the alert without
+attributing cause. Real example we caught and fixed in F-2:
+<em>"Based on observed metrics, the HighP95Latency alert indicates that
+service kong is experiencing elevated p95 latency."</em> That's surface-only —
+it restates the alert and signals nothing about <em>why</em>. Six widening
+rounds cover PromQL-leading prose, "based on observed/repeated/context/...",
+"the alert for X", "looking at the metrics", and the alertname-first form.
+</p>
+
+<p>
+The hypothesis-menu validator (shipped 2026-04-29 as S3-HF-03) catches the
+<em>opposite</em> failure mode: the LLM hedging by listing multiple possible
+causes without committing. Seven regex patterns target "possibly X or Y", "may
+be due to slow query, pool exhaustion, or GC pressure", "either A or B" prose
+with 5+ word noun phrases on either side. Negative lookahead excludes
+idiomatic "either way" / "either case". Pair this with a
+<strong>cause-evidence rule</strong>: the named cause's tokens must overlap
+with the evidence tokens (tokenized as <code>[a-z]{4,}</code> so
+<code>hikaricp_connections_active</code> splits into <code>[hikaricp,
+connections, active]</code> for cross-matching).
+</p>
+
+<h3 id="clamp">5.4 Confidence clamp + diagnostic steps fallback</h3>
+
+<p>
+The clamp is the user-visible trust signal. When any validator hits, or RCA
+quality lands as <code>data_starved</code>, or suggested actions look
+templated, the clamp forces <code>confidence ≤ 0.40</code> and replaces
+<code>suggested_actions</code> with a small list of
+<strong><code>diagnostic_steps</code></strong> — read-only verbs like
+<em>"Check Grafana panel X"</em>, <em>"Tail Loki for &lt;service&gt; in the
+last 10 min"</em>. The email + dashboard render diagnostic steps as a separate
+card with a "Withheld — confidence clamped to 0.40" notice in the actions
+section. The operator sees clearly that the system is not confident and not
+recommending any change-of-state.
+</p>
+
+<h3 id="bounded">5.5 Bounded-agency retry — exactly one extra call</h3>
+
+<p>
+When the first pass is flagged <code>data_starved</code> or
+<code>INCONCLUSIVE</code>, instead of just scolding the model in the retry
+prompt, we let it request <strong>one</strong> additional MCP call from a
+fixed 6-tool whitelist (Prom instant query, Loki range, Jaeger get-traces,
+RCA-history lookup, deploy-events, get-trace). The model returns a structured
+tool request; we execute it; we re-prompt with the new evidence. Properties:
+exactly-one-extra-call ceiling, Pydantic-validated args (no arbitrary command
+execution), still reproducible at temperature=0.
+</p>
+
+<!-- ────────────────────── 6 ────────────────────── -->
+<h2 id="archetypes"><span class="num-badge">6</span>The 14 archetypes</h2>
+
+<p>
+Each archetype is a curated "good RCA shape" for a class of incident. The full
+prose for each lives in <code>monitoring-triage-service/docs/happy-path-scenarios.md</code>.
+Below is a one-line summary — the kind of incident each represents, the
+canonical verdict, and the alert rules it currently maps to.
+</p>
+
+<table>
+  <thead>
+    <tr><th>Archetype</th><th>Incident class</th><th>Verdict</th><th>Maps to alert rules</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>oom-loop</code></td><td>JVM heap saturating cgroup limit; OOM-kill cycle</td><td>ESCALATE</td><td>HighMemoryUsage, CriticalMemoryUsage, MediumMemoryUsage</td></tr>
+    <tr><td><code>upstream-latency-attribution</code></td><td>p95 at gateway/Kong driven by an upstream service</td><td>ESCALATE</td><td>HighP95Latency, HighKongP95Latency</td></tr>
+    <tr><td><code>service-self-p95-saturation</code> <em>(new)</em></td><td>p95 driven by the service itself (heap pressure, GC, lock contention) — not upstream</td><td>ESCALATE</td><td>HighP95Latency</td></tr>
+    <tr><td><code>critical-resource-saturation</code> <em>(new)</em></td><td>Host hitting critical CPU/memory thresholds in a way that warrants paging</td><td>ESCALATE</td><td>CriticalCpuUsage, CriticalMemoryUsage</td></tr>
+    <tr><td><code>otel-collector-degradation</code> <em>(new, partially forward)</em></td><td>Telemetry pipeline failing (collector down, queue depth, span drops)</td><td>ESCALATE</td><td>OTelCollectorDown, OTelCollectorHighSpanDropRate (+ 2 not yet provisioned)</td></tr>
+    <tr><td><code>synthetic-blip-dismiss</code></td><td>Target temporarily unreachable for a recoverable reason (deploy, scrape blip)</td><td>DISMISS</td><td>TargetDown</td></tr>
+    <tr><td><code>cascade-incident-disk-loki</code></td><td>Loki disk filling correlating with disk alerts — one root cause across multiple rules</td><td>ESCALATE</td><td>HighDiskUsage, CriticalDiskUsage, LokiHighDiskUsage, LokiCriticalDiskUsage, DiskFillingUp, LokiDiskFillingUp, LokiIngestionRateLow</td></tr>
+    <tr><td><code>drain3-novelty-post-deploy</code></td><td>New log template appearing after a deploy — expected novelty, dismiss with reason</td><td>DISMISS</td><td>Drain3AnomalyDetected (self-generated, not a Grafana rule)</td></tr>
+    <tr><td><code>bounded-agency-resolves-inconclusive</code></td><td>First pass said "data starved"; retry with one extra MCP call resolves it</td><td>variable</td><td>forward-looking; HighErrorRate / HighFrontendErrorRate when those rules exist</td></tr>
+    <tr><td><code>adaptive-threshold-noop</code></td><td>Same-hour-7d-baseline + 3σ rule fires within historical envelope — false alarm</td><td>DISMISS</td><td>HighCpuUsage, MediumCpuUsage</td></tr>
+    <tr><td><code>closed-loop-feedback-override</code></td><td>Operator previously thumbed-down a similar alert; suppress on the strength of that</td><td>DISMISS (sentinel)</td><td><code>__pipeline_explicit__</code> (gated by design)</td></tr>
+    <tr><td><code>crashloop-bad-config</code></td><td>Pod crashlooping due to invalid config / env / image — recovery requires human</td><td>ESCALATE</td><td>forward-looking; KubePodCrashLooping + TargetDown</td></tr>
+    <tr><td><code>network-firewall-attribution</code></td><td>p95 / errors driven by network-layer rejection (SG, NACL, DNS) not app</td><td>ESCALATE</td><td>forward-looking; HighKongUpstreamErrorRate, HighFrontendErrorRate</td></tr>
+    <tr><td><code>tls-cert-expiry-pre-failure</code></td><td>Cert near expiry surfacing as upstream errors or probe failures</td><td>ESCALATE</td><td>forward-looking; TLSCertExpiringSoon, ProbeSSL.*</td></tr>
+  </tbody>
+</table>
+
+<p>
+Default fallback when no archetype matches: <code>generic-sre-shape</code> — a
+generic structural shape with no specific incident class. This fires more often
+than we'd like and is a signal that an archetype is missing.
+</p>
+
+<!-- ────────────────────── 7 ────────────────────── -->
+<h2 id="case-study"><span class="num-badge">7</span>Case study — the 0b215ef3 incident</h2>
+
+<div class="callout story">
+  <div class="callout-label">Real RCA · 2026-04-29 · the failure that drove Epic 4</div>
+  <p>
+    <strong>The alert:</strong> <code>HighKongP95Latency</code> — p95 at the Kong
+    gateway crossed threshold. Upstream service was <code>spring-boot</code>.
+  </p>
+  <p>
+    <strong>What the LLM said:</strong> Cause-first, fluently — but it recommended
+    <code>kubectl rollout restart deployment/spring-boot</code> and
+    <code>kubectl describe pod -l app=spring-boot | grep -i oom</code> in the
+    suggested actions. These are <em>OOMKill remediations</em> on a
+    <em>p95 latency alert</em>. The actions were templated from the wrong
+    archetype — the OOM template (<code>app/suggested_actions.yaml:64-77</code>) only
+    matches <code>^(High|Medium|Critical)MemoryUsage$</code> regex; it didn't fire
+    here. The LLM produced these directly.
+  </p>
+  <p>
+    <strong>Why the system shipped it anyway:</strong> The F-4 confidence clamp
+    correctly fired (RCA was tagged <code>data_starved</code> because the pipeline
+    only gathered service-boundary trace summaries — it never called
+    <code>get_trace(trace_id)</code> to drill into spring-boot's spans). The clamp
+    lowered confidence to 0.40, which is the trust signal. But it didn't
+    <em>strip</em> the bad actions — the operator saw "low-confidence verdict"
+    next to "here are some kubectl commands to run." Bad combination.
+  </p>
+  <p>
+    <strong>What we shipped to fix it:</strong>
+  </p>
+  <ul>
+    <li><strong>S3-HF-01 (Tier 0):</strong> the clamp now strips <code>suggested_actions</code> entirely and emits a separate <code>diagnostic_steps</code> field with read-only verbs.</li>
+    <li><strong>S3-HF-03 (Tier 2):</strong> hypothesis-menu validator + cause-evidence rule (the LLM here also hedged with "possibly upstream is slow due to GC or pool exhaustion").</li>
+    <li><strong>S3-HF-02:</strong> defensive tests pinning the action-template lookup so a YAML regex widening can never key wrong-archetype actions.</li>
+  </ul>
+  <p>
+    <strong>What's still open:</strong>
+  </p>
+  <ul>
+    <li><strong>S3-HF-07 (Tier 1, Sprint 3, in flight):</strong> wire <code>get_trace(trace_id)</code> so the LLM sees per-span attributes (<code>db.statement</code>, <code>http.target</code>, error tags) for the failing trace. With this, the model can say <em>"hikaricp connection pool is exhausted: 27/30 active, all spans queued"</em> instead of <em>"upstream is slow."</em></li>
+    <li><strong>S3-HF-04/05 (Sprint 3):</strong> close the three remaining MCP-only invariant bypasses so the hallucination firewall is genuinely complete.</li>
+  </ul>
+</div>
+
+<!-- ────────────────────── 8 ────────────────────── -->
+<h2 id="asks"><span class="num-badge">8</span>What we need from you</h2>
+
+<p>
+Four concrete inputs. We've tried to scope each so it doesn't cost you a week.
+</p>
+
+<ul class="ask-list">
+  <li>
+    <strong>1. Review the 14 archetypes.</strong> Do they cover the kinds of
+    incidents you'd expect to see in a Kong + Spring-Boot + k3s + monitoring-VM
+    stack? What's missing? In particular: anything around <em>stateful storage
+    failures</em>, <em>distributed coordination</em> (etcd, scheduler),
+    <em>certificate / DNS / network</em>, or <em>cascading dependencies</em>
+    we should be modelling?
+  </li>
+  <li>
+    <strong>2. Walk us through your RCA procedure for 3–5 archetypes.</strong>
+    Pick the ones you have the strongest mental model for (e.g. OOM loop, p95
+    latency spike, log anomaly post-deploy, disk filling cascade). Tell us:
+    what evidence you'd want, in what order; what hypotheses you'd rule out
+    first; what makes you commit to a cause vs. keep digging. We'll codify
+    that flow into the exemplar prose and the hallucination blocklist.
+  </li>
+  <li>
+    <strong>3. Review a handful of recent live RCAs.</strong> The dashboard at
+    <code>http://adolin-wsl:8090/dashboard</code> (Tailscale-only) shows the
+    last 50 verdicts. Flag any RCA that reads wrong to you — too confident,
+    too hedged, wrong cause, wrong remediation, evidence cited that doesn't
+    actually support the claim. Especially anything in the
+    <code>generic-sre-shape</code> fallback bucket (means the archetype-match
+    didn't fire — likely an archetype gap).
+  </li>
+  <li>
+    <strong>4. Tell us where our quality mechanisms have blind spots.</strong>
+    The hallucination blocklist is alert-keyed banned phrases. The
+    surface-only validator is regex. The clamp triggers on three explicit
+    conditions. These are deterministic catchers — what failure modes would
+    you expect them to miss? Where would you add a tripwire?
+  </li>
+</ul>
+
+<div class="callout ask">
+  <div class="callout-label">Format suggestion</div>
+  <p>None of this needs to be written up formally. A 60–90 minute working
+  session where you screen-share with us, walk us through #2 verbally while we
+  take notes, and we screen-share <code>/dashboard</code> for #3 — that's the
+  most efficient shape. We'll send a follow-up doc with what we extracted from
+  the session and you sign off.</p>
+</div>
+
+<!-- ────────────────────── 9 ────────────────────── -->
+<h2 id="study-plan"><span class="num-badge">9</span>Recommended reading — for getting up to speed before the meeting</h2>
+
+<p>
+You don't need to read all of this. The first three are mandatory; the rest are
+depth on specific layers, drill in as needed.
+</p>
+
+<table>
+  <thead>
+    <tr><th>Order</th><th>Source</th><th>Time</th><th>Why</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>1</td><td>This page (top to bottom)</td><td>15 min</td><td>Orient on what the system is and what we're asking</td></tr>
+    <tr><td>2</td><td><a href="system-explained.html">system-explained.html</a></td><td>20 min</td><td>The obsessive-detail reference. Every file, every config, every flow. Skim the TOC; read sections 3 (alert lifecycle) and 5 (failure modes)</td></tr>
+    <tr><td>3</td><td><a href="triage-service.html">triage-service.html</a></td><td>15 min</td><td>The triage service guts. Read §3 (pipeline), §5 (suppression), §7 (metrics) at minimum</td></tr>
+    <tr><td>4</td><td><a href="decisions-log.html">decisions-log.html</a> — D17 through D23</td><td>10 min</td><td>The seven most recent design decisions. Especially D17 (exemplar library), D18 (suggested-actions philosophy), D19 (telemetry-is-the-means)</td></tr>
+    <tr><td>5</td><td><a href="architecture.html">architecture.html</a></td><td>15 min</td><td>AWS topology, Tailscale, k3s, the monitoring VM. Only if you want to push on infra-layer questions</td></tr>
+    <tr><td>6</td><td><a href="https://github.com/linalaaraich/monitoring-triage-service/blob/main/app/exemplars/library.yaml">app/exemplars/library.yaml</a> (raw)</td><td>15 min</td><td>The 14 archetypes in their full prose. This is what you're being asked to review for completeness</td></tr>
+    <tr><td>7</td><td><a href="https://github.com/linalaaraich/monitoring-triage-service/blob/main/app/hallucination_blocklist.yaml">app/hallucination_blocklist.yaml</a> (raw)</td><td>5 min</td><td>Tiny YAML. The alert-keyed banned-phrase list</td></tr>
+    <tr><td>8</td><td><a href="https://github.com/linalaaraich/monitoring-triage-service/blob/main/docs/happy-path-scenarios.md">docs/happy-path-scenarios.md</a> (raw)</td><td>20 min</td><td>The long-form prose backing each archetype. Reading 2–3 of these gives you the strongest sense of "what does the LLM see"</td></tr>
+  </tbody>
+</table>
+
+<!-- ────────────────────── 10 ────────────────────── -->
+<h2 id="glossary"><span class="num-badge">10</span>Glossary &amp; acronyms</h2>
+
+<table class="kv-table">
+  <tbody>
+    <tr><td>RCA</td><td>Root-cause analysis. The LLM-produced prose paragraph + verdict + evidence + suggested actions.</td></tr>
+    <tr><td>MCP</td><td>Model Context Protocol. JSON-RPC server pattern from Anthropic. We have five — one per data pillar — and they're the only sanctioned data path between the LLM and the world.</td></tr>
+    <tr><td>Exemplar / archetype</td><td>One of 14 curated "good RCA shapes" injected into every LLM prompt.</td></tr>
+    <tr><td>Confidence clamp</td><td>Mechanism that forces <code>confidence ≤ 0.40</code> and strips actions when quality mechanisms catch a problem.</td></tr>
+    <tr><td>Bounded agency</td><td>The exactly-one-extra-MCP-call retry path. Not a loop; not an agent in the multi-step sense.</td></tr>
+    <tr><td>Drain3</td><td>Log-template clustering library (LogPAI / IBM). We run it server-side over Loki to detect novel log templates as a fourth signal alongside metrics / logs / traces.</td></tr>
+    <tr><td>Recurrence gate</td><td>Per-rule "suppress fires 1–4, force-escalate fire 5" mechanism for opted-in flappy alerts. Pre-LLM (cheap) and post-LLM (safety net) variants.</td></tr>
+    <tr><td>F-N / S3-HF-NN</td><td>Internal story IDs. F-1 through F-5 are the 2026-04-28 RCA-quality hardening pass. S3-HF-NN are Sprint 3 hallucination-firewall stories.</td></tr>
+    <tr><td>Surface-only</td><td>An RCA that restates the alert symptoms without naming a cause. The validator catches these.</td></tr>
+    <tr><td>Hypothesis menu</td><td>An RCA that hedges with multiple possible causes. The validator catches these (shipped 2026-04-29, S3-HF-03).</td></tr>
+    <tr><td>data_starved</td><td>A quality classification meaning the LLM didn't have enough evidence to commit to a cause. Triggers the clamp and the bounded-agency retry.</td></tr>
+    <tr><td>0b215ef3</td><td>The specific RCA ID of the 2026-04-29 incident that drove the Epic 4 hallucination-firewall scope.</td></tr>
+  </tbody>
+</table>
+
+<p style="margin-top:40px; padding-top:20px; border-top:1px solid var(--border); font-size:13px; color:var(--muted);">
+Brief drafted 2026-05-19. Maintainer: Lina Laaraich. If anything here reads
+inconsistently with the live system, the live system is authoritative — flag it
+and we'll update.
+</p>
+
+</section>
+</main>
+
+</body>
+</html>
