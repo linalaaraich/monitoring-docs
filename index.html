@@ -184,6 +184,114 @@
     </div>
   </a>
 
+  <a href="sprint3-plan.md" class="card" style="border-color:rgba(176,126,232,.45); background:linear-gradient(180deg, rgba(176,126,232,.05), var(--card));">
+    <div class="card-header">
+      <div class="card-icon" style="background:rgba(176,126,232,.12);">📋</div>
+      <div class="card-header-text">
+        <h2>Sprint 3 Plan — authoritative current scope</h2>
+        <p>The current-sprint plan in full: 4 epics, 28 stories, ~77 SP, file-path-level acceptance criteria, dependency ordering, deferral list, Sprint 4 candidates. Epic 1 (Quality v2 close-out), Epic 2 (operator feedback loop), Epic 3 (Drain3 baseline lifecycle), Epic 4 (hallucination firewall + trace depth). Source of truth for "what are we working on now".</p>
+      </div>
+    </div>
+    <div class="card-footer">
+      <div class="card-tags">
+        <span class="tag tag-purple">Current sprint</span>
+        <span class="tag tag-orange">28 stories</span>
+        <span class="tag tag-green">2026-04-23 → 2026-05-19</span>
+      </div>
+      <div class="card-arrow">&rarr;</div>
+    </div>
+  </a>
+
+  <a href="the-bigger-picture.md" class="card" style="border-color:rgba(78,168,222,.35);">
+    <div class="card-header">
+      <div class="card-icon" style="background:rgba(78,168,222,.1);">🗺️</div>
+      <div class="card-header-text">
+        <h2>The Bigger Picture — long-form status tracker</h2>
+        <p>Project-wide progress tracker, rewritten frequently. Sprint snapshots, epic-by-epic status with Jira mapping, demo-day readiness, time-budget views. The "what's actually true today" source-of-truth that the sprint plan and the bullet-form audits both read from. Read this when you need context, not just status.</p>
+      </div>
+    </div>
+    <div class="card-footer">
+      <div class="card-tags">
+        <span class="tag tag-blue">Long-form tracker</span>
+        <span class="tag tag-orange">Updated 2026-05-19</span>
+        <span class="tag tag-purple">Epic-by-epic</span>
+      </div>
+      <div class="card-arrow">&rarr;</div>
+    </div>
+  </a>
+
+  <a href="hallucination-firewall.html" class="card" style="border-color:rgba(224,96,112,.45); background:linear-gradient(180deg, rgba(224,96,112,.05), var(--card));">
+    <div class="card-header">
+      <div class="card-icon" style="background:rgba(224,96,112,.12);">🛡️</div>
+      <div class="card-header-text">
+        <h2>The Hallucination Firewall</h2>
+        <p>Single-page landing for the six reinforcing mechanisms that keep the LLM output operationally trustworthy: exemplar injection, alert-keyed blocklist, surface-only LEDE validator, hypothesis-menu validator, confidence-clamp with diagnostic-steps fallback, bounded-agency retry. Plus the MCP-only invariant that makes the firewall durable, and the 4-axis rubric that measures whether it works.</p>
+      </div>
+    </div>
+    <div class="card-footer">
+      <div class="card-tags">
+        <span class="tag" style="background:rgba(224,96,112,.1); color:var(--accent-red);">Epic 4</span>
+        <span class="tag tag-purple">6 mechanisms</span>
+        <span class="tag tag-cyan">MCP-only</span>
+      </div>
+      <div class="card-arrow">&rarr;</div>
+    </div>
+  </a>
+
+  <a href="chaos-report-2026-04-28.html" class="card" style="border-color:rgba(240,160,80,.4);">
+    <div class="card-header">
+      <div class="card-icon" style="background:rgba(240,160,80,.1);">💥</div>
+      <div class="card-header-text">
+        <h2>Chaos Report — 2026-04-28</h2>
+        <p>Output of the chaos-injection test harness at <code>monitoring-project/scripts/chaos/</code>. Five scenarios (<code>target_down</code>, <code>high_memory_usage</code>, <code>high_cpu_usage</code>, <code>drain3_anomaly</code>, plus the new <code>0b215ef3</code>-corpus seed) — each induces a controlled failure, polls <code>/decisions</code> for the matching alert, and scores the RCA on the 4-axis quality rubric. The harness is how the platform regression-tests itself.</p>
+      </div>
+    </div>
+    <div class="card-footer">
+      <div class="card-tags">
+        <span class="tag tag-orange">Chaos harness</span>
+        <span class="tag tag-green">4-axis scoring</span>
+        <span class="tag tag-purple">5 scenarios</span>
+      </div>
+      <div class="card-arrow">&rarr;</div>
+    </div>
+  </a>
+
+  <a href="tailscale-guide.html" class="card" style="border-color:rgba(64,208,208,.35);">
+    <div class="card-header">
+      <div class="card-icon" style="background:rgba(64,208,208,.1);">🛰️</div>
+      <div class="card-header-text">
+        <h2>Tailscale Topology Guide</h2>
+        <p>The 5-node tailnet that connects everything: <code>claude-controller</code>, <code>adolin</code>, <code>adolin-wsl</code> (the AI host), <code>observability-rca-monitoring</code>, <code>observability-rca-k3s</code>. MagicDNS host names are stable across AWS stop/start; WireGuard is the transport for inter-host service traffic. This is the actual operational shape, not a future plan.</p>
+      </div>
+    </div>
+    <div class="card-footer">
+      <div class="card-tags">
+        <span class="tag tag-cyan">Tailnet</span>
+        <span class="tag tag-blue">5 nodes</span>
+        <span class="tag tag-green">WireGuard · MagicDNS</span>
+      </div>
+      <div class="card-arrow">&rarr;</div>
+    </div>
+  </a>
+
+  <a href="repository-map.html" class="card" style="border-color:rgba(64,208,208,.35);">
+    <div class="card-header">
+      <div class="card-icon" style="background:rgba(64,208,208,.1);">🗃️</div>
+      <div class="card-header-text">
+        <h2>Repository Map</h2>
+        <p>Where every piece of code lives. Seven repositories across one GitHub organisation, mapped to the architectural layer they implement: docs, triage service, MCP bridges, Terraform infra, Ansible + chaos, private audit history, and Jira CSV exports. Local-clone paths, GHCR image, and one-liner pull command included.</p>
+      </div>
+    </div>
+    <div class="card-footer">
+      <div class="card-tags">
+        <span class="tag tag-cyan">7 repos</span>
+        <span class="tag tag-green">By layer</span>
+        <span class="tag tag-orange">Local + remote</span>
+      </div>
+      <div class="card-arrow">&rarr;</div>
+    </div>
+  </a>
+
   <a href="prepare.html" class="card" style="border-color:rgba(176,126,232,.35); background:linear-gradient(180deg, rgba(176,126,232,.05), var(--card));">
     <div class="card-header">
       <div class="card-icon" style="background:rgba(176,126,232,.12);">🎤</div>
@@ -496,6 +604,8 @@
 <p style="max-width:1200px; margin:24px auto 48px; padding:0 40px; font-size:12px; color:var(--muted); text-align:right;">
   Report draft: <a href="report/cires-fyp-report.pdf" style="color:var(--muted); border-bottom:1px dotted var(--muted); text-decoration:none;" download>FYP PDF</a>
   &middot; <a href="report/cires-fyp-report.tex" style="color:var(--muted); border-bottom:1px dotted var(--muted); text-decoration:none;">LaTeX source</a>
+  &middot; Historical: <a href="work-report.md" style="color:var(--muted); border-bottom:1px dotted var(--muted); text-decoration:none;">2026-04-13 work report</a>
+  &middot; <a href="sprint3-backlog.md" style="color:var(--muted); border-bottom:1px dotted var(--muted); text-decoration:none;">Sprint 3 long-form backlog</a>
 </p>
 
 <div class="status-row">

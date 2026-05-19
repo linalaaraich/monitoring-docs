@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Repository Map — CIRES Observability Platform</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --bg-soft: #13151e;
+    --card: #1a1d27;
+    --card-alt: #1e2230;
+    --border: #2a2d3a;
+    --text: #e4e6ee;
+    --text-soft: #c0c5d0;
+    --muted: #8890a0;
+    --accent-blue: #4ea8de;
+    --accent-green: #6bcf7f;
+    --accent-orange: #f0a050;
+    --accent-purple: #b07ee8;
+    --accent-cyan: #40d0d0;
+    --accent-yellow: #e0d060;
+    --accent-red: #e06070;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { font-family:'Inter','Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); line-height:1.65; font-size:15px; -webkit-font-smoothing:antialiased; }
+  code, pre, .mono { font-family:'JetBrains Mono','Fira Code',ui-monospace,monospace; font-size:0.88em; }
+
+  .topnav { display:flex; align-items:center; gap:12px; padding:14px 40px; background:var(--bg-soft); border-bottom:1px solid var(--border); flex-wrap:wrap; }
+  .topnav span.nav-label { color:var(--muted); font-size:13px; font-weight:600; margin-right:4px; }
+  .navlink { display:inline-flex; align-items:center; gap:6px; padding:7px 14px; border-radius:8px; font-size:13px; font-weight:600; text-decoration:none; border:1px solid; transition:background .2s, transform .15s; }
+  .navlink:hover { transform:translateY(-1px); }
+  .navlink-home { color:var(--text); border-color:var(--border); background:var(--card); }
+  .navlink-arch { color:var(--accent-blue); border-color:rgba(78,168,222,.4); background:rgba(78,168,222,.08); }
+  .navlink-tri { color:var(--accent-purple); border-color:rgba(176,126,232,.4); background:rgba(176,126,232,.08); }
+
+  .hero { padding:48px 40px 36px; border-bottom:1px solid var(--border); background:linear-gradient(180deg, #13151e 0%, var(--bg) 100%); }
+  .hero .inner { max-width:1040px; margin:0 auto; }
+  .hero .eyebrow { font-size:11px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:var(--accent-cyan); margin-bottom:12px; }
+  .hero h1 { font-size:32px; font-weight:800; letter-spacing:-.5px; margin-bottom:10px; line-height:1.2; }
+  .hero h1 span { color:var(--accent-cyan); }
+  .hero p.lead { font-size:15px; color:var(--text-soft); max-width:740px; line-height:1.7; }
+
+  .layout { max-width:1040px; margin:0 auto; padding:32px 40px 80px; }
+
+  h2.section { font-size:22px; font-weight:700; margin:32px 0 12px; letter-spacing:-.3px; padding-bottom:8px; border-bottom:1px solid var(--border); }
+  p { margin-bottom:12px; color:var(--text-soft); }
+  p strong { color:var(--text); font-weight:600; }
+  code { background:var(--card); border:1px solid var(--border); padding:1px 6px; border-radius:4px; font-size:0.85em; color:var(--accent-cyan); }
+  a { color:var(--accent-blue); text-decoration:none; border-bottom:1px dashed rgba(78,168,222,.35); }
+  a:hover { border-bottom-style:solid; }
+  ul { margin:8px 0 14px 22px; color:var(--text-soft); }
+  li { margin-bottom:5px; }
+
+  .repo-grid { display:grid; grid-template-columns:1fr; gap:14px; margin-top:14px; }
+  .repo {
+    background:var(--card); border:1px solid var(--border); border-radius:10px;
+    padding:18px 20px;
+  }
+  .repo-head { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:8px; }
+  .repo-name { font-size:15px; font-weight:700; color:var(--text); }
+  .repo-name code { color:var(--accent-cyan); border:none; background:none; padding:0; font-size:14px; }
+  .repo-tags { display:flex; gap:6px; flex-wrap:wrap; }
+  .repo-tag { font-size:11px; padding:2px 8px; border-radius:10px; font-weight:600; border:1px solid; }
+  .t-private  { color:var(--accent-red);    border-color:rgba(224,96,112,.4); background:rgba(224,96,112,.08); }
+  .t-public   { color:var(--accent-green);  border-color:rgba(107,207,127,.4); background:rgba(107,207,127,.08); }
+  .t-infra    { color:var(--accent-blue);   border-color:rgba(78,168,222,.4); background:rgba(78,168,222,.08); }
+  .t-app      { color:var(--accent-purple); border-color:rgba(176,126,232,.4); background:rgba(176,126,232,.08); }
+  .t-docs     { color:var(--accent-yellow); border-color:rgba(224,208,96,.4); background:rgba(224,208,96,.08); }
+  .t-ops      { color:var(--accent-orange); border-color:rgba(240,160,80,.4); background:rgba(240,160,80,.08); }
+  .repo-desc { font-size:14px; color:var(--text-soft); margin-bottom:8px; }
+  .repo-detail { font-size:13px; color:var(--muted); }
+  .repo-detail code { color:var(--accent-cyan); }
+
+  table { width:100%; border-collapse:collapse; margin:8px 0 22px; font-size:13px; }
+  th, td { padding:9px 12px; border-bottom:1px solid var(--border); vertical-align:top; text-align:left; }
+  th { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--muted); background:var(--card); }
+  tr:hover td { background:var(--card-alt); }
+</style>
+</head>
+<body>
+
+<nav class="topnav">
+  <span class="nav-label">CIRES Observability Platform</span>
+  <a href="index.html" class="navlink navlink-home">🏠 Home</a>
+  <a href="architecture.html" class="navlink navlink-arch">🏗️ Architecture</a>
+  <a href="triage-service.html" class="navlink navlink-tri">🧠 Triage Service</a>
+</nav>
+
+<section class="hero">
+  <div class="inner">
+    <div class="eyebrow">7 repositories · 1 GitHub organisation</div>
+    <h1>Repository <span>map</span></h1>
+    <p class="lead">
+      The platform is split across seven Git repositories. This page
+      is the canonical answer to "where does that piece of code live?"
+      — for both the engineering team and anyone catching up on the
+      project from the outside. Visibility, ownership, and the
+      cross-repo dependency shape are all summarised below.
+    </p>
+  </div>
+</section>
+
+<main class="layout">
+
+  <h2 class="section" id="repos">The seven repositories</h2>
+
+  <div class="repo-grid">
+
+    <div class="repo">
+      <div class="repo-head">
+        <div class="repo-name"><a href="https://github.com/linalaaraich/monitoring-docs"><code>monitoring-docs</code></a></div>
+        <div class="repo-tags">
+          <span class="repo-tag t-public">Public</span>
+          <span class="repo-tag t-docs">Docs · the website</span>
+        </div>
+      </div>
+      <p class="repo-desc">The pages you're reading right now. Architecture, decisions log, sprint history, solution brief, triage-service reference, system-explained — the operator-facing and reviewer-facing documentation surface of the entire platform. Served as a static site.</p>
+      <p class="repo-detail"><strong>Contains:</strong> ~25 HTML pages, the FYP report (PDF + LaTeX), <code>sprint3-plan.md</code>, <code>the-bigger-picture.md</code>, <code>decisions-log.html</code>. <strong>Maintainer:</strong> Lina Laaraich.</p>
+    </div>
+
+    <div class="repo">
+      <div class="repo-head">
+        <div class="repo-name"><a href="https://github.com/linalaaraich/monitoring-triage-service"><code>monitoring-triage-service</code></a></div>
+        <div class="repo-tags">
+          <span class="repo-tag t-public">Public</span>
+          <span class="repo-tag t-app">AI · core</span>
+        </div>
+      </div>
+      <p class="repo-desc">The FastAPI triage service itself — webhook receivers, 10-stage pipeline, LLM client, dedup + suppression, dashboard, SMTP escalation, the 14 exemplar archetypes, the validator stack, the bounded-agency retry layer. The production AI workload runs from this image.</p>
+      <p class="repo-detail"><strong>Key paths:</strong> <code>app/pipeline.py</code>, <code>app/llm_client.py</code>, <code>app/response_validator.py</code>, <code>app/clamp_actions.py</code>, <code>app/bounded_agency.py</code>, <code>app/exemplars/library.yaml</code>, <code>app/hallucination_blocklist.yaml</code>, <code>docs/happy-path-scenarios.md</code>. <strong>Image:</strong> <code>ghcr.io/linalaaraich/monitoring-triage-service:latest</code>. <strong>Test suite:</strong> 226/226 green at the time of writing.</p>
+    </div>
+
+    <div class="repo">
+      <div class="repo-head">
+        <div class="repo-name"><a href="https://github.com/linalaaraich/monitoring-mcp-servers"><code>monitoring-mcp-servers</code></a></div>
+        <div class="repo-tags">
+          <span class="repo-tag t-public">Public</span>
+          <span class="repo-tag t-app">AI · bridges</span>
+        </div>
+      </div>
+      <p class="repo-desc">The five MCP bridge servers — every datum the LLM sees passes through here. Each server is a small Python process exposing 3–4 tools over JSON-RPC, with a Prometheus-style <code>/metrics</code> endpoint for self-observability.</p>
+      <p class="repo-detail"><strong>Bridges:</strong> <code>prometheus-mcp:8091</code>, <code>loki-mcp:8092</code>, <code>jaeger-mcp:8093</code>, <code>rca-history-mcp:8094</code>, <code>deploy-events-mcp:8095</code>. <strong>Invariant:</strong> the MCP-only data-access rule lives here in spirit — see <a href="hallucination-firewall.html#invariant">hallucination-firewall.html § MCP-only invariant</a>.</p>
+    </div>
+
+    <div class="repo">
+      <div class="repo-head">
+        <div class="repo-name"><a href="https://github.com/linalaaraich/provisioning-monitoring-infra"><code>provisioning-monitoring-infra</code></a></div>
+        <div class="repo-tags">
+          <span class="repo-tag t-public">Public</span>
+          <span class="repo-tag t-infra">Terraform · AWS</span>
+        </div>
+      </div>
+      <p class="repo-desc">The Terraform state for the entire AWS estate. VPC, subnets, security groups, EC2 instances, RDS, S3 buckets, EIPs, IAM. Pinned Ubuntu AMI to remove silent drift. SG rules parameterised so <code>terraform.tfvars</code> is the only file an operator edits during day-to-day work.</p>
+      <p class="repo-detail"><strong>Managed resources:</strong> <code>observability-rca-monitoring</code> (<code>t3.large</code>), <code>observability-rca-k3s</code> (<code>t3.xlarge</code>), <code>observability-rca-mysql</code> (RDS), Loki S3 bucket, Terraform state bucket. <strong>Account:</strong> <code>735115318342</code>, region <code>us-east-1</code>.</p>
+    </div>
+
+    <div class="repo">
+      <div class="repo-head">
+        <div class="repo-name"><a href="https://github.com/linalaaraich/monitoring-project"><code>monitoring-project</code></a></div>
+        <div class="repo-tags">
+          <span class="repo-tag t-public">Public</span>
+          <span class="repo-tag t-ops">Ansible · k3s · chaos</span>
+        </div>
+      </div>
+      <p class="repo-desc">The operational side: Ansible roles for every observability component, playbooks for the monitoring stack, the k3s bootstrap for the application workload, the OTel Collector configuration, the Grafana alert-rule template (<code>roles/grafana/templates/alertrules.yml.j2</code>), and the chaos-injection test harness.</p>
+      <p class="repo-detail"><strong>Key paths:</strong> <code>roles/</code> (per-service Ansible roles), <code>inventory/tailnet.yml</code>, <code>scripts/chaos/runner.py</code>, <code>scripts/chaos/lib/rca_scorer.py</code>, <code>scripts/chaos/tests/</code>, <code>manifests/node-exporter/daemonset.yaml</code>. <strong>Default inventory:</strong> Tailscale tailnet (managed via MagicDNS).</p>
+    </div>
+
+    <div class="repo">
+      <div class="repo-head">
+        <div class="repo-name"><a href="https://github.com/linalaaraich/monitoring-audit-results"><code>monitoring-audit-results</code></a></div>
+        <div class="repo-tags">
+          <span class="repo-tag t-private">Private</span>
+          <span class="repo-tag t-ops">Audits · daily</span>
+        </div>
+      </div>
+      <p class="repo-desc">Private repository holding the daily static + live audit reports. The static audit checks code/doc drift against the latest published state; the live audit fires three synthetic webhooks at the triage service and grades the produced RCAs. Both push here on completion.</p>
+      <p class="repo-detail"><strong>Cadence:</strong> static — manual via "run full audit" trigger phrase or <code>~/monitoring-audit-results/scripts/audit-static.sh</code>; live — cron <code>0 12 * * *</code> on <code>claude-controller</code>. <strong>Why private:</strong> contains raw RCA prose and operator notes that include working evidence (alert payloads, log excerpts) not intended for public publication.</p>
+    </div>
+
+    <div class="repo">
+      <div class="repo-head">
+        <div class="repo-name"><a href="https://github.com/linalaaraich/jira"><code>jira</code></a></div>
+        <div class="repo-tags">
+          <span class="repo-tag t-public">Public</span>
+          <span class="repo-tag t-docs">Planning · CSV</span>
+        </div>
+      </div>
+      <p class="repo-desc">CSV exports of the SCRUM Jira project and the import scripts that fed them. Versioned alongside the code because the Jira UI is not always reachable and because the CSV format encodes the workflow (numeric Work Item IDs, Parent/Sub-task relationships, Sprint mapping).</p>
+      <p class="repo-detail"><strong>Key files:</strong> <code>Sprint3-additions.csv</code> (the Sprint 3 import), <code>SPRINT3-README.md</code> (per-row Story Points + Due-date table since the importer drops those fields). <strong>Story IDs:</strong> SCRUM-### in Jira ↔ human codes (E3-01, S3-HF-04 …) preserved via the Summary prefix.</p>
+    </div>
+
+  </div>
+
+  <h2 class="section" id="layers">Repositories by architectural layer</h2>
+
+  <p>The layered architecture from the <a href="architecture.html">Architecture page</a> maps onto the repos as follows:</p>
+
+  <table>
+    <thead>
+      <tr><th>Layer</th><th>Repository</th><th>What's there</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Layer 3 — AI triage</td><td><code>monitoring-triage-service</code></td><td>FastAPI service, pipeline, validators, dashboard, exemplars</td></tr>
+      <tr><td>Layer 2 — MCP bridges</td><td><code>monitoring-mcp-servers</code></td><td>Five MCP servers + their JSON-RPC tools</td></tr>
+      <tr><td>Layer 1 — Observability foundation</td><td><code>monitoring-project</code></td><td>Ansible roles, Grafana templates, k3s bootstrap, chaos harness</td></tr>
+      <tr><td>Layer 0 — Cloud infra</td><td><code>provisioning-monitoring-infra</code></td><td>Terraform: VPC, EC2, RDS, S3, IAM, security groups</td></tr>
+      <tr><td>Cross-cutting · docs</td><td><code>monitoring-docs</code></td><td>This site</td></tr>
+      <tr><td>Cross-cutting · audits</td><td><code>monitoring-audit-results</code> <em>(private)</em></td><td>Daily static + live audit reports</td></tr>
+      <tr><td>Cross-cutting · planning</td><td><code>jira</code></td><td>Sprint CSV exports, story-key mapping</td></tr>
+    </tbody>
+  </table>
+
+  <h2 class="section" id="local-clones">Local clones</h2>
+
+  <p>On the development controller these live under <code>/root/</code>:</p>
+
+  <ul>
+    <li><code>/root/monitoring-docs</code></li>
+    <li><code>/root/monitoring-triage-service</code></li>
+    <li><code>/root/monitoring-mcp-servers</code></li>
+    <li><code>/root/provisioning-monitoring-infra</code></li>
+    <li><code>/root/monitoring-project</code></li>
+    <li><code>/root/monitoring-audit-results</code> <em>(private clone)</em></li>
+    <li><code>/root/linalaaraich/jira</code></li>
+  </ul>
+
+  <p>A one-liner that pulls all of them up to date:</p>
+
+  <pre style="background:var(--card); border:1px solid var(--border); border-radius:8px; padding:14px 16px; overflow-x:auto;"><code>for r in monitoring-triage-service monitoring-project monitoring-docs \
+         monitoring-mcp-servers monitoring-audit-results provisioning-monitoring-infra; do
+  git -C /root/$r pull --ff-only 2&gt;&amp;1 | head -1 | sed "s|^|$r: |"
+done</code></pre>
+
+  <h2 class="section" id="cross-refs">Cross-cutting references</h2>
+
+  <ul>
+    <li><a href="architecture.html">Architecture</a> — the layered topology that the repository split mirrors.</li>
+    <li><a href="hallucination-firewall.html">Hallucination firewall</a> — explains why <code>monitoring-mcp-servers</code> sits as a separate repo (the MCP-only invariant).</li>
+    <li><a href="sprint-history.html">Sprint history</a> — chronology of when each repository came into being.</li>
+    <li><a href="build-pipeline.html">Build pipeline</a> — how <code>monitoring-triage-service</code> publishes to GHCR on every push to <code>main</code>.</li>
+    <li><a href="reproducibility-guide.html">Reproducibility guide</a> — the runbook that exercises every repository end-to-end on a fresh environment.</li>
+  </ul>
+
+  <p style="margin-top:32px; padding-top:18px; border-top:1px solid var(--border); font-size:13px; color:var(--muted);">
+    Page compiled 2026-05-19. Counts and image tags are point-in-time;
+    <code>monitoring-audit-results</code> visibility is private by
+    design (decision <a href="decisions-log.html#d22">D22</a>-adjacent —
+    see also the audit-results scope note).
+  </p>
+
+</main>
+
+</body>
+</html>

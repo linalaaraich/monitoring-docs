@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hallucination Firewall — CIRES Observability Platform</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --bg-soft: #13151e;
+    --card: #1a1d27;
+    --card-alt: #1e2230;
+    --border: #2a2d3a;
+    --border-hi: #3a3f52;
+    --text: #e4e6ee;
+    --text-soft: #c0c5d0;
+    --muted: #8890a0;
+    --accent-blue: #4ea8de;
+    --accent-green: #6bcf7f;
+    --accent-orange: #f0a050;
+    --accent-purple: #b07ee8;
+    --accent-red: #e06070;
+    --accent-cyan: #40d0d0;
+    --accent-yellow: #e0d060;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { font-family:'Inter','Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); line-height:1.65; font-size:15px; -webkit-font-smoothing:antialiased; }
+  code, pre, .mono { font-family:'JetBrains Mono','Fira Code',ui-monospace,monospace; font-size:0.88em; }
+
+  .topnav { display:flex; align-items:center; gap:12px; padding:14px 40px; background:var(--bg-soft); border-bottom:1px solid var(--border); flex-wrap:wrap; }
+  .topnav span.nav-label { color:var(--muted); font-size:13px; font-weight:600; margin-right:4px; }
+  .navlink { display:inline-flex; align-items:center; gap:6px; padding:7px 14px; border-radius:8px; font-size:13px; font-weight:600; text-decoration:none; border:1px solid; transition:background .2s, transform .15s; }
+  .navlink:hover { transform:translateY(-1px); }
+  .navlink-home { color:var(--text); border-color:var(--border); background:var(--card); }
+  .navlink-brief { color:var(--accent-green); border-color:rgba(107,207,127,.4); background:rgba(107,207,127,.08); }
+  .navlink-tri { color:var(--accent-purple); border-color:rgba(176,126,232,.4); background:rgba(176,126,232,.08); }
+  .navlink-dec { color:var(--accent-orange); border-color:rgba(240,160,80,.4); background:rgba(240,160,80,.08); }
+
+  .hero { padding:56px 40px 40px; border-bottom:1px solid var(--border); background:linear-gradient(180deg, #13151e 0%, var(--bg) 100%); }
+  .hero .inner { max-width:1040px; margin:0 auto; }
+  .hero .eyebrow { font-size:11px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:var(--accent-red); margin-bottom:12px; }
+  .hero h1 { font-size:36px; font-weight:800; letter-spacing:-.5px; margin-bottom:14px; line-height:1.2; }
+  .hero h1 span { color:var(--accent-red); }
+  .hero p.lead { font-size:16px; color:var(--text-soft); max-width:780px; line-height:1.7; }
+
+  .layout { max-width:1040px; margin:0 auto; padding:36px 40px 80px; }
+
+  .pillars { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-top:8px; }
+  @media (max-width:900px) { .pillars { grid-template-columns:1fr; } }
+  .pillar { padding:16px 18px; background:var(--card); border:1px solid var(--border); border-radius:10px; }
+  .pillar .label { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--accent-red); margin-bottom:6px; }
+  .pillar h3 { font-size:15px; font-weight:700; margin-bottom:6px; }
+  .pillar p { font-size:13px; color:var(--text-soft); }
+
+  h2.section { font-size:22px; font-weight:700; margin:40px 0 14px; letter-spacing:-.3px; padding-bottom:8px; border-bottom:1px solid var(--border); }
+  h3.sub { font-size:17px; font-weight:700; margin:22px 0 8px; }
+  p { margin-bottom:12px; color:var(--text-soft); }
+  p strong { color:var(--text); font-weight:600; }
+  ul { margin:8px 0 14px 22px; color:var(--text-soft); }
+  li { margin-bottom:5px; }
+  code { background:var(--card); border:1px solid var(--border); padding:1px 6px; border-radius:4px; font-size:0.85em; color:var(--accent-cyan); }
+  a { color:var(--accent-blue); text-decoration:none; border-bottom:1px dashed rgba(78,168,222,.35); }
+  a:hover { border-bottom-style:solid; }
+
+  .mech-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:16px; margin:12px 0 24px; }
+  .mech {
+    background:var(--card); border:1px solid var(--border); border-radius:10px;
+    padding:18px 20px; display:flex; flex-direction:column; gap:8px;
+    text-decoration:none; color:var(--text); transition:transform .15s, border-color .15s, box-shadow .15s;
+  }
+  .mech:hover { transform:translateY(-2px); border-color:var(--border-hi); box-shadow:0 8px 24px rgba(0,0,0,.32); }
+  .mech .mech-no { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--accent-orange); }
+  .mech h4 { font-size:15px; font-weight:700; }
+  .mech p { font-size:13px; color:var(--text-soft); margin:0; }
+  .mech .mech-foot { margin-top:auto; padding-top:8px; font-size:11px; color:var(--muted); }
+
+  table { width:100%; border-collapse:collapse; margin:12px 0 22px; font-size:13px; }
+  th, td { padding:9px 12px; border-bottom:1px solid var(--border); vertical-align:top; text-align:left; }
+  th { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--muted); background:var(--card); }
+  tr:hover td { background:var(--card-alt); }
+
+  .callout { border-left:3px solid; border-radius:0 8px 8px 0; padding:14px 18px; margin:16px 0; background:var(--card); }
+  .callout.warn  { border-color:var(--accent-red); background:rgba(224,96,112,.04); }
+  .callout.note  { border-color:var(--accent-blue); }
+  .callout-label { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; margin-bottom:6px; }
+  .callout.warn .callout-label { color:var(--accent-red); }
+  .callout.note .callout-label { color:var(--accent-blue); }
+</style>
+</head>
+<body>
+
+<nav class="topnav">
+  <span class="nav-label">CIRES Observability Platform</span>
+  <a href="index.html" class="navlink navlink-home">🏠 Home</a>
+  <a href="solution-brief.html" class="navlink navlink-brief">📣 Solution Brief</a>
+  <a href="triage-service.html" class="navlink navlink-tri">🧠 Triage Service</a>
+  <a href="decisions-log.html" class="navlink navlink-dec">📝 Decisions Log</a>
+</nav>
+
+<section class="hero">
+  <div class="inner">
+    <div class="eyebrow">Epic 4 · the structural defence against bad RCA output</div>
+    <h1>The <span>hallucination firewall</span></h1>
+    <p class="lead">
+      Six reinforcing mechanisms that together keep the LLM's output
+      operationally trustworthy. Each mechanism addresses a specific
+      failure mode observed during construction; together they make
+      the difference between an AI RCA you can leave a junior operator
+      to read at 03:00 and one you can't. This page is the canonical
+      entry point — for the prose-shape detail, deep-link into the
+      relevant <a href="solution-brief.html#quality">Solution Brief §5</a>
+      subsections.
+    </p>
+  </div>
+</section>
+
+<main class="layout">
+
+  <h2 class="section" id="failure-modes">Three failure modes the firewall exists to catch</h2>
+
+  <div class="pillars">
+    <div class="pillar">
+      <div class="label">Failure mode 1</div>
+      <h3>Hallucination</h3>
+      <p>The model invents a service, a metric value, or a remediation that does not exist in the evidence pack (the <code>0b215ef3</code> incident's invented <code>products</code> service is the canonical case).</p>
+    </div>
+    <div class="pillar">
+      <div class="label">Failure mode 2</div>
+      <h3>Surface-only LEDE</h3>
+      <p>The RCA restates the alert rather than naming a cause — leading with PromQL, with the observed value, or with "based on context" / "the alert indicates" openers.</p>
+    </div>
+    <div class="pillar">
+      <div class="label">Failure mode 3</div>
+      <h3>Hypothesis menu</h3>
+      <p>Under uncertainty, the model emits a list of possibilities ("this could be a slow query, a connection pool issue, or a GC pause") rather than committing to one with evidence.</p>
+    </div>
+  </div>
+
+  <h2 class="section" id="mechanisms">Six reinforcing mechanisms</h2>
+
+  <p>Each mechanism is independent — any one of them can fire without
+  the others — but they are deliberately layered so a single
+  failure mode is caught by more than one. The pipeline stage
+  numbering matches the ten-stage diagram in
+  <a href="triage-service.html">triage-service.html</a>.</p>
+
+  <div class="mech-grid">
+
+    <a class="mech" href="solution-brief.html#exemplars">
+      <div class="mech-no">Mechanism 1 · Stage 5</div>
+      <h4>Exemplar library</h4>
+      <p>Fourteen hand-authored RCA archetypes injected as a <code>## Reference exemplar</code> section <em>before</em> the evidence pack. The model gets a structural target tailored to this alert before it sees the data.</p>
+      <div class="mech-foot">Decision <a href="decisions-log.html#d17">D17</a> · 14 archetypes · pre-LLM</div>
+    </a>
+
+    <a class="mech" href="solution-brief.html#hallucination">
+      <div class="mech-no">Mechanism 2 · Stage 6b</div>
+      <h4>Alert-keyed hallucination blocklist</h4>
+      <p>Per-alert YAML rejects phrases that are wrong-by-construction for that alert (e.g. <code>HighKongP95Latency</code> rejects <code>/actuator/*</code>; <code>Drain3AnomalyDetected</code> rejects <code>PromQL</code>). Hits trigger a retry with a HINT.</p>
+      <div class="mech-foot"><code>app/hallucination_blocklist.yaml</code> · F-3</div>
+    </a>
+
+    <a class="mech" href="solution-brief.html#validator">
+      <div class="mech-no">Mechanism 3 · Stage 6b</div>
+      <h4>Surface-only LEDE validator</h4>
+      <p><code>_SURFACE_ONLY_LEDE_PATTERNS</code> regex set: catches PromQL ledes, "based on observed/repeated/context" openers, "The &lt;X&gt; alert for" leads, alertname-first form, and "Looking at the metrics".</p>
+      <div class="mech-foot">Decision <a href="decisions-log.html#d19">D19</a> · 4 rounds of widening</div>
+    </a>
+
+    <a class="mech" href="solution-brief.html#validator">
+      <div class="mech-no">Mechanism 4 · Stage 6b</div>
+      <h4>Hypothesis-menu validator</h4>
+      <p>Seven regex patterns targeting "possibly X or Y" / "may be due to (slow query | pool | GC)" / "either A or B" prose, with negative lookahead for idiomatic "either way" / "either case". Companion cause-evidence rule requires non-stop-word overlap between RCA prose and cited evidence.</p>
+      <div class="mech-foot">Story S3-HF-03 · 22 dedicated tests · 0/120 false positives on the synthetic harness</div>
+    </a>
+
+    <a class="mech" href="solution-brief.html#clamp">
+      <div class="mech-no">Mechanism 5 · Stage 6d</div>
+      <h4>Confidence clamp + diagnostic-steps fallback</h4>
+      <p>Forces <code>confidence ≤ 0.40</code> if surface-only fired, RCA quality is <code>data_starved</code>, or actions look templated. <strong>Strips <code>suggested_actions</code></strong> and emits read-only <code>diagnostic_steps</code> instead. Email + dashboard render a "Withheld — confidence clamped to 0.40" notice.</p>
+      <div class="mech-foot">Story S3-HF-01 (Tier 0) · F-4</div>
+    </a>
+
+    <a class="mech" href="solution-brief.html#bounded">
+      <div class="mech-no">Mechanism 6 · Stage 6c</div>
+      <h4>Bounded-agency retry</h4>
+      <p>Exactly <em>one</em> additional MCP call from a 6-tool whitelist (Prom instant, Loki range, Jaeger get-traces, RCA history, deploy events, <code>get_trace</code>). Pydantic schema + retry feedback string constrain the second call; re-prompt; revalidate; keep first-pass if retry still bad.</p>
+      <div class="mech-foot">Decision <a href="decisions-log.html#d15">D15</a> · "one MCP call, not a chain"</div>
+    </a>
+
+  </div>
+
+  <h2 class="section" id="invariant">The MCP-only invariant — the rule that makes the firewall durable</h2>
+
+  <div class="callout warn">
+    <div class="callout-label">Project-wide rule</div>
+    <p>Every datum the LLM sees in its prompt must arrive through an
+    MCP server. Direct <code>httpx</code> or <code>requests</code> calls
+    to Prometheus, direct <code>aiosqlite</code> reads of the RCA
+    history database, and direct in-process <code>from app.exemplars
+    import …</code> imports are all forbidden in the LLM-adjacent
+    code paths.</p>
+  </div>
+
+  <p>The invariant is the rule under which the six mechanisms above
+  are <em>worth</em> running. If a piece of evidence reaches the LLM
+  without provenance — a direct Prometheus query that bypasses
+  <code>prometheus-mcp</code>, an in-process import that bypasses
+  <code>rca-history-mcp</code> — then the validator suite cannot tell
+  whether a hallucination came from the model or from upstream stale
+  data. The <code>0b215ef3</code> incident on 2026-04-29 exposed three
+  such bypasses in the production code; closing them is the
+  Sprint-3 Epic-4 scope.</p>
+
+  <h3 class="sub">Three bypasses caught by the 0b215ef3 forensic analysis</h3>
+
+  <table>
+    <thead><tr><th>Code path</th><th>Bypass type</th><th>Closed by</th></tr></thead>
+    <tbody>
+      <tr><td><code>app/entity_baselines.py:144</code></td><td>Direct <code>httpx</code> to Prometheus <code>/api/v1/query</code></td><td>S3-HF-04 · 1 SP</td></tr>
+      <tr><td><code>app/bounded_agency.py</code></td><td>Direct <code>aiosqlite</code> reads of <code>rca_history</code></td><td>S3-HF-05 · 1 SP (blocked by S3-HF-06)</td></tr>
+      <tr><td><code>app/llm_client.py</code> + exemplar consumers</td><td>In-process <code>from app.exemplars import …</code></td><td>Wrapped into the exemplar-MCP design under S3-HF-06</td></tr>
+    </tbody>
+  </table>
+
+  <p>A fourth, related, finding: the existing
+  <code>get_trace(trace_id)</code> MCP tool — written months earlier
+  — had never been called from the pipeline. The context gather was
+  operating at the service-boundary level: it knew "upstream is slow"
+  but could not name <em>what</em> was slow because it had not pulled
+  the spans of the offending trace. Closing this is the Tier-1 story
+  <strong>S3-HF-07</strong>, with a 12-span feasibility scan during
+  the investigation window confirming <code>db.statement</code> uses
+  bind parameters (so PII redaction is not a blocker).</p>
+
+  <h2 class="section" id="ci-lint">The CI lint — making the rule mechanical</h2>
+
+  <p>Social enforcement (code review + audit reports) is the first
+  layer; the second is mechanical. Story <strong>S3-HF-08</strong>
+  adds a continuous-integration lint that forbids the bypass
+  patterns: <code>httpx</code>/<code>requests</code>/direct-DB calls
+  outside the <code>_mcp_call</code> helpers and the MCP servers
+  themselves. The order of operations matters — the lint cannot fire
+  until S3-HF-04 and S3-HF-05 have closed the existing offenders,
+  because a lint that fails on existing code is one the team will
+  work around rather than fix.</p>
+
+  <h2 class="section" id="measurement">How we know it's working</h2>
+
+  <p>The four-axis RCA quality rubric — cause-named, evidence-cited,
+  actionable, prose-shape — is the standing measurement. The chaos
+  harness at <code>monitoring-project/scripts/chaos/</code> runs the
+  rubric automatically; the daily live audit runs it manually against
+  three synthetic injected webhooks.</p>
+
+  <p>The investigation-window baseline on the 28-decision sample (drawn
+  from the live-audit log and chaos runs 3/4):</p>
+
+  <table>
+    <thead><tr><th>Axis</th><th>Mean</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td>Cause-named</td><td>0.78</td><td>Prose-shape work (D19) lifted from ~0.62 baseline</td></tr>
+      <tr><td>Evidence-cited</td><td>0.84</td><td>Drain3 webhook payload + MCP context gather are doing real work here</td></tr>
+      <tr><td>Actionable</td><td>0.71</td><td>Lowest axis — by design: clamp strips actions (S3-HF-01) raising operational trust at the cost of this score</td></tr>
+      <tr><td>Prose-shape</td><td>0.89</td><td>Surface-only LEDE validator hits a small number of regressions per week</td></tr>
+      <tr><td><strong>Overall</strong></td><td><strong>0.81</strong></td><td>Unweighted mean</td></tr>
+    </tbody>
+  </table>
+
+  <p>The future <strong>S3-HF-09</strong> story adds a 5th axis to the
+  chaos scorer (MCP-provenance) and seeds the labelled corpus with the
+  <code>0b215ef3</code> RCA itself. Once that lands, the firewall is
+  measured continuously against regression in CI — the lower-bound
+  guarantee that the next prompt change doesn't quietly break the
+  rubric.</p>
+
+  <h2 class="section" id="see-also">See also</h2>
+
+  <ul>
+    <li><a href="solution-brief.html#case-study">Solution Brief §7</a> — the 0b215ef3 case study in full.</li>
+    <li><a href="triage-service.html">Triage Service Reference</a> — the 10-stage pipeline, where each firewall mechanism slots in.</li>
+    <li><a href="decisions-log.html">Decisions Log</a> — D15, D17, D19, D20, D21 are the decisions the firewall is built on.</li>
+    <li><a href="sprint-history.html#s3-epic4">Sprint History § Epic 4</a> — the Epic-4 story table with shipped / remaining.</li>
+    <li><a href="https://github.com/linalaaraich/monitoring-triage-service/blob/main/docs/happy-path-scenarios.md">Happy-path scenarios</a> — the 14 archetypes in full prose.</li>
+  </ul>
+
+  <p style="margin-top:32px; padding-top:18px; border-top:1px solid var(--border); font-size:13px; color:var(--muted);">
+    Page compiled 2026-05-19 as part of the Sprint-3 doc refresh. For the
+    detailed prose of any single mechanism, the deep-links on the cards
+    above land directly on the relevant Solution Brief §5 subsection.
+  </p>
+
+</main>
+
+</body>
+</html>
