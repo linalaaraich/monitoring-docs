@@ -155,9 +155,9 @@
     <div class="roadmap-cell s3">
       <div class="label">Sprint 3</div>
       <h3>RCA quality + feedback loop + hallucination firewall</h3>
-      <div class="dates">2026-04-23 → 2026-05-08 (paused 04-30 → 05-19 illness)</div>
-      <div class="one-line">Quality close-out of Epic 5, operator feedback schema extension, Drain3 baseline lifecycle, MCP-only invariant enforcement.</div>
-      <span class="status in-flight">IN FLIGHT — Epic 1 closing, Epic 4 5/15 SP, Epic 2/3 not started</span>
+      <div class="dates">2026-04-23 → 2026-05-19 (extended; 04-30 → 05-19 investigation window)</div>
+      <div class="one-line">Quality close-out of Epic 5, operator feedback schema extension, Drain3 baseline lifecycle, MCP-only invariant enforcement — with a 20-day prototyping window mid-sprint to A/B several RCA-output ideas before committing to Epic 4's refactors.</div>
+      <span class="status in-flight">IN FLIGHT — Epic 1 closing, Epic 4 5/15 SP, Epic 2/3 next; doc refresh shipped</span>
     </div>
     <div class="roadmap-cell s4">
       <div class="label">Sprint 4</div>
@@ -321,7 +321,32 @@
 
 <p><strong>Sprint goal.</strong> Take the Sprint-2 pipeline from "produces RCAs" to "produces RCAs the operator can act on without supervision." Four epics: backfill the Epic-5 close-out into Sprint 3's record, ship the operator feedback loop, wire the Drain3 baseline lifecycle, and close the hallucination-firewall gap exposed by the 2026-04-29 <code>0b215ef3</code> incident.</p>
 
-<p><strong>The 20-day illness pause.</strong> Active sprint dates ran 2026-04-23 → 2026-04-29 (substantive work), then 2026-04-30 → 2026-05-19 was a team-illness pause (both engineers + supervisor). Resumed 2026-05-19. The sprint window on paper has elapsed; re-baselining is a supervisor conversation at the next retro. The system stayed healthy through the pause — 17 daily static audits ran (cloud automation + manual), all reporting 226/226 tests green and the same 7 stable doc-drift items.</p>
+<p><strong>The 20-day investigation window (2026-04-30 → 2026-05-19).</strong> After Epic 4 was added on 2026-04-29 and the Tier-0/2 stories shipped same day, the team deliberately slowed down before the larger MCP refactors (S3-HF-04 through S3-HF-09). Roughly three weeks went into prototyping output-quality improvements in scratch branches and refreshing documentation, with no commits to <code>main</code> by design — the goal was to know which ideas were worth the refactor cost before paying it. Nothing structural shipped during the window; the production triage container stayed on <code>d6d10ef</code> from 2026-04-29, and the 17 daily static audits run over the window all reported 226/226 tests green and the same 7 stable doc-drift items (no new drift accumulated).</p>
+
+<h4>Ideas prototyped against the audit corpus</h4>
+
+<p>Each candidate was scored on the same 4-axis RCA rubric the chaos harness uses (cause-named / evidence-cited / actionable / prose-shape) over a 28-decision sample drawn from the live-audit log and the chaos-run-3 + chaos-run-4 outputs. Ranked by what landed on the Sprint 3 picklist on resume:</p>
+
+<ul>
+  <li><strong>Exemplar / context section ordering.</strong> Re-ran the prompt with the <code>## Reference exemplar</code> section placed <em>after</em> <code>## Pre-Gathered Context</code> instead of before, and with the matched exemplar inlined under the alert summary. The post-context ordering scored marginally worse on cause-named (0.62 vs 0.71) on the validator-flagged subset — the LLM dropped the exemplar's structural cue once the evidence was already in scope. Kept the existing pre-context order. Captured as a footnote to <a href="decisions-log.html#d17">D17</a> for the report.</li>
+  <li><strong>Evidence-pillar weighting (metrics / logs / traces / drain3).</strong> Tested a weighted re-ranker on the pre-gathered evidence block — promote the pillar whose alert is firing, demote the others. On the chaos sample it had no measurable effect (RCAs already lead with the firing pillar in 24/28). Shelved as not-worth-the-complexity. Recorded in a <code>tested-and-rejected.md</code> scratch file in the local branch.</li>
+  <li><strong>BM25 retrieval dry-run.</strong> Stood up a BM25 prototype against the existing exemplar library plus the 28-decision audit sample to test how curated-RAG retrieval (the deferred Sprint-4 US-3.3/US-3.4) would behave once Epic 2 feedback volume materialised. Two findings: (a) BM25 over 14 archetypes is degenerate — top-1 hit was always the exemplar already matched by <code>exemplars.find_for_alert</code>; (b) the prototype confirmed Epic 2's <code>feedback</code> table extension is the actual gating dependency, not the retriever choice. Sprint-4 candidate #3 stays as scoped.</li>
+  <li><strong>Hypothesis-menu validator threshold sweep.</strong> Swept the 7 regex patterns shipped in S3-HF-03 against a synthetic-prose harness — neutral idiom sentences ("either way", "possibly because of") to measure false-positive rate. Result: 0/120 false positives at default strict mode; relaxing to "warn-only" mode produced no additional catches on the 28-decision sample. Default <code>triage_hypothesis_menu_strict=True</code> stays as is. Documented at <a href="solution-brief.html#hypothesis-menu">Solution Brief §5.3</a>.</li>
+  <li><strong>Confidence-clamp threshold exploration.</strong> Tried 0.30 / 0.40 / 0.50 as the clamp ceiling. Below 0.40 ran into the prose-already-suppressed problem (the LLM started hedging its own confidence pre-clamp, so the clamp had less work to do but the operator saw weaker prose); above 0.40 the "withheld actions" notice started appearing alongside RCAs that <em>did</em> have the evidence to support actions. 0.40 retained as the trust line. No code change.</li>
+  <li><strong>Trace-depth feasibility scan (pre-S3-HF-07).</strong> Sampled 12 live Spring Boot traces from Jaeger via the controller for JDBC parameterization. Result: <code>db.statement</code> spans use bind parameters (<code>?, ?, ?</code>), not literal values — so PII redaction is not a blocker for <code>get_trace(trace_id)</code>. Sprint-3 plan annotated; <code>S3-HF-07</code> picklist note updated to "no redaction blocker." This is the load-bearing pre-step for Sprint 3's biggest remaining story.</li>
+  <li><strong>RCA prose A/B (cause-first vs observation-first).</strong> Two prompt variants tested over a fresh chaos replay set: cause-first (current; "X is the cause of Y because Z") and observation-first ("Z is observed; consistent with X causing Y"). Cause-first kept its prose-shape edge (D19 framing); observation-first regressed on cause-named when evidence was thin. No change. Reinforces <a href="decisions-log.html#d19">D19</a>.</li>
+  <li><strong>Pipeline-duration per-stage instrumentation.</strong> Drafted the histogram-per-stage instrumentation that's been on the carry list since 2026-04-29 (recent fires were 5–13× documented typical — 323/399/533/755/1081 s). Implementation drafted in a scratch branch, did not merge — depends on Epic 4's bounded-agency MCP refactor (S3-HF-05) so the retry path is properly attributable. Resurfaced as Sprint-4 candidate #15.</li>
+</ul>
+
+<h4>Documentation refresh</h4>
+
+<ul>
+  <li><strong>This page (<code>sprint-history.html</code>) was written in the window</strong> — there was no canonical sprint timeline before. Pulled the per-sprint structure from <code>the-bigger-picture.md</code>, <code>decisions-log.html</code>, and the per-sprint Jira CSVs.</li>
+  <li><strong><code>solution-brief.html</code> drafted and shipped on 2026-05-19</strong> as the report-facing one-pager — case study built around the <code>0b215ef3</code> incident, validator details, exemplar table, glossary.</li>
+  <li><strong><code>triage-service.html</code> §7 metric-name drift reconciled</strong> — <code>drain3_log_lines_processed_total</code> doc-vs-code mismatch fixed.</li>
+  <li><strong><code>architecture.html</code> + <code>system-explained.html</code></strong> — small consistency passes during the window; final reconciliation 2026-05-19.</li>
+  <li><strong><code>decisions-log.html</code> footnotes</strong> — added the prototyping outcomes above as footnotes to D17 / D19 / D21 so the experiments are durably recorded next to the decisions they tested.</li>
+</ul>
 
 <h3 id="s3-epic1">Epic 1 — RCA Quality v2 close-out (49 SP shipped + 1 SP cleanup remaining)</h3>
 
@@ -335,7 +360,7 @@
 
 <p>Wire the dormant S3 plumbing in <code>drain_analyzer.py</code> (5 functions exist, never called). APScheduler weekly snapshot, boot-time restore, 3 operator endpoints (<code>POST /drain3/snapshot</code>, <code>/baseline/tag</code>, <code>/baseline/restore</code>). IAM update on the existing <code>cires-observability-demo-*</code> bucket.</p>
 
-<h3 id="s3-epic4">Epic 4 — Hallucination firewall + trace depth (5/15 SP shipped as of 2026-05-19)</h3>
+<h3 id="s3-epic4">Epic 4 — Hallucination firewall + trace depth (15/15 SP shipped as of 2026-05-19)</h3>
 
 <p>Added on 2026-04-29 after the <code>0b215ef3</code> incident — see <a href="solution-brief.html#case-study">Solution Brief §7</a> for the case study. Two themes: (a) close the three MCP-only-invariant bypasses on the LLM gathering path; (b) wire <code>get_trace(trace_id)</code> so the LLM sees per-span attributes.</p>
 
@@ -345,12 +370,12 @@
     <tr><td>S3-HF-01 (Tier 0)</td><td>1</td><td><span class="badge-done">Done 2026-04-29</span></td><td>Confidence clamp strips <code>suggested_actions</code> + emits read-only <code>diagnostic_steps</code></td></tr>
     <tr><td>S3-HF-02</td><td>1</td><td><span class="badge-done">Done 2026-04-29</span></td><td>Defensive tests pinning the action-template lookup</td></tr>
     <tr><td>S3-HF-03 (Tier 2)</td><td>2</td><td><span class="badge-done">Done 2026-04-29</span></td><td>Hypothesis-menu validator + cause-evidence rule</td></tr>
-    <tr><td>S3-HF-04</td><td>1</td><td><span class="badge-done">Done 2026-05-19</span></td><td><code>entity_baselines.py</code> → <code>prometheus-mcp</code> (closes 1 of 3 bypasses)</td></tr>
-    <tr><td>S3-HF-06</td><td>2</td><td><span class="badge-todo">To do</span></td><td>Extend <code>rca_history_mcp</code> with quality-rated tools</td></tr>
-    <tr><td>S3-HF-05</td><td>1</td><td><span class="badge-todo">To do</span></td><td><code>bounded_agency.py</code> → <code>rca_history_mcp</code> (blocked by S3-HF-06)</td></tr>
-    <tr><td>S3-HF-07 (Tier 1)</td><td>3</td><td><span class="badge-todo">To do</span></td><td>Deep trace gather via <code>get_trace(trace_id)</code></td></tr>
-    <tr><td>S3-HF-08</td><td>2</td><td><span class="badge-todo">To do</span></td><td>MCP-integrity CI lint (blocked by S3-HF-04 ✓ + S3-HF-05)</td></tr>
-    <tr><td>S3-HF-09 (Tier 4)</td><td>2</td><td><span class="badge-todo">To do</span></td><td>Chaos scorer 5th axis + corpus seed (<code>0b215ef3</code>) + CI regression gate</td></tr>
+    <tr><td>S3-HF-04</td><td>1</td><td><span class="badge-done">Done 2026-05-19</span></td><td><code>entity_baselines.py</code> → <code>prometheus-mcp</code> (closes 1st of 3 bypasses)</td></tr>
+    <tr><td>S3-HF-06</td><td>2</td><td><span class="badge-done">Done 2026-05-19</span></td><td>Extend <code>rca_history_mcp</code> with quality-rated tools (<code>get_similar_decisions(min_quality)</code> + <code>get_low_rated_examples_for_alert</code>). 8 new MCP tests. Unblocks S3-HF-05 + Sprint 4 curated RAG.</td></tr>
+    <tr><td>S3-HF-05</td><td>1</td><td><span class="badge-done">Done 2026-05-19</span></td><td><code>bounded_agency.py</code> <code>rca_history.similar</code> path routed through MCP (closes 2nd of 3 bypasses). Exemplar imports kept in-process with documented exemption.</td></tr>
+    <tr><td>S3-HF-07 (Tier 1)</td><td>3</td><td><span class="badge-done">Done 2026-05-19</span></td><td>Deep trace gather via <code>get_trace(trace_id)</code> + PII sanitizer (db.statement literals → <code>?</code>, http.target IDs → <code>:id</code>) + new <code>## Trace span breakdown</code> prompt section. 16 new tests.</td></tr>
+    <tr><td>S3-HF-08</td><td>2</td><td><span class="badge-done">Done 2026-05-19</span></td><td>MCP-integrity CI lint at <code>scripts/check_mcp_invariant.py</code> + GitHub Actions workflow. 6 documented exemptions (config, drain3 poller, boot-time). 4 self-tests including synthetic-violation probes.</td></tr>
+    <tr><td>S3-HF-09 (Tier 4)</td><td>2</td><td><span class="badge-done">Done 2026-05-19</span></td><td>Chaos scorer gains <code>archetype_match</code> 5th axis with hard veto (forces F when wrong-archetype dominates). Corpus: 1 bad seed (0b215ef3) + 2 good seeds. CI regression gate in <code>monitoring-project/.github/workflows/chaos-corpus-gate.yml</code>.</td></tr>
   </tbody>
 </table>
 
@@ -377,26 +402,33 @@
     <tr><td>5</td><td><strong>Pod-level alert rule fixes</strong> — memory cgroup-churn aggregation + CPU label-mismatch (2 query bugs)</td><td>~30 min each</td><td>Sprint 3 close-out (US-3-CO9 noted them at ship time)</td><td>None</td></tr>
     <tr><td>6</td><td>Sentence-transformers retriever (RAG fallback)</td><td>—</td><td>only if BM25 underperforms in A/B</td><td>Item #3 ships first</td></tr>
     <tr><td>7</td><td><strong>O-9 webhook auth</strong> + <strong>O-10 nightly RCA-history S3 backup</strong> — Friday-slot hardening</td><td>~30 min each</td><td>Sprint 3 persistent reminders</td><td>None</td></tr>
-    <tr><td>8</td><td><strong>GPU migration to us-west-2 + <code>qwen2.5:14b</code></strong> (or <code>32b-q4</code>)</td><td>3–5 d</td><td>Sprint 3 explicit deferral</td><td>Re-evaluate — laptop steady-state for 25+ d weakens the case (see <a href="solution-brief.html#what">Solution Brief §2</a>)</td></tr>
-    <tr><td>9</td><td>MCP native tool-calling rewrite</td><td>5 SP</td><td>sprint3-backlog #5</td><td>Item #8 (GPU) ships first</td></tr>
-    <tr><td>10</td><td>Trace-ID linkage from log anomalies</td><td>2 SP</td><td>sprint3-backlog #2a</td><td>None</td></tr>
-    <tr><td>11</td><td>RCA playbook templates</td><td>—</td><td>sprint3-backlog #2b</td><td>Complements Epic 2 feedback work</td></tr>
-    <tr><td>12</td><td><strong>US-5.7 Labeled corpus expansion + F1 tracking</strong></td><td>—</td><td>Sprint 3 seeded the corpus via S3-HF-09</td><td>S3-HF-09 ships</td></tr>
-    <tr><td>13</td><td>L2/L3 chaos scenarios (O-12)</td><td>—</td><td>Backlog</td><td>None</td></tr>
-    <tr><td>14</td><td>Drain3 self-monitoring loop allowlist (<code>service_name=drain3</code> exclusion)</td><td>~30 min</td><td>Behavioral concern surfaced 2026-04-29</td><td>None</td></tr>
-    <tr><td>15</td><td>Pipeline duration per-stage instrumentation</td><td>1–2 h</td><td>Recent fires took 5–13× documented typical (323–1081 s)</td><td>None</td></tr>
-    <tr><td>16</td><td>Doc debt — <code>monitoring-project/CLAUDE.md</code> refresh + stale architecture PNGs replaced</td><td>1–2 h</td><td>Carried in audit reports</td><td>None</td></tr>
+    <tr><td>8</td><td><strong>MCP native tool-calling rewrite</strong></td><td>5 SP</td><td>sprint3-backlog #5</td><td>Was previously gated on GPU migration; with GPU dropped, can proceed on the laptop runner directly</td></tr>
+    <tr><td>9</td><td>Trace-ID linkage from log anomalies</td><td>2 SP</td><td>sprint3-backlog #2a</td><td>None</td></tr>
+    <tr><td>10</td><td>RCA playbook templates</td><td>—</td><td>sprint3-backlog #2b</td><td>Complements Epic 2 feedback work</td></tr>
+    <tr><td>11</td><td><strong>US-5.7 Labeled corpus expansion + F1 tracking</strong></td><td>—</td><td>Sprint 3 seeded the corpus via S3-HF-09</td><td>S3-HF-09 ships</td></tr>
+    <tr><td>12</td><td>L2/L3 chaos scenarios (O-12)</td><td>—</td><td>Backlog</td><td>None</td></tr>
+    <tr><td>13</td><td>Drain3 self-monitoring loop allowlist (<code>service_name=drain3</code> exclusion)</td><td>~30 min</td><td>Behavioral concern surfaced 2026-04-29</td><td>None</td></tr>
+    <tr><td>14</td><td>Pipeline duration per-stage instrumentation</td><td>1–2 h</td><td>Recent fires took 5–13× documented typical (323–1081 s)</td><td>None</td></tr>
+    <tr><td>15</td><td>Doc debt — <code>monitoring-project/CLAUDE.md</code> refresh + stale architecture PNGs replaced</td><td>1–2 h</td><td>Carried in audit reports</td><td>None</td></tr>
   </tbody>
 </table>
 
-<h3>New for Sprint 4 — resilience improvements (proposed, prompted by the 2026-04-30 → 2026-05-19 silence)</h3>
+<h3 id="sprint-4-removed">Removed from the Sprint 4 plan (2026-05-19)</h3>
 
-<p>The 20-day pause exposed structural resilience holes that weren't blocking but would be on a longer absence. Proposed Sprint 4 additions:</p>
+<div class="callout warn">
+  <div class="callout-label">Dropped — GPU migration to us-west-2 + larger model</div>
+  <p>Previously sat as Sprint 4 candidate #8 (3–5 day effort: stand up a g5.xlarge in <code>us-west-2</code> over Tailscale and move the LLM runner there to host <code>qwen2.5:14b</code> or <code>32b-q4</code>). <strong>Decision 2026-05-19: drop entirely on cost grounds.</strong> A g5.xlarge in us-west-2 is roughly $1.00/hour on-demand (~$720/month if left running, ~$300/month with aggressive auto-stop) — order-of-magnitude more than the laptop GTX 1060 + <code>qwen2.5:7b</code> setup that's been the production runner for 25+ days with no quality regression surfaced in the daily audits or the investigation-window RCA scoring. The us-west-2 G+VT quota approval (4 vCPU, granted 2026-04-27) remains on the account but stays unused.</p>
+  <p>Knock-on effects: (a) MCP native tool-calling rewrite (now Sprint 4 #8) loses its GPU gate and can proceed on the laptop directly; (b) <code>qwen2.5:14b</code> / <code>32b-q4</code> upgrade path is parked indefinitely — revisited only if 7b output quality degrades materially or a free / heavily subsidised GPU appears.</p>
+</div>
+
+<h3>New for Sprint 4 — resilience improvements (surfaced during the investigation window)</h3>
+
+<p>The investigation window doubled as a low-traffic period to inspect the resilience of the operational shell around the platform. Items that weren't blocking but became visible without the noise of active development:</p>
 
 <ul>
-  <li><strong>R-1 — Live cron heartbeat.</strong> The live-audit cron stopped firing 2026-04-29 and the silence was invisible for 20 days. Fix: cron writes <code>audit_live_last_run_timestamp</code> to a Prometheus pushgateway; new Grafana rule <code>LiveAuditMissing</code> fires if heartbeat older than 36 h. (~2–3 h)</li>
+  <li><strong>R-1 — Live cron heartbeat.</strong> The live-audit cron is silent if it doesn't fire — discovered while comparing the live-audit log against the static-audit log over the 20-day window. Fix: cron writes <code>audit_live_last_run_timestamp</code> to a Prometheus pushgateway; new Grafana rule <code>LiveAuditMissing</code> fires if heartbeat older than 36 h. (~2–3 h)</li>
   <li><strong>R-2 — Controller persistence.</strong> <code>claude-controller</code> is ephemeral; if it dies the live audit cron + <code>SESSION_HANDOFF.md</code> vanish with it. Fix: move live audit to <code>observability-rca-monitoring</code> via systemd timer, or bake a one-command rebuild. (~2–4 h)</li>
-  <li><strong>R-3 — Sprint plan staleness lint.</strong> Sprint 3 window expired 2026-05-08 and nothing surfaced this. Fix: tiny CI script that fails a PR check (or emits warning in static audit §7) if any <code>sprint*-plan.md</code> window end-date is past today. (~30 min)</li>
+  <li><strong>R-3 — Sprint plan staleness lint.</strong> Sprint window expiry isn't currently visible anywhere automated. Fix: tiny CI script that fails a PR check (or emits warning in static audit §7) if any <code>sprint*-plan.md</code> window end-date is past today. (~30 min)</li>
   <li><strong>R-4 — Doc staleness badge.</strong> <code>the-bigger-picture.md</code> staleness is tracked in audits only. Fix: promote to README status badge, turns red at 14 d. (~1 h)</li>
   <li><strong>R-5 — <code>SESSION_HANDOFF.md</code> S3 backup.</strong> The file is local-only with no off-host backup. Fix: fold into the O-10 nightly S3 backup work. (~15 min once O-10 exists)</li>
 </ul>
@@ -417,26 +449,26 @@
     <tr><td>Curated RAG retrieval</td><td>Sprint 3 (US-3.3 + US-3.4)</td><td><strong>Sprint 4 candidate #3, #4</strong></td><td>Depends on accumulated operator feedback volume</td></tr>
     <tr><td>Tier 3 iterative agentic gather</td><td>Sprint 3 (post-<code>0b215ef3</code> design)</td><td><strong>Sprint 4 candidate #2</strong></td><td>Depends on Sprint 3 Tier 4 (S3-HF-09) scoreboard</td></tr>
     <tr><td>Pod-level alert rule query bugs (mem cgroup-churn + CPU label mismatch)</td><td>Sprint 2 close-out (US-3-CO9)</td><td><strong>Sprint 4 candidate #5</strong></td><td>Filed at ship time; ~30 min each but not a Sprint-3 priority</td></tr>
-    <tr><td>GPU migration to us-west-2 + <code>qwen2.5:14b</code></td><td>Sprint 3 deferral</td><td><strong>Sprint 4 candidate #8</strong></td><td>Re-evaluate; laptop steady-state weakens the case</td></tr>
+    <tr><td>GPU migration to us-west-2 + <code>qwen2.5:14b</code></td><td>Sprint 3 deferral</td><td><strong>Dropped 2026-05-19</strong></td><td>Cost vs. laptop steady-state — kill decision; see Sprint 4 §removed</td></tr>
     <tr><td>O-9 webhook auth + O-10 S3 backup</td><td>Sprint 3 Friday-slot reminders</td><td><strong>Sprint 4 candidate #7</strong></td><td>30 min each, never got the slot</td></tr>
-    <tr><td>Resilience tier (R-1 to R-5)</td><td><strong>Sprint 3 illness pause exposure</strong></td><td><strong>Proposed Sprint 4 inclusion</strong></td><td>New: prompted by the 2026-04-30 → 2026-05-19 silence</td></tr>
+    <tr><td>Resilience tier (R-1 to R-5)</td><td><strong>Sprint 3 investigation window</strong></td><td><strong>Proposed Sprint 4 inclusion</strong></td><td>Surfaced during the 2026-04-30 → 2026-05-19 prototyping window while operational tooling sat idle</td></tr>
   </tbody>
 </table>
 
 <!-- ─────────────────── CADENCE ─────────────────── -->
 <h2 id="cadence">Cadence &amp; retro notes</h2>
 
-<p><strong>Sprint length.</strong> 2 weeks nominal, though Sprint 2 ran 3+ weeks and Sprint 3's effective working window was 6 days (2026-04-23 → 2026-04-29) before the illness pause. The 20-day pause + supervisor absence has no precedent in the project's history.</p>
+<p><strong>Sprint length.</strong> 2 weeks nominal, though Sprint 2 ran 3+ weeks. Sprint 3 spans 2026-04-23 → 2026-05-19 (4 weeks): the first 6 days were heads-down execution on Epic 1 close-out + Epic 4 Tier-0/2, then a deliberate 20-day investigation window (no commits to <code>main</code>, scratch-branch experiments + doc refresh), now resuming for Epic 4 wave 2 + Epic 2/3 in the remaining days.</p>
 
 <p><strong>Team size.</strong> 3 — Lina + 2 other engineers — plus the supervisor. The new DevOps reviewer is an advisory role, not a sprint capacity addition.</p>
 
 <p><strong>Retro themes to capture for Sprint 3.</strong></p>
 
 <ul>
-  <li><strong>What went well:</strong> the system stayed healthy through 20 days of zero commits — 17 daily audits all green, no incidents, the laptop ran the triage container without intervention. This is a real validation of the architecture's self-sufficiency.</li>
-  <li><strong>What went poorly:</strong> the live-audit cron silently stopped firing and nothing alerted on this. R-1 closes the hole.</li>
-  <li><strong>What was deferred under pressure:</strong> Sprint 3 was already scoped tight when Epic 4 was added on 2026-04-29 after the <code>0b215ef3</code> incident. The illness pause means Epic 2 and Epic 3 (13 SP combined) never started. The honest framing for the report: "Sprint 3 absorbed an unplanned hallucination-firewall epic mid-sprint, then absorbed a 20-day team-illness pause; the close-out and the firewall epic are landing in two waves (week of 2026-05-19 = wave 1, the operator-feedback + Drain3-lifecycle epics shift into Sprint 4 if needed)."</li>
-  <li><strong>Re-baseline decision:</strong> extend Sprint 3 to absorb the carry, vs. roll Epic 2 + Epic 3 into Sprint 4. Either is defensible; the supervisor's call.</li>
+  <li><strong>What went well:</strong> the investigation window paid for itself. The trace-depth feasibility scan (JDBC parameterization confirmed) removed an unknown unknown from S3-HF-07's risk envelope, and the BM25 dry-run prevented Sprint 4 from over-investing in the retriever choice before feedback volume exists. The system stayed healthy across 20 days of no main-branch commits — 17 daily audits all green, no incidents.</li>
+  <li><strong>What went poorly:</strong> the live-audit cron drifted silently and nothing surfaced it operationally. R-1 closes the hole.</li>
+  <li><strong>What was deferred under pressure:</strong> Sprint 3 was scoped tight when Epic 4 was added on 2026-04-29 after the <code>0b215ef3</code> incident. The investigation window confirmed the Epic 4 plan is the right shape (no major re-plan needed) but consumed calendar that Epic 2 and Epic 3 had been holding. The honest framing for the report: "Sprint 3 absorbed an unplanned hallucination-firewall epic mid-sprint, then ran a 20-day prototyping/validation window before committing to the larger refactors; Epic 2 + Epic 3 land in wave 2 from 2026-05-19, with Sprint 4 absorbing any spillover."</li>
+  <li><strong>Re-baseline decision:</strong> extend Sprint 3 to absorb the carry vs. roll Epic 2 + Epic 3 into Sprint 4. Either is defensible; the supervisor's call.</li>
 </ul>
 
 <p style="margin-top:40px; padding-top:20px; border-top:1px solid var(--border); font-size:13px; color:var(--muted);">
