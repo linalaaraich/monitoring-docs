@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sprint History — CIRES Observability Platform</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --bg-soft: #13151e;
+    --card: #1a1d27;
+    --card-alt: #1e2230;
+    --border: #2a2d3a;
+    --border-hi: #3a3f52;
+    --text: #e4e6ee;
+    --text-soft: #c0c5d0;
+    --muted: #8890a0;
+    --accent-blue: #4ea8de;
+    --accent-green: #6bcf7f;
+    --accent-orange: #f0a050;
+    --accent-purple: #b07ee8;
+    --accent-red: #e06070;
+    --accent-cyan: #40d0d0;
+    --accent-yellow: #e0d060;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { font-family:'Inter','Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); line-height:1.65; font-size:15px; -webkit-font-smoothing:antialiased; }
+  code, pre, .mono { font-family:'JetBrains Mono','Fira Code',ui-monospace,monospace; font-size:0.88em; }
+
+  .topnav { display:flex; align-items:center; gap:12px; padding:14px 40px; background:var(--bg-soft); border-bottom:1px solid var(--border); flex-wrap:wrap; }
+  .topnav span.nav-label { color:var(--muted); font-size:13px; font-weight:600; margin-right:4px; }
+  .navlink { display:inline-flex; align-items:center; gap:6px; padding:7px 14px; border-radius:8px; font-size:13px; font-weight:600; text-decoration:none; border:1px solid; transition:background .2s, transform .15s; }
+  .navlink:hover { transform:translateY(-1px); }
+  .navlink-home { color:var(--text); border-color:var(--border); background:var(--card); }
+  .navlink-brief { color:var(--accent-green); border-color:rgba(107,207,127,.4); background:rgba(107,207,127,.08); }
+  .navlink-sys { color:var(--accent-cyan); border-color:rgba(64,208,208,.4); background:rgba(64,208,208,.08); }
+  .navlink-dec { color:var(--accent-orange); border-color:rgba(240,160,80,.4); background:rgba(240,160,80,.08); }
+
+  .hero { padding:56px 40px 40px; border-bottom:1px solid var(--border); background:linear-gradient(180deg, #13151e 0%, var(--bg) 100%); }
+  .hero .inner { max-width:1080px; margin:0 auto; }
+  .hero .eyebrow { font-size:11px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:var(--accent-yellow); margin-bottom:12px; }
+  .hero h1 { font-size:38px; font-weight:800; letter-spacing:-.5px; margin-bottom:14px; line-height:1.2; }
+  .hero h1 span.accent { color:var(--accent-yellow); }
+  .hero p.lead { font-size:16px; color:var(--text-soft); max-width:820px; line-height:1.7; margin-bottom:20px; }
+
+  .roadmap { max-width:1080px; margin:0 auto; padding:24px 40px 0; }
+  .roadmap-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; }
+  @media (max-width: 900px) { .roadmap-grid { grid-template-columns:1fr; } }
+  .roadmap-cell { padding:14px 16px; border-radius:8px; border:1px solid var(--border); background:var(--card); }
+  .roadmap-cell.s1 { border-color:rgba(176,126,232,.4); background:linear-gradient(180deg, rgba(176,126,232,.06), var(--card)); }
+  .roadmap-cell.s2 { border-color:rgba(78,168,222,.4); background:linear-gradient(180deg, rgba(78,168,222,.06), var(--card)); }
+  .roadmap-cell.s3 { border-color:rgba(107,207,127,.4); background:linear-gradient(180deg, rgba(107,207,127,.06), var(--card)); }
+  .roadmap-cell.s4 { border-color:rgba(240,160,80,.4); background:linear-gradient(180deg, rgba(240,160,80,.06), var(--card)); }
+  .roadmap-cell .label { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--muted); margin-bottom:8px; }
+  .roadmap-cell h3 { font-size:16px; font-weight:700; margin-bottom:4px; }
+  .roadmap-cell .dates { font-size:12px; color:var(--text-soft); margin-bottom:6px; font-family:monospace; }
+  .roadmap-cell .one-line { font-size:13px; color:var(--text-soft); }
+  .roadmap-cell .status { font-size:11px; font-weight:600; padding:2px 8px; border-radius:10px; display:inline-block; margin-top:8px; }
+  .status.shipped { color:var(--accent-green); background:rgba(107,207,127,.1); border:1px solid rgba(107,207,127,.3); }
+  .status.in-flight { color:var(--accent-orange); background:rgba(240,160,80,.1); border:1px solid rgba(240,160,80,.3); }
+  .status.planned { color:var(--muted); background:rgba(136,144,160,.08); border:1px solid rgba(136,144,160,.25); }
+
+  .layout { max-width:1080px; margin:0 auto; padding:32px 40px 80px; display:grid; grid-template-columns: 240px 1fr; gap:40px; }
+  @media (max-width: 900px) { .layout { grid-template-columns:1fr; } .toc-sidebar { position:static; } }
+  .toc-sidebar { position:sticky; top:20px; align-self:start; font-size:13px; }
+  .toc-sidebar h4 { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--muted); margin-bottom:10px; }
+  .toc-sidebar ol { list-style:none; padding:0; }
+  .toc-sidebar li { margin-bottom:4px; }
+  .toc-sidebar a { color:var(--text-soft); text-decoration:none; border-bottom:1px dashed transparent; }
+  .toc-sidebar a:hover { color:var(--accent-yellow); border-bottom-color:var(--accent-yellow); }
+  .toc-sidebar li.sub { padding-left:14px; font-size:12px; }
+  .toc-sidebar li.sub a { color:var(--muted); }
+
+  .content h2 { font-size:26px; font-weight:700; margin:48px 0 16px; letter-spacing:-.3px; scroll-margin-top:24px; padding-bottom:8px; border-bottom:1px solid var(--border); }
+  .content h2:first-child { margin-top:0; }
+  .content h3 { font-size:18px; font-weight:700; margin:28px 0 10px; color:var(--text); scroll-margin-top:24px; }
+  .content h4 { font-size:14px; font-weight:700; margin:20px 0 6px; color:var(--text); }
+  .content p { margin-bottom:14px; color:var(--text-soft); }
+  .content p strong { color:var(--text); font-weight:600; }
+  .content ul, .content ol { margin:8px 0 16px 24px; color:var(--text-soft); }
+  .content li { margin-bottom:6px; }
+  .content code { background:var(--card); border:1px solid var(--border); padding:1px 6px; border-radius:4px; font-size:0.85em; color:var(--accent-cyan); }
+  .content a { color:var(--accent-blue); text-decoration:none; border-bottom:1px dashed rgba(78,168,222,.35); }
+  .content a:hover { border-bottom-style:solid; }
+
+  .callout { border-left:3px solid; border-radius:0 8px 8px 0; padding:14px 18px; margin:16px 0; background:var(--card); }
+  .callout.note { border-color:var(--accent-blue); }
+  .callout.warn { border-color:var(--accent-orange); }
+  .callout.win  { border-color:var(--accent-green); background:rgba(107,207,127,.04); }
+  .callout-label { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; margin-bottom:6px; }
+  .callout.note .callout-label { color:var(--accent-blue); }
+  .callout.warn .callout-label { color:var(--accent-orange); }
+  .callout.win  .callout-label { color:var(--accent-green); }
+
+  table { width:100%; border-collapse:collapse; margin:12px 0 20px; font-size:13px; }
+  table th, table td { padding:10px 14px; border-bottom:1px solid var(--border); text-align:left; vertical-align:top; }
+  table th { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--muted); background:var(--card); }
+  table tr:hover td { background:var(--card-alt); }
+  .badge-done { display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600; background:rgba(107,207,127,.1); color:var(--accent-green); border:1px solid rgba(107,207,127,.3); }
+  .badge-progress { display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600; background:rgba(240,160,80,.1); color:var(--accent-orange); border:1px solid rgba(240,160,80,.3); }
+  .badge-todo { display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600; background:rgba(136,144,160,.1); color:var(--muted); border:1px solid rgba(136,144,160,.3); }
+  .badge-deferred { display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600; background:rgba(176,126,232,.1); color:var(--accent-purple); border:1px solid rgba(176,126,232,.3); }
+</style>
+</head>
+<body>
+
+<nav class="topnav">
+  <span class="nav-label">CIRES Observability Platform</span>
+  <a href="index.html" class="navlink navlink-home">🏠 Home</a>
+  <a href="solution-brief.html" class="navlink navlink-brief">📣 Solution Brief</a>
+  <a href="system-explained.html" class="navlink navlink-sys">📖 System Explained</a>
+  <a href="decisions-log.html" class="navlink navlink-dec">📝 Decisions Log</a>
+</nav>
+
+<section class="hero">
+  <div class="inner">
+    <div class="eyebrow">Project timeline · for the report &amp; planning</div>
+    <h1>Sprint <span class="accent">history</span> &amp; roadmap</h1>
+    <p class="lead">
+      One canonical timeline of the CIRES Observability Platform from
+      Sprint 1 (the on-prem VM observability foundation, March 2026) through
+      Sprint 4 (the agentic-gather and curated-RAG iteration, planned). For
+      each sprint: dates, goal in one sentence, what actually shipped, what
+      carried forward, and the decisions captured along the way.
+    </p>
+  </div>
+</section>
+
+<div class="roadmap">
+  <div class="roadmap-grid">
+    <div class="roadmap-cell s1">
+      <div class="label">Sprint 1</div>
+      <h3>Observability foundation</h3>
+      <div class="dates">2026-03-10 → 2026-03-30</div>
+      <div class="one-line">Prometheus / Loki / Jaeger / Grafana on three on-prem VMs via Ansible + docker-compose. OTel agent on Spring Boot, Kong OTel plugin at the gateway.</div>
+      <span class="status shipped">SHIPPED</span>
+    </div>
+    <div class="roadmap-cell s2">
+      <div class="label">Sprint 2</div>
+      <h3>AWS migration + AI RCA MVP</h3>
+      <div class="dates">2026-03-31 → 2026-04-23</div>
+      <div class="one-line">Terraform on AWS, k3s for the app workload, FastAPI triage service with 5 MCP servers and a local LLM, structured RCA pipeline.</div>
+      <span class="status shipped">SHIPPED + Epic 5 in flight to 2026-04-29</span>
+    </div>
+    <div class="roadmap-cell s3">
+      <div class="label">Sprint 3</div>
+      <h3>RCA quality + feedback loop + hallucination firewall</h3>
+      <div class="dates">2026-04-23 → 2026-05-08 (paused 04-30 → 05-19 illness)</div>
+      <div class="one-line">Quality close-out of Epic 5, operator feedback schema extension, Drain3 baseline lifecycle, MCP-only invariant enforcement.</div>
+      <span class="status in-flight">IN FLIGHT — Epic 1 closing, Epic 4 5/15 SP, Epic 2/3 not started</span>
+    </div>
+    <div class="roadmap-cell s4">
+      <div class="label">Sprint 4</div>
+      <h3>Agentic gather + curated RAG + Sprint-3 carry-forward</h3>
+      <div class="dates">TBD (after Sprint 3 close)</div>
+      <div class="one-line">Tier 3 iterative agentic gather built on the Sprint 3 Tier 4 scoreboard, US-5.2 incident correlator, curated RAG retrieval, pod-rule fixes.</div>
+      <span class="status planned">PLANNED — 16 candidates ranked, scope to be finalised at retro</span>
+    </div>
+  </div>
+</div>
+
+<main class="layout">
+
+<aside class="toc-sidebar">
+  <h4>CONTENTS</h4>
+  <ol>
+    <li><a href="#sprint-1">Sprint 1 — Observability foundation</a></li>
+    <li><a href="#sprint-2">Sprint 2 — AWS + AI RCA MVP</a></li>
+    <li class="sub"><a href="#s2-epic1">Epic 1 — AWS Infrastructure</a></li>
+    <li class="sub"><a href="#s2-epic2">Epic 2 — AI RCA System MVP</a></li>
+    <li class="sub"><a href="#s2-epic3">Epic 3 — Kubernetes migration</a></li>
+    <li class="sub"><a href="#s2-epic4">Epic 4 — AI Triage Hardening</a></li>
+    <li class="sub"><a href="#s2-epic5">Epic 5 — UEBA stories (post-sprint)</a></li>
+    <li><a href="#sprint-3">Sprint 3 — Quality + feedback + firewall</a></li>
+    <li class="sub"><a href="#s3-epic1">Epic 1 — RCA Quality v2 close-out</a></li>
+    <li class="sub"><a href="#s3-epic2">Epic 2 — Operator feedback loop</a></li>
+    <li class="sub"><a href="#s3-epic3">Epic 3 — Drain3 baseline lifecycle</a></li>
+    <li class="sub"><a href="#s3-epic4">Epic 4 — Hallucination firewall</a></li>
+    <li><a href="#sprint-4">Sprint 4 — Planned scope</a></li>
+    <li><a href="#carry">Cross-sprint carry-forward map</a></li>
+    <li><a href="#cadence">Cadence &amp; retro notes</a></li>
+  </ol>
+</aside>
+
+<section class="content">
+
+<!-- ─────────────────── SPRINT 1 ─────────────────── -->
+<h2 id="sprint-1">Sprint 1 — Observability foundation (2026-03-10 → 2026-03-30)</h2>
+
+<p><strong>Sprint goal.</strong> Stand up a full-stack observability platform for a representative web stack (<code>mukundmadhav/react-springboot-mysql</code>) using open-source tools and deployable by anyone with the playbook. No AI yet — this is the pillar on which everything else is built.</p>
+
+<p><strong>Topology shipped.</strong> Three on-prem VMs in the <code>192.168.127.0/24</code> subnet:</p>
+
+<table>
+  <thead><tr><th>VM</th><th>Role</th><th>Services</th></tr></thead>
+  <tbody>
+    <tr><td><code>monitoring-vm</code> · <code>.10</code></td><td>Observability stack</td><td>Prometheus, Alertmanager, Loki, OTel Collector, Jaeger, Grafana, node-exporter, cAdvisor</td></tr>
+    <tr><td><code>application-vm</code> · <code>.11</code></td><td>Application + gateway</td><td>Spring Boot (with OTel Java agent injected externally), Kong (with OTel plugin at the gateway layer), MySQL</td></tr>
+    <tr><td><code>network-vm</code> · <code>.12</code></td><td>Network / supporting tooling</td><td>Bastion / DNS / supporting services</td></tr>
+  </tbody>
+</table>
+
+<p><strong>What shipped.</strong></p>
+
+<ul>
+  <li><strong>Ansible roles for every component.</strong> One role per service (<code>roles/prometheus</code>, <code>roles/loki</code>, <code>roles/jaeger</code>, <code>roles/grafana</code>, <code>roles/otel_collector</code>, <code>roles/kong</code>, <code>roles/spring_boot</code>, <code>roles/cadvisor</code>, <code>roles/node_exporter</code>, <code>roles/mysql</code>). Each role idempotent, with a docker-compose template, env file generation, and a health-check task.</li>
+  <li><strong>Single playbook that builds the whole stack.</strong> <code>ansible-playbook playbooks/site.yml -i inventory/onprem.yml</code> brought a fresh set of VMs to fully-observable in ~15 min.</li>
+  <li><strong>Three-pillar telemetry.</strong> Metrics via Prometheus (scrape spring-boot's <code>/actuator/prometheus</code>, Kong's stats endpoint, node-exporter, cAdvisor). Logs via Loki + Promtail. Traces via OTel Collector → Jaeger. Trace IDs propagated through Kong's OTel plugin so a single user request shows up as one trace from gateway to upstream.</li>
+  <li><strong>Grafana dashboards.</strong> The four canonical views — service overview, alert overview, log explorer, trace explorer — provisioned via Ansible templates.</li>
+  <li><strong>Initial alerting via Alertmanager.</strong> Metric-threshold rules on CPU / memory / disk / target-down, routed through Alertmanager to a Gmail SMTP contact point.</li>
+  <li><strong>End-to-end reproducibility.</strong> <code>monitoring-docs/reproducibility-guide.html</code> + <code>build-guide.html</code> documented every step from "VMs exist" to "alerts firing into email".</li>
+</ul>
+
+<div class="callout note">
+  <div class="callout-label">Sprint 1 decisions worth carrying forward</div>
+  <p><strong>External instrumentation only.</strong> Spring Boot is not modified to instrument itself — the OTel Java agent is mounted at start time. This is a durable principle: <em>the platform produces telemetry from the outside, the application does not need to know it's being observed</em>. Carried through Sprint 2's k3s migration unchanged.</p>
+</div>
+
+<p><strong>What carried forward (rather than shipped at sprint end).</strong></p>
+
+<ul>
+  <li>The three-VM topology — replaced in Sprint 2 by AWS EC2 + k3s. The Ansible roles survived; the inventory changed.</li>
+  <li>Alertmanager — removed in Sprint 2 (decision <a href="decisions-log.html#d6">D6</a>, 2026-04-24). Grafana unified alerting with a single <code>triage-webhook</code> contact point replaced it.</li>
+  <li>The Gmail SMTP contact point — replaced by the triage service's own SMTP send so escalation emails carry the AI verdict + RCA + suggested actions, not just a Grafana alert dump.</li>
+  <li>The <code>192.168.127.x</code> address space — pre-AWS legacy; live system is on a Tailscale tailnet now.</li>
+</ul>
+
+<p><strong>Sprint 1 reference docs (frozen, historical).</strong> <a href="build-guide.html">Complete Build Guide</a> · <a href="reproducibility-guide.html">Reproducibility Guide</a></p>
+
+<!-- ─────────────────── SPRINT 2 ─────────────────── -->
+<h2 id="sprint-2">Sprint 2 — AWS migration + AI RCA MVP (2026-03-31 → 2026-04-23)</h2>
+
+<p><strong>Sprint goal.</strong> Move the platform off on-prem VMs onto AWS (Terraform-provisioned EC2), migrate the application workload to k3s, and add an AI layer that produces structured root-cause analyses from incoming alerts. The on-prem foundation from Sprint 1 stays useful as a reproducibility target; the production-shaped deployment lives on AWS.</p>
+
+<p>The sprint deadline moved twice (April 9 → April 23) — captured in the <code>~~April 9, 2026~~ ~~April 23, 2026~~</code> strikethrough in the original tracker. Final landing: <strong>2026-04-23</strong>. A follow-on Epic 5 (UEBA-flavoured stories) ran past sprint close until 2026-04-29 as an in-flight workstream.</p>
+
+<h3 id="s2-epic1">Epic 1 — AWS Infrastructure</h3>
+
+<p>Terraform-managed AWS account, VPC, subnets, security groups, EC2 instances, IAM, S3 buckets for state + Loki. Pinned Ubuntu AMI to remove silent drift. Free-Tier-aware quotas (CloudFront verification, EC2 limits). EIPs on the durable instances. Repo: <code>provisioning-monitoring-infra</code>.</p>
+
+<h3 id="s2-epic2">Epic 2 — AI RCA System MVP</h3>
+
+<p>The biggest new surface in the project. Composed of:</p>
+
+<ul>
+  <li><strong>5 MCP servers</strong> (<code>monitoring-mcp-servers/</code>) — <code>prometheus-mcp:8091</code>, <code>loki-mcp:8092</code>, <code>jaeger-mcp:8093</code>, <code>rca-history-mcp:8094</code>, <code>deploy-events-mcp:8095</code>. Each speaks JSON-RPC and exposes 3–4 tools over a Prometheus-style <code>/metrics</code> endpoint.</li>
+  <li><strong>FastAPI triage service</strong> (<code>monitoring-triage-service/</code>) — webhook receivers (Grafana + Drain3), async pipeline, structured-output LLM call via Ollama, dedup + suppression, dashboard at <code>/dashboard</code>, SMTP escalation.</li>
+  <li><strong>Cross-pillar correlation</strong> — context.py fans out to three MCPs in parallel before the LLM call, building one pre-gathered evidence pack the LLM consumes.</li>
+  <li><strong>Drain3 log-template clustering</strong> — runs server-side over Loki, surfaces novel templates as a fourth signal alongside metrics / logs / traces.</li>
+  <li><strong>Local LLM</strong> — <code>qwen2.5:7b-instruct</code> via Ollama. Initially on a g4dn.xlarge EC2 (decommissioned), then moved to the laptop's GTX 1060 (still the production runner today).</li>
+</ul>
+
+<h3 id="s2-epic3">Epic 3 — Kubernetes migration</h3>
+
+<p>Application workload moved from the application-VM docker-compose into a k3s cluster on a dedicated EC2 (<code>observability-rca-k3s</code>). Helm charts for spring-boot, kong, frontend. <code>xanmanning.k3s</code> Galaxy role provisions k3s as a systemd unit. The monitoring VM stays in docker-compose — it's stable, deployable, and not gaining anything by going onto k3s. Decision <a href="decisions-log.html#d11">D11</a>.</p>
+
+<h3 id="s2-epic4">Epic 4 — AI Triage Hardening</h3>
+
+<p>From "MVP that responds to webhooks" to "service operators can trust." Dedup + suppression layers, structured-output schema enforcement, error envelope on every MCP response, pipeline timeouts, the dashboard, the email notifier, and a first pass at action-template fallback. Two-tier dedup design (in-memory fingerprint + pre-LLM history-based suppression) captured in <a href="decisions-log.html#d4">D4</a>.</p>
+
+<h3 id="s2-epic5">Epic 5 — UEBA-flavoured stories (post-sprint, 2026-04-23 → 2026-04-29)</h3>
+
+<p>Five UEBA-inspired stories ran past sprint close as a coherent in-flight workstream, then folded into Sprint 3 as the "RCA Quality v2 close-out" epic. Net effort ~49 SP shipped after sprint close.</p>
+
+<table>
+  <thead><tr><th>Story</th><th>What it added</th><th>Status</th></tr></thead>
+  <tbody>
+    <tr><td>US-5.1 Phase A</td><td>Per-service Drain3 (<code>dict[service → TemplateMiner]</code>) with file-backed state per service</td><td><span class="badge-done">Shipped</span></td></tr>
+    <tr><td>US-5.1 Phase B</td><td>Entity baselines (7-day rolling per-service-metric quantiles, σ-claim helper)</td><td><span class="badge-done">Shipped</span> (verification closed by Sprint 3 S3-HF-04)</td></tr>
+    <tr><td>US-5.3</td><td>Closed-loop feedback override/confirm + lazy <code>triage_precision</code> / <code>triage_recall</code> metrics</td><td><span class="badge-done">Shipped 2026-04-28</span></td></tr>
+    <tr><td>US-5.4</td><td>Adaptive thresholds on 3 flappiest rules (same-hour-7-days-ago + 3σ baseline)</td><td><span class="badge-done">Shipped 2026-04-27</span></td></tr>
+    <tr><td>US-5.8</td><td>Recurrence gates (pre-LLM + post-LLM, MediumCpu/Mem opt-in)</td><td><span class="badge-done">Shipped 2026-04-28</span></td></tr>
+  </tbody>
+</table>
+
+<div class="callout win">
+  <div class="callout-label">Sprint 2 outcome</div>
+  <p>The transition from "we have observability" (Sprint 1) to "the observability platform produces structured, validated RCAs end-to-end with operator-feedback closure" (Sprint 2 + Epic 5). The pipeline that runs in production today is the Sprint-2 architecture plus Sprint-3's quality / safety mechanisms layered on top.</p>
+</div>
+
+<p><strong>Sprint 2 reference docs.</strong> <a href="prepare.html">Sprint 2 Presentation Notes</a> · <a href="sprint2-backlog.html">Sprint 2 Backlog</a> · <a href="sprint2-guide.html">Sprint 2 Guide</a> · <a href="sprint2-extension-guide.html">Sprint 2 Extension Guide</a> · <a href="sprint2-epic5-ueba.html">Epic 5 UEBA Stories</a></p>
+
+<!-- ─────────────────── SPRINT 3 ─────────────────── -->
+<h2 id="sprint-3">Sprint 3 — RCA quality + feedback + hallucination firewall (2026-04-23 → 2026-05-08)</h2>
+
+<p><strong>Sprint goal.</strong> Take the Sprint-2 pipeline from "produces RCAs" to "produces RCAs the operator can act on without supervision." Four epics: backfill the Epic-5 close-out into Sprint 3's record, ship the operator feedback loop, wire the Drain3 baseline lifecycle, and close the hallucination-firewall gap exposed by the 2026-04-29 <code>0b215ef3</code> incident.</p>
+
+<p><strong>The 20-day illness pause.</strong> Active sprint dates ran 2026-04-23 → 2026-04-29 (substantive work), then 2026-04-30 → 2026-05-19 was a team-illness pause (both engineers + supervisor). Resumed 2026-05-19. The sprint window on paper has elapsed; re-baselining is a supervisor conversation at the next retro. The system stayed healthy through the pause — 17 daily static audits ran (cloud automation + manual), all reporting 226/226 tests green and the same 7 stable doc-drift items.</p>
+
+<h3 id="s3-epic1">Epic 1 — RCA Quality v2 close-out (49 SP shipped + 1 SP cleanup remaining)</h3>
+
+<p>Backfill of the Epic-5 close-out work that shipped between 2026-04-23 and 2026-04-29 under Sprint-3's epic record. Net: 12/13 stories Done; only US-3-CO13 (codify <code>app/policy.py</code> + <code>app/bypass_llm.yaml</code> as a behaviour-unchanged refactor) remains.</p>
+
+<h3 id="s3-epic2">Epic 2 — Operator feedback loop (7 SP — not started)</h3>
+
+<p>Schema extension on the existing US-5.3 <code>feedback</code> table: <code>rating</code> (up/down), <code>tags</code>, <code>actual_root_cause</code>, <code>comment</code>, <code>rater</code> columns. New <code>POST /decisions/{id}/feedback</code>. 4 new MCP tools on <code>rca_history_mcp</code>. <code>app/static/rate.html</code> form; <code>?rate=1</code> link in escalation emails. Dependency chain US-3.1 → US-3.2 → US-3.5. Curated-RAG retrieval (formerly US-3.3 + US-3.4) deferred to Sprint 4.</p>
+
+<h3 id="s3-epic3">Epic 3 — Drain3 baseline lifecycle (6 SP — not started)</h3>
+
+<p>Wire the dormant S3 plumbing in <code>drain_analyzer.py</code> (5 functions exist, never called). APScheduler weekly snapshot, boot-time restore, 3 operator endpoints (<code>POST /drain3/snapshot</code>, <code>/baseline/tag</code>, <code>/baseline/restore</code>). IAM update on the existing <code>cires-observability-demo-*</code> bucket.</p>
+
+<h3 id="s3-epic4">Epic 4 — Hallucination firewall + trace depth (5/15 SP shipped as of 2026-05-19)</h3>
+
+<p>Added on 2026-04-29 after the <code>0b215ef3</code> incident — see <a href="solution-brief.html#case-study">Solution Brief §7</a> for the case study. Two themes: (a) close the three MCP-only-invariant bypasses on the LLM gathering path; (b) wire <code>get_trace(trace_id)</code> so the LLM sees per-span attributes.</p>
+
+<table>
+  <thead><tr><th>Story</th><th>SP</th><th>Status</th><th>What it ships</th></tr></thead>
+  <tbody>
+    <tr><td>S3-HF-01 (Tier 0)</td><td>1</td><td><span class="badge-done">Done 2026-04-29</span></td><td>Confidence clamp strips <code>suggested_actions</code> + emits read-only <code>diagnostic_steps</code></td></tr>
+    <tr><td>S3-HF-02</td><td>1</td><td><span class="badge-done">Done 2026-04-29</span></td><td>Defensive tests pinning the action-template lookup</td></tr>
+    <tr><td>S3-HF-03 (Tier 2)</td><td>2</td><td><span class="badge-done">Done 2026-04-29</span></td><td>Hypothesis-menu validator + cause-evidence rule</td></tr>
+    <tr><td>S3-HF-04</td><td>1</td><td><span class="badge-done">Done 2026-05-19</span></td><td><code>entity_baselines.py</code> → <code>prometheus-mcp</code> (closes 1 of 3 bypasses)</td></tr>
+    <tr><td>S3-HF-06</td><td>2</td><td><span class="badge-todo">To do</span></td><td>Extend <code>rca_history_mcp</code> with quality-rated tools</td></tr>
+    <tr><td>S3-HF-05</td><td>1</td><td><span class="badge-todo">To do</span></td><td><code>bounded_agency.py</code> → <code>rca_history_mcp</code> (blocked by S3-HF-06)</td></tr>
+    <tr><td>S3-HF-07 (Tier 1)</td><td>3</td><td><span class="badge-todo">To do</span></td><td>Deep trace gather via <code>get_trace(trace_id)</code></td></tr>
+    <tr><td>S3-HF-08</td><td>2</td><td><span class="badge-todo">To do</span></td><td>MCP-integrity CI lint (blocked by S3-HF-04 ✓ + S3-HF-05)</td></tr>
+    <tr><td>S3-HF-09 (Tier 4)</td><td>2</td><td><span class="badge-todo">To do</span></td><td>Chaos scorer 5th axis + corpus seed (<code>0b215ef3</code>) + CI regression gate</td></tr>
+  </tbody>
+</table>
+
+<p><strong>Tier 3 deliberately deferred to Sprint 4</strong> — iterative agentic gather with hypothesis-tree state depends on Sprint 3's Tier 4 measurement scoreboard being green first. Shipping Tier 3 unmeasured would be a high-risk change without a way to detect regressions.</p>
+
+<p><strong>Sprint 3 reference docs.</strong> <a href="sprint3-plan.md">Sprint 3 Plan</a> · <a href="sprint3-backlog.md">Sprint 3 Backlog</a> · <a href="https://github.com/linalaaraich/jira/blob/main/Sprint3-additions.csv">Sprint 3 Jira CSV</a></p>
+
+<!-- ─────────────────── SPRINT 4 ─────────────────── -->
+<h2 id="sprint-4">Sprint 4 — Planned scope</h2>
+
+<p><strong>Sprint goal (working draft).</strong> Build the iterative agentic gather (Tier 3) on top of Sprint-3's Tier-4 measurement scoreboard, ship the incident correlator carried from Sprint 2's deferred Tier-1, introduce curated-RAG retrieval over operator-feedback-curated examples, and close the remaining pod-rule and operational-hardening items.</p>
+
+<p><strong>Dates.</strong> TBD — finalised at the Sprint 3 retro after the supervisor's return. Window will be the standard 2-week shape unless we choose to absorb Sprint-3 carry-forward + the new scope into a longer cycle.</p>
+
+<h3>Sprint 4 candidates — ranked priority list (from <code>sprint3-plan.md</code>)</h3>
+
+<table>
+  <thead><tr><th>#</th><th>Story / Item</th><th>Effort</th><th>Origin</th><th>Gates</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td><strong>US-5.2 Incident correlator</strong> — 4-alert kill-chain RCA collapsed into one coherent email</td><td>1–2 d</td><td>Sprint 2 carry-forward (was Tier-1 priority)</td><td>None</td></tr>
+    <tr><td>2</td><td><strong>Tier 3 — Iterative agentic gather</strong> (3-iteration tool-call loop with hypothesis-tree state)</td><td>3–5 d</td><td>Replaces single-shot <code>bounded_agency</code> retry</td><td>Sprint 3 Tier 4 (S3-HF-09) scoreboard green</td></tr>
+    <tr><td>3</td><td><strong>Curated RAG retrieval</strong> (BM25 over feedback-curated YAML, top-K=3 positives + K=2 anti-examples)</td><td>was US-3.4</td><td>Sprint 3 deferral</td><td>Sprint 3 Epic 2 feedback table populated</td></tr>
+    <tr><td>4</td><td><strong>Weekly curation job</strong> — APScheduler, Sundays 02:00 UTC, reads SQLite feedback → emits <code>library_curated.yaml</code></td><td>was US-3.3</td><td>Sprint 3 deferral</td><td>Feedback volume</td></tr>
+    <tr><td>5</td><td><strong>Pod-level alert rule fixes</strong> — memory cgroup-churn aggregation + CPU label-mismatch (2 query bugs)</td><td>~30 min each</td><td>Sprint 3 close-out (US-3-CO9 noted them at ship time)</td><td>None</td></tr>
+    <tr><td>6</td><td>Sentence-transformers retriever (RAG fallback)</td><td>—</td><td>only if BM25 underperforms in A/B</td><td>Item #3 ships first</td></tr>
+    <tr><td>7</td><td><strong>O-9 webhook auth</strong> + <strong>O-10 nightly RCA-history S3 backup</strong> — Friday-slot hardening</td><td>~30 min each</td><td>Sprint 3 persistent reminders</td><td>None</td></tr>
+    <tr><td>8</td><td><strong>GPU migration to us-west-2 + <code>qwen2.5:14b</code></strong> (or <code>32b-q4</code>)</td><td>3–5 d</td><td>Sprint 3 explicit deferral</td><td>Re-evaluate — laptop steady-state for 25+ d weakens the case (see <a href="solution-brief.html#what">Solution Brief §2</a>)</td></tr>
+    <tr><td>9</td><td>MCP native tool-calling rewrite</td><td>5 SP</td><td>sprint3-backlog #5</td><td>Item #8 (GPU) ships first</td></tr>
+    <tr><td>10</td><td>Trace-ID linkage from log anomalies</td><td>2 SP</td><td>sprint3-backlog #2a</td><td>None</td></tr>
+    <tr><td>11</td><td>RCA playbook templates</td><td>—</td><td>sprint3-backlog #2b</td><td>Complements Epic 2 feedback work</td></tr>
+    <tr><td>12</td><td><strong>US-5.7 Labeled corpus expansion + F1 tracking</strong></td><td>—</td><td>Sprint 3 seeded the corpus via S3-HF-09</td><td>S3-HF-09 ships</td></tr>
+    <tr><td>13</td><td>L2/L3 chaos scenarios (O-12)</td><td>—</td><td>Backlog</td><td>None</td></tr>
+    <tr><td>14</td><td>Drain3 self-monitoring loop allowlist (<code>service_name=drain3</code> exclusion)</td><td>~30 min</td><td>Behavioral concern surfaced 2026-04-29</td><td>None</td></tr>
+    <tr><td>15</td><td>Pipeline duration per-stage instrumentation</td><td>1–2 h</td><td>Recent fires took 5–13× documented typical (323–1081 s)</td><td>None</td></tr>
+    <tr><td>16</td><td>Doc debt — <code>monitoring-project/CLAUDE.md</code> refresh + stale architecture PNGs replaced</td><td>1–2 h</td><td>Carried in audit reports</td><td>None</td></tr>
+  </tbody>
+</table>
+
+<h3>New for Sprint 4 — resilience improvements (proposed, prompted by the 2026-04-30 → 2026-05-19 silence)</h3>
+
+<p>The 20-day pause exposed structural resilience holes that weren't blocking but would be on a longer absence. Proposed Sprint 4 additions:</p>
+
+<ul>
+  <li><strong>R-1 — Live cron heartbeat.</strong> The live-audit cron stopped firing 2026-04-29 and the silence was invisible for 20 days. Fix: cron writes <code>audit_live_last_run_timestamp</code> to a Prometheus pushgateway; new Grafana rule <code>LiveAuditMissing</code> fires if heartbeat older than 36 h. (~2–3 h)</li>
+  <li><strong>R-2 — Controller persistence.</strong> <code>claude-controller</code> is ephemeral; if it dies the live audit cron + <code>SESSION_HANDOFF.md</code> vanish with it. Fix: move live audit to <code>observability-rca-monitoring</code> via systemd timer, or bake a one-command rebuild. (~2–4 h)</li>
+  <li><strong>R-3 — Sprint plan staleness lint.</strong> Sprint 3 window expired 2026-05-08 and nothing surfaced this. Fix: tiny CI script that fails a PR check (or emits warning in static audit §7) if any <code>sprint*-plan.md</code> window end-date is past today. (~30 min)</li>
+  <li><strong>R-4 — Doc staleness badge.</strong> <code>the-bigger-picture.md</code> staleness is tracked in audits only. Fix: promote to README status badge, turns red at 14 d. (~1 h)</li>
+  <li><strong>R-5 — <code>SESSION_HANDOFF.md</code> S3 backup.</strong> The file is local-only with no off-host backup. Fix: fold into the O-10 nightly S3 backup work. (~15 min once O-10 exists)</li>
+</ul>
+
+<!-- ─────────────────── CARRY ─────────────────── -->
+<h2 id="carry">Cross-sprint carry-forward map</h2>
+
+<p>What jumped sprint boundaries — useful for the report's "evolution" framing.</p>
+
+<table>
+  <thead><tr><th>Item</th><th>First proposed</th><th>Shipped</th><th>Reason for carry</th></tr></thead>
+  <tbody>
+    <tr><td>External instrumentation principle (OTel agent injected at start)</td><td>Sprint 1</td><td>Sprint 1 ✓</td><td>Durable principle, carried forward through k3s migration</td></tr>
+    <tr><td>Alertmanager → Grafana unified alerting (single webhook contact point)</td><td>—</td><td>Sprint 2 (D6, 2026-04-24)</td><td>Triage service replaces the Alertmanager routing surface</td></tr>
+    <tr><td>g4dn.xlarge GPU for the LLM</td><td>Sprint 2</td><td>Sprint 2 → decommissioned</td><td>Quotas + cost ↑ vs. laptop GTX 1060 steady-state performance ↑</td></tr>
+    <tr><td>AI workload on k3s</td><td>Sprint 2</td><td>Sprint 2 → moved to laptop 2026-04-23</td><td>Operator wanted dedicated GPU resource; laptop had a 1060 idle</td></tr>
+    <tr><td>US-5.2 incident correlator</td><td>Sprint 2 (Tier-1 priority)</td><td><strong>Sprint 4 candidate #1</strong></td><td>Sprint 3 capacity went to RCA quality close-out + Epic 4 instead</td></tr>
+    <tr><td>Curated RAG retrieval</td><td>Sprint 3 (US-3.3 + US-3.4)</td><td><strong>Sprint 4 candidate #3, #4</strong></td><td>Depends on accumulated operator feedback volume</td></tr>
+    <tr><td>Tier 3 iterative agentic gather</td><td>Sprint 3 (post-<code>0b215ef3</code> design)</td><td><strong>Sprint 4 candidate #2</strong></td><td>Depends on Sprint 3 Tier 4 (S3-HF-09) scoreboard</td></tr>
+    <tr><td>Pod-level alert rule query bugs (mem cgroup-churn + CPU label mismatch)</td><td>Sprint 2 close-out (US-3-CO9)</td><td><strong>Sprint 4 candidate #5</strong></td><td>Filed at ship time; ~30 min each but not a Sprint-3 priority</td></tr>
+    <tr><td>GPU migration to us-west-2 + <code>qwen2.5:14b</code></td><td>Sprint 3 deferral</td><td><strong>Sprint 4 candidate #8</strong></td><td>Re-evaluate; laptop steady-state weakens the case</td></tr>
+    <tr><td>O-9 webhook auth + O-10 S3 backup</td><td>Sprint 3 Friday-slot reminders</td><td><strong>Sprint 4 candidate #7</strong></td><td>30 min each, never got the slot</td></tr>
+    <tr><td>Resilience tier (R-1 to R-5)</td><td><strong>Sprint 3 illness pause exposure</strong></td><td><strong>Proposed Sprint 4 inclusion</strong></td><td>New: prompted by the 2026-04-30 → 2026-05-19 silence</td></tr>
+  </tbody>
+</table>
+
+<!-- ─────────────────── CADENCE ─────────────────── -->
+<h2 id="cadence">Cadence &amp; retro notes</h2>
+
+<p><strong>Sprint length.</strong> 2 weeks nominal, though Sprint 2 ran 3+ weeks and Sprint 3's effective working window was 6 days (2026-04-23 → 2026-04-29) before the illness pause. The 20-day pause + supervisor absence has no precedent in the project's history.</p>
+
+<p><strong>Team size.</strong> 3 — Lina + 2 other engineers — plus the supervisor. The new DevOps reviewer is an advisory role, not a sprint capacity addition.</p>
+
+<p><strong>Retro themes to capture for Sprint 3.</strong></p>
+
+<ul>
+  <li><strong>What went well:</strong> the system stayed healthy through 20 days of zero commits — 17 daily audits all green, no incidents, the laptop ran the triage container without intervention. This is a real validation of the architecture's self-sufficiency.</li>
+  <li><strong>What went poorly:</strong> the live-audit cron silently stopped firing and nothing alerted on this. R-1 closes the hole.</li>
+  <li><strong>What was deferred under pressure:</strong> Sprint 3 was already scoped tight when Epic 4 was added on 2026-04-29 after the <code>0b215ef3</code> incident. The illness pause means Epic 2 and Epic 3 (13 SP combined) never started. The honest framing for the report: "Sprint 3 absorbed an unplanned hallucination-firewall epic mid-sprint, then absorbed a 20-day team-illness pause; the close-out and the firewall epic are landing in two waves (week of 2026-05-19 = wave 1, the operator-feedback + Drain3-lifecycle epics shift into Sprint 4 if needed)."</li>
+  <li><strong>Re-baseline decision:</strong> extend Sprint 3 to absorb the carry, vs. roll Epic 2 + Epic 3 into Sprint 4. Either is defensible; the supervisor's call.</li>
+</ul>
+
+<p style="margin-top:40px; padding-top:20px; border-top:1px solid var(--border); font-size:13px; color:var(--muted);">
+Sprint history compiled 2026-05-19. For the long-form day-by-day timeline of the 2026-04-27 → 2026-04-29 work that established Sprint 3 Epic 1 / Epic 4, see <a href="the-bigger-picture.md">the-bigger-picture.md</a>. For the durable design decisions that shaped each sprint, see <a href="decisions-log.html">decisions-log.html</a>.
+</p>
+
+</section>
+</main>
+
+</body>
+</html>
