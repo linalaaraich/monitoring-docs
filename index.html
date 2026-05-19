@@ -137,12 +137,12 @@
 <div class="hero">
   <div class="eyebrow">CIRES Technologies · Tanger Med</div>
   <h1>Observability <span>Platform</span></h1>
-  <p>Full-stack observability for <code>react-springboot-mysql</code>. Metrics, logs, distributed traces, and AI-assisted root cause analysis — deployed via Ansible + docker-compose (AWS EC2 for demo, CIRES private cloud for production).</p>
+  <p>Full-stack observability for <code>react-springboot-mysql</code>. Metrics, logs, distributed traces, log-template anomalies, and AI-assisted root-cause analysis — Terraform on AWS for the monitoring + application stack, the AI layer on a Tailscale-attached laptop GPU. Reproducible end-to-end from a single Ansible playbook.</p>
   <div class="hero-meta">
-    <div class="meta-item"><div class="meta-dot" style="background:var(--accent-blue)"></div>Prometheus · Loki · Jaeger</div>
+    <div class="meta-item"><div class="meta-dot" style="background:var(--accent-blue)"></div>Prometheus · Loki · Jaeger · Drain3</div>
     <div class="meta-item"><div class="meta-dot" style="background:var(--accent-green)"></div>OTel Collector · Kong Gateway</div>
-    <div class="meta-item"><div class="meta-dot" style="background:var(--accent-purple)"></div>Ollama · FastAPI · MCP</div>
-    <div class="meta-item"><div class="meta-dot" style="background:var(--accent-cyan)"></div>AWS EC2 (demo) · Ansible · Docker</div>
+    <div class="meta-item"><div class="meta-dot" style="background:var(--accent-purple)"></div>Ollama · FastAPI · 5 MCP bridges</div>
+    <div class="meta-item"><div class="meta-dot" style="background:var(--accent-cyan)"></div>AWS EC2 · k3s · Ansible · Tailscale</div>
   </div>
 </div>
 
@@ -189,14 +189,14 @@
       <div class="card-icon" style="background:rgba(176,126,232,.12);">📋</div>
       <div class="card-header-text">
         <h2>Sprint 3 Plan — authoritative current scope</h2>
-        <p>The current-sprint plan in full: 4 epics, 28 stories, ~77 SP, file-path-level acceptance criteria, dependency ordering, deferral list, Sprint 4 candidates. Epic 1 (Quality v2 close-out), Epic 2 (operator feedback loop), Epic 3 (Drain3 baseline lifecycle), Epic 4 (hallucination firewall + trace depth). Source of truth for "what are we working on now".</p>
+        <p>The current-sprint plan in full: 4 epics, 28 stories, ~77 SP, file-path-level acceptance criteria, dependency ordering, deferral list, Sprint 4 candidates. Epic 1 (Quality v2 close-out — 49/50 SP done), <strong>Epic 4 (hallucination firewall + trace depth — 15/15 SP shipped 2026-05-19)</strong>, Epic 2 (operator feedback loop — 7 SP, next), Epic 3 (Drain3 baseline lifecycle — 6 SP, next). Source of truth for "what are we working on now".</p>
       </div>
     </div>
     <div class="card-footer">
       <div class="card-tags">
         <span class="tag tag-purple">Current sprint</span>
-        <span class="tag tag-orange">28 stories</span>
-        <span class="tag tag-green">2026-04-23 → 2026-05-19</span>
+        <span class="tag tag-green">Epic 1 + 4 shipped</span>
+        <span class="tag tag-orange">Epic 2 + 3 next</span>
       </div>
       <div class="card-arrow">&rarr;</div>
     </div>
@@ -297,13 +297,13 @@
       <div class="card-icon" style="background:rgba(176,126,232,.12);">🎤</div>
       <div class="card-header-text">
         <h2>Prepare — Sprint 2 Presentation Notes</h2>
-        <p>Single-page prep doc going from big picture to small: architecture, decisions, Terraform + Ansible + k3s + Helm + MCP + triage, evolution path, retro, and Q&amp;A prep. Everything due by Apr 23 is here.</p>
+        <p>Frozen prep doc from the 2026-04-23 Sprint 2 close-out presentation. Big-picture-to-small: architecture, decisions, Terraform + Ansible + k3s + Helm + MCP + triage, evolution path, retro, Q&amp;A. Kept as a snapshot of what we shipped at Sprint 2 close; current state lives in <a href="the-bigger-picture.md">the bigger picture</a> and <a href="sprint-history.html">sprint history</a>.</p>
       </div>
     </div>
     <div class="card-footer">
       <div class="card-tags">
         <span class="tag tag-purple">Sprint 2</span>
-        <span class="tag tag-orange">Presentation</span>
+        <span class="tag tag-green">Closed · snapshot</span>
         <span class="tag tag-cyan">Q&amp;A</span>
       </div>
       <div class="card-arrow">&rarr;</div>
@@ -333,14 +333,14 @@
       <div class="card-icon" style="background:rgba(240,160,80,.1);">🛠️</div>
       <div class="card-header-text">
         <h2>Sprint 2 Build Guide</h2>
-        <p>Step-by-step implementation guide for the AI RCA pipeline: AWS demo setup, Drain3 anomaly detection, FastAPI triage service, Ollama LLM, and end-to-end integration.</p>
+        <p>Step-by-step implementation guide for the AI RCA pipeline: AWS setup, Drain3 anomaly detection, FastAPI triage service, Ollama LLM, end-to-end integration. <em>Frozen historical reference</em> — Sprint 2 closed 2026-04-23.</p>
       </div>
     </div>
     <div class="card-footer">
       <div class="card-tags">
         <span class="tag tag-purple">AI RCA</span>
         <span class="tag tag-cyan">Drain3</span>
-        <span class="tag tag-orange">Due Apr 9</span>
+        <span class="tag tag-green">Sprint 2 · closed</span>
       </div>
       <div class="card-arrow">&rarr;</div>
     </div>
@@ -369,14 +369,14 @@
       <div class="card-icon">🧠</div>
       <div class="card-header-text">
         <h2>Triage Service — Reference</h2>
-        <p>Deep dive on the AI RCA service: the 10-stage pipeline (with exemplar injection, response validator, bounded-agency retry, action-template fallback), HTTP API (<code>/webhook/grafana</code>, <code>/decisions</code>, <code>/dashboard</code>), data model, Prometheus metrics, dedup + suppression, and the 2026-04-23 laptop GPU verdict that validated the end-to-end path in 68&nbsp;seconds. Reconciled 2026-04-28 to the full-sweep audit.</p>
+        <p>Deep dive on the AI RCA service: the 10-stage pipeline (exemplar injection, response validator, hallucination blocklist, surface-only + hypothesis-menu validators, confidence clamp with <code>diagnostic_steps</code> fallback, bounded-agency retry, action-template fallback), HTTP API (<code>/webhook/grafana</code>, <code>/decisions</code>, <code>/dashboard</code>, <code>/feedback/*</code>), data model, 226-test suite, Prometheus metrics, dedup + suppression. End-to-end verified at 68 s cold on laptop GTX 1060 + <code>qwen2.5:7b</code>. See also <a href="hallucination-firewall.html">hallucination firewall</a>.</p>
       </div>
     </div>
     <div class="card-footer">
       <div class="card-tags">
         <span class="tag tag-purple">AI RCA</span>
-        <span class="tag tag-blue">FastAPI</span>
-        <span class="tag tag-green">Reference</span>
+        <span class="tag tag-blue">FastAPI · 10 stages</span>
+        <span class="tag tag-green">226/226 tests</span>
       </div>
       <div class="card-arrow">→</div>
     </div>
@@ -405,14 +405,14 @@
       <div class="card-icon">🚀</div>
       <div class="card-header-text">
         <h2>Sprint 2 Backlog</h2>
-        <p>20 user stories across 2 epics: AWS demo environment and AI RCA system with Drain3 anomaly detection (MVP). 86 story points, due April 9th.</p>
+        <p>20 user stories across 2 epics: AWS environment and AI RCA system with Drain3 anomaly detection (MVP). 86 story points; <strong>closed 2026-04-23</strong> with the deadline moved twice from the original Apr 9 (rescope captured in <a href="decisions-log.html">decisions log</a>).</p>
       </div>
     </div>
     <div class="card-footer">
       <div class="card-tags">
-        <span class="tag tag-cyan">AWS Demo</span>
+        <span class="tag tag-cyan">AWS</span>
         <span class="tag tag-purple">AI RCA</span>
-        <span class="tag tag-orange">Due Apr 9</span>
+        <span class="tag tag-green">Sprint 2 · closed</span>
       </div>
       <div class="card-arrow">→</div>
     </div>
@@ -495,7 +495,7 @@
       <div class="card-icon" style="background:rgba(240,160,80,.1);">📝</div>
       <div class="card-header-text">
         <h2>Decisions Log</h2>
-        <p>Every significant architectural or product decision made while building the AI triage pipeline — problem → reasoning → chosen solution → evaluation. 15+ decisions with file references, the "why we arrived here" trail for reviewers and future collaborators. Living document.</p>
+        <p>Every significant architectural or product decision made while building the AI triage pipeline — problem → reasoning → chosen solution → evaluation. <strong>D1–D23</strong> with file references, the "why we arrived here" trail for reviewers and future collaborators. Living document.</p>
       </div>
     </div>
     <div class="card-footer">
@@ -530,15 +530,15 @@
     <div class="card-header">
       <div class="card-icon" style="background:rgba(224,96,112,.1);">🔍</div>
       <div class="card-header-text">
-        <h2>Alerts Audit</h2>
-        <p>Rigorous row-by-row review of every RCA the triage pipeline produced. Per-alert accuracy assessments, drain3 deep-dive (why zero self-alerts in 123 k lines), trace-analysis proposal, fixes applied this sprint, and a four-track improvement plan for Sprint 3.</p>
+        <h2>Alerts Audit (frozen 2026-04-24)</h2>
+        <p>The original full-sweep RCA audit that seeded the Sprint 3 quality work — per-alert accuracy assessments, Drain3 deep-dive (why zero self-alerts in 123 k lines), trace-analysis proposal, and the four-track improvement plan that became Epics 1 + 4. <em>Frozen as historical evidence</em>; the rolling daily audits since 2026-04-28 live in the private <code>monitoring-audit-results</code> repo.</p>
       </div>
     </div>
     <div class="card-footer">
       <div class="card-tags">
-        <span class="tag tag-orange">Audit</span>
+        <span class="tag tag-orange">Founding audit</span>
         <span class="tag tag-purple">RCA quality</span>
-        <span class="tag" style="background:rgba(224,96,112,.1); color:var(--accent-red);">2026-04-24</span>
+        <span class="tag" style="background:rgba(224,96,112,.1); color:var(--accent-red);">2026-04-24 · frozen</span>
       </div>
       <div class="card-arrow">→</div>
     </div>
@@ -567,14 +567,14 @@
       <div class="card-icon" style="background:rgba(224,208,96,.1);">🧬</div>
       <div class="card-header-text">
         <h2>Sprint 2 Epic 5 — UEBA</h2>
-        <p>New Epic. Seven user stories lifting User and Entity Behavior Analytics patterns from SIEM into AIOps: per-service baselines, incident correlation (kill-chain grouping), closed-loop analyst feedback, adaptive thresholds, peer grouping, deployment-history enrichment, labeled corpus for precision/recall. 4 core + 3 stretch. The philosophical shift from alert-driven to entity-behavior-driven ops.</p>
+        <p>Seven user stories lifting UEBA patterns from SIEM into AIOps. Per-service Drain3 baselines (<strong>shipped</strong>), closed-loop feedback (<strong>shipped</strong>), adaptive thresholds (<strong>shipped</strong>), recurrence gates (<strong>shipped</strong>) all landed 2026-04-27/28 and were absorbed into the Sprint 3 Epic 1 close-out. Stretch stories (US-5.2 incident correlator, US-5.5/6/7 stretch) carried forward to Sprint 4.</p>
       </div>
     </div>
     <div class="card-footer">
       <div class="card-tags">
-        <span class="tag" style="background:rgba(224,208,96,.1); color:var(--accent-yellow);">New Epic</span>
-        <span class="tag tag-purple">7 stories</span>
-        <span class="tag tag-green">2026-04-24</span>
+        <span class="tag tag-green">4 of 7 shipped</span>
+        <span class="tag tag-purple">Absorbed into Sprint 3 Epic 1</span>
+        <span class="tag tag-orange">3 carried to Sprint 4</span>
       </div>
       <div class="card-arrow">→</div>
     </div>
@@ -585,7 +585,7 @@
       <div class="card-icon" style="background:rgba(120,200,180,.1);">📚</div>
       <div class="card-header-text">
         <h2>Happy-path scenarios — exemplar library</h2>
-        <p>Eleven curated "perfect cycle" RCA scenarios — OOM-loop, upstream-latency attribution, synthetic-blip dismiss, cascade incidents, Drain3 novelty post-deploy, bounded-agency retry, adaptive threshold, closed-loop feedback, CrashLoopBackOff, network/firewall attribution, TLS pre-failure expiry. Pre-injected into every LLM prompt as a structural reference (D17). Source-of-truth in <code>app/exemplars/library.yaml</code>.</p>
+        <p>Fourteen curated "perfect cycle" RCA archetypes — OOM-loop, upstream-latency attribution, service-self p95 saturation, critical resource saturation, otel-collector degradation, synthetic-blip dismiss, cascade incidents (disk-Loki), Drain3 novelty post-deploy, bounded-agency retry, adaptive-threshold no-op, closed-loop feedback override, CrashLoopBackOff, network/firewall attribution, TLS pre-failure expiry. Pre-injected into every LLM prompt as a structural reference (<a href="decisions-log.html#d17">D17</a>). Source-of-truth: <code>app/exemplars/library.yaml</code>.</p>
       </div>
     </div>
     <div class="card-footer">
@@ -609,9 +609,10 @@
 </p>
 
 <div class="status-row">
-  <div class="status-item"><div class="status-dot dot-done"></div>Sprint 1 complete — local observability stack</div>
-  <div class="status-item"><div class="status-dot dot-done"></div>Sprint 2 closed Apr 23 — AI RCA on CPU (underwhelming: 20–40 min/alert)</div>
-  <div class="status-item"><div class="status-dot dot-active"></div>Sprint 3 in progress — AI runs on laptop GTX 1060 + <code>qwen2.5:7b</code> (cloud-GPU migration dropped 2026-05-19 on cost grounds); native MCP tool calling now unblocked (see <a href="sprint-history.html#sprint-4-removed" style="color:var(--accent-purple);">sprint-history § removed</a>)</div>
+  <div class="status-item"><div class="status-dot dot-done"></div>Sprint 1 complete — observability foundation, reproducible from one Ansible playbook</div>
+  <div class="status-item"><div class="status-dot dot-done"></div>Sprint 2 closed 2026-04-23 — AWS + AI RCA MVP shipped; production runner moved to laptop GPU on close day</div>
+  <div class="status-item"><div class="status-dot dot-active"></div>Sprint 3 wave 2 (2026-05-19 →) — Epic 4 hallucination firewall <strong>15/15 SP shipped</strong>; <code>qwen2.5:7b</code> on laptop GTX 1060 holding 25–68 s end-to-end; triage suite <strong>226/226</strong>; daily static + live audits running</div>
+  <div class="status-item"><div class="status-dot dot-pending"></div>Sprint 4 — incident correlator, Tier 3 agentic gather, curated RAG, R-1..R-5 resilience tier; <a href="sprint-history.html#sprint-4-removed" style="color:var(--accent-purple);">cloud-GPU migration dropped on cost grounds</a></div>
 </div>
 
 </body>
