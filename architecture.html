@@ -313,7 +313,7 @@
     The diagrams below are the original Sprint-2 intent. The <strong>live</strong> layout has diverged in two important ways that matter for any operator touching this system:
   </p>
   <ul style="margin:0 0 10px 20px;color:#c0c5d0;line-height:1.7;">
-    <li><strong>AI stack (Ollama + 5 MCP servers + triage) is on Lina's laptop</strong>, not a cloud GPU. The laptop's GTX 1060 + qwen2.5:7b delivered end-to-end RCA in ~25 s warm / 68 s cold. The G+VT vCPU quota landed 2026-04-27 in <code>us-west-2</code> only (limit 4 vCPU = exactly one <code>g5.xlarge</code> with an A10G + 24 GB VRAM), so a dedicated EC2 GPU is now <em>unblocked</em> — but stand-up is deferred while the laptop remains sufficient. Trigger to revisit: wanting <code>qwen2.5:14b</code> / <code>qwen2.5:32b-q4</code> or higher demo throughput. The laptop runs WSL2 + Docker Desktop; the AI stack compose file lives at <code>~/cires-ai/docker-compose.yml</code>, with the <code>.env</code> ansible-managed by <code>roles/triage_laptop</code> (single-command CD from the controller).</li>
+    <li><strong>AI stack (Ollama + 5 MCP servers + triage) is on Lina's laptop</strong>, not a cloud GPU. The laptop's GTX 1060 + qwen2.5:7b delivered end-to-end RCA in ~25 s warm / 68 s cold and has held that steady state for 25+ days through the Sprint-3 investigation window. The G+VT vCPU quota landed 2026-04-27 in <code>us-west-2</code> only (limit 4 vCPU = exactly one <code>g5.xlarge</code> with an A10G + 24 GB VRAM), but the cloud-GPU stand-up was <strong>dropped on 2026-05-19 on cost grounds</strong> — a g5.xlarge runs ~$720/month on-demand, an order of magnitude more than the laptop runner with no quality regression to justify it. The <code>qwen2.5:14b</code> / <code>32b-q4</code> upgrade path is parked indefinitely; revisited only if 7b output quality materially degrades or a subsidised GPU appears. The laptop runs WSL2 + Docker Desktop; the AI stack compose file lives at <code>~/cires-ai/docker-compose.yml</code>, with the <code>.env</code> ansible-managed by <code>roles/triage_laptop</code> (single-command CD from the controller).</li>
     <li><strong>Tailscale is the control + data plane between cloud, k3s, and laptop.</strong> Monitoring VM (EC2) → triage webhook at <code>adolin-wsl</code> (laptop), triage → Loki at <code>observability-rca-monitoring</code> (EC2), controller → ansible to all three managed nodes. Every hop is over WireGuard, keyed on MagicDNS short hostnames that survive EIP drift. As of 2026-04-28 the tailnet has 5 nodes — k3s joined that day. Public SSH on k3s is closed; <code>monitoring-vm</code> SSH is scoped to the operator's <code>/32</code>; tailnet is the always-available fallback. Full setup in the <a href="tailscale-guide.html" style="color:#6bcf7f">Tailscale guide</a>.</li>
   </ul>
   <p style="margin:0;color:#8890a0;font-size:12.5px;">
@@ -551,7 +551,7 @@
     <div class="vm-box vm-ai vm-full">
       <div class="vm-header">
         <span>AI / LLM host <span class="gpu-badge">GPU</span></span>
-        <span class="ip">Laptop · GTX 1060 6 GB &nbsp;|&nbsp; future: g5.xlarge A10G 24 GB (us-west-2, deferred)</span>
+        <span class="ip">Laptop · GTX 1060 6 GB &nbsp;|&nbsp; cloud-GPU upgrade dropped 2026-05-19 (cost)</span>
       </div>
       <div class="vm-body">
         <div class="svc pillar-ai">
@@ -1024,7 +1024,7 @@ const archData = {
       {
         "name": "AI / LLM host (laptop)",
         "host_type": "Lina's laptop · WSL2 + Docker · over Tailscale",
-        "specs": "GTX 1060 6 GB VRAM · qwen2.5:7b (current); future host g5.xlarge A10G 24 GB in us-west-2 (deferred — see sprint3-backlog.md §4)",
+        "specs": "GTX 1060 6 GB VRAM · qwen2.5:7b (current and indefinite); cloud-GPU upgrade to g5.xlarge / qwen2.5:14b dropped 2026-05-19 on cost grounds — see sprint-history.html §sprint-4-removed",
         "role": "ai-rca",
         "services": [
           {
@@ -1268,7 +1268,7 @@ const archData = {
       },
       "layer_3_llm": {
         "technology": "Ollama (self-hosted) :11434",
-        "gpu": "NVIDIA GTX 1060 6 GB VRAM (laptop, current); g5.xlarge A10G 24 GB in us-west-2 (future, deferred)",
+        "gpu": "NVIDIA GTX 1060 6 GB VRAM (laptop, current and indefinite — cloud-GPU upgrade dropped 2026-05-19 on cost grounds)",
         "mcp_bridges": [
           {"name": "Prometheus MCP", "port": 8091, "purpose": "Query metrics, check rates, get history"},
           {"name": "Loki MCP", "port": 8092, "purpose": "Search logs, filter by service, log volume"},

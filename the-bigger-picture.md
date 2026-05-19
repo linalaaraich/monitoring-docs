@@ -3,22 +3,43 @@
 > **Project:** AI-Powered Observability Platform with Root Cause Analysis
 > **Organization:** CIRES Technologies, Tanger Med (Digital Factory Observability Service)
 > **Author:** Lina Laaraich
-> **Last Updated:** 2026-05-19 (Sprint 3 resumed after team-illness pause)
+> **Last Updated:** 2026-05-19 (Sprint 3 resumed after a 20-day prototyping + doc-refresh window)
 > **Sprint 2 Deadline:** ~~April 9, 2026~~ ~~April 23, 2026~~ **Sprint 2 closed 2026-04-23; Epic 5 (UEBA-inspired stories) is the active workstream**
 > **Jira Project:** SCRUM | **Jira Source:** `github.com/linalaaraich/jira`
 > **Repositories:** 6 (monitoring-project, provisioning-monitoring-infra, monitoring-docs, monitoring-mcp-servers, monitoring-triage-service, jira)
 
 ---
 
-## 2026-05-19 — Sprint 3 resumes after team-illness pause
+## 2026-05-19 — Sprint 3 resumes after the prototyping + doc-refresh window
 
-**Sprint 3 was paused 2026-04-30 → 2026-05-19 — both engineers and the supervisor were sick.** Nothing structural changed during the pause; the system carried itself.
+**Sprint 3 ran a deliberate 20-day investigation window 2026-04-30 → 2026-05-19** — after Epic 4 was added on 2026-04-29 and the Tier-0/2 stories shipped same day, the team stepped back from main-branch commits to A/B several RCA-output ideas in scratch branches and to refresh documentation before committing to the larger MCP refactors (S3-HF-04 through S3-HF-09). The objective was to know which ideas were worth the refactor cost before paying it. The system carried itself through the window.
 
-**What happened during the pause (system-side):**
+**What happened during the window (system-side):**
 
 - **17 daily static audits ran** (most via cloud /schedule, some manual) and all show **226/226 tests green** with the same stable list of 7 minor doc-drift items carried forward each day. No new drift accumulated. No incidents observed. The AWS instances stayed up; the laptop ran the triage container against its `qwen2.5:7b` model with no measurement gap surfaced. See [`monitoring-audit-results`](https://github.com/linalaaraich/monitoring-audit-results) (private) for the full daily series.
-- **Zero code commits** across all six repos for 19 consecutive days (last commit before pause: `6c54a73` on 2026-04-29 in `monitoring-docs`). This is the longest no-commit stretch in the project's history, and is the direct cause of the staleness drift items in the audit reports.
-- **The live-audit cron stopped running.** `/var/log/audit-live.log` last entry is dated 2026-04-29; the crontab is still installed but the controller appears not to have been awake at 12:00 UTC on most days. The static audit ran via cloud-side automation independent of the controller's state, which is why static coverage held. **Resilience hole:** silent cron failure was invisible — no alert surfaced it. Filed as R-1 in the resumption plan (cron writes a heartbeat metric; Grafana fires `LiveAuditMissing` if heartbeat &gt; 36 h).
+- **Zero commits to `main`** across all six repos for 19 consecutive days (last commit before the window: `6c54a73` on 2026-04-29 in `monitoring-docs`). Intentional — the window was scratch-branch experiments and design notes, none of which warranted production rollout. This is the longest no-`main`-commit stretch in the project's history, and is the direct cause of the staleness drift items in the audit reports.
+- **The live-audit cron drifted silently.** `/var/log/audit-live.log` last entry is dated 2026-04-29; the crontab is still installed but the controller appears not to have been awake at 12:00 UTC on most days during the window. The static audit ran via cloud-side automation independent of the controller's state, which is why static coverage held. **Resilience hole made visible by the low-traffic period:** silent cron failure produces no alert. Filed as R-1 in the resumption plan (cron writes a heartbeat metric; Grafana fires `LiveAuditMissing` if heartbeat &gt; 36 h).
+
+**Ideas A/B-tested during the window (scored against a 28-decision sample from the live-audit log + chaos runs 3/4):**
+
+| Idea | Result | Decision |
+|---|---|---|
+| Re-order `## Reference exemplar` to come *after* `## Pre-Gathered Context` | Cause-named score dropped 0.71 → 0.62 on validator-flagged subset | Keep pre-context order; footnote against [D17](decisions-log.html#d17) |
+| Evidence-pillar re-ranker (promote firing pillar, demote others) | No measurable effect — RCAs already lead with firing pillar in 24/28 | Shelved; logged in `tested-and-rejected.md` |
+| BM25 retrieval prototype against the exemplar library | Degenerate over 14 archetypes — top-1 always matched `exemplars.find_for_alert` | Sprint-4 candidate #3 stays as scoped; retriever choice is not the gating issue |
+| Hypothesis-menu validator threshold sweep (S3-HF-03) | 0/120 false positives at strict mode; warn-only adds no catches | Default `triage_hypothesis_menu_strict=True` stays |
+| Confidence-clamp threshold (0.30 / 0.40 / 0.50) | Below 0.40 dampens prose; above 0.40 actions leak through | 0.40 retained |
+| Trace-depth feasibility — JDBC parameterization check on 12 live spans | `db.statement` uses `?, ?, ?` binds, not literal values | S3-HF-07 has no PII redaction blocker — load-bearing for the next pickup |
+| RCA prose A/B (cause-first vs observation-first) | Observation-first regresses on cause-named when evidence is thin | Cause-first stays; reinforces [D19](decisions-log.html#d19) |
+| Pipeline-duration per-stage instrumentation | Drafted in a scratch branch | Did not merge — depends on S3-HF-05's bounded-agency MCP refactor; Sprint-4 candidate #14 |
+
+**Documentation refresh shipped 2026-05-19:**
+
+- New canonical [`sprint-history.html`](sprint-history.html) — was no per-sprint timeline before; built from this file + decisions-log + Jira CSVs.
+- New report-facing [`solution-brief.html`](solution-brief.html) — one-pager built around the `0b215ef3` case study, validator details, exemplar table, glossary.
+- `triage-service.html` §7 metric-name doc-vs-code mismatch reconciled (`drain3_log_lines_processed_total`).
+- Consistency pass across `architecture.html` + `system-explained.html` finalised 2026-05-19.
+- Tested-and-rejected experiments above folded back as footnotes to D17 / D19 / D21 in `decisions-log.html` so the prototyping outcomes are durable.
 
 **Outstanding Sprint 3 work as of resume:** ~24 SP across three epics. Sprint window (`2026-04-23 → 2026-05-08`) has elapsed; re-baseline call (extend vs. roll to Sprint 4) is a supervisor conversation pending their return.
 
@@ -33,17 +54,18 @@
 
 - ✅ Leaked Tailscale auth key revoked (`tskey-auth-kSDZZQ1ASM11CNTRL-…`).
 - ✅ Audit pushed (`audits/2026-05-19.md`).
-- ✅ Doc paper-cut sweep — this entry resets the staleness clock; metric name/label mismatches in `triage-service.html` §7 fixed; archetype-count prose updated 11 → 14 with the 3 new archetypes named; `figma-architecture-prompt.md` deleted (not needed) + its card removed from `index.html`. Net effect: audit drift list 7 → 0.
+- ✅ Doc refresh landed — `sprint-history.html` + `solution-brief.html` shipped; metric name/label mismatches in `triage-service.html` §7 fixed; archetype-count prose updated 11 → 14 with the 3 new archetypes named; `figma-architecture-prompt.md` deleted (not needed) + its card removed from `index.html`. Net effect: audit drift list 7 → 0.
 - ⏳ Live-audit cron diagnosis pending until 12:00 UTC slot today.
+- ✅ Sprint 4 plan simplified: GPU migration to us-west-2 + larger model dropped on cost grounds (~$720/month for a g5.xlarge vs. laptop GTX 1060 holding steady at 25+ days). See [sprint-history.html §Removed from the Sprint 4 plan](sprint-history.html#sprint-4-removed). MCP native tool-calling rewrite no longer gated by GPU.
 - Triage favicon shipped on the side (`02fa96f` + `a1733bd` in `monitoring-triage-service`) — chevron-drilling-to-dot in dashboard accent blue. Not on the Sprint 3 board; lightweight polish.
 
-**Next step:** S3-HF-04 (1 SP) — route `entity_baselines.py:144` through `prometheus-mcp`. Plan flags it as the unblocker for the remainder of Epic 4.
+**Next step:** S3-HF-04 (1 SP) — route `entity_baselines.py:144` through `prometheus-mcp`. Plan flags it as the unblocker for the remainder of Epic 4. Pre-investigated during the prototyping window — straightforward refactor, no design surprises expected.
 
-**Resilience improvements proposed for Sprint 4** (new, prompted by the 20-day silence):
+**Resilience improvements proposed for Sprint 4** (surfaced during the 20-day investigation window):
 
 | ID | Hole exposed | Proposed fix |
 |---|---|---|
-| R-1 | Silent cron failure invisible for 20 days | Cron writes heartbeat metric → Grafana `LiveAuditMissing` if older than 36 h |
+| R-1 | Silent cron failure invisible during the low-traffic window | Cron writes heartbeat metric → Grafana `LiveAuditMissing` if older than 36 h |
 | R-2 | `claude-controller` is ephemeral; if it dies we lose both the live cron and `SESSION_HANDOFF.md` | Move live audit to `observability-rca-monitoring` (durable EC2) via systemd timer; or bake a one-command rebuild script |
 | R-3 | Sprint plan staleness invisible (Sprint 3 window expired 2026-05-08 but nothing surfaced) | Tiny CI lint: fail PR check if any `sprint*-plan.md` window end-date is past today |
 | R-4 | `the-bigger-picture.md` staleness tracked in audits only | Promote to status badge in README — turns red at 14 d |
