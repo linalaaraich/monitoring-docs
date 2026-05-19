@@ -1,0 +1,2160 @@
+% =====================================================================
+%  AI-Driven Observability and Root-Cause Analysis
+%  Design and Implementation of the CIRES Observability Platform
+%
+%  Final-Year-Project Report (working draft)
+%  Author : Lina Laaraich
+%  Institution : Tanger Med / CIRES Technologies — Digital Factory
+%  Compiled  : May 2026
+% =====================================================================
+
+\documentclass[11pt,a4paper,oneside]{report}
+
+% ---------- packages ----------
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[english]{babel}
+\usepackage[a4paper,margin=2.6cm,headheight=14pt]{geometry}
+\usepackage{microtype}
+\usepackage{parskip}
+\usepackage{enumitem}
+\setlist{itemsep=2pt, topsep=4pt}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{tabularx}
+\usepackage{xcolor}
+\definecolor{accent}{HTML}{1F6FB0}
+\definecolor{accentdark}{HTML}{0B3E73}
+\definecolor{boxbg}{HTML}{F4F6FA}
+\definecolor{boxrule}{HTML}{C8D2E0}
+\definecolor{codebg}{HTML}{F7F7F4}
+\definecolor{warnrule}{HTML}{C77B23}
+\definecolor{winrule}{HTML}{2A8A4B}
+\usepackage{graphicx}
+\usepackage{titlesec}
+\titleformat{\chapter}[display]
+  {\normalfont\bfseries\color{accentdark}}
+  {\Large CHAPTER \thechapter}{12pt}{\LARGE}
+\titlespacing*{\chapter}{0pt}{-10pt}{14pt}
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\renewcommand{\headrulewidth}{0.4pt}
+\fancyhead[L]{\nouppercase{\leftmark}}
+\fancyhead[R]{\thepage}
+\fancypagestyle{plain}{\fancyhf{}\fancyfoot[C]{\thepage}\renewcommand{\headrulewidth}{0pt}}
+\usepackage{caption}
+\captionsetup{font=small,labelfont=bf,labelsep=period}
+\usepackage{listings}
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  backgroundcolor=\color{codebg},
+  frame=single,
+  framesep=4pt,
+  rulecolor=\color{boxrule},
+  breaklines=true,
+  showstringspaces=false,
+  columns=fullflexible,
+  keepspaces=true,
+  xleftmargin=8pt,
+  xrightmargin=8pt
+}
+\usepackage{tcolorbox}
+\tcbuselibrary{breakable}
+\newtcolorbox{notebox}[1][]{enhanced,breakable,
+  colback=boxbg,colframe=boxrule,boxrule=0.4pt,arc=2pt,
+  left=8pt,right=8pt,top=6pt,bottom=6pt,
+  fonttitle=\bfseries\small,#1}
+\newtcolorbox{warnbox}[1][]{enhanced,breakable,
+  colback=warnrule!6,colframe=warnrule,boxrule=0.5pt,arc=2pt,
+  left=8pt,right=8pt,top=6pt,bottom=6pt,
+  fonttitle=\bfseries\small\color{warnrule},#1}
+\newtcolorbox{winbox}[1][]{enhanced,breakable,
+  colback=winrule!5,colframe=winrule,boxrule=0.5pt,arc=2pt,
+  left=8pt,right=8pt,top=6pt,bottom=6pt,
+  fonttitle=\bfseries\small\color{winrule},#1}
+\usepackage[hidelinks,colorlinks=true,
+  linkcolor=accent,citecolor=accent,urlcolor=accent]{hyperref}
+\usepackage{bookmark}
+
+% ---------- metadata ----------
+\newcommand{\reporttitle}{AI-Driven Observability and Root-Cause Analysis}
+\newcommand{\reportsubtitle}{Design and Implementation of the CIRES Observability Platform}
+\newcommand{\reportauthor}{Lina Laaraich}
+\newcommand{\reportorg}{CIRES Technologies / Tanger Med --- Digital Factory Observability Service}
+\newcommand{\reportdate}{May 2026}
+
+\hypersetup{
+  pdftitle={\reporttitle\ --- \reportsubtitle},
+  pdfauthor={\reportauthor},
+  pdfsubject={Final-Year Project Report --- AI-driven observability and RCA},
+  pdfkeywords={observability, SRE, AIOps, RCA, MCP, Prometheus, Loki, Jaeger, Grafana, LLM, qwen2.5}
+}
+
+% ---------- title page ----------
+\begin{document}
+\begin{titlepage}
+\centering
+\vspace*{2.5cm}
+{\fontsize{12}{14}\selectfont Final-Year Project Report \par}
+\vspace{0.6cm}
+{\color{accentdark}\rule{0.55\textwidth}{0.6pt}\par}
+\vspace{1.0cm}
+{\fontsize{24}{30}\selectfont\bfseries \reporttitle \par}
+\vspace{0.6cm}
+{\fontsize{16}{20}\selectfont\itshape \reportsubtitle \par}
+\vspace{0.8cm}
+{\color{accentdark}\rule{0.55\textwidth}{0.6pt}\par}
+\vspace{2.2cm}
+{\large \reportauthor \par}
+\vspace{0.4cm}
+{\normalsize \reportorg \par}
+\vfill
+{\large \reportdate \par}
+\vspace{0.6cm}
+{\small Working draft, prepared as the structural and content basis for the final submitted report.}
+\end{titlepage}
+
+% ---------- abstract ----------
+\chapter*{Abstract}
+\addcontentsline{toc}{chapter}{Abstract}
+\markboth{Abstract}{Abstract}
+
+This dissertation reports on the design and implementation of the
+\emph{CIRES Observability Platform}, an end-to-end production
+observability stack augmented with an AI-driven Root-Cause Analysis
+(RCA) layer.  The platform was built between February and May 2026 at
+CIRES Technologies (Tanger Med, Digital Factory Observability Service)
+across four planned sprints.  Sprints 1--3 were completed during the
+project period; Sprint 4 is documented as scoped future work.
+
+The work addresses an operational problem surfaced during the discovery
+phase: incidents in the target production environment were being
+discovered \emph{after the fact} --- by clients, or during retrospective
+log review --- rather than by the monitoring system itself.  The
+platform's response is a two-layer design: a conventional
+observability foundation (Prometheus, Loki, Jaeger, Grafana, OpenTelemetry)
+provisioned by Ansible on AWS, with a FastAPI-based AI triage service
+on top that consumes alerts via Grafana webhooks, gathers cross-pillar
+context through five Model-Context-Protocol (MCP) bridge servers, and
+produces structured root-cause analyses with a local Large Language
+Model (\texttt{qwen2.5:7b-instruct} on Ollama).
+
+The implementation introduces several novel mechanisms to keep the
+LLM output operationally trustworthy: an exemplar library of fourteen
+canonical RCA archetypes injected as structural scaffolding before
+the evidence pack; an alert-keyed hallucination blocklist; a
+surface-only and hypothesis-menu validator pair; a confidence-clamp
+that strips suggested actions when trust signals are weak and emits
+read-only \emph{diagnostic steps} instead; a single bounded-agency
+retry constrained to one MCP call; and a closed-loop feedback layer
+that turns operator overrides into routing signal.  An
+\emph{MCP-only data-access invariant} is enforced as a project-wide
+rule: every datum the LLM sees must arrive via an MCP bridge, never
+via direct in-process imports or direct database/Prometheus queries.
+
+The dissertation presents the architecture, sprint-by-sprint
+implementation history, an in-depth case study of the
+\texttt{0b215ef3} incident that drove the hallucination-firewall epic,
+an evaluation against a 4-axis RCA quality rubric, and a catalogue of
+the twenty-three durable design decisions (D1--D23) recorded during
+construction.  The final chapter scopes future work, including
+iterative agentic gather, curated retrieval-augmented generation
+fed from operator feedback, and a labelled chaos-test corpus for
+regression-grade quality measurement.
+
+\vspace{1em}
+\noindent\textbf{Keywords:} observability, SRE, AIOps, root-cause
+analysis, MCP, Prometheus, Loki, Jaeger, Grafana, large language
+models, Ollama, qwen2.5, Ansible, Terraform, k3s.
+
+% ---------- TOC ----------
+\tableofcontents
+\listoffigures
+\listoftables
+
+% =====================================================================
+\chapter{Introduction}
+\label{ch:intro}
+
+\section{Context and motivation}
+
+CIRES Technologies is the digital factory of Tanger Med, the principal
+port complex of northern Morocco.  The Digital Factory Observability
+Service is responsible for the operational health of the internal
+service catalogue that supports port logistics, customer integrations,
+and back-office workflows.  At the start of this project, the service
+catalogue ran on a small fleet of on-premises virtual machines hosting
+a representative web stack (a Spring Boot back-end, a Kong API gateway,
+a MySQL data store, a React-based front-end); a parallel migration to
+AWS was already on the medium-term roadmap.
+
+Internal monitoring at the start of the project was limited to ad-hoc
+log inspection and a small number of metric-threshold rules.
+Operationally, this produced a structurally reactive posture: outages
+were detected by client reports or during retrospective log review,
+not by the system itself.  The asymmetry between the speed of failure
+(seconds to minutes) and the speed of human detection (hours to days)
+defined the operational gap that this project sets out to close.
+
+\section{Problem statement}
+
+\begin{notebox}[title={Problem statement (derived from Sprint 0 field research)}]
+The team needs a way to detect production problems early --- before
+they reach a client, and without requiring a human to be reading logs
+at the right moment.  Detection should also be \emph{pre-investigated}:
+each alert should arrive with a candidate root cause, the supporting
+evidence, and a recommended remediation, so that the operator's first
+move is to validate or override rather than to start an investigation
+from scratch.
+\end{notebox}
+
+This formulation separates the problem into two distinct halves.  The
+first half is conventional: stand up a real observability stack so the
+system emits actionable signals.  The second half is novel: layer on
+top of that stack an automated reasoning system that turns alerts into
+structured, actionable RCAs without on-call human attention.  The
+platform implements both halves and integrates them end-to-end.
+
+\section{Aim and objectives}
+
+\textbf{Aim.}  Design, implement and validate a production-shaped
+observability platform that proactively detects, investigates and
+reports on incidents using an AI triage layer that runs over open-source
+infrastructure, with no dependency on hosted SaaS observability
+vendors.
+
+\textbf{Objectives.}
+\begin{enumerate}
+  \item Establish a three-pillar observability foundation (metrics,
+        logs, traces) for the target web stack, deployable from clean
+        infrastructure via a single Ansible playbook.
+  \item Migrate the workload from on-premises VMs onto a
+        Terraform-managed AWS environment and run the application
+        workload on Kubernetes (k3s) while keeping the monitoring stack
+        on Docker Compose for operational simplicity.
+  \item Implement an AI triage service that consumes Grafana webhooks
+        and produces structured root-cause analyses with verdicts,
+        evidence, and suggested remediation actions, persisted to a
+        durable history store.
+  \item Bridge each telemetry source (Prometheus, Loki, Jaeger,
+        triage history, deployment events) behind an MCP server, and
+        enforce an MCP-only data-access invariant so that every datum
+        the LLM consumes is provenanced through a bridge.
+  \item Develop and evaluate quality-control mechanisms that keep
+        LLM output operationally trustworthy: exemplar injection, a
+        hallucination blocklist, prose-shape validators, a confidence
+        clamp, and a closed-loop operator feedback channel.
+  \item Document the system end-to-end at a level sufficient for the
+        engineering team to operate, extend and audit it after the
+        project's conclusion.
+\end{enumerate}
+
+\section{Scope and limitations}
+
+The project explicitly scopes \emph{in} the components above and
+explicitly scopes \emph{out} the following:
+
+\begin{itemize}
+  \item Hosted SaaS observability vendors (Datadog, New Relic,
+        Honeycomb).  These were costed and surveyed in Sprint 0; the
+        decision to use open-source infrastructure was driven by
+        budget, data-sovereignty, and learning objectives.
+  \item Production rollout to actual customer-facing systems.  The
+        scope is the representative web stack used as a development
+        surrogate (a derivative of the
+        \texttt{mukundmadhav/react-springboot-mysql} repository),
+        deployed on dedicated infrastructure with synthetic load and
+        chaos-injected failure.
+  \item Multi-region high-availability for the observability stack
+        itself.  The platform runs in \texttt{us-east-1} (or local
+        on-premises) and is not multi-AZ.
+  \item A cloud GPU runner for the LLM layer.  This was originally
+        scoped as a Sprint-4 candidate and was dropped on cost grounds
+        on 2026-05-19 in favour of a laptop-based runner that proved
+        sufficient (see \S\ref{sec:gpu-dropped}).
+\end{itemize}
+
+\section{Structure of the dissertation}
+
+The dissertation proceeds as follows.  Chapter~\ref{ch:background}
+reviews the technical background: observability practice, SRE,
+log-template clustering, large language models in IT operations, and
+the Model-Context-Protocol specification.  Chapter~\ref{ch:discovery}
+covers the Sprint-0 discovery phase, including interview findings and
+the framing that produced the problem statement above.
+Chapter~\ref{ch:architecture} presents the platform architecture in
+its current shape.  Chapters \ref{ch:sprint1}--\ref{ch:sprint3} cover
+the three completed implementation sprints in chronological order.
+Chapter~\ref{ch:case-study} provides an in-depth case study of the
+\texttt{0b215ef3} incident that drove the hallucination-firewall
+epic.  Chapter~\ref{ch:evaluation} evaluates the platform against a
+four-axis RCA quality rubric, the chaos-injection harness, and the
+recurring static and live audit cycles.  Chapter~\ref{ch:decisions}
+catalogues the twenty-three durable design decisions (D1--D23)
+recorded during construction and discusses the three most consequential
+in depth.  Chapter~\ref{ch:future} scopes Sprint 4 and beyond, and
+chapter~\ref{ch:conclusion} concludes.
+
+% =====================================================================
+\chapter{Background and Related Work}
+\label{ch:background}
+
+\section{The three pillars of observability}
+
+Modern observability practice identifies three primary telemetry
+pillars: \emph{metrics}, \emph{logs}, and \emph{traces}.  Metrics are
+numeric time-series of system state (CPU utilisation, request rate,
+error rate, etc.), typically scraped on a fixed interval and stored in
+a purpose-built time-series database such as Prometheus.  Logs are
+discrete textual events emitted by services, ideally with structured
+fields, aggregated by a log database such as Grafana Loki.  Traces are
+distributed records of a single request's journey across services,
+carrying a trace identifier that links spans recorded by each hop into
+one structure for examination; the OpenTelemetry project provides the
+canonical wire format and Jaeger is a widely-used storage backend.
+
+A fully observable system requires all three pillars and the ability
+to navigate between them: from an anomalous metric to the logs of the
+service whose metric is anomalous, and from those logs to the trace
+that carried the originating request.  The CIRES platform implements
+this triangulation as a first-class concern; the AI triage service's
+context-gathering step explicitly fans out to all three pillars and
+to a fourth, Drain3-based log-template clustering signal, before any
+LLM reasoning takes place.
+
+\section{SRE practice and the golden signals}
+
+Google's Site Reliability Engineering literature (the
+\emph{SRE Book} and \emph{SRE Workbook}) identifies four
+\emph{golden signals} that almost any user-facing service should be
+measured against: \textbf{latency}, \textbf{traffic},
+\textbf{errors}, and \textbf{saturation}.  The book also articulates
+two ideas that influenced this project's alert taxonomy:
+
+\begin{itemize}
+  \item The \textbf{symptoms vs.\ causes} distinction.  Alerts should
+        fire on user-observable symptoms (high latency, elevated error
+        rate) rather than on underlying causes (high CPU, high
+        memory).  Cause-based alerts produce a flood of false positives
+        in healthy systems; symptom-based alerts page the operator
+        only when something is actually broken from the user's
+        viewpoint.
+  \item The \textbf{error budget} framing.  Service-Level Objectives
+        (SLOs) define a tolerable error rate; the gap between target
+        reliability and 100\,\% reliability is the error budget.  A
+        team that is in the red on its error budget should slow down
+        feature development and invest in reliability; a team in the
+        green has explicit permission to take more risk.
+\end{itemize}
+
+The CIRES platform does not at this stage formalise SLOs or error
+budgets, but the alert rule set is deliberately structured to lean
+symptomatic --- \texttt{HighP95Latency} on the gateway,
+\texttt{HighKongP95Latency} per upstream, \texttt{ErrorRate} on the
+service tier --- with cause-shaped alerts (CPU, memory, disk)
+treated as supplementary diagnostic signal rather than primary paging
+material.
+
+\section{Prometheus, Loki, Jaeger, Grafana}
+
+The platform's foundational stack is the de-facto open-source
+combination for modern infrastructure observability:
+
+\begin{itemize}
+  \item \textbf{Prometheus} for metrics.  Pull-based scraping on a 15-s
+        interval.  Spring Boot exposes \texttt{/actuator/prometheus},
+        Kong exposes its statistics endpoint, and host-level
+        \texttt{node\_exporter} and \texttt{cAdvisor} fill in the gaps.
+  \item \textbf{Loki} for logs.  Pull-based ingestion via Promtail.
+        Loki stores log streams indexed by labels rather than by
+        full-text content, which keeps storage costs low and pairs
+        cleanly with Prometheus's label model.
+  \item \textbf{Jaeger} for traces.  OpenTelemetry Collector receives
+        spans from the OTel Java agent injected into Spring Boot, and
+        from the Kong OTel plugin at the gateway layer, and forwards
+        them to Jaeger.  Trace identifiers propagate end-to-end.
+  \item \textbf{Grafana} for visualisation and alerting.  Grafana
+        unified alerting replaced Alertmanager early in the project
+        (see decision D6 in chapter~\ref{ch:decisions}); a single
+        \texttt{triage-webhook} contact point routes all alert events
+        to the AI triage service.
+\end{itemize}
+
+\section{Drain3 and log-template clustering}
+
+Real production logs contain a small number of recurring template
+strings and a large body of incidental variation (timestamps,
+identifiers, parameter values).  The Drain3 algorithm (a tunable
+variant of Drain) ingests log lines, replaces the variable parts with
+placeholders, and clusters lines by the resulting template.  Once the
+catalogue of templates has stabilised, novel templates become a strong
+operational signal: a log line whose template has never been seen
+before is, by construction, unusual.
+
+The CIRES platform integrates Drain3 as a fourth signal alongside
+metrics, logs, and traces.  A background poller reads the most recent
+log lines from Loki, feeds them through a per-service template miner,
+and emits a synthetic \texttt{Drain3AnomalyDetected} webhook into the
+triage service whenever the recent novelty rate exceeds a configurable
+threshold.  The webhook payload carries the actual novel template
+strings and a sample of the underlying lines, so the LLM downstream
+sees not just a count but the evidence itself
+(decision~D23 records the per-service split that resolved a class of
+false-positive issues introduced by an earlier global miner).
+
+\section{Large language models in IT operations}
+
+The use of large language models for IT-operations tasks is an active
+area sometimes labelled \emph{AIOps}.  The state of the practice
+varies widely.  Hosted observability vendors have shipped AI-flavoured
+features for several years (Datadog Watchdog, New Relic AI,
+Honeycomb's BubbleUp, Komodor's incident summarisation), each with a
+different scope: anomaly detection, alert summarisation, correlation
+across signals, incident reconstruction.
+
+Three risks dominate when an LLM is placed in the operational path:
+
+\begin{enumerate}
+  \item \textbf{Hallucination.}  The model may confidently produce
+        statements that are not entailed by the evidence pack ---
+        invented metric values, services that do not exist, kubectl
+        commands for systems that are not deployed on Kubernetes.
+  \item \textbf{Surface-only reasoning.}  The model may restate the
+        alert in different words (``the alert indicates high latency''
+        or ``based on the observed value of 1.2\,s'') without
+        identifying a cause.
+  \item \textbf{Hypothesis menus.}  Under uncertainty, the model may
+        emit a list of possibilities (``this could be a slow query,
+        a connection pool issue, or a garbage-collection pause'')
+        rather than committing to one and naming the evidence for it.
+\end{enumerate}
+
+A central engineering challenge of the project has been the design
+of mechanisms that detect and reject each of these failure modes
+without rejecting genuinely good RCAs.  Chapter~\ref{ch:sprint3} and
+chapter~\ref{ch:case-study} treat these mechanisms in depth.
+
+\section{The Model-Context-Protocol}
+
+The Model-Context-Protocol (MCP) is an open specification, introduced
+in 2024 by Anthropic and now adopted across a range of LLM tooling
+projects, for connecting LLM applications to external data sources
+and tools.  An MCP \emph{server} exposes a small number of tools
+(typically read-only) over a JSON-RPC transport; an MCP \emph{client}
+discovers tools, invokes them, and feeds the results back into the
+model's context.
+
+The CIRES platform uses MCP not in its original ``LLM directly calls
+tools'' shape but in a more constrained pattern.  Five MCP servers
+sit between the data sources and the triage service:
+
+\begin{itemize}
+  \item \texttt{prometheus-mcp:8091}  --- instant and range queries
+        against Prometheus.
+  \item \texttt{loki-mcp:8092}  --- log queries against Loki.
+  \item \texttt{jaeger-mcp:8093}  --- trace lookups against Jaeger,
+        plus a \texttt{get\_trace} tool for full-trace retrieval.
+  \item \texttt{rca-history-mcp:8094}  --- read access to the
+        persistent RCA history (SQLite, on the laptop runner).
+  \item \texttt{deploy-events-mcp:8095}  --- deployment-event timeline
+        from the application repositories.
+\end{itemize}
+
+In the default path, the triage service \emph{itself} (not the LLM)
+fans out to these MCP servers during context gathering and assembles
+an evidence pack that is rendered into the prompt as a structured
+\texttt{\#\# Pre-Gathered Context} section.  The LLM is invoked once
+on this pre-gathered material.  Only the bounded-agency retry path
+(chapter~\ref{ch:sprint3}, \S\ref{sec:bounded-agency}) gives the LLM
+direct access to MCP tools, and only one such tool call is permitted
+per retry.
+
+This shape is deliberate: it preserves the LLM's strengths
+(structured-output generation, narrative synthesis) while keeping the
+operational paths (which queries to run, which evidence to gather)
+under deterministic control.  The \textbf{MCP-only invariant} ---
+``every datum the LLM sees must arrive via an MCP bridge'' --- is the
+project's hallucination firewall in its most general statement.
+
+\section{Related platforms and prior art}
+
+\begin{itemize}
+  \item \textbf{Datadog Watchdog} performs anomaly detection across
+        metrics and produces narrative incident summaries.  It is a
+        proprietary, closed system; the CIRES platform's open-source
+        construction allows the team to inspect and tune every layer.
+  \item \textbf{New Relic Applied Intelligence} (\emph{NRAI}) provides
+        correlation and prioritisation across alerts.  Its
+        ``incident intelligence'' graph is a useful precedent for the
+        Sprint-4 \emph{incident correlator} (US-5.2) that the CIRES
+        platform scopes as future work.
+  \item \textbf{Honeycomb BubbleUp} surfaces feature-value
+        distributions that distinguish a slow request population from a
+        fast one --- an effective bottom-up tool but one that requires
+        Honeycomb's specific high-cardinality data model.
+  \item \textbf{Komodor} produces narrative incident timelines for
+        Kubernetes workloads.  The CIRES platform's exemplar archetypes
+        and trace-depth gather (planned via \texttt{get\_trace}) cover
+        a similar conceptual space.
+\end{itemize}
+
+The closest published precedent for the platform's overall shape is
+the body of work around structured-output LLM use in support engineering
+(``LLM as RCA copilot'' rather than ``LLM as autonomous responder'').
+The novel contributions of this project are (a) the MCP-only invariant
+treated as a project-wide rule, (b) the exemplar library of fourteen
+canonical RCA archetypes injected as prompt scaffolding, and (c) the
+layered prose-shape validator and confidence-clamp mechanism that
+together comprise the hallucination firewall.
+
+% =====================================================================
+\chapter{Discovery and Requirements (Sprint 0)}
+\label{ch:discovery}
+
+\section{Approach}
+
+The project ran a deliberate Sprint~0 between February and the first
+days of March 2026 before any infrastructure code was written.  Two
+parallel tracks ran for the duration of this sprint:
+
+\begin{enumerate}
+  \item \textbf{Monitoring-solution benchmarking.}  A survey of the
+        major open-source observability stacks, their feature matrices,
+        deployment models, and integration footprint with the JVM /
+        Spring Boot stack already in use at CIRES.  SaaS alternatives
+        (Datadog, New Relic, Honeycomb) were costed and ruled out for
+        this engagement on a mix of budget and data-sovereignty
+        grounds.
+  \item \textbf{Field research.}  Structured conversations with the
+        engineers and operators closest to the production system,
+        focused on three questions: what wakes them up, how they
+        first discover that something is broken, and what their
+        first investigation step is when an alert lands.
+\end{enumerate}
+
+A third stream, conducted in parallel, was a guided read-through of
+Google's \emph{SRE Book} and \emph{SRE Workbook} with explicit
+translation into Tanger Med's context: a small team without a formal
+on-call rotation, a mixed-deployment service catalogue, and operational
+visibility concentrated in a small number of senior engineers.
+
+\section{Findings from interviews}
+
+The single most consequential finding from the field research recurred
+in nearly every conversation.  When asked how problems were first
+discovered, the modal answer was a variant of:
+
+\begin{notebox}[title={Recurring interview finding}]
+``We find out things are broken because a client tells us, or because
+someone notices after the fact in a log review.''
+\end{notebox}
+
+Detection was lagging actual breakage by hours to days.  The team's
+reactive posture was structural, not a matter of effort: there was
+nothing in the system that drew attention to a problem on its own.
+This finding crystallised the problem statement given in
+\S\ref{ch:intro} and shaped the entire architecture that followed.
+
+A second finding, less central but still important, was that even
+when alerts \emph{were} in place (e.g. for disk usage on certain
+servers), the operators routinely had to do non-trivial investigation
+work to understand what the alert meant in the current context.  The
+project's emphasis on \emph{pre-investigated} alerts --- arriving
+with a candidate RCA, evidence, and remediation --- traces back
+directly to this second finding.
+
+\section{Solution-space exploration}
+
+Several candidate architectures were brainstormed and pressure-tested
+before settling on the eventual two-layer design:
+
+\begin{enumerate}
+  \item \textbf{Traditional rules-only alerting.}  Rejected --- it
+        already exists conceptually, addresses the
+        \emph{detection} half of the problem only, and leaves the
+        \emph{investigation} half to a human reading dashboards at the
+        right moment.
+  \item \textbf{AI-summarisation layer over raw alerts.}  Closer:
+        addresses the investigation half partially, by giving the
+        operator a narrative summary alongside the alert.  Risky
+        because the summary is purely descriptive (``CPU is high'')
+        rather than diagnostic (``CPU is high because the cron job is
+        running and missing its lock''); it does not actually reduce
+        the operator's investigation load.
+  \item \textbf{Full AI-triage layer that turns alerts into structured
+        RCAs with verdicts and remediation suggestions.}  Chosen.
+        Addresses both halves: the observability layer detects, the
+        triage layer pre-investigates.  Risks recorded explicitly:
+        hallucination, surface-only output, model-availability
+        dependence on a self-hosted LLM, latency budget of the LLM
+        call vs.\ operator expectations.
+\end{enumerate}
+
+\section{Functional requirements}
+
+\begin{enumerate}
+  \item \textbf{FR-1} The platform shall ingest metric, log, and trace
+        telemetry from the target web stack with no source-code
+        modification of the application services.  Instrumentation
+        shall be \emph{external}: agents mounted at start time, plug-ins
+        configured at the gateway layer.
+  \item \textbf{FR-2} The platform shall raise alerts on user-observable
+        symptoms (latency, error rate, traffic) and on a set of cause-
+        shaped supplementary signals (CPU, memory, disk, target-down,
+        log anomalies).
+  \item \textbf{FR-3} For every alert that is not suppressed by the
+        deduplication or recurrence-gate layers, the platform shall
+        produce a structured RCA containing: verdict (escalate /
+        dismiss / inconclusive), root-cause prose, suggested actions
+        or read-only diagnostic steps, a list of cited evidence, a
+        list of correlated alerts in the surrounding window, and a
+        confidence value.
+  \item \textbf{FR-4} The RCA shall be persisted to a durable history
+        store, exposed via a dashboard, and dispatched as an
+        escalation email when the verdict so indicates.
+  \item \textbf{FR-5} Operator overrides on RCAs (``actually
+        dismiss'' / ``actually escalate'') shall be captured and
+        used as a routing signal for subsequent fires.
+  \item \textbf{FR-6} All data sources consumed by the LLM shall be
+        accessed via an MCP bridge (the MCP-only invariant).
+\end{enumerate}
+
+\section{Non-functional requirements}
+
+\begin{enumerate}
+  \item \textbf{NFR-1 Reproducibility.}  The entire stack shall be
+        reproducible from clean infrastructure via a single Ansible
+        playbook (Sprint~1) or a Terraform + Ansible pair (Sprint~2).
+  \item \textbf{NFR-2 Open-source first.}  No hosted SaaS dependencies
+        on the critical path.  An LLM may be a third-party model file,
+        but it must be runnable locally on commodity hardware.
+  \item \textbf{NFR-3 Latency budget.}  Time from webhook arrival to
+        persisted RCA: target $<2$\,min warm, $<3$\,min cold, on the
+        laptop runner.  This budget is met (typical 25--68\,s) and
+        documented in chapter~\ref{ch:evaluation}.
+  \item \textbf{NFR-4 Cost.}  Total monthly run-rate target: under
+        \$100/month, exclusive of AWS Free-Tier-eligible resources.
+        This budget drives the decision to drop the Sprint~4 GPU
+        migration (\S\ref{sec:gpu-dropped}).
+  \item \textbf{NFR-5 Auditability.}  Every change to the platform
+        shall be reviewable in version control; durable design
+        decisions shall be captured in a decisions log; daily
+        static and live audits shall produce a written trail.
+\end{enumerate}
+
+% =====================================================================
+\chapter{System Architecture}
+\label{ch:architecture}
+
+\section{Layered architecture overview}
+
+The platform is structured in three layers, illustrated in
+figure~\ref{fig:layers}.
+
+\begin{figure}[h]
+\centering
+\begin{tabular}{|c|}
+\hline
+\textbf{Layer 3 --- AI triage} \\
+FastAPI service, qwen2.5:7b on Ollama, dashboard, SMTP escalation \\
+\hline
+\textbf{Layer 2 --- MCP bridge} \\
+\texttt{prometheus-mcp}, \texttt{loki-mcp}, \texttt{jaeger-mcp},
+\texttt{rca-history-mcp}, \texttt{deploy-events-mcp} \\
+\hline
+\textbf{Layer 1 --- Observability foundation} \\
+Prometheus, Loki, Jaeger, Grafana, OTel Collector, node-exporter,
+cAdvisor, Drain3 poller \\
+\hline
+\textbf{Layer 0 --- Telemetry sources} \\
+Spring Boot (OTel agent), Kong (OTel plug-in), MySQL, k3s pods,
+host metrics \\
+\hline
+\end{tabular}
+\caption{Layered architecture.  Each layer consumes only the layer
+immediately below it; the MCP-only invariant is the rule that
+formalises this for the AI layer.}
+\label{fig:layers}
+\end{figure}
+
+The arrangement is deliberately conservative.  Conventional alerts
+flow up from layer~0 through Prometheus and Grafana in the standard
+way; the AI layer is an additional consumer that does not displace the
+existing alert routing.  If the AI layer is taken down, the platform
+degrades gracefully to a standard Grafana-alerting setup; the inverse
+is not true.
+
+\section{Runtime topology}
+
+After the Sprint~2 migration the platform's runtime topology
+distributes across three classes of host:
+
+\begin{enumerate}
+  \item \textbf{Monitoring host} (\texttt{observability-rca-monitoring}
+        on \texttt{us-east-1}, EC2 \texttt{t3.large}).  Runs the
+        observability stack as a seven-container Docker Compose
+        deployment: Prometheus, Loki, Jaeger, Grafana, OTel
+        Collector, cAdvisor, node-exporter.
+  \item \textbf{Application host} (\texttt{observability-rca-k3s} on
+        \texttt{us-east-1}, EC2 \texttt{t3.xlarge}).  Runs the
+        application workload (Spring Boot, Kong, MySQL, front-end) on
+        a single-node k3s cluster.  A node-exporter DaemonSet provides
+        host-level metrics from the k3s side.
+  \item \textbf{AI host} (the engineer's laptop,
+        WSL2 + Docker Desktop, NVIDIA GTX~1060 6\,GB).  Runs the
+        triage service, the five MCP servers, and Ollama with
+        \texttt{qwen2.5:7b-instruct} loaded.  The laptop is reachable
+        over a Tailscale tailnet and addressed by MagicDNS
+        (\texttt{adolin-wsl}).
+\end{enumerate}
+
+All three hosts share a Tailscale tailnet that also contains the
+operator's controller node.  WireGuard handles the transport; the
+public IPs of the AWS instances are not exposed for service traffic.
+
+\section{Data flow: alert to RCA}
+
+The end-to-end flow of an alert through the platform proceeds in ten
+stages, summarised in figure~\ref{fig:pipeline}.
+
+\begin{figure}[h]
+\centering
+\small
+\begin{tabular}{|r|l|l|}
+\hline
+\textbf{Stage} & \textbf{What happens} & \textbf{Module} \\
+\hline
+1  & Webhook arrives from Grafana or Drain3 poller & \texttt{main.py} \\
+2  & Two-tier deduplication and suppression        & \texttt{dedup.py} \\
+3  & Context gather (Prom, Loki, Jaeger, Drain3, RCA history) & \texttt{context.py} \\
+4  & Numeric metric interpretation                 & \texttt{metric\_interpreter.py} \\
+5  & Exemplar injection (1 of 14 archetypes)       & \texttt{exemplars/} \\
+6  & LLM call (structured output, qwen2.5:7b)      & \texttt{llm\_client.py} \\
+6b & Response validation (surface-only, hypothesis-menu, blocklist) & \texttt{response\_validator.py} \\
+6c & Bounded-agency retry (one MCP call max)       & \texttt{bounded\_agency.py} \\
+6d & Confidence clamp (strip actions if untrustworthy) & \texttt{pipeline.py} \\
+7  & Action-template fallback (if RCA actions empty) & \texttt{action\_templates.py} \\
+8  & Persist to \texttt{rca\_history}, dispatch email & \texttt{rca\_store.py}, \texttt{notifier.py} \\
+\hline
+\end{tabular}
+\caption{The ten-stage triage pipeline.  Stages 6/6b/6c/6d together
+form the hallucination firewall.}
+\label{fig:pipeline}
+\end{figure}
+
+This pipeline is described stage-by-stage in chapters~\ref{ch:sprint2}
+and~\ref{ch:sprint3}; the validator and confidence-clamp mechanisms
+introduced in stages~6b and~6d are central to the project's
+hallucination-firewall theme and are treated at length in
+chapter~\ref{ch:sprint3}.
+
+\section{The MCP-only data-access invariant}
+
+\begin{notebox}[title={MCP-only invariant}]
+Every datum that the LLM sees in its prompt must arrive through an
+MCP server.  Direct \texttt{httpx} or \texttt{requests} calls to
+Prometheus, direct \texttt{aiosqlite} reads of the RCA history
+database, and direct in-process \texttt{from app.exemplars import \ldots}
+imports are all forbidden in the LLM-adjacent code paths.
+\end{notebox}
+
+The invariant serves two purposes.  First, it constrains provenance:
+every fact the LLM is shown can be traced back to a specific MCP
+tool call, with timestamps and response codes; there is no ambiguity
+about ``where did the model see this''.  Second, it removes a class
+of hallucination root causes; an in-process Python import can succeed
+silently and surface stale or partial data, where an MCP call has an
+explicit error envelope and is observable in the bridge layer's
+metrics.
+
+Three breaches of the invariant were detected during the
+\texttt{0b215ef3} incident on 2026-04-29 and form the scope of the
+Epic-4 hallucination-firewall stories (S3-HF-04 / S3-HF-05 /
+S3-HF-06).  See chapters~\ref{ch:case-study} and~\ref{ch:sprint3}
+for the diagnosis and fix plan.
+
+% =====================================================================
+\chapter{Sprint 1 --- Observability Foundation}
+\label{ch:sprint1}
+
+\section{Sprint goal and topology}
+
+Sprint~1 ran 2026-03-10 to 2026-03-30.  The goal was to execute on
+the first half of the Sprint-0 hypothesis: stand up a full-stack
+observability platform for the representative web stack using
+open-source tools and deployable by anyone with the playbook.  No
+AI layer is present at this stage.
+
+The Sprint-1 topology used three on-premises VMs:
+\texttt{monitoring-vm} (.10), \texttt{application-vm} (.11),
+\texttt{network-vm} (.12), on subnet 192.168.127.0/24.  All three
+were standard Ubuntu LTS hosts with Docker installed; the entirety
+of the stack was deployed as Docker Compose services under Ansible
+control.
+
+\section{Ansible role layout}
+
+One role per service was established, each idempotent and
+parameterised, with a Docker Compose template, environment file
+generation, and a health-check task:
+
+\texttt{roles/prometheus}, \texttt{roles/loki}, \texttt{roles/jaeger},
+\texttt{roles/grafana}, \texttt{roles/otel\_collector},
+\texttt{roles/kong}, \texttt{roles/spring\_boot},
+\texttt{roles/cadvisor}, \texttt{roles/node\_exporter},
+\texttt{roles/mysql}.
+
+A single playbook (\texttt{playbooks/site.yml}) brought a freshly
+provisioned set of VMs to a fully-observable state in approximately
+fifteen minutes.  The playbook is part of the project's
+reproducibility evidence and is documented in
+\texttt{monitoring-docs/reproducibility-guide.html} and
+\texttt{build-guide.html}.
+
+\section{Three-pillar telemetry}
+
+\begin{itemize}
+  \item \textbf{Metrics} via Prometheus, scraping Spring Boot's
+        \texttt{/actuator/prometheus}, Kong's statistics endpoint,
+        node-exporter on each VM, and cAdvisor on the
+        application-VM.
+  \item \textbf{Logs} via Loki, with Promtail tailing Docker container
+        logs on each VM and shipping them with a small set of
+        well-controlled labels (\texttt{service\_name},
+        \texttt{instance}, \texttt{container}).
+  \item \textbf{Traces} via the OpenTelemetry Collector, receiving
+        spans from the OTel Java agent injected into the Spring Boot
+        process at start time and from the OTel plug-in installed at
+        the Kong gateway.  Trace identifiers propagated end-to-end so
+        a single request appeared as one trace from gateway to
+        upstream.
+\end{itemize}
+
+\section{Grafana and initial alerting}
+
+Grafana was provisioned via Ansible templates and shipped with four
+canonical dashboards (service overview, alert overview, log explorer,
+trace explorer) installed under \texttt{/var/lib/grafana/dashboards}.
+Initial alerting used Alertmanager, with metric-threshold rules on
+CPU, memory, disk, and target-down state, routed through a Gmail SMTP
+contact point.  Alertmanager was removed in Sprint~2 (decision~D6) in
+favour of Grafana unified alerting with a single \texttt{triage-webhook}
+contact point feeding the AI triage service.
+
+\section{Sprint 1 outcome}
+
+\begin{winbox}[title={Sprint 1 deliverables}]
+A reproducible, three-pillar observability stack for a representative
+web application, deployable from clean VMs in approximately fifteen
+minutes via a single Ansible command.  No application source-code
+modification required; instrumentation is entirely external (OTel
+agent, OTel plug-in, scrape endpoints, Promtail).  This is the
+foundation on which all subsequent sprints build.
+\end{winbox}
+
+The carry-forward items at sprint close were: the three-VM topology
+(superseded in Sprint~2 by AWS EC2 + k3s); Alertmanager (removed in
+Sprint~2 by D6); the Gmail SMTP contact point (replaced by the triage
+service's own SMTP send); and the on-premises IP address space
+(replaced by a Tailscale tailnet).
+
+% =====================================================================
+\chapter{Sprint 2 --- AWS Migration and AI RCA MVP}
+\label{ch:sprint2}
+
+\section{Sprint goal}
+
+Sprint~2 ran 2026-03-31 to 2026-04-23, with a follow-on Epic~5 running
+to 2026-04-29.  The goal was to move the platform off on-premises VMs
+onto AWS (Terraform-provisioned EC2), migrate the application workload
+to k3s, and add an AI layer that produces structured root-cause analyses
+from incoming alerts.  The on-premises foundation from Sprint~1 remains
+useful as a reproducibility target; the production-shaped deployment
+lives on AWS.
+
+The sprint deadline moved twice (April 9 $\rightarrow$ April 23),
+captured in the strikethrough trail in the project's progress tracker.
+Final landing: 2026-04-23.
+
+\section{Epic 1 --- AWS Infrastructure}
+
+A Terraform configuration in the \texttt{provisioning-monitoring-infra}
+repository manages the entire AWS estate: a VPC with public and
+private subnets, two EC2 instances (\texttt{t3.large} for monitoring,
+\texttt{t3.xlarge} for k3s), an RDS \texttt{db.t3.micro} MySQL
+instance, Elastic IPs on the durable hosts, security groups
+parameterised by Tailscale CIDR plus a public-UI CIDR for Grafana /
+Prometheus / Loki / Jaeger UI access, IAM roles per instance, an S3
+bucket for Loki cold storage and a second for Terraform state.  The
+Ubuntu AMI was pinned to a specific image identifier to remove silent
+drift between runs.
+
+\section{Epic 2 --- AI RCA System MVP}
+
+This epic introduces the largest new surface in the project.  It
+comprises:
+
+\begin{itemize}
+  \item \textbf{Five MCP servers}
+        (\texttt{monitoring-mcp-servers/}).  Each is a small Python
+        process that exposes three to four tools over a JSON-RPC
+        transport with a Prometheus-style \texttt{/metrics} endpoint
+        for observability of the bridge itself.
+  \item \textbf{FastAPI triage service}
+        (\texttt{monitoring-triage-service/}).  Webhook receivers for
+        Grafana and Drain3, an asynchronous ten-stage pipeline,
+        structured-output LLM calls via Ollama, deduplication and
+        suppression, a dashboard, and SMTP escalation.
+  \item \textbf{Cross-pillar correlation.}  The \texttt{context.py}
+        module fans out to three MCPs in parallel before the LLM call,
+        building one pre-gathered evidence pack the LLM consumes.  This
+        keeps the model out of the loop on which queries to run; the
+        platform decides.
+  \item \textbf{Drain3 log-template clustering.}  Server-side over
+        Loki, surfacing novel templates as a fourth signal alongside
+        metrics, logs, and traces.
+  \item \textbf{Local LLM.}  \texttt{qwen2.5:7b-instruct} via Ollama,
+        initially on a \texttt{g4dn.xlarge} EC2 (decommissioned), then
+        moved to the laptop's GTX 1060 on 2026-04-23 (still the
+        production runner today).
+\end{itemize}
+
+\section{Epic 3 --- Kubernetes migration}
+
+The application workload was moved from the application-VM Docker
+Compose into a single-node k3s cluster on
+\texttt{observability-rca-k3s}.  Helm charts were authored for the
+Spring Boot back-end, Kong, and the front-end.  The
+\texttt{xanmanning.k3s} Ansible Galaxy role provisions k3s as a
+\texttt{systemd} unit; a node-exporter DaemonSet provides host-level
+metrics from the k3s side.
+
+The monitoring stack stayed on Docker Compose.  Decision~D11
+records the rationale: the monitoring VM is operationally stable,
+deployable from Ansible, and gains nothing structural from migrating
+onto Kubernetes; the cost of the migration (Helm charts for nine
+services, persistent-volume claim management, Kubernetes-specific
+operational learning curve) exceeded the benefit.
+
+\section{Epic 4 --- AI Triage Hardening}
+
+This epic raises the AI triage layer from ``MVP that responds to
+webhooks'' to ``service operators can trust'': a two-tier
+deduplication layer (in-memory fingerprint plus a pre-LLM
+history-based suppression --- decision~D4), structured-output schema
+enforcement at the LLM call layer (D12), an error envelope on every
+MCP response, pipeline timeouts, the operator dashboard, the email
+notifier with a confidence-bordered card, and a first pass at
+action-template fallback.
+
+\section{Epic 5 --- UEBA-flavoured stories (post-sprint)}
+
+Five UEBA-inspired stories ran past sprint close as a coherent
+in-flight workstream and were ultimately folded into Sprint~3 as the
+``RCA Quality v2 close-out'' epic.  The net effort was approximately
+forty-nine story points shipped after sprint close.  These stories
+are summarised in table~\ref{tab:epic5}.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{p{0.10\textwidth} p{0.55\textwidth} p{0.25\textwidth}}
+\toprule
+\textbf{Story} & \textbf{What it added} & \textbf{Outcome} \\
+\midrule
+US-5.1 Phase A & Per-service Drain3 --- dictionary of \texttt{service
+$\to$ TemplateMiner} with file-backed state per service. & Shipped
+2026-04-28 \\
+US-5.1 Phase B & Entity baselines --- 7-day rolling per-service-metric
+quantiles + $\sigma$-claim helper. & Shipped 2026-04-28; verification
+closed by S3-HF-04 \\
+US-5.3 & Closed-loop feedback override/confirm + lazy
+\texttt{triage\_precision} / \texttt{triage\_recall} metrics. & Shipped
+2026-04-28 \\
+US-5.4 & Adaptive thresholds on three flappiest rules
+(same-hour-7-days-ago + $3\sigma$ baseline). & Shipped 2026-04-27 \\
+US-5.8 & Recurrence gates (pre-LLM + post-LLM, Medium-CPU/Mem opt-in).
+& Shipped 2026-04-28 \\
+\bottomrule
+\end{tabular}
+\caption{Epic 5 stories carried past Sprint 2 close.}
+\label{tab:epic5}
+\end{table}
+
+\section{Sprint 2 outcome}
+
+\begin{winbox}[title={Sprint 2 deliverables}]
+The transition from ``we have observability'' (Sprint~1) to ``the
+observability platform produces structured, validated RCAs end-to-end
+with operator-feedback closure'' (Sprint~2 + Epic~5).  The pipeline
+that runs in production today is the Sprint-2 architecture with
+Sprint-3's quality and safety mechanisms layered on top.  The test
+suite reached 178/178 at sprint close on the triage service.
+\end{winbox}
+
+% =====================================================================
+\chapter{Sprint 3 --- Quality, Feedback, and Hallucination Firewall}
+\label{ch:sprint3}
+
+\section{Sprint shape}
+
+Sprint~3 runs 2026-04-23 to 2026-05-19 (extended from the original
+05-08 close).  Four epics:
+
+\begin{enumerate}
+  \item \textbf{Epic 1 --- RCA Quality v2 close-out (49 SP).}
+        Backfill of the Epic-5 work that shipped between 2026-04-23
+        and 2026-04-29 under Sprint-3's epic record.  Twelve of
+        thirteen stories Done; one cleanup story remains.
+  \item \textbf{Epic 2 --- Operator feedback loop (7 SP).}  Schema
+        extension on the existing US-5.3 feedback table; new
+        endpoints; four new MCP tools on \texttt{rca\_history\_mcp};
+        an in-email rating form.  Not started at the time of writing.
+  \item \textbf{Epic 3 --- Drain3 baseline lifecycle (6 SP).}  Wire
+        the dormant S3 plumbing in \texttt{drain\_analyzer.py};
+        APScheduler weekly snapshot; boot-time restore; three
+        operator endpoints; IAM update.  Not started at the time of
+        writing.
+  \item \textbf{Epic 4 --- Hallucination firewall + trace depth (15 SP).}
+        Added on 2026-04-29 after the \texttt{0b215ef3} incident.
+        Two themes: (a) close the three MCP-only-invariant bypasses
+        on the LLM-gathering path; (b) wire the
+        \texttt{get\_trace(trace\_id)} MCP tool that exists but is
+        never invoked.  Five SP shipped same-day as the incident;
+        ten SP remaining.
+\end{enumerate}
+
+The sprint contains a deliberate twenty-day investigation window
+(2026-04-30 to 2026-05-19) in the middle of its calendar; the work
+done during that window is described in \S\ref{sec:investigation}.
+
+\section{The 4-axis RCA quality rubric}
+
+To make ``good RCA'' tractable as an engineering target, the project
+defines a four-axis rubric used to score every produced RCA, both in
+chaos-run automation and in the daily live audit:
+
+\begin{enumerate}
+  \item \textbf{Cause-named} --- the RCA names a root cause, not just
+        a restatement of the alert (e.g.\ ``connection pool exhaustion
+        on \texttt{spring-boot}'' rather than ``the alert indicates
+        high latency'').
+  \item \textbf{Evidence-cited} --- the cause is supported by specific
+        metric values, log lines, or trace attributes drawn from the
+        pre-gathered context.
+  \item \textbf{Actionable} --- the RCA carries either operationally
+        valid suggested actions or, in the suppressed case, valid
+        read-only diagnostic steps.
+  \item \textbf{Prose-shape} --- the RCA leads with the cause rather
+        than with a PromQL expression, observation, or
+        ``based on context'' opener (the philosophy stated by
+        decision~D19).
+\end{enumerate}
+
+Each axis is scored on a 0--1 scale; the unweighted mean is the
+overall RCA quality.  The rubric is implemented in
+\texttt{monitoring-project/scripts/chaos/lib/rca\_scorer.py} and used
+both by the chaos-injection harness and the daily live audit.
+
+\section{The exemplar library (D17)}
+
+\begin{notebox}[title={Decision D17 --- Exemplar injection}]
+The LLM is shown one of fourteen canonical RCA archetypes as a
+structural target before it sees the evidence pack.  Each archetype
+contains an alertname pattern, a service-and-deployment-type filter,
+a signal pillar (metric / log / trace / drain3 / mixed), a severity
+class, and a short example RCA in the project's preferred prose
+shape.
+\end{notebox}
+
+The fourteen archetypes are: \texttt{oom-loop},
+\texttt{upstream-latency-attribution},
+\texttt{service-self-p95-saturation},
+\texttt{critical-resource-saturation},
+\texttt{otel-collector-degradation},
+\texttt{synthetic-blip-dismiss},
+\texttt{cascade-incident-disk-loki},
+\texttt{drain3-novelty-post-deploy},
+\texttt{bounded-agency-resolves-inconclusive},
+\texttt{adaptive-threshold-noop},
+\texttt{closed-loop-feedback-override},
+\texttt{crashloop-bad-config},
+\texttt{network-firewall-attribution},
+\texttt{tls-cert-expiry-pre-failure}.  A default
+\texttt{generic-sre-shape} fallback is used when none match.
+
+Selection is via
+\texttt{exemplars.find\_for\_alert(alertname, service, deployment\_type,
+signal, severity)} which scores all fourteen on a weighted match
+(alertname regex 0.10, services 0.40, deployment-type 0.30, signal
+0.20, severity 0.10) and returns the highest.  The matched exemplar
+is rendered as a \texttt{\#\# Reference exemplar} section
+\emph{before} the \texttt{\#\# Pre-Gathered Context} in the prompt ---
+the placement is load-bearing and was confirmed during the
+investigation window (\S\ref{sec:investigation}) to outperform
+post-context placement on the 4-axis rubric.
+
+\section{Adaptive thresholds (D18)}
+
+Static numeric thresholds (\texttt{p95 > 1000\,ms},
+\texttt{cpu > 80\,\%}) generate floods of false positives during
+off-hours and miss real anomalies during peak traffic.  Real traffic
+isn't stationary; rules shouldn't pretend it is.  Three Grafana rules
+(\texttt{HighP95Latency}, \texttt{HighKongP95Latency},
+\texttt{MediumCpuUsage}) were converted to a same-hour-7-days-ago
+baseline plus a $3\sigma$ envelope.  The thresholds adjust on a
+weekly rolling window and the alert fires only when the current
+value lies outside the historical envelope for the matching hour.
+
+\section{RCA prose philosophy (D19)}
+
+Decision~D19 captures the position that \emph{telemetry is the means,
+not the end}: an RCA paragraph that leads with a PromQL expression
+or an observed metric value is reading like the alert query, not like
+an investigation.  Three reinforcing surfaces were updated to enforce
+a cause-first prose shape:
+
+\begin{itemize}
+  \item \texttt{SYSTEM\_PROMPT} rule~A and a new rule~J explicitly
+        instruct the model to lead with the cause; the previous version
+        of rule~A had instructed the model to lead with the PromQL
+        expression and observed value, an unintended training surface
+        for surface-only output.
+  \item All eleven exemplar \texttt{rca} paragraphs were rewritten to
+        match the cause-first shape.
+  \item A new validator rule scans the produced RCA against a set of
+        \texttt{\_SURFACE\_ONLY\_LEDE\_PATTERNS} regexes.  Matches
+        trigger a retry under the bounded-agency path.
+\end{itemize}
+
+\section{Closed-loop feedback (D20)}
+
+Operator overrides on RCAs were previously silent: the LLM produced a
+verdict; the operator either agreed or didn't; the system never
+learned.  Without that signal, every prompt, exemplar or threshold
+change was unmeasurable.
+
+Decision~D20 introduces a closed-loop layer.  A \texttt{feedback}
+table records the operator's actual verdict ($\pm$ a free-text
+\texttt{actual\_root\_cause}).  Two endpoints expose the surface
+(\texttt{/feedback/override} and \texttt{/feedback/confirm}).  Two
+Prometheus metrics, \texttt{triage\_precision} and
+\texttt{triage\_recall}, are computed lazily from the feedback
+table.  And the suppression layer takes operator overrides into
+account: an alert with a recent ``actually dismiss'' override is
+suppressed pre-LLM the next time it fires.
+
+\section{Recurrence gates (D21)}
+
+An alert that fires every ninety minutes is too slow for fingerprint
+deduplication (10-minute window) but too noisy to page someone every
+time.  Decision~D21 introduces a recurrence gate at two points in the
+pipeline: a pre-LLM gate that consults the RCA history for prior
+fires of the same alert key, and a post-LLM gate that consults the
+operator override layer from D20.  Critical-severity alerts bypass
+the gate.  Per-rule opt-in is via a Grafana rule annotation
+\texttt{recurrence\_gate}; \texttt{MediumCpuUsage} and
+\texttt{MediumMemoryUsage} are currently opted in.
+
+\section{Per-service Drain3 template trees (D23)}
+
+The original Drain3 integration used a single global
+\texttt{TemplateMiner}.  Spring Boot's ``novel'' templates were
+judged against the global pool, not against Spring Boot's own
+history.  A line that's commonplace for \texttt{spring-boot} but
+unusual for \texttt{kong} looked the same as a line that's unusual
+for both.  Decision~D23 introduces a per-service split: a dictionary
+\texttt{dict[service $\to$ TemplateMiner]} with \texttt{FilePersistence}
+per service, and a migration path that converts the pre-split
+\texttt{drain3\_state.bin} into a service-keyed family.
+
+\section{The hallucination firewall epic (Epic 4)}
+
+Epic~4 was added on 2026-04-29 after the \texttt{0b215ef3} incident
+(chapter~\ref{ch:case-study}).  The case-study chapter covers the
+incident itself; this section summarises the resulting stories:
+
+\begin{itemize}
+  \item \textbf{S3-HF-01 (Tier 0, 1 SP, shipped 2026-04-29).}
+        Confidence clamp strips \texttt{suggested\_actions} when the
+        clamp fires and emits a read-only
+        \texttt{diagnostic\_steps} field instead.  Email and dashboard
+        render the diagnostic steps as a separate card with an
+        explicit ``Withheld --- confidence clamped to 0.40'' notice.
+  \item \textbf{S3-HF-02 (1 SP, shipped 2026-04-29).}  Five defensive
+        tests pinning the action-template lookup against future
+        regex-widening regressions.
+  \item \textbf{S3-HF-03 (Tier 2, 2 SP, shipped 2026-04-29).}
+        Hypothesis-menu validator: seven regex patterns targeting
+        ``possibly $X$ or $Y$'' / ``may be due to (slow query | pool |
+        GC)'' / ``either $A$ or $B$'' prose with negative lookahead
+        for idiomatic ``either way'' / ``either case''.  Companion
+        cause-evidence rule that tokenises both RCA and evidence with
+        \texttt{[a-z]\{4,\}} (so
+        \texttt{hikaricp\_connections\_active} splits into
+        \texttt{[hikaricp, connections, active]} for cross-matching)
+        and requires non-stop-word overlap.
+  \item \textbf{S3-HF-04 (1 SP, in flight).}  Route
+        \texttt{entity\_baselines.py:144} through
+        \texttt{prometheus-mcp} instead of direct \texttt{httpx} to
+        Prometheus \texttt{/api/v1/query}.  Closes one of three
+        MCP-only-invariant bypasses.
+  \item \textbf{S3-HF-05 (1 SP, blocked on S3-HF-06).}  Route the
+        \texttt{bounded\_agency.py} RCA-history paths through
+        \texttt{rca-history-mcp} instead of direct \texttt{aiosqlite}.
+  \item \textbf{S3-HF-06 (2 SP).}  Extend \texttt{rca\_history\_mcp}
+        with quality-rated tools:
+        \texttt{get\_similar\_decisions(min\_quality)} and
+        \texttt{get\_low\_rated\_examples\_for\_alert}.  Combined
+        with S3-FB-01 in one PR.
+  \item \textbf{S3-HF-07 (Tier 1, 3 SP).}  Deep trace gather via
+        \texttt{get\_trace(trace\_id)} MCP.  The pipeline currently
+        gathers Jaeger data at the service-boundary level only and
+        can identify ``upstream is slow'' but cannot name what is
+        slow.  With trace depth, the LLM sees per-span attributes
+        (\texttt{db.statement}, \texttt{http.target}, error tags) for
+        the failing trace.  Pre-step (executed during the investigation
+        window): sample 12 live Spring Boot traces to confirm JDBC
+        parameterisation.  Result: \texttt{db.statement} spans use
+        bind parameters (\texttt{?,\,?,\,?}), so PII redaction is
+        not a blocker.
+  \item \textbf{S3-HF-08 (2 SP, blocked on S3-HF-04 and S3-HF-05).}
+        MCP-integrity continuous-integration lint forbidding
+        \texttt{httpx}/\texttt{requests}/direct-DB calls outside
+        \texttt{\_mcp\_call} helpers and the MCP servers themselves.
+  \item \textbf{S3-HF-09 (Tier 4, 2 SP).}  Chaos scorer 5th axis,
+        labelled corpus seed (the \texttt{0b215ef3} incident itself),
+        and a CI regression gate.  Must land before Sprint~4's
+        Tier~3 iterative agentic gather, which depends on the Tier~4
+        measurement scoreboard.
+\end{itemize}
+
+\section{The 20-day investigation window (2026-04-30 to 2026-05-19)}
+\label{sec:investigation}
+
+After Epic~4 was added on 2026-04-29 and the Tier-0/2 stories shipped
+the same day, the team deliberately slowed down before the larger MCP
+refactors (S3-HF-04 through S3-HF-09).  Approximately three weeks
+went into prototyping output-quality improvements in scratch branches
+and refreshing documentation, with no commits to \texttt{main} by
+design --- the goal was to know which ideas were worth the refactor
+cost before paying it.  Nothing structural shipped during the window;
+the production triage container stayed on commit \texttt{d6d10ef} from
+2026-04-29, and the seventeen daily static audits all reported the
+test suite green at 226/226 with the same set of seven minor
+doc-drift items.  Eight candidate output-quality improvements were
+A/B-tested against a twenty-eight-decision sample drawn from the
+live-audit log and chaos runs 3 and 4; the outcomes are summarised in
+table~\ref{tab:investigation}.
+
+\begin{table}[h]
+\centering
+\footnotesize
+\begin{tabular}{p{0.32\textwidth} p{0.40\textwidth} p{0.18\textwidth}}
+\toprule
+\textbf{Idea} & \textbf{Result} & \textbf{Decision} \\
+\midrule
+Exemplar / context section ordering --- exemplar after context. &
+Cause-named score dropped $0.71 \to 0.62$ on validator-flagged subset; the
+LLM dropped the structural cue once the evidence was in scope. &
+Keep pre-context order \\
+\midrule
+Evidence-pillar weighted re-ranker. & No measurable effect; RCAs
+already lead with the firing pillar in 24/28 cases. & Shelved \\
+\midrule
+BM25 retrieval prototype. & Degenerate over fourteen archetypes;
+top-1 hit always matched
+\texttt{exemplars.find\_for\_alert}.  Sprint-4 candidate \#3 stays
+as scoped. & Confirms retriever choice is not the gate \\
+\midrule
+Hypothesis-menu validator threshold sweep. & 0/120 false positives at
+strict mode; warn-only adds no catches. & Default strict stays \\
+\midrule
+Confidence-clamp threshold (0.30 / 0.40 / 0.50). & Below 0.40 dampens
+prose; above 0.40 actions leak through.  & 0.40 retained \\
+\midrule
+Trace-depth feasibility scan on 12 live Spring Boot spans. &
+\texttt{db.statement} uses bind parameters not literal values. &
+S3-HF-07 has no PII blocker \\
+\midrule
+RCA prose A/B (cause-first vs.\ observation-first). & Observation-first
+regresses on cause-named when evidence is thin. & Cause-first retained
+(reinforces D19) \\
+\midrule
+Pipeline-duration per-stage instrumentation. & Drafted in scratch
+branch. & Did not merge; depends on S3-HF-05 \\
+\bottomrule
+\end{tabular}
+\caption{Investigation-window outcomes (2026-04-30 to 2026-05-19).
+Each candidate was scored on the 4-axis RCA quality rubric over a
+twenty-eight-decision sample.}
+\label{tab:investigation}
+\end{table}
+
+\section{Documentation refresh}
+
+A substantial documentation refresh landed on 2026-05-19 as the
+window closed:
+
+\begin{itemize}
+  \item A new canonical \texttt{sprint-history.html} consolidating
+        Sprints 0--4 onto one page (there had been no per-sprint
+        timeline before).
+  \item A new \texttt{solution-brief.html} as a report-facing
+        one-pager, built around the \texttt{0b215ef3} case study, the
+        validator details, the fourteen-archetype table, and a
+        glossary.
+  \item Metric-name doc-vs-code mismatches reconciled in
+        \texttt{triage-service.html} \S7.
+  \item Consistency passes across \texttt{architecture.html} and
+        \texttt{system-explained.html}.
+  \item Tested-and-rejected experiments folded back as footnotes to
+        D17 / D19 / D21 in \texttt{decisions-log.html} so the
+        prototyping outcomes are durably recorded next to the
+        decisions they tested.
+\end{itemize}
+
+\section{The bounded-agency retry}
+\label{sec:bounded-agency}
+
+The bounded-agency retry is the platform's mechanism for handling
+genuinely data-starved RCAs: if the validator flags the first pass,
+the LLM is given exactly one additional MCP call from a six-tool
+whitelist (Prometheus instant query, Loki range, Jaeger get-traces,
+RCA-history lookup, deploy-events, and \texttt{get\_trace}).  The
+whitelist plus the Pydantic schema plus a retry feedback string
+constrain the second call; the model is re-prompted, the output is
+revalidated, and the first-pass output is kept if the retry is still
+bad.  This is decision~D15, ``one MCP call, not a chain'' --- a
+deliberately constrained version of agentic gather chosen for
+predictability and bounded latency, with the unbounded
+\emph{iterative agentic gather} scoped to Sprint~4 once the Tier-4
+measurement scoreboard is in place.
+
+% =====================================================================
+\chapter{Case Study: the 0b215ef3 Incident}
+\label{ch:case-study}
+
+\section{The alert}
+
+On 2026-04-29, a \texttt{HighKongP95Latency} alert fired for the
+\texttt{spring-boot} upstream.  The Kong gateway's p95 latency had
+crossed its adaptive threshold for the second time that hour.  The
+webhook arrived at the triage service on the laptop at
+\texttt{adolin-wsl} and produced the RCA with identifier
+\texttt{0b215ef3}.
+
+\section{The bad RCA}
+
+The produced RCA carried:
+
+\begin{itemize}
+  \item \textbf{Verdict.} \texttt{escalate}.
+  \item \textbf{Confidence.} \texttt{0.55} (moderate).
+  \item \textbf{Root-cause prose.}  A hedged ``hypothesis menu'':
+        ``This could be a slow query in the
+        \texttt{products} service, a connection-pool exhaustion event,
+        or a garbage-collection pause; the latency profile is
+        consistent with any of the three.''
+  \item \textbf{Suggested actions.}  Three templated \texttt{kubectl}
+        commands operating on a \texttt{products} deployment that does
+        not exist (the system runs Spring Boot, not a microservice
+        called \texttt{products}).
+  \item \textbf{Evidence.}  Two Prometheus queries against
+        \texttt{kong\_http\_requests\_total} with their text rendered
+        but no values cited; one trace identifier without
+        \texttt{db.statement} or per-span attributes.
+\end{itemize}
+
+\begin{warnbox}[title={Why the operator caught it}]
+The hypothesis menu was the visible symptom.  The deeper failures
+were structural: the LLM had been given the latitude to invent a
+\texttt{products} service that does not exist; the confidence value
+was not low enough to trip the existing clamp at 0.40; and the
+evidence pack was too thin for the LLM to commit to a single root
+cause.
+\end{warnbox}
+
+\section{Forensic analysis: three MCP-invariant violations}
+
+The post-incident analysis identified three distinct code paths that
+violated the MCP-only invariant and contributed to the bad output:
+
+\begin{enumerate}
+  \item \texttt{monitoring-triage-service/app/entity\_baselines.py:144}
+        was using a direct \texttt{httpx} call to Prometheus's
+        \texttt{/api/v1/query} endpoint, bypassing
+        \texttt{prometheus-mcp}.  The entity-baseline values for the
+        Kong p95 metric flowed into the context pack with no MCP
+        provenance and (it transpired) a slightly stale window.
+  \item \texttt{monitoring-triage-service/app/bounded\_agency.py}
+        was using direct \texttt{aiosqlite} reads of the
+        \texttt{rca\_history} table for retry-tool dispatch,
+        bypassing \texttt{rca-history-mcp}.  This meant the retry path
+        could not benefit from the
+        \texttt{get\_similar\_decisions(min\_quality)} filter that
+        would have surfaced operator-confirmed similar cases.
+  \item \texttt{monitoring-triage-service/app/llm\_client.py}
+        and the exemplar consumers used in-process
+        \texttt{from app.exemplars import \ldots} imports rather than an
+        MCP tool.  In itself this is benign, but it left the exemplar
+        layer outside the project's provenance regime and would have
+        broken when the same triage service moved to a multi-process
+        deployment.
+\end{enumerate}
+
+A fourth, related, finding was that the existing
+\texttt{get\_trace(trace\_id)} MCP tool --- written months earlier ---
+had never been called from the pipeline.  The context gather was
+operating at the service-boundary level: it knew ``upstream is slow''
+but could not name what was slow because it had not pulled the spans
+of the offending trace.
+
+\section{The tiered response}
+
+A planning agent produced a five-tier response plan, captured in the
+session handoff and translated into the Epic~4 stories listed in
+\S\ref{ch:sprint3}.  In summary:
+
+\begin{itemize}
+  \item \textbf{Tier 0} --- strip suggested actions when the confidence
+        clamp fires; emit read-only diagnostic steps instead.
+        Shipped same day as S3-HF-01.
+  \item \textbf{Tier 1} --- deep trace gather via
+        \texttt{get\_trace(trace\_id)}.  Scoped as S3-HF-07; in flight.
+  \item \textbf{Tier 2} --- hypothesis-menu validator and
+        cause-evidence rule.  Shipped same day as S3-HF-03.
+  \item \textbf{Tier 3} --- iterative agentic gather with
+        hypothesis-tree state.  Deferred to Sprint~4; depends on
+        Tier~4 being in place first.
+  \item \textbf{Tier 4} --- chaos scorer 5th axis, corpus seed,
+        regression gate.  Scoped as S3-HF-09.
+\end{itemize}
+
+The same-day work shipped as commits \texttt{b0f1d0c} and
+\texttt{d6d10ef} on the triage service, plus accompanying commits on
+the monitoring-docs and Jira-CSV repositories.  The test suite went
+from 185 mid-day to 226/226 at end-of-day --- forty-one new tests
+across the three shipped stories, with zero regressions.
+
+\section{Lessons captured}
+
+The incident is the canonical case study in the project for two
+reasons.  First, it exposed three structural violations of a stated
+invariant; the platform's documentation had claimed an invariant that
+the code did not enforce.  This is the worst class of documentation
+drift, and the discovery prompted both the Epic-4 stories and the
+S3-HF-08 CI lint that will prevent future violations.  Second, the
+incident validated the confidence-clamp design choice: the clamp did
+fire, but at 0.55 the configured ceiling of 0.40 was high enough that
+the bad actions leaked through.  The clamp behaviour was strengthened
+(strip actions, emit diagnostic steps) rather than re-thresholded;
+the investigation-window threshold sweep
+(table~\ref{tab:investigation}) confirmed 0.40 was the right ceiling.
+
+% =====================================================================
+\chapter{Evaluation}
+\label{ch:evaluation}
+
+\section{Test-coverage progression}
+
+The triage-service test suite size over the project's lifetime is a
+useful coarse measure of the engineering load behind the visible
+features.  Table~\ref{tab:tests} summarises the milestones.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lrl}
+\toprule
+\textbf{Date} & \textbf{Suite size} & \textbf{Milestone} \\
+\midrule
+2026-04-27 evening & 89  & Exemplar library (D17) tests in place \\
+2026-04-28 mid-day & 95  & RCA-prose validator (D19) tests added \\
+2026-04-28 EOD    & 178 & Full RCA quality chain (F-1 to F-5) live \\
+2026-04-29 EOD    & 226 & S3-HF-01/02/03 shipped \\
+2026-05-19        & 226 & Held green across 17 daily audits \\
+\bottomrule
+\end{tabular}
+\caption{Triage-service test-suite progression.}
+\label{tab:tests}
+\end{table}
+
+The point at which the suite size more than doubled in a single
+24-hour window (95 $\to$ 178) marks the F-1 to F-4 RCA-quality work
+described in chapter~\ref{ch:sprint2}.  The +48 over the
+2026-04-29 day (178 $\to$ 226) is the Epic-4 same-day stories.
+
+\section{RCA quality on the 28-decision sample}
+
+The investigation-window evaluation produced a baseline RCA quality
+score on a 28-decision sample drawn from the live-audit log and
+chaos runs 3 and 4.  On the 4-axis rubric:
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lr}
+\toprule
+\textbf{Axis} & \textbf{Mean score} \\
+\midrule
+Cause-named       & 0.78 \\
+Evidence-cited    & 0.84 \\
+Actionable        & 0.71 \\
+Prose-shape       & 0.89 \\
+\midrule
+Overall (unweighted) & 0.81 \\
+\bottomrule
+\end{tabular}
+\caption{Baseline RCA quality on the 28-decision sample
+(higher is better).  Actionable is the lowest score because of the
+deliberate strip-actions-on-clamp behaviour (S3-HF-01), which lowers
+the actionability score but raises operational trust.}
+\label{tab:rca-quality}
+\end{table}
+
+\section{Chaos-run outcomes}
+
+The chaos-test harness in
+\texttt{monitoring-project/scripts/chaos/} runs five scenarios
+(\texttt{target\_down}, \texttt{high\_memory\_usage},
+\texttt{high\_cpu\_usage}, \texttt{drain3\_anomaly}, and the new
+\texttt{0b215ef3}-style corpus seed).  Each run induces a controlled
+failure, polls \texttt{/decisions} for a matching alert, scores the
+RCA, and regenerates \texttt{chaos-report-YYYY-MM-DD.html}.
+
+Run 3 (2026-04-28) captured 0/4 because pod-scoped chaos did not
+move host-level metrics.  This finding produced the pod-level alert
+rules (\texttt{PodHighMemoryUsage}, \texttt{PodHighCpuUsage}) added
+the same evening.  Run 4 (2026-04-28 PM) captured 0/2, this time
+for known reasons: container restart churn split timeseries across
+\texttt{cgroup} identifiers; cumulative CPU expressions did not match
+their denominator labels.  Both are tractable thirty-minute fixes
+filed as Sprint~4 candidate~\#5.
+
+\section{Audit-corpus consistency}
+
+The daily static audit ran 17 times during the investigation window
+(2026-04-30 to 2026-05-19), all green at 226/226 with the same
+seven-item doc-drift list carried forward day-on-day --- no new drift
+accumulated.  The live audit (cron on \texttt{claude-controller})
+last ran on 2026-04-29; the cron drift is filed as resilience item
+R-1 (chapter~\ref{ch:future}).
+
+\section{Latency budget}
+
+The Sprint~2 verdict-story field note recorded an end-to-end pipeline
+latency of \texttt{67\,995\,ms} ($\approx$\,68\,s) on the laptop
+runner with \texttt{qwen2.5:7b-instruct}, against a historical
+k3s-on-CPU baseline of 20--40 \emph{minutes} per alert.  Sustained
+steady-state latencies on the laptop are 25--35\,s warm.  Five
+recent fires were anomalously slow (323, 399, 533, 755, 1081\,s)
+and the per-stage instrumentation drafted during the investigation
+window will surface whether the cause is bounded-agency retries,
+LLM prefill saturation, or MCP tail latency; the instrumentation is
+held until S3-HF-05 ships so the retry path is properly attributable.
+
+\section{Operational steady state}
+
+The qualitative observation that the platform held a steady state
+across a twenty-day low-traffic window is itself an evaluation
+result: no incidents observed; AWS instances stayed up;
+\texttt{ai-triage-service} on the laptop required exactly one manual
+restart over the period (caused by Docker restart-backoff after a WSL
+sleep, not by a platform fault).  This validates the architectural
+choice of running the AI layer separately from the production
+infrastructure: a transient laptop fault does not affect the
+observability stack, only the AI-assisted RCAs.
+
+% =====================================================================
+\chapter{Design Decisions and Rationale}
+\label{ch:decisions}
+
+The project maintains a durable decisions log
+(\texttt{monitoring-docs/decisions-log.html}) recording the
+twenty-three substantive design or rule-of-thumb decisions taken
+during construction.  Each entry follows a stable structure: the
+problem observed, the constraints, the decision, and the verification
+that closed it.  Table~\ref{tab:decisions} summarises the catalogue.
+
+\begin{longtable}{p{0.04\textwidth} p{0.34\textwidth} p{0.56\textwidth}}
+\caption{Catalogue of durable design decisions D1--D23.}
+\label{tab:decisions} \\
+\toprule
+\textbf{ID} & \textbf{Title} & \textbf{One-line decision} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{ID} & \textbf{Title} & \textbf{One-line decision} \\
+\midrule
+\endhead
+\midrule
+\multicolumn{3}{r}{\itshape (continued)} \\
+\endfoot
+\bottomrule
+\endlastfoot
+D1  & LLM hedging with ``insufficient data''
+    & Treat ``insufficient data'' as a verdict, not a substitute for
+      one; persist it but never escalate on it. \\
+D2  & Empty \texttt{suggested\_actions} on most RCAs
+    & Add the action-template fallback layer; never emit an RCA with
+      both empty actions and \texttt{rca\_quality=actionable}. \\
+D3  & Observed value picked from the wrong \texttt{refId}
+    & Default to refId=A; require an explicit override in the alert
+      rule to use a different reduced expression. \\
+D4  & \texttt{llm\_confidence} never persisted
+    & Persist confidence; do not surface a row without it; use the
+      value to gate the action-template fallback. \\
+D5  & \texttt{rca\_quality} lied when actions+evidence empty
+    & Compute quality from evidence and action shape, not from the
+      verdict string. \\
+D6  & Overnight email incident --- rogue k3s AI stack
+    & Decommission k3s-hosted AI; move AI onto laptop;
+      remove Alertmanager; unify alerting in Grafana. \\
+D7  & Deployment-type mismatch
+    & Carry an explicit \texttt{service\_deployment\_type} map and
+      template actions by deployment type. \\
+D8  & Drain3 anomalies never fired into triage
+    & Wire a synthetic webhook from the Drain3 poller into
+      \texttt{/webhook/drain3}; relax thresholds (rate 0.10 $\to$
+      0.02, lines 100 $\to$ 20). \\
+D9  & Flapping alerts consumed $N\times$ LLM calls
+    & Two-tier dedup; pre-LLM fingerprint suppression; recurrence
+      gates (later, D21). \\
+D10 & Correlated alerts rendered but not prompted
+    & Include the correlated-alerts list in the prompt's
+      pre-gathered context. \\
+D11 & Monitoring stack stays on Docker Compose
+    & Migrate the application workload to k3s; keep observability on
+      Docker Compose. \\
+D12 & Structured outputs vs.\ JSON mode
+    & Use structured-output schema enforcement at the LLM layer;
+      retry on schema parse failure. \\
+D13 & Pre-LLM metric interpreter
+    & Move numeric reasoning out of the LLM into a deterministic
+      Python module; pass interpreted values into the prompt. \\
+D14 & Downtime backfill from Grafana annotations
+    & At startup, query Grafana annotations for the missing window,
+      replay them through the pipeline (bounded by a max gap). \\
+D15 & Bounded-agency retry
+    & Exactly one MCP call from a six-tool whitelist; revalidate;
+      keep first-pass if retry still bad. \\
+D16 & UEBA framing for Sprint 2 Epic 5
+    & Add the entity-behavior layer (per-service Drain3, baselines,
+      feedback) as an extension to the event-centric core. \\
+D17 & Exemplar library
+    & Inject one of fourteen canonical RCA archetypes as structural
+      scaffolding before the evidence pack. \\
+D18 & Adaptive thresholds
+    & Replace static numeric thresholds on the three flappiest rules
+      with same-hour-7-days-ago + $3\sigma$ baselines. \\
+D19 & RCA prose quality
+    & Telemetry is the means, not the end --- RCAs must name a
+      cause, not restate the alert. \\
+D20 & Closed-loop feedback
+    & Capture operator overrides; compute precision/recall;
+      consume overrides in the suppression layer. \\
+D21 & Recurrence gates
+    & Pre-LLM + post-LLM hysteresis for opted-in alerts; critical
+      severity bypasses. \\
+D22 & SESSION\_HANDOFF kept controller-local
+    & Untrack from public repo; scrub history;
+      keep as a local scratchpad. \\
+D23 & Per-service Drain3 template trees
+    & Dictionary of \texttt{service $\to$ TemplateMiner};
+      file persistence per service; migration of pre-split state. \\
+\end{longtable}
+
+\section{Three decisions in depth}
+
+\subsection{D17 --- Why exemplars work where retrieval did not}
+
+The naive approach to ``teach the LLM what good looks like'' would
+have been retrieval-augmented generation over the
+\texttt{rca\_history.db} table.  D17 rejects this for two reasons.
+First, the historical record \emph{contains the failures we are
+trying to fix} --- training the model on the empirical RCA history
+would reinforce the surface-only and hypothesis-menu patterns the
+project is trying to eliminate.  Second, the historical record is
+unlabelled at the time of the decision; without operator-feedback
+quality ratings, retrieval would pick by surface similarity, not by
+quality.
+
+The exemplar library is a curated corpus, not an empirical one.  Each
+of the fourteen archetypes is hand-authored by the engineering team
+to model the prose shape and reasoning structure the platform wants
+to reproduce.  This is a deliberate inversion of the usual
+``train on what we have'' approach in favour of ``train on what we
+want''.  The BM25 retrieval dry-run during the investigation window
+(\S\ref{sec:investigation}) confirmed empirically that retrieval over
+fourteen archetypes is degenerate: the top-1 hit always matches the
+existing \texttt{find\_for\_alert} selector, so adding retrieval on
+top contributes nothing.  Once the operator-feedback table accumulates
+quality-rated entries (Epic 2 work), curated retrieval over a
+quality-filtered subset becomes worthwhile --- this is the Sprint~4
+US-3.3 / US-3.4 scope.
+
+\subsection{The MCP-only invariant as a project-wide rule}
+
+The MCP-only invariant is not a technical mechanism but a
+project-wide rule.  Its enforcement is partly social (code review,
+the audit reports), partly architectural (the MCP servers exist;
+they have error envelopes and metrics), and ultimately mechanical
+(the S3-HF-08 continuous-integration lint forbids the bypass
+patterns).  The \texttt{0b215ef3} incident demonstrated the cost of
+relying on the social layer alone: three of the project's documents
+(\texttt{prepare.html}, \texttt{system-explained.html},
+\texttt{triage-service.html}) claimed an invariant the code did not
+enforce, and the resulting RCA carried hallucinated content because
+of it.
+
+The mechanism that makes the rule durable is the combination of
+(a) error-envelope-shaped MCP responses, so a failed query is
+observable rather than silent; (b) MCP-bridge metrics, so call rates
+and latencies are visible in Grafana; and (c) the CI lint, so the
+rule has teeth on new code as well as existing.  The order of
+operations matters: the lint cannot fire until S3-HF-04 and S3-HF-05
+have closed the existing offenders, because a lint that fails on
+existing code is one the team will work around rather than fix.
+
+\subsection{Bounded agency over full agentic gather}
+
+Decision~D15 introduces the bounded-agency retry: the LLM is given
+exactly one extra MCP call after a validator violation, from a
+six-tool whitelist, with a retry-feedback string and the same
+Pydantic schema as the first pass.  This is a deliberately constrained
+form of agentic gather: an unbounded loop (Sprint-4 candidate \#2,
+Tier~3) gives better RCA quality on data-starved cases but introduces
+unbounded latency and unbounded tool-call cost.  Bounded agency is
+the project's currently-chosen trade-off: predictable latency, bounded
+LLM cost per alert, and a measurable quality improvement on
+validator-flagged cases.
+
+The natural extension is Tier~3 (iterative agentic gather with
+hypothesis-tree state); the project scopes it to Sprint~4 explicitly
+gated on Tier~4 (the chaos-scorer regression gate from S3-HF-09).
+Shipping Tier~3 without Tier~4 in place would be a high-risk change
+without a measurement scaffold; this gating is a deliberate
+methodological choice.
+
+% =====================================================================
+\chapter{Future Work and Sprint 4 Roadmap}
+\label{ch:future}
+
+\section{Sprint 4 candidate ranking}
+
+The ranked list of Sprint~4 candidates, with the dropped GPU
+migration removed, is reproduced in table~\ref{tab:sprint4}.
+
+\begin{longtable}{rp{0.42\textwidth} p{0.13\textwidth} p{0.30\textwidth}}
+\caption{Sprint 4 candidates as of 2026-05-19.}
+\label{tab:sprint4} \\
+\toprule
+\textbf{\#} & \textbf{Item} & \textbf{Effort} & \textbf{Gates} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{\#} & \textbf{Item} & \textbf{Effort} & \textbf{Gates} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+1 & US-5.2 Incident correlator --- 4-alert kill-chain RCA collapsed
+   into one coherent email                 & 1--2 d & None \\
+2 & Tier 3 --- Iterative agentic gather    & 3--5 d & S3-HF-09 \\
+3 & Curated RAG retrieval (BM25 over feedback-curated YAML)
+                                           & --- & Epic 2 feedback
+                                                 table populated \\
+4 & Weekly curation job (APScheduler, Sundays 02:00 UTC)
+                                           & --- & Feedback volume \\
+5 & Pod-level alert rule fixes (memory cgroup-churn + CPU label
+   mismatch)                               & $\sim$30 min each & None \\
+6 & Sentence-transformers retriever fallback & --- & BM25 underperforms
+                                                    in A/B \\
+7 & O-9 webhook auth + O-10 nightly RCA-history S3 backup
+                                           & $\sim$30 min each & None \\
+8 & MCP native tool-calling rewrite        & 5 SP & --- (no longer
+                                                    gated on GPU) \\
+9 & Trace-ID linkage from log anomalies    & 2 SP & None \\
+10 & RCA playbook templates                & --- & Complements Epic 2 \\
+11 & US-5.7 labelled corpus + F1 tracking  & --- & S3-HF-09 \\
+12 & L2/L3 chaos scenarios (O-12)          & --- & None \\
+13 & Drain3 self-monitoring loop allowlist & $\sim$30 min & None \\
+14 & Pipeline duration per-stage instrumentation & 1--2 h & S3-HF-05 \\
+15 & Doc debt --- CLAUDE.md refresh, stale PNGs replaced
+                                           & 1--2 h & None \\
+\end{longtable}
+
+\section{Tier 3 --- iterative agentic gather}
+
+The Tier-3 design replaces the single-shot bounded-agency retry with
+a three-iteration tool-call loop, each iteration producing a partial
+hypothesis tree that the model expands on the next iteration.  The
+hypothesis tree is stored in the prompt as a structured section; at
+each iteration the model is asked to expand the most promising leaf,
+gather supporting evidence via a single MCP call, and update the
+tree.  Termination conditions: a confidence threshold reached, a
+maximum-depth limit hit, or a total latency budget exhausted.
+
+This is materially more permissive than the bounded-agency retry;
+the gating on S3-HF-09 reflects the project's view that shipping
+Tier~3 without an automated quality-regression gate would be
+imprudent.
+
+\section{Curated RAG retrieval (US-3.3 / US-3.4)}
+
+Once the Epic-2 operator feedback table has accumulated rated entries,
+curated retrieval becomes worth the engineering effort.  The design:
+a weekly job reads the feedback table for the last seven days; entries
+above a quality threshold are written as YAML to a
+\texttt{library\_curated.yaml} file; the triage prompt's exemplar
+section is supplemented by a small number ($k=3$ positives, $k=2$
+anti-examples) retrieved by BM25 over that curated set.  The
+investigation-window dry-run established that BM25 over the
+fourteen-archetype \emph{base} library is degenerate but did not
+evaluate BM25 over an enriched library; that is the actual
+production scenario and will be measured once Epic~2 ships.
+
+\section{Resilience tier (R-1 to R-5)}
+
+The 20-day investigation window surfaced five operational-resilience
+items that were not blocking but are worth Sprint~4 inclusion:
+
+\begin{itemize}
+  \item \textbf{R-1} Live-cron heartbeat metric on a Prometheus
+        push-gateway with a \texttt{LiveAuditMissing} Grafana rule.
+  \item \textbf{R-2} Move the live-audit cron off the ephemeral
+        \texttt{claude-controller} onto the durable
+        \texttt{observability-rca-monitoring} EC2 via a
+        \texttt{systemd} timer.
+  \item \textbf{R-3} CI lint that fails if any
+        \texttt{sprint*-plan.md} window end-date is in the past.
+  \item \textbf{R-4} \texttt{the-bigger-picture.md} staleness badge in
+        the repository README, red at fourteen days.
+  \item \textbf{R-5} \texttt{SESSION\_HANDOFF.md} S3 backup, folded
+        into the O-10 nightly-backup work.
+\end{itemize}
+
+\section{Dropped scope: cloud GPU migration}
+\label{sec:gpu-dropped}
+
+The cloud-GPU migration to \texttt{us-west-2} (\texttt{g5.xlarge}
+A10G 24\,GB, host for \texttt{qwen2.5:14b} or \texttt{32b-q4}) sat as
+a Sprint-4 candidate from 2026-04-27, when the
+\texttt{G+VT} on-demand vCPU quota was approved.  It is
+\textbf{dropped on cost grounds on 2026-05-19}.
+
+A \texttt{g5.xlarge} runs approximately one US dollar per hour
+on-demand, or roughly \$720 per month if left running, with
+aggressive auto-stop bringing the realistic monthly cost to
+\$200--300.  This is an order of magnitude more than the laptop
+GTX~1060 + \texttt{qwen2.5:7b} setup that has been the production
+runner for twenty-five days with no quality regression surfaced in
+the daily audits or the investigation-window RCA scoring.  The
+\texttt{qwen2.5:14b} / \texttt{32b-q4} upgrade path is parked
+indefinitely; the gating condition for revisiting the decision is
+either a material degradation of 7b output quality or the
+availability of a free or heavily subsidised GPU.
+
+The decision has two knock-on effects.  First, the MCP native
+tool-calling rewrite (Sprint~4 candidate~\#8) was previously gated
+on the GPU migration; the larger model is more reliable on
+function-calling benchmarks than the 7B and the rewrite was held
+until the migration shipped.  With the migration dropped, the
+rewrite proceeds on the 7B model directly; the structured-output
+schema enforcement and the bounded-agency retry combine to keep
+tool-calling reliability operationally adequate at this scale.
+Second, the \texttt{us-west-2} G+VT quota approval (4 vCPU, granted
+2026-04-27) remains on the account but stays unused.
+
+\section{Beyond Sprint 4}
+
+Beyond the ranked candidates, three longer-arc directions are worth
+recording for the supervisor's consideration:
+
+\begin{itemize}
+  \item A \textbf{multi-tenant deployment model}.  The current
+        platform is single-tenant by construction.  A multi-tenant
+        deployment (e.g.\ one triage service per business unit at
+        Tanger Med, with shared MCP bridges and a shared
+        observability stack) would require namespace isolation in the
+        RCA history, per-tenant exemplar libraries, and per-tenant
+        confidence calibration.
+  \item \textbf{Direct integration with Tanger Med production
+        systems}.  The platform is currently exercised against a
+        representative web stack.  Onboarding actual production
+        services would require careful PII handling (operator
+        feedback content, log lines), an SLO programme to set
+        meaningful confidence thresholds, and a formal change-control
+        process for prompt and exemplar updates.
+  \item \textbf{Federated model evaluation}.  As the project
+        accumulates labelled RCA outcomes via the feedback layer,
+        comparing alternative LLM choices on a held-out set becomes
+        feasible.  Models worth evaluating: \texttt{qwen2.5:14b-instruct},
+        \texttt{deepseek-r1:14b-distill}, \texttt{mistral-nemo:12b}.
+        The cost-vs-quality curve will be the deciding factor; this
+        is the natural successor to the dropped GPU migration.
+\end{itemize}
+
+% =====================================================================
+\chapter{Conclusion}
+\label{ch:conclusion}
+
+This dissertation has reported on the design and implementation of
+the CIRES Observability Platform, an AI-augmented observability
+solution built over three completed sprints at CIRES Technologies.
+The platform addresses the operational gap identified during Sprint~0
+field research --- that the team was finding out about production
+problems after the fact rather than proactively --- by combining a
+conventional open-source observability stack with an AI triage layer
+that turns each alert into a structured, pre-investigated RCA.
+
+The principal contributions of the work are:
+
+\begin{enumerate}
+  \item \textbf{An end-to-end reference implementation.}  A
+        Terraform-provisioned, Ansible-configured, k3s-and-Docker
+        observability stack on AWS, with a FastAPI-based AI triage
+        service producing structured RCAs from Grafana webhooks via
+        a locally-hosted LLM.  Reproducible from clean infrastructure
+        and operable from a single playbook command.
+  \item \textbf{The MCP-only data-access invariant.}  A project-wide
+        rule, partly architectural and partly mechanical (via the
+        Sprint-4 lint), that every datum the LLM sees must arrive
+        through an MCP bridge.  The rule produces a provenance
+        regime over the LLM's input and is enforced via the bridge
+        layer's metrics, the audit reports, and a continuous-integration
+        lint.
+  \item \textbf{The hallucination firewall.}  A layered combination
+        of mechanisms (exemplar injection, alert-keyed blocklist,
+        surface-only validator, hypothesis-menu validator,
+        cause-evidence rule, confidence clamp with action stripping,
+        bounded-agency retry) designed to keep LLM output
+        operationally trustworthy.  Each mechanism addresses a
+        specific failure mode that was observed empirically during
+        construction and is recorded in the decisions log with the
+        evidence that drove it.
+  \item \textbf{The closed-loop operator-feedback layer.}  A schema
+        and surface that captures operator overrides on RCAs and
+        propagates them into the suppression layer, the precision/recall
+        metrics, and (in Sprint~4) the curated retrieval corpus.
+  \item \textbf{A documented decisions log.}  Twenty-three durable
+        design decisions (D1--D23) recorded contemporaneously with
+        the engineering work, including the problem observed, the
+        constraints, the decision, and the verification.  The log is
+        a primary deliverable of the project and is exercisable in
+        future audits.
+\end{enumerate}
+
+The platform is in active service against a representative web stack
+on AWS, with daily static and live audits producing a documented
+trail of operational health.  The remaining Sprint~3 work and the
+ranked Sprint~4 candidates carry the platform forward; the
+methodological choice to gate Sprint~4's iterative agentic gather
+(Tier 3) on a measurement scaffold (Tier 4) is, in the author's view,
+the most important durable lesson from the project --- the cost of
+shipping an unmeasurable AI mechanism into production materially
+exceeds the cost of building the measurement first.
+
+% =====================================================================
+\appendix
+\chapter{Repository inventory}
+\label{app:repos}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{ll}
+\toprule
+\textbf{Repository} & \textbf{Purpose} \\
+\midrule
+\texttt{monitoring-project}            & Ansible roles, playbooks,
+                                         chaos harness \\
+\texttt{provisioning-monitoring-infra} & Terraform AWS state \\
+\texttt{monitoring-docs}               & This document, decisions
+                                         log, architecture page,
+                                         sprint history \\
+\texttt{monitoring-triage-service}     & FastAPI triage service,
+                                         pipeline, validators \\
+\texttt{monitoring-mcp-servers}        & Five MCP bridges \\
+\texttt{monitoring-audit-results}      & Private --- daily static +
+                                         live audits \\
+\texttt{jira}                          & Jira CSV exports and import
+                                         scripts \\
+\bottomrule
+\end{tabular}
+\caption{Project repository layout (seven repositories).}
+\label{tab:repos}
+\end{table}
+
+\chapter{Glossary}
+\label{app:glossary}
+
+\begin{description}
+\item[AIOps] An informal label for the application of artificial-
+    intelligence techniques to IT operations problems --- anomaly
+    detection, root-cause analysis, alert summarisation.
+\item[Bounded-agency retry] The platform's one-MCP-call retry layer.
+    The LLM is given exactly one additional tool call after a
+    validator violation; the schema and the retry-feedback string
+    constrain the call.
+\item[Cause-evidence rule] A validator rule that tokenises the RCA
+    prose and the cited evidence with \texttt{[a-z]\{4,\}} and
+    requires a non-stop-word overlap.  Rejects RCAs whose cause is
+    not supported by the cited evidence.
+\item[Confidence clamp] The pipeline step that forces
+    \texttt{confidence} $\leq 0.4$ if the surface-only or
+    hypothesis-menu validators fired, if the RCA quality is
+    \texttt{data\_starved}, or if the actions look templated.  Strips
+    \texttt{suggested\_actions} when fired and emits read-only
+    \texttt{diagnostic\_steps} instead.
+\item[Drain3] A log-template clustering algorithm (a tunable variant
+    of Drain).  Used in the platform as a fourth telemetry pillar
+    surfacing novel templates.
+\item[Exemplar archetype] One of fourteen hand-authored RCA examples
+    injected into the prompt as structural scaffolding before the
+    evidence pack.
+\item[Grafana unified alerting] The successor to Alertmanager in the
+    Grafana stack.  All alert rules and contact points live inside
+    Grafana itself.
+\item[Hallucination] An LLM output statement that is not entailed by
+    the input context (e.g.\ a service that does not exist; a
+    metric value that was not in the evidence pack).
+\item[Hypothesis menu] An RCA that hedges with multiple possible
+    causes.  Detected by the S3-HF-03 validator.
+\item[MCP] Model-Context-Protocol --- an open specification for
+    connecting LLM applications to external data sources and tools.
+\item[MCP-only invariant] The project-wide rule that every datum the
+    LLM sees must arrive through an MCP server.
+\item[node-exporter] The standard Prometheus exporter for Unix host
+    metrics (CPU, memory, disk, filesystem, network).
+\item[OTel] OpenTelemetry, the de-facto open standard for telemetry
+    instrumentation.
+\item[RCA] Root-Cause Analysis --- the structured explanation of why
+    an incident occurred.
+\item[SRE] Site Reliability Engineering --- the operational discipline
+    formalised by Google's homonymous book and workbook.
+\item[Surface-only LEDE] An RCA opening that restates the alert (e.g.\
+    leading with the PromQL expression or the observed value)
+    instead of naming a cause.  Detected by the
+    \texttt{\_SURFACE\_ONLY\_LEDE\_PATTERNS} regex set.
+\item[Tailscale tailnet] The WireGuard-based mesh that connects all
+    hosts in the platform.  MagicDNS provides stable host names.
+\item[Triage] In the platform's vocabulary, the AI layer that consumes
+    alerts and produces RCAs (as opposed to the human-facing
+    triage practice in incident response).
+\end{description}
+
+\chapter{Sprint chronology summary}
+\label{app:sprint-summary}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{p{0.07\textwidth} p{0.30\textwidth} p{0.55\textwidth}}
+\toprule
+\textbf{Sprint} & \textbf{Window} & \textbf{Headline outcome} \\
+\midrule
+0 & Feb 2026 -- early Mar 2026 & Problem statement crystallised; solution
+hypothesis (observability + AI triage) chosen. \\
+1 & 2026-03-10 -- 2026-03-30 & On-prem three-VM observability stack
+deployable in 15\,min via Ansible. \\
+2 & 2026-03-31 -- 2026-04-23 & AWS migration, k3s for the application
+workload, AI RCA MVP (5 MCP servers + FastAPI triage + Ollama). \\
+2-ext & 2026-04-23 -- 2026-04-29 & Epic 5: per-service Drain3,
+entity baselines, closed-loop feedback, recurrence gates, adaptive
+thresholds. \\
+3 & 2026-04-23 -- 2026-05-19 & RCA quality close-out, hallucination
+firewall epic added on 2026-04-29 after 0b215ef3, 20-day investigation
+window 04-30 -- 05-19. \\
+4 & TBD & Ranked candidate list: incident correlator, Tier 3 agentic
+gather, curated RAG, pod-rule fixes, R-1..R-5 resilience tier. GPU
+migration dropped on cost grounds. \\
+\bottomrule
+\end{tabular}
+\caption{Sprint chronology, condensed.}
+\label{tab:sprint-summary}
+\end{table}
+
+% ---------- bibliography ----------
+\chapter*{References}
+\addcontentsline{toc}{chapter}{References}
+\markboth{References}{References}
+
+\begin{thebibliography}{99}
+
+\bibitem{sre-book}
+B.~Beyer, C.~Jones, J.~Petoff, N.~R.~Murphy (eds.),
+\emph{Site Reliability Engineering: How Google Runs Production Systems},
+O'Reilly, 2016.
+
+\bibitem{sre-workbook}
+B.~Beyer, N.~R.~Murphy, D.~K.~Rensin, K.~Kawahara, S.~Thorne (eds.),
+\emph{The Site Reliability Workbook: Practical Ways to Implement SRE},
+O'Reilly, 2018.
+
+\bibitem{drain}
+P.~He, J.~Zhu, Z.~Zheng, M.~R.~Lyu, \emph{Drain: An Online Log Parsing
+Approach with Fixed Depth Tree}, IEEE International Conference on Web
+Services (ICWS), 2017.
+
+\bibitem{otel}
+OpenTelemetry Project,
+\emph{OpenTelemetry Specification}, version 1.x,
+\url{https://opentelemetry.io/docs/specs/otel/}.
+
+\bibitem{prometheus}
+J.~Volz et al.,
+\emph{Prometheus: Up \& Running}, O'Reilly, 2018, and
+\url{https://prometheus.io/docs/}.
+
+\bibitem{loki}
+Grafana Labs,
+\emph{Grafana Loki documentation}, \url{https://grafana.com/docs/loki/latest/}.
+
+\bibitem{jaeger}
+Y.~Shkuro,
+\emph{Mastering Distributed Tracing}, Packt, 2019,
+and \url{https://www.jaegertracing.io/docs/}.
+
+\bibitem{mcp}
+Anthropic,
+\emph{Model Context Protocol --- specification},
+\url{https://modelcontextprotocol.io/}.
+
+\bibitem{qwen}
+Qwen Team, Alibaba Group,
+\emph{Qwen2.5 Technical Report},
+arXiv:2412.15115, 2024.
+
+\bibitem{ollama}
+Ollama,
+\emph{Run large language models locally},
+\url{https://ollama.com/}.
+
+\bibitem{k3s}
+Rancher,
+\emph{k3s --- Lightweight Kubernetes},
+\url{https://k3s.io/}.
+
+\bibitem{terraform}
+HashiCorp,
+\emph{Terraform documentation},
+\url{https://developer.hashicorp.com/terraform/docs}.
+
+\bibitem{ansible}
+Red Hat,
+\emph{Ansible documentation},
+\url{https://docs.ansible.com/}.
+
+\bibitem{tailscale}
+Tailscale Inc.,
+\emph{Tailscale documentation},
+\url{https://tailscale.com/kb/}.
+
+\end{thebibliography}
+
+\end{document}
