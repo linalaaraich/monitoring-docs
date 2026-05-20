@@ -914,7 +914,7 @@
   <li><code>ai-ollama-init</code> — one-shot sidecar that pulls the model</li>
   <li><code>ai-triage-service</code> — FastAPI + pipeline (THIS repo)</li>
   <li><code>ai-mcp-prometheus/loki/jaeger/drain3/rca-history</code> — 5 HTTP bridges</li>
-  <li><code>watchtower</code> — polls GHCR every 60 s, auto-rolls on new image</li>
+  <li><s><code>watchtower</code> — polls GHCR every 60 s, auto-rolls on new image</s> <em>(does not exist — audit I-3, 2026-05-20; image rolls via <code>roles/triage_laptop</code> ansible playbook, no polling daemon)</em></li>
 </ul>
 <p>
   Images: triage builds via
