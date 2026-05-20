@@ -184,7 +184,7 @@
 <ul>
 <li><strong>1 monitoring EC2</strong> &mdash; unchanged, <code>t3.large</code>. Runs Prometheus, Grafana, Loki, Jaeger.</li>
 <li><strong>1 k3s EC2</strong> &mdash; new, <code>t3.xlarge</code> (4 vCPU, 16GB RAM). Runs the single-node k3s cluster with Spring Boot, Kong, AI stack, OTel Collector.</li>
-<li><strong>1 GPU EC2</strong> &mdash; renamed from "ai", <code>g4dn.xlarge</code>. For Ollama if a separate GPU node is needed (optional &mdash; can colocate on k3s node if it has a GPU).</li>
+<li><s><strong>1 GPU EC2</strong> &mdash; renamed from "ai", <code>g4dn.xlarge</code>. For Ollama if a separate GPU node is needed (optional &mdash; can colocate on k3s node if it has a GPU).</s> <em>(not deployed &mdash; GPU EC2 was deferred Sprint 2 and the us-west-2 g5.xlarge migration was dropped 2026-05-19 on cost grounds. Ollama runs on the laptop GTX 1060. See <a href="sprint-history.html#sprint-4-removed">sprint-history.html &sect;Removed</a>.)</em></li>
 </ul>
 
 <h3>Changes to ec2.tf</h3>

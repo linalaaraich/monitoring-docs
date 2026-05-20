@@ -152,11 +152,13 @@ All code that can be written locally has been written. 4 repositories were modif
 - Set `SMTP_USER`, `SMTP_PASSWORD` environment variables or Helm values for the triage service
 - Trigger a test alert and verify escalation email is received
 
-### 2.5 Ollama Model Pull (requires GPU EC2 running)
+### 2.5 Ollama Model Pull (laptop runner)
 
-- After AI stack Helm chart is deployed, the init container will pull `llama3.1:8b`
-- This downloads ~4.7GB — takes 5-10 minutes on first deploy
-- Verify: `kubectl exec -n ai deploy/ollama -- ollama list`
+> *Historical note (2026-05-20):* This section originally said "requires GPU EC2 running" and pulled `llama3.1:8b`. The GPU EC2 stand-up was deferred in Sprint 2 and the us-west-2 GPU migration was dropped 2026-05-19 on cost grounds. **Live runner is now the laptop GTX 1060 with `qwen2.5:7b-instruct`** via the docker-compose stack at `~/cires-ai/`, rolled by the `roles/triage_laptop` ansible playbook from `claude-controller`. The K8s `kubectl exec` verification below no longer applies.
+
+- ~~After AI stack Helm chart is deployed, the init container will pull `llama3.1:8b`~~ — superseded
+- ~~This downloads ~4.7GB — takes 5-10 minutes on first deploy~~ — superseded
+- ~~Verify: `kubectl exec -n ai deploy/ollama -- ollama list`~~ — superseded; current verify: `ssh lina@adolin-wsl 'docker exec ai-ollama ollama list'`
 
 ### 2.6 Git Commits (requires your review)
 
@@ -165,7 +167,7 @@ All changes are staged but NOT committed. Review the changes in each repo and co
 ```bash
 # Terraform
 cd /root/provisioning-monitoring-infra
-git add -A && git commit -m "Rescope for k3s migration: 1 k3s EC2 + 1 GPU EC2"
+git add -A && git commit -m "Rescope for k3s migration: 1 k3s EC2 + 1 GPU EC2"  # historical — GPU EC2 was deferred and the us-west-2 migration was dropped 2026-05-19
 
 # Ansible + Helm
 cd /root/monitoring-project

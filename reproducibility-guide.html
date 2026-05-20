@@ -137,7 +137,7 @@
 </table>
 
 <h3>Sequence at a glance</h3>
-<pre><code>Terraform apply              (≈8 min, creates VPC + 3 EC2 + RDS + S3/CDN + SGs)
+<pre><code>Terraform apply              (≈8 min, creates VPC + 2 EC2 + RDS + S3/CDN + SGs)
       │
       ▼
 Ansible bootstrap monitoring (≈10 min, installs Prom/Grafana/Loki/Jaeger/OTel on VM1)
@@ -160,7 +160,7 @@ Ollama model pull            (≈5-15 min depending on model size)
       ▼
 integration-k8s.yml          (end-to-end smoke test — load-test → alert → triage → email)</code></pre>
 
-<div class="warn"><strong>Rough cost:</strong> in us-east-1 the demo stack runs ~$3-5/day if left on 24×7 (t3.large monitoring + t3.xlarge k3s + g4dn.xlarge GPU + db.t3.micro RDS). Stop the EC2s when not demoing; RDS storage still bills but is small.</div>
+<div class="warn"><strong>Rough cost:</strong> in us-east-1 the demo stack runs ~$2-3/day if left on 24×7 (t3.large monitoring + t3.xlarge k3s + db.t3.micro RDS). <s>+ g4dn.xlarge GPU</s> <em>(not deployed &mdash; Ollama runs on the laptop GTX 1060; the us-west-2 g5.xlarge migration was dropped 2026-05-19 on cost grounds)</em>. Stop the EC2s when not demoing; RDS storage still bills but is small.</div>
 </div>
 
 <!-- ============== PREREQUISITES ============== -->
