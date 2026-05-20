@@ -14,6 +14,8 @@
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
 \usepackage{lmodern}
+\usepackage{amsmath}
+\usepackage{amssymb}
 \usepackage[english]{babel}
 \usepackage[a4paper,margin=2.6cm,headheight=14pt]{geometry}
 \usepackage{microtype}
@@ -62,7 +64,7 @@
   xrightmargin=8pt
 }
 \usepackage{tcolorbox}
-\tcbuselibrary{breakable}
+\tcbuselibrary{skins,breakable}
 \newtcolorbox{notebox}[1][]{enhanced,breakable,
   colback=boxbg,colframe=boxrule,boxrule=0.4pt,arc=2pt,
   left=8pt,right=8pt,top=6pt,bottom=6pt,
@@ -1018,13 +1020,15 @@ Sprint~3 runs 2026-04-23 to 2026-05-19 (extended from the original
         APScheduler weekly snapshot; boot-time restore; three
         operator endpoints; IAM update.  Not started at the time of
         writing.
-  \item \textbf{Epic 4 --- Hallucination firewall + trace depth (15 SP).}
-        Added on 2026-04-29 after the \texttt{0b215ef3} incident.
-        Two themes: (a) close the three MCP-only-invariant bypasses
-        on the LLM-gathering path; (b) wire the
-        \texttt{get\_trace(trace\_id)} MCP tool that exists but is
-        never invoked.  Five SP shipped same-day as the incident;
-        ten SP remaining.
+  \item \textbf{Epic 4 --- Hallucination firewall + trace depth
+        (15 SP, closed 2026-05-19).}  Added on 2026-04-29 after the
+        \texttt{0b215ef3} incident.  Two themes: (a) close the three
+        MCP-only-invariant bypasses on the LLM-gathering path; (b)
+        wire the \texttt{get\_trace(trace\_id)} MCP tool that
+        existed but was never invoked.  Five SP shipped same-day as
+        the incident; the remaining ten SP (S3-HF-04 through
+        S3-HF-09) shipped in one focused session at sprint close-out
+        on 2026-05-19.
 \end{enumerate}
 
 The sprint contains a deliberate twenty-day investigation window
@@ -1197,40 +1201,50 @@ incident itself; this section summarises the resulting stories:
         \texttt{hikaricp\_connections\_active} splits into
         \texttt{[hikaricp, connections, active]} for cross-matching)
         and requires non-stop-word overlap.
-  \item \textbf{S3-HF-04 (1 SP, in flight).}  Route
+  \item \textbf{S3-HF-04 (1 SP, shipped 2026-05-19).}  Route
         \texttt{entity\_baselines.py:144} through
         \texttt{prometheus-mcp} instead of direct \texttt{httpx} to
         Prometheus \texttt{/api/v1/query}.  Closes one of three
         MCP-only-invariant bypasses.
-  \item \textbf{S3-HF-05 (1 SP, blocked on S3-HF-06).}  Route the
+  \item \textbf{S3-HF-05 (1 SP, shipped 2026-05-19).}  Route the
         \texttt{bounded\_agency.py} RCA-history paths through
         \texttt{rca-history-mcp} instead of direct \texttt{aiosqlite}.
-  \item \textbf{S3-HF-06 (2 SP).}  Extend \texttt{rca\_history\_mcp}
-        with quality-rated tools:
+  \item \textbf{S3-HF-06 (2 SP, shipped 2026-05-19).}  Extend
+        \texttt{rca\_history\_mcp} with quality-rated tools:
         \texttt{get\_similar\_decisions(min\_quality)} and
-        \texttt{get\_low\_rated\_examples\_for\_alert}.  Combined
-        with S3-FB-01 in one PR.
-  \item \textbf{S3-HF-07 (Tier 1, 3 SP).}  Deep trace gather via
-        \texttt{get\_trace(trace\_id)} MCP.  The pipeline currently
-        gathers Jaeger data at the service-boundary level only and
-        can identify ``upstream is slow'' but cannot name what is
-        slow.  With trace depth, the LLM sees per-span attributes
-        (\texttt{db.statement}, \texttt{http.target}, error tags) for
-        the failing trace.  Pre-step (executed during the investigation
-        window): sample 12 live Spring Boot traces to confirm JDBC
-        parameterisation.  Result: \texttt{db.statement} spans use
-        bind parameters (\texttt{?,\,?,\,?}), so PII redaction is
-        not a blocker.
-  \item \textbf{S3-HF-08 (2 SP, blocked on S3-HF-04 and S3-HF-05).}
+        \texttt{get\_low\_rated\_examples\_for\_alert}.  Eight new
+        MCP-level tests cover the rating-filter semantics.
+  \item \textbf{S3-HF-07 (Tier 1, 3 SP, shipped 2026-05-19).}  Deep
+        trace gather via \texttt{get\_trace(trace\_id)} MCP.  The
+        pipeline previously gathered Jaeger data at the
+        service-boundary level only and could identify ``upstream is
+        slow'' but not name what was slow.  With trace depth, the LLM
+        now sees per-span attributes (\texttt{db.statement},
+        \texttt{http.target}, error tags) for the failing trace.
+        Pre-step (executed during the investigation window): sampled
+        12 live Spring Boot traces to confirm JDBC parameterisation;
+        \texttt{db.statement} spans use bind parameters
+        (\texttt{?,\,?,\,?}), so PII redaction was not a blocker.
+  \item \textbf{S3-HF-08 (2 SP, shipped 2026-05-19).}
         MCP-integrity continuous-integration lint forbidding
         \texttt{httpx}/\texttt{requests}/direct-DB calls outside
         \texttt{\_mcp\_call} helpers and the MCP servers themselves.
-  \item \textbf{S3-HF-09 (Tier 4, 2 SP).}  Chaos scorer 5th axis,
-        labelled corpus seed (the \texttt{0b215ef3} incident itself),
-        and a CI regression gate.  Must land before Sprint~4's
-        Tier~3 iterative agentic gather, which depends on the Tier~4
-        measurement scoreboard.
+        The lint runs on every push and was the work that confirmed
+        S3-HF-04 and S3-HF-05 were the only two bypasses on the
+        LLM-gather path.
+  \item \textbf{S3-HF-09 (Tier 4, 2 SP, shipped 2026-05-19).}  Chaos
+        scorer 5th axis, labelled corpus seed (the \texttt{0b215ef3}
+        incident itself), and a CI regression gate.  Landed before
+        Sprint~4's Tier~3 iterative agentic gather, which is now
+        unblocked by the Tier~4 measurement scoreboard being in
+        place.
 \end{itemize}
+
+Epic~4 closed at \textbf{15/15 SP on 2026-05-19} in a single focused
+session.  All three MCP-only-invariant bypasses on the
+LLM-gather path are now closed, the trace-depth path is wired, the CI
+lint forbids future regressions, and the chaos corpus regression gate
+is live (suite \texttt{252/252}).
 
 \section{The 20-day investigation window (2026-04-30 to 2026-05-19)}
 \label{sec:investigation}
@@ -1267,7 +1281,7 @@ already lead with the firing pillar in 24/28 cases. & Shelved \\
 \midrule
 BM25 retrieval prototype. & Degenerate over fourteen archetypes;
 top-1 hit always matched
-\texttt{exemplars.find\_for\_alert}.  Sprint-4 candidate \#3 stays
+\texttt{exemplars.find\_for\_alert}.  Sprint-4 candidate \#13 stays
 as scoped. & Confirms retriever choice is not the gate \\
 \midrule
 Hypothesis-menu validator threshold sweep. & 0/120 false positives at
@@ -1422,16 +1436,19 @@ session handoff and translated into the Epic~4 stories listed in
 \begin{itemize}
   \item \textbf{Tier 0} --- strip suggested actions when the confidence
         clamp fires; emit read-only diagnostic steps instead.
-        Shipped same day as S3-HF-01.
+        Shipped same day as S3-HF-01 (2026-04-29).
   \item \textbf{Tier 1} --- deep trace gather via
-        \texttt{get\_trace(trace\_id)}.  Scoped as S3-HF-07; in flight.
+        \texttt{get\_trace(trace\_id)}.  Shipped as S3-HF-07 on
+        2026-05-19.
   \item \textbf{Tier 2} --- hypothesis-menu validator and
-        cause-evidence rule.  Shipped same day as S3-HF-03.
+        cause-evidence rule.  Shipped same day as S3-HF-03
+        (2026-04-29).
   \item \textbf{Tier 3} --- iterative agentic gather with
-        hypothesis-tree state.  Deferred to Sprint~4; depends on
-        Tier~4 being in place first.
+        hypothesis-tree state.  Deferred to Sprint~4; the Tier~4
+        scoreboard dependency is now satisfied (S3-HF-09 shipped),
+        so the Sprint-4 gate is operational rather than structural.
   \item \textbf{Tier 4} --- chaos scorer 5th axis, corpus seed,
-        regression gate.  Scoped as S3-HF-09.
+        regression gate.  Shipped as S3-HF-09 on 2026-05-19.
 \end{itemize}
 
 The same-day work shipped as commits \texttt{b0f1d0c} and
@@ -1533,16 +1550,20 @@ the same evening.  Run 4 (2026-04-28 PM) captured 0/2, this time
 for known reasons: container restart churn split timeseries across
 \texttt{cgroup} identifiers; cumulative CPU expressions did not match
 their denominator labels.  Both are tractable thirty-minute fixes
-filed as Sprint~4 candidate~\#5.
+filed as Sprint~4 candidate~\#16.
 
 \section{Audit-corpus consistency}
 
 The daily static audit ran 17 times during the investigation window
 (2026-04-30 to 2026-05-19), all green at 226/226 with the same
 seven-item doc-drift list carried forward day-on-day --- no new drift
-accumulated.  The live audit (cron on \texttt{claude-controller})
-last ran on 2026-04-29; the cron drift is filed as resilience item
-R-1 (chapter~\ref{ch:future}).
+accumulated.  At sprint close-out (2026-05-19) the paper-cut sweep
+closed all seven items and the suite stepped to \texttt{252/252}
+following the Epic-4 close-out commits.  The live audit (cron on
+\texttt{claude-controller}) silently stopped firing after 2026-04-29
+due to a controller-uptime issue; the cron was reinstalled on
+2026-05-19 and is now firing daily.  The 20-day gap is filed as
+resilience item R-1 (chapter~\ref{ch:future}).
 
 \section{Latency budget}
 
@@ -1560,14 +1581,19 @@ held until S3-HF-05 ships so the retry path is properly attributable.
 \section{Operational steady state}
 
 The qualitative observation that the platform held a steady state
-across a twenty-day low-traffic window is itself an evaluation
-result: no incidents observed; AWS instances stayed up;
-\texttt{ai-triage-service} on the laptop required exactly one manual
-restart over the period (caused by Docker restart-backoff after a WSL
-sleep, not by a platform fault).  This validates the architectural
-choice of running the AI layer separately from the production
-infrastructure: a transient laptop fault does not affect the
-observability stack, only the AI-assisted RCAs.
+across the twenty-day investigation window --- plus a subsequent
+sprint close-out wave on 2026-05-19 that landed ten SP of refactors
+across four repositories without a regression --- is itself an
+evaluation result.  No incidents were observed across the
+twenty-seven-day run from the Sprint-2 close-out on 2026-04-23 to the
+verification on 2026-05-20; AWS instances stayed up across the full
+window; the \texttt{ai-triage-service} container on the laptop
+required exactly one manual restart over the period (caused by
+Docker restart-backoff after a WSL sleep, not by a platform fault).
+This validates the architectural choice of running the AI layer
+separately from the production infrastructure: a transient laptop
+fault does not affect the observability stack, only the AI-assisted
+RCAs.
 
 % =====================================================================
 \chapter{Design Decisions and Rationale}
@@ -1726,7 +1752,7 @@ Decision~D15 introduces the bounded-agency retry: the LLM is given
 exactly one extra MCP call after a validator violation, from a
 six-tool whitelist, with a retry-feedback string and the same
 Pydantic schema as the first pass.  This is a deliberately constrained
-form of agentic gather: an unbounded loop (Sprint-4 candidate \#2,
+form of agentic gather: an unbounded loop (Sprint-4 candidate \#12,
 Tier~3) gives better RCA quality on data-starved cases but introduces
 unbounded latency and unbounded tool-call cost.  Bounded agency is
 the project's currently-chosen trade-off: predictable latency, bounded
@@ -1746,47 +1772,182 @@ methodological choice.
 
 \section{Sprint 4 candidate ranking}
 
-The ranked list of Sprint~4 candidates, with the dropped GPU
-migration removed, is reproduced in table~\ref{tab:sprint4}.
+The ranked list of Sprint~4 candidates as of 2026-05-19 is reproduced
+in table~\ref{tab:sprint4}.  The list integrates the twelve findings
+(P0--P11) from the 2026-05-19 real-load investigation with the
+existing carry-forward backlog items, ranked by
+$(\text{impact}\times\text{frequency})\div\text{effort}$.  The two
+anchor items are \textbf{(P0+P9)} \emph{Latency bundle} --- the
+latency unblocker, attacked as a bundle of small fixes after the
+GPU-migration option was dropped on cost grounds (\S\ref{sec:gpu-dropped}) ---
+and \textbf{P2} \emph{Suppression-cascade fixes} --- the
+cheapest-impact win, $\sim$1.5\,h for a class of false-negative
+caught twice in a single day's evidence.
 
-\begin{longtable}{rp{0.42\textwidth} p{0.13\textwidth} p{0.30\textwidth}}
-\caption{Sprint 4 candidates as of 2026-05-19.}
+\begin{longtable}{rp{0.40\textwidth} p{0.09\textwidth} p{0.07\textwidth} p{0.22\textwidth}}
+\caption{Sprint 4 candidates as of 2026-05-19, ranked.  ``P-tag''
+maps each row to the 2026-05-19 investigation findings P0--P11
+where applicable; \texttt{---} indicates a carry-forward item with
+no investigation finding attached.}
 \label{tab:sprint4} \\
 \toprule
-\textbf{\#} & \textbf{Item} & \textbf{Effort} & \textbf{Gates} \\
+\textbf{\#} & \textbf{Item} & \textbf{Effort} & \textbf{P-tag} & \textbf{Gates} \\
 \midrule
 \endfirsthead
 \toprule
-\textbf{\#} & \textbf{Item} & \textbf{Effort} & \textbf{Gates} \\
+\textbf{\#} & \textbf{Item} & \textbf{Effort} & \textbf{P-tag} & \textbf{Gates} \\
 \midrule
 \endhead
 \bottomrule
 \endfoot
-1 & US-5.2 Incident correlator --- 4-alert kill-chain RCA collapsed
-   into one coherent email                 & 1--2 d & None \\
-2 & Tier 3 --- Iterative agentic gather    & 3--5 d & S3-HF-09 \\
-3 & Curated RAG retrieval (BM25 over feedback-curated YAML)
-                                           & --- & Epic 2 feedback
-                                                 table populated \\
-4 & Weekly curation job (APScheduler, Sundays 02:00 UTC)
-                                           & --- & Feedback volume \\
-5 & Pod-level alert rule fixes (memory cgroup-churn + CPU label
-   mismatch)                               & $\sim$30 min each & None \\
-6 & Sentence-transformers retriever fallback & --- & BM25 underperforms
-                                                    in A/B \\
-7 & O-9 webhook auth + O-10 nightly RCA-history S3 backup
-                                           & $\sim$30 min each & None \\
-8 & MCP native tool-calling rewrite        & 5 SP & --- (no longer
-                                                    gated on GPU) \\
-9 & Trace-ID linkage from log anomalies    & 2 SP & None \\
-10 & RCA playbook templates                & --- & Complements Epic 2 \\
-11 & US-5.7 labelled corpus + F1 tracking  & --- & S3-HF-09 \\
-12 & L2/L3 chaos scenarios (O-12)          & --- & None \\
-13 & Drain3 self-monitoring loop allowlist & $\sim$30 min & None \\
-14 & Pipeline duration per-stage instrumentation & 1--2 h & S3-HF-05 \\
-15 & Doc debt --- CLAUDE.md refresh, stale PNGs replaced
-                                           & 1--2 h & None \\
+1 & \textbf{Latency bundle} --- hard 180\,s pipeline timeout +
+    per-stage instrumentation + Ollama concurrency cap (serial).
+    Combined target: median 6\,min $\to$ $\sim$90\,s on laptop.
+                                              & $\sim$5\,h total
+                                              & \textbf{P0+P9}
+                                              & None \\
+2 & \textbf{Suppression-cascade fixes} --- exclude
+    \texttt{audit-live-*}/\texttt{chaos-*} fingerprints from
+    suppression lookup; tighten
+    \texttt{TRIAGE\_HISTORY\_LOOKBACK\_MINUTES} 30\,$\to$\,10;
+    widen recurrence-gate annotation to also cover
+    \texttt{TargetDown}, \texttt{HighP95Latency},
+    \texttt{HighKongP95Latency}.
+                                              & $\sim$1.5\,h
+                                              & \textbf{P2}
+                                              & None --- cheapest impact \\
+3 & \textbf{PromQL / numerical-noise scrubber} --- validator rule
+    rejecting PromQL function calls, raw floats $>$\,4 sig figs,
+    Z-score equations, and \texttt{...}-truncated metric names;
+    \texttt{translate\_value(value,unit)} helper renders values
+    before prompt assembly.
+                                              & $\sim$4\,h
+                                              & \textbf{P1}
+                                              & None \\
+4 & \textbf{Deterministic diagnostic-steps generator} --- move
+    \texttt{diagnostic\_steps} out of the LLM into
+    \texttt{app/diagnostic\_steps\_for\_alert(alert,ctx)}, templated
+    from concrete evidence (trace\_id, service, window, observed
+    value).
+                                              & $\sim$6\,h
+                                              & \textbf{P3}
+                                              & None \\
+5 & \textbf{US-5.2 Incident correlator} --- collapse a 4-alert
+    kill-chain RCA into one coherent email.
+                                              & 1--2\,d
+                                              & \textbf{P10}
+                                              & None \\
+6 & \textbf{Drain3 + empty-actions auto-downgrade} --- post-LLM
+    gate: if \texttt{verdict=escalate} \textsc{and}
+    \texttt{suggested\_actions=[]} \textsc{and} no service named,
+    auto-downgrade to dismiss.  Drain3 escalations require
+    $\ge$\,2 novel templates in a 5-min window.
+                                              & 2--3\,h
+                                              & \textbf{P5}
+                                              & None \\
+7 & \textbf{Hallucination on truncated metric names} --- context
+    sanitiser drops lines ending in \texttt{(truncated)} or
+    \texttt{...]}; cross-check cited metric names against
+    \texttt{app/metrics.py} and the Prometheus registry.
+                                              & $\sim$4\,h
+                                              & \textbf{P4}
+                                              & None \\
+8 & \textbf{Tighter \texttt{\_classify\_rca\_quality}} ---
+    actionable requires ($\ge$\,1 specific evidence item)
+    \textsc{and} (named cause in prose) \textsc{and} ($\ge$\,1
+    action \textsc{or} explicit ``dismiss with reasoning'').
+                                              & 1\,h
+                                              & \textbf{P11}
+                                              & None \\
+9 & \textbf{Corpus reclassification + nightly post-hoc} ---
+    manually demote \texttt{0b215ef3} and clear its actions; a
+    nightly job re-runs the current validator over the last 7\,d of
+    stored RCAs, demoting any that would now fail.
+                                              & 4\,h
+                                              & \textbf{P8}
+                                              & P11 first \\
+10 & \textbf{MCP native tool-calling rewrite} --- replaces
+     prompt-engineered JSON-schema output with the native tool-call
+     API; smaller prompts $\to$ faster inference, compounds with
+     item \#1.
+                                              & 5\,SP
+                                              & ---
+                                              & GPU gate removed \\
+11 & \textbf{Exemplar prose rewrites + overlap-detection
+     validator} --- exemplars use \texttt{\{INSTANCE\}},
+     \texttt{\{N\}}, \texttt{\{TIMESTAMP\}} placeholders the LLM
+     must substitute; validator rejects RCAs with $>$\,80\,\%
+     char-overlap to their matched exemplar.
+                                              & $\sim$1\,d
+                                              & \textbf{P6}
+                                              & None \\
+12 & \textbf{Tier 3 --- Iterative agentic gather} (3-iteration
+     tool-call loop with hypothesis-tree state)
+                                              & 3--5\,d
+                                              & ---
+                                              & S3-HF-09 $\checkmark$ \\
+13 & \textbf{Curated RAG retrieval} (BM25 over feedback-curated
+     YAML; top-$k$\,=\,3 positives + 2 anti-examples)
+                                              & was US-3.4
+                                              & ---
+                                              & Epic 2 feedback table populated \\
+14 & \textbf{Weekly curation job} --- APScheduler, Sundays 02:00
+     UTC, reads SQLite feedback into \texttt{library\_curated.yaml}
+                                              & was US-3.3
+                                              & ---
+                                              & Feedback volume \\
+15 & \textbf{Dashboard \texttt{dismiss\_with\_recommendation}
+     colour} --- amber for ``dismiss but rule needs fixing'' vs.\
+     grey for ``dismiss, ignore.''  Schema migration on
+     \texttt{rca\_history}.
+                                              & 2\,h
+                                              & \textbf{P7}
+                                              & P11 first \\
+16 & \textbf{Pod-level alert rule fixes} --- memory cgroup-churn
+     aggregation + CPU label mismatch.
+                                              & $\sim$30\,min each
+                                              & ---
+                                              & None \\
+17 & \textbf{O-9 webhook auth} + \textbf{O-10 nightly RCA-history
+     S3 backup} --- Friday-slot hardening.
+                                              & $\sim$30\,min each
+                                              & ---
+                                              & None \\
+18 & Sentence-transformers retriever (RAG fallback) & ---
+                                              & ---
+                                              & Only if BM25 underperforms \\
+19 & Trace-ID linkage from log anomalies     & 2\,SP
+                                              & ---
+                                              & None \\
+20 & RCA playbook templates                   & ---
+                                              & ---
+                                              & Complements Epic 2 \\
+21 & US-5.7 labelled corpus expansion + F1 tracking
+                                              & ---
+                                              & ---
+                                              & S3-HF-09 $\checkmark$ \\
+22 & L2/L3 chaos scenarios (O-12)             & ---
+                                              & ---
+                                              & None \\
+23 & Drain3 self-monitoring loop allowlist
+     (\texttt{service\_name=drain3} exclusion)
+                                              & $\sim$30\,min
+                                              & ---
+                                              & None \\
+24 & Doc debt --- \texttt{monitoring-project/CLAUDE.md} refresh
+     + stale architecture PNGs replaced.
+                                              & 1--2\,h
+                                              & ---
+                                              & None \\
 \end{longtable}
+
+\noindent
+\textbf{Suggested week-1 execution order:}
+\#1 $\to$ \#2 $\to$ \#3 $\to$ \#4\,+\,\#8 (paired).  Items
+\#1\,+\,\#2\,+\,\#8 together are roughly eight hours of effort and
+deliver the largest perceived-quality improvement.  Items \#3\,+\,\#4
+are the ``the prose is now honest'' work.  Items \#5--\#11 close the
+false-positive escalation paths.  Items \#12--\#24 are wave 2.
 
 \section{Tier 3 --- iterative agentic gather}
 
@@ -1852,7 +2013,7 @@ on-demand, or roughly \$720 per month if left running, with
 aggressive auto-stop bringing the realistic monthly cost to
 \$200--300.  This is an order of magnitude more than the laptop
 GTX~1060 + \texttt{qwen2.5:7b} setup that has been the production
-runner for twenty-five days with no quality regression surfaced in
+runner for twenty-seven days with no quality regression surfaced in
 the daily audits or the investigation-window RCA scoring.  The
 \texttt{qwen2.5:14b} / \texttt{32b-q4} upgrade path is parked
 indefinitely; the gating condition for revisiting the decision is
@@ -1860,7 +2021,7 @@ either a material degradation of 7b output quality or the
 availability of a free or heavily subsidised GPU.
 
 The decision has two knock-on effects.  First, the MCP native
-tool-calling rewrite (Sprint~4 candidate~\#8) was previously gated
+tool-calling rewrite (Sprint~4 candidate~\#10) was previously gated
 on the GPU migration; the larger model is more reliable on
 function-calling benchmarks than the 7B and the rewrite was held
 until the migration shipped.  With the migration dropped, the
