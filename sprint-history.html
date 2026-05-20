@@ -424,10 +424,11 @@
     <tr><td>22</td><td>L2/L3 chaos scenarios (O-12)</td><td>—</td><td>—</td><td>Backlog</td><td>None</td></tr>
     <tr><td>23</td><td>Drain3 self-monitoring loop allowlist (<code>service_name=drain3</code> exclusion)</td><td>~30 min</td><td>—</td><td>Behavioral concern surfaced 2026-04-29</td><td>None</td></tr>
     <tr><td>24</td><td>Doc debt — <code>monitoring-project/CLAUDE.md</code> refresh + stale architecture PNGs replaced</td><td>1–2 h</td><td>—</td><td>Carried in audit reports</td><td>None</td></tr>
+    <tr><td>25</td><td><strong>Widen bounded-agency trigger to low-confidence + clamp-fired verdicts</strong> (currently only fires on <code>data_starved</code>) — the system iterates on <code>get_trace</code> / <code>prometheus.query</code> / <code>loki.query_range</code> itself instead of emitting <code>diagnostic_steps_for_clamp</code> hint text</td><td>3 SP</td><td>(none — surfaced 2026-05-20 from chat, not 2026-05-19 investigation)</td><td>Operator-perceived design issue: today's PodHighMemoryUsage RCA emitted "Open Jaeger and inspect the slowest trace…" instead of pulling spans itself</td><td>Pairs with #1 (per-stage instr makes the new retry observable), #10 (MCP native tool-calling), #12 (Tier 3 hypothesis-tree — this is the cheap precursor). Jira: SCRUM-S4-HF-01 / Work item Id 127</td></tr>
   </tbody>
 </table>
 
-<p><strong>Suggested execution order for week 1 of Sprint 4:</strong> items 1 → 2 → 3 → 4 + 8 (paired). Items 1 + 2 + 8 together are ~8 hours of effort and deliver the biggest perceived-quality improvement. Items 3 + 4 are the "now the prose is honest" work. Items 5–7 close the false-positive escalation paths. Items 9–24 are wave 2.</p>
+<p><strong>Suggested execution order for week 1 of Sprint 4:</strong> items 1 → 2 → 3 → 4 + 8 (paired). Items 1 + 2 + 8 together are ~8 hours of effort and deliver the biggest perceived-quality improvement. Items 3 + 4 are the "now the prose is honest" work. Items 5–7 close the false-positive escalation paths. Items 9–24 are wave 2. Item 25 (added 2026-05-20) pairs with item 1.</p>
 
 <h3 id="sprint-4-removed">Removed from the Sprint 4 plan (2026-05-19)</h3>
 

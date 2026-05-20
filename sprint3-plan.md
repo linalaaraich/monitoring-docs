@@ -1,9 +1,10 @@
 # Sprint 3 Plan — RCA Quality v2 + Operator Feedback Loop + Hallucination Firewall
 
-> **Sprint window:** 2026-04-23 → 2026-05-08 (16 days)
-> **Status:** Day 7 of 16 — Epic 1 mostly Done, Epics 2–4 starting week 2
+> **Sprint window:** 2026-04-23 → 2026-05-08 (16 days nominal; **extended de-facto** — sprint object still open in Jira as of 2026-05-20; closure-vs-roll decision pending per `SESSION_HANDOFF.md` §Decision 1)
+> **Status (2026-05-20, Day 28):** Epic 1: 12/13 SP Done (1 SP hygiene gap on US-3-CO13). **Epic 4: 15/15 SP Done ✅** (closed 2026-05-19). Epic 2: 0/7 SP. Epic 3: 0/6 SP. **63 SP shipped, 13 SP carry.**
 > **Repos in scope:** `monitoring-triage-service` · `monitoring-docs` · `monitoring-mcp-servers` · `monitoring-project` · `provisioning-monitoring-infra`
-> **Capacity:** ~77 SP total (49 SP shipped under Epic 1 close-out + ~28 SP new work in Epics 2–4 across remaining 9 days, 3-engineer team)
+> **Capacity (retro):** Plan called for ~77 SP across 16 days × 3 engineers. Actual: Epic 1 + Epic 4 = 63 SP shipped over 2 working bursts (2026-04-23..04-29 + 2026-05-19). Epic 2 + Epic 3 blocked behind a 20-day prototyping/doc-refresh window, deferred to Sprint 4. The team was effectively 1 engineer for the working bursts (Lina solo), not 3.
+> **Jira keys:** SCRUM-132..163 (32 work items: 4 epics + 28 stories). See `linalaaraich/jira/Sprint3-additions.csv` + `SPRINT3-README.md` for the import + ID mapping.
 
 ---
 
@@ -44,23 +45,23 @@
 
 **Goal:** Backfill Sprint 3's epic record with RCA-quality work shipped between 2026-04-23 and 2026-04-29. **All "Done" stories already have commits in their respective repos.**
 
-**Net effort:** 49 SP shipped + 1 SP cleanup remaining.
+**Net effort:** 48 SP shipped + 1 SP hygiene gap on US-3-CO13.
 
-| ID | Story | SP | Status |
-|---|---|---|---|
-| US-3-CO1 | US-5.1 Phase A — Per-service Drain3 (`dict[service → TemplateMiner]`) | 3 | Done |
-| US-3-CO2 | US-5.1 Phase B — Entity baselines (code complete, real-RCA verification pending) | 3 | In Progress |
-| US-3-CO3 | US-5.3 — Closed-loop feedback override/confirm + precision/recall metrics | 5 | Done |
-| US-3-CO4 | US-5.4 — Adaptive thresholds on 3 flappiest rules | 3 | Done |
-| US-3-CO5 | US-5.8 — Recurrence gates (pre-LLM + post-LLM, MediumCpu/Mem opt-in) | 5 | Done |
-| US-3-CO6 | RCA quality hardening F-1..F-5 (Drain3 webhook enrichment, hallucination blocklist, confidence clamp, surface-only LEDE validator, retry-on-violations) | 8 | Done |
-| US-3-CO7 | Exemplar library (D17, 11 archetypes) + RCA prose philosophy (D18 + D19) | 5 | Done |
-| US-3-CO8 | Dashboard redesign + `/dashboard/guide` operator manual | 3 | Done |
-| US-3-CO9 | Pod-level alert rules `PodHighMemoryUsage` + `PodHighCpuUsage` (2 query bugs filed for Sprint 4) | 3 | Done |
-| US-3-CO10 | Chaos test harness (`scripts/chaos/`, 4 test classes, RCA scorer) | 5 | Done |
-| US-3-CO11 | Daily audit feeds — static (cloud /schedule routine) + live (controller cron) | 3 | Done |
-| US-3-CO12 | Audit repo migrations (3 manual audits → private repo) + SESSION_HANDOFF history scrub | 2 | Done |
-| US-3-CO13 | Codify `app/policy.py` + `app/bypass_llm.yaml` (extract from existing rule/LLM ordering — *cleanup only, behavior unchanged*) | 1 | To Do |
+| Jira | ID | Story | SP | Status |
+|---|---|---|---|---|
+| SCRUM-136 | US-3-CO1 | US-5.1 Phase A — Per-service Drain3 (`dict[service → TemplateMiner]`) | 3 | Done |
+| SCRUM-137 | US-3-CO2 | US-5.1 Phase B — Entity baselines (verification dependency US-3.12 shipped 2026-05-19) | 3 | Done |
+| SCRUM-138 | US-3-CO3 | US-5.3 — Closed-loop feedback override/confirm + precision/recall metrics | 5 | Done |
+| SCRUM-139 | US-3-CO4 | US-5.4 — Adaptive thresholds on 3 flappiest rules | 3 | Done |
+| SCRUM-140 | US-3-CO5 | US-5.8 — Recurrence gates (pre-LLM + post-LLM, MediumCpu/Mem opt-in) | 5 | Done |
+| SCRUM-141 | US-3-CO6 | RCA quality hardening F-1..F-5 (Drain3 webhook enrichment, hallucination blocklist, confidence clamp, surface-only LEDE validator, retry-on-violations) | 8 | Done |
+| SCRUM-142 | US-3-CO7 | Exemplar library (D17, 14 archetypes — bumped from 11 in commit `134e811`) + RCA prose philosophy (D18 + D19) | 5 | Done |
+| SCRUM-143 | US-3-CO8 | Dashboard redesign + `/dashboard/guide` operator manual | 3 | Done |
+| SCRUM-144 | US-3-CO9 | Pod-level alert rules `PodHighMemoryUsage` + `PodHighCpuUsage` (2 query bugs filed for Sprint 4) | 3 | Done |
+| SCRUM-145 | US-3-CO10 | Chaos test harness (`scripts/chaos/`, 4 test classes, RCA scorer) | 5 | Done |
+| SCRUM-146 | US-3-CO11 | Daily audit feeds — static (cloud /schedule routine) + live (controller cron) | 3 | Done |
+| SCRUM-147 | US-3-CO12 | Audit repo migrations (3 manual audits → private repo) + SESSION_HANDOFF history scrub | 2 | Done |
+| SCRUM-148 | US-3-CO13 | Codify `app/policy.py` + `app/bypass_llm.yaml` — **hygiene gap**: marked Done in Jira 2026-05-19 but the two files don't exist in `monitoring-triage-service` (logic stayed inline; the extraction was deemed not worth the churn). Reopen-or-rename pending Decision 1 in `SESSION_HANDOFF.md`. | 1 | Hygiene gap |
 
 ---
 
@@ -70,9 +71,11 @@
 
 **Why:** The exemplar library is a frozen seed of 11 archetypes. As real US-5.3 `feedback` accumulates (override/confirm), there's no closed loop bringing operator thumbs-up/down + corrections into the system. Epic 2 captures the signal and exposes it through MCP. Curated-RAG retrieval (formerly US-3.3 + US-3.4) is deferred to Sprint 4 — it depends on accumulated feedback volume.
 
-**Net effort:** 7 SP (was 14 SP before Sprint 4 deferral).
+**Net effort:** 7 SP (was 14 SP before Sprint 4 deferral). **0/7 shipped as of 2026-05-20** — carried to Sprint 4 (Decision 1 pending: extend Sprint 3 vs roll to Sprint 4 / EPIC11).
 
 **Dependency order:** 3.1 → 3.2 → 3.5
+
+**Jira:** SCRUM-149 (US-3.1) · SCRUM-150 (US-3.2) · SCRUM-151 (US-3.5). Parent epic SCRUM-133 still marked "To Do" in the export despite child stories already in "In Progress"; epic should be bumped to "In Progress" or "Done" depending on Decision 1.
 
 ### US-3.1 — Extend feedback schema + endpoint *(4 SP)*
 
@@ -161,9 +164,11 @@ New Grafana panel on `triage-service-health` dashboard: feedback volume + tag br
 
 **Out of scope vs. backlog #1:** `sources.yaml` + topology hashing + calibration mode are **deferred**. Dynamic discovery (US-5.1 Phase A) already works; hard-coding sources would regress that. Add only if v1 surfaces a real need.
 
-**Net effort:** 6 SP.
+**Net effort:** 6 SP. **0/6 shipped as of 2026-05-20** — carried to Sprint 4 (Decision 1 pending; same fate as Epic 2).
 
 **Dependency order:** 3.6 → 3.7 → 3.8
+
+**Jira:** SCRUM-152 (US-3.6) · SCRUM-153 (US-3.7) · SCRUM-154 (US-3.8). Parent epic SCRUM-134 marked "To Do" despite child stories already "In Progress"; same status-update needed as Epic 2.
 
 ### US-3.6 — Scheduled snapshots + boot-time restore *(3 SP)*
 
@@ -449,7 +454,7 @@ Add `expected_cause_tokens: list[str]` to the `ChaosTest` base class. Score 1.0 
 | US-3.17 Tier 4 chaos scorer + corpus seed | 4 | 2 | **Done 2026-05-19** | monitoring-project + triage-service |
 | **Total** |  | **77** | **63 SP Done / 1 SP Dropped / 13 SP carried to Sprint 4** |  |
 
-**Capacity check:** 28 SP new+changed work in 9 remaining days = ~3.1 SP/day across a 3-engineer team. Comfortable. Tier 0 (US-3.9) + the wrong-archetype bug (US-3.10) ship Day 1. MCP-integrity stories (US-3.12, US-3.13) parallelize across engineers. US-3.14 + US-3.1 should be claimed by the same engineer to keep `rca_history_mcp` PR cohesive. US-3.15 (deepest change) takes the most calendar time but no upstream deps after US-3.13 lands.
+**Capacity check (retro 2026-05-20):** Plan called for 28 SP new+changed work over 9 remaining days × 3-engineer team. Actual: Epic 4 (15 SP) shipped in a single focused session on 2026-05-19 by Lina solo, after a 20-day prototyping/doc-refresh window (2026-04-30 → 2026-05-18). Epic 2 + Epic 3 (13 SP) blocked behind that window — never started, carried to Sprint 4. The "3-engineer team" assumption was the planning fiction: the working team was effectively 1 engineer for the Sprint 3 work bursts. Lesson for Sprint 4 capacity planning: size against 1 engineer × ~5 SP/day burst capacity, not 3 × 3.1 SP/day.
 
 ---
 
