@@ -194,7 +194,7 @@
       <span class="pill green">Prometheus · Loki · Jaeger MCPs</span>
       <span class="pill orange">Drain3</span>
       <span class="pill cyan">SQLite RCA store</span>
-      <span class="pill purple">Exemplar library (11)</span>
+      <span class="pill purple">Exemplar library (14)</span>
       <span class="pill orange">Bounded agency</span>
     </div>
   </div>
@@ -251,7 +251,7 @@ Every decision — escalate, dismiss, suppress, or timeout — is persisted in a
     <tr><td class="name">Entry point</td><td class="desc"><code>app/main.py</code> — FastAPI app + endpoint declarations</td></tr>
     <tr><td class="name">Pipeline</td><td class="desc"><code>app/pipeline.py</code> — the 10-stage flow below</td></tr>
     <tr><td class="name">Context fan-out</td><td class="desc"><code>app/context_window.py</code> — parallel calls to the 3 pillar MCPs anchored on <code>alert.startsAt</code></td></tr>
-    <tr><td class="name">Exemplar library</td><td class="desc"><code>app/exemplars/library.yaml</code> — 11 canonical archetypes; <code>app/exemplars/__init__.py</code> matcher</td></tr>
+    <tr><td class="name">Exemplar library</td><td class="desc"><code>app/exemplars/library.yaml</code> — 14 canonical archetypes; <code>app/exemplars/__init__.py</code> matcher</td></tr>
     <tr><td class="name">Response validator</td><td class="desc"><code>app/response_validator.py</code> — banned-phrase, vague-action, investigation-only, arch-mismatch, and <em>surface-only-lede</em> scans</td></tr>
     <tr><td class="name">Bounded-agency retry</td><td class="desc"><code>app/bounded_agency.py</code> — 6-tool whitelist (Prometheus / Loki / Jaeger / RCA history × 3) for one-shot retry on data-starved verdicts</td></tr>
     <tr><td class="name">Action-template fallback</td><td class="desc"><code>app/suggested_actions.yaml</code> — remediation-only templates keyed by alertname × deployment_type</td></tr>
@@ -706,7 +706,7 @@ Both layers are <em>optional</em> via env (<code>TRIAGE_SUPPRESSION_ENABLED=fals
   <li><a href="dashboard-guide.html">Dashboard guide</a> — operator manual for every column, code, and abbreviation in <code>/dashboard</code>. Pair with <code>/dashboard/guide</code> on the running service.</li>
   <li><a href="decisions-log.html">Decisions log</a> — D17 (exemplar library), D18 (adaptive thresholds + remediation-only philosophy), D19 (RCA prose quality — telemetry as means, not end) cover the recent shipping work.</li>
   <li><a href="sprint2-epic5-ueba.html">Sprint 2 Epic 5</a> — UEBA-inspired user stories. US-5.4 ✅ shipped (adaptive thresholds), US-5.3 next (closed-loop feedback), US-5.8 spec'd (recurrence gate).</li>
-  <li><a href="https://github.com/linalaaraich/monitoring-triage-service/blob/main/docs/happy-path-scenarios.md">Happy-path scenarios</a> — eleven detailed end-to-end RCA cycles the triage service is calibrated to produce. Source-of-truth for the exemplar library injected at stage 7.</li>
+  <li><a href="https://github.com/linalaaraich/monitoring-triage-service/blob/main/docs/happy-path-scenarios.md">Happy-path scenarios</a> — fourteen detailed end-to-end RCA cycles the triage service is calibrated to produce. Source-of-truth for the exemplar library injected at stage 7.</li>
   <li><a href="sprint3-backlog.md">Sprint 3 backlog</a> — Sprint 2 closed; Sprint 3 picks include closed-loop feedback evaluation, peer-grouping, deployment-history MCP.</li>
   <li><a href="reproducibility-guide.html">Reproducibility guide</a> — how to bring everything up from scratch, including the triage service container.</li>
   <li>Source of truth: <a href="https://github.com/linalaaraich/monitoring-triage-service">github.com/linalaaraich/monitoring-triage-service</a> — <code>app/main.py</code>, <code>app/pipeline.py</code>, <code>app/context_window.py</code>, <code>app/exemplars/</code>, <code>app/response_validator.py</code>, <code>app/bounded_agency.py</code> are the files that implement what this page describes.</li>
