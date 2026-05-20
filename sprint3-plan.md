@@ -430,24 +430,24 @@ Add `expected_cause_tokens: list[str]` to the `ChaosTest` base class. Score 1.0 
 
 | Story | Epic | SP | Status | Repo |
 |---|---|---|---|---|
-| US-3-CO1..CO12 | 1 | 48 | Done / In Progress | various |
-| US-3-CO13 (policy.py cleanup) | 1 | 1 | To Do | triage-service |
-| US-3.1 Feedback schema + 4 MCP tools | 2 | 4 | To Do | triage-service + mcp-servers |
-| US-3.2 Rating UI | 2 | 2 | To Do | triage-service |
-| US-3.5 Feedback observability | 2 | 1 | To Do | triage-service + monitoring-project |
-| US-3.6 Scheduled snapshots + boot restore | 3 | 3 | To Do | triage-service |
-| US-3.7 Operator endpoints | 3 | 2 | To Do | triage-service |
-| US-3.8 IAM + Grafana panel | 3 | 1 | To Do | provisioning-infra + monitoring-project |
-| US-3.9 Tier 0 diagnostic-only on clamp | 4 | 1 | To Do | triage-service |
-| US-3.10 HighKongP95Latency wrong-archetype bug | 4 | 1 | To Do | triage-service |
-| US-3.11 Tier 2 hypothesis-menu validator | 4 | 2 | To Do | triage-service |
-| US-3.12 MCP integrity — entity_baselines | 4 | 1 | To Do | triage-service + mcp-servers |
-| US-3.13 MCP integrity — bounded_agency rca_history | 4 | 1 | To Do | triage-service |
-| US-3.14 Quality-rated rca_history MCP tools | 4 | 2 | To Do | mcp-servers |
-| US-3.15 Tier 1 deeper trace gather | 4 | 3 | To Do | triage-service |
-| US-3.16 MCP integrity CI lint | 4 | 2 | To Do | all repos + monitoring-docs |
-| US-3.17 Tier 4 chaos scorer + corpus seed | 4 | 2 | To Do | monitoring-project + triage-service |
-| **Total** |  | **77** |  |  |
+| US-3-CO1..CO12 | 1 | 48 | Done 2026-04-23..04-29 | various |
+| US-3-CO13 (policy.py cleanup) | 1 | 1 | **Dropped 2026-05-20** — refactor superseded, policy logic stayed inline | triage-service |
+| US-3.1 Feedback schema + 4 MCP tools | 2 | 4 | In Progress (carried into Sprint 4 2026-05-20) | triage-service + mcp-servers |
+| US-3.2 Rating UI | 2 | 2 | In Progress (carried into Sprint 4 2026-05-20) | triage-service |
+| US-3.5 Feedback observability | 2 | 1 | To Do (carried into Sprint 4 2026-05-20) | triage-service + monitoring-project |
+| US-3.6 Scheduled snapshots + boot restore | 3 | 3 | In Progress (carried into Sprint 4 2026-05-20) | triage-service |
+| US-3.7 Operator endpoints | 3 | 2 | In Progress (carried into Sprint 4 2026-05-20) | triage-service |
+| US-3.8 IAM + Grafana panel | 3 | 1 | In Progress (carried into Sprint 4 2026-05-20) | provisioning-infra + monitoring-project |
+| US-3.9 Tier 0 diagnostic-only on clamp | 4 | 1 | Done 2026-04-29 | triage-service |
+| US-3.10 HighKongP95Latency wrong-archetype bug | 4 | 1 | Done 2026-04-29 | triage-service |
+| US-3.11 Tier 2 hypothesis-menu validator | 4 | 2 | Done 2026-04-29 | triage-service |
+| US-3.12 MCP integrity — entity_baselines | 4 | 1 | **Done 2026-05-19** | triage-service + mcp-servers |
+| US-3.13 MCP integrity — bounded_agency rca_history | 4 | 1 | **Done 2026-05-19** | triage-service |
+| US-3.14 Quality-rated rca_history MCP tools | 4 | 2 | **Done 2026-05-19** | mcp-servers |
+| US-3.15 Tier 1 deeper trace gather | 4 | 3 | **Done 2026-05-19** | triage-service |
+| US-3.16 MCP integrity CI lint | 4 | 2 | **Done 2026-05-19** | all repos + monitoring-docs |
+| US-3.17 Tier 4 chaos scorer + corpus seed | 4 | 2 | **Done 2026-05-19** | monitoring-project + triage-service |
+| **Total** |  | **77** | **63 SP Done / 1 SP Dropped / 13 SP carried to Sprint 4** |  |
 
 **Capacity check:** 28 SP new+changed work in 9 remaining days = ~3.1 SP/day across a 3-engineer team. Comfortable. Tier 0 (US-3.9) + the wrong-archetype bug (US-3.10) ship Day 1. MCP-integrity stories (US-3.12, US-3.13) parallelize across engineers. US-3.14 + US-3.1 should be claimed by the same engineer to keep `rca_history_mcp` PR cohesive. US-3.15 (deepest change) takes the most calendar time but no upstream deps after US-3.13 lands.
 
@@ -468,27 +468,11 @@ Add `expected_cause_tokens: list[str]` to the `ChaosTest` base class. Score 1.0 
 
 ## Sprint 4 candidates (next-sprint backlog)
 
-In rough priority order:
-
-1. **US-5.2 Incident correlator** — 4-alert kill-chain RCA email (carryover from Sprint 2 Tier-1)
-2. **Tier 3 — Iterative agentic gather (hypothesis-tree state)** — replaces single-shot `bounded_agency` retry with a 3-iteration tool-call loop. Lands ON TOP of Sprint 3's Tier 4 scoreboard. Design choices documented:
-   - **Iterative budget** (Q6=A for v1): global `max_iterations=3`. *Perspective for v2:* per-severity (critical=5, warning=3, info=2) — better-tuned but more knobs. Promote if v1 measurement shows critical alerts consistently exhausting budget without narrowing.
-   - **Tree-narrowed definition** (Q7=B): `len(confirmed) >= 1 and len(open) == 0` — supports cascade RCAs (multiple contributing causes). Strict "exactly one confirmed" rejected because real chaos runs (cgroup-churn) involve compound diagnoses.
-   - **Cost ceiling** (Q8=A for v1): no ceiling beyond `max_iterations`. *Perspective for v2:* per-decision token cap (e.g., 20k tokens) with hard fail to investigate-only — auditable and predictable. Promote if token spend grows materially or per-decision cost SLO is set.
-3. **Curated RAG retrieval** (was US-3.4, deferred from Sprint 3) — BM25 over feedback-curated YAML, top-K=3 positives + K=2 anti-examples injected into LLM prompt
-4. **Weekly curation job** (was US-3.3, deferred from Sprint 3) — APScheduler in-process, Sundays 02:00 UTC, reads SQLite feedback → emits `library_curated.yaml`
-5. **Pod-level alert rule fixes** — memory cgroup-churn aggregation + CPU label-mismatch (~30 min each)
-6. **Sentence-transformers retriever** (RAG fallback) — only if BM25 underperforms in A/B
-7. **O-9 webhook auth + O-10 nightly RCA-history S3 backup** — Friday-slot hardening
-8. **GPU migration to us-west-2 + qwen2.5:14b** (deferred 3–5 day effort)
-9. **MCP native tool-calling rewrite** (sprint3-backlog #5) — gates on GPU
-10. **Trace-ID linkage from log anomalies** (sprint3-backlog #2a)
-11. **RCA playbook templates** (sprint3-backlog #2b)
-12. **US-5.7 Labeled corpus expansion + F1 tracking** — builds on US-3.17's seed
-13. **L2/L3 chaos scenarios** (O-12)
-14. **Drain3 self-monitoring loop allowlist** (`service_name=drain3` exclusion)
-15. **Pipeline duration instrumentation** per-stage
-16. **Doc debt:** `monitoring-project/CLAUDE.md` + stale architecture PNGs
+> **Superseded 2026-05-19.** The 16-item list previously held here has been replaced by a 24-item P-tag-integrated ranking after the 2026-05-19 real-load investigation surfaced findings P0–P11. See **`sprint-history.html` §"Sprint 4 candidates — ranked priority list"** for the authoritative ordered list with per-item evidence and gate.
+>
+> **GPU migration to us-west-2 + `qwen2.5:14b` was dropped on cost grounds 2026-05-19** (`sprint-history.html` §"Removed from the Sprint 4 plan"). The MCP native tool-calling rewrite (previously gated on the GPU) is now Sprint 4 item #10 and proceeds on the laptop runner directly.
+>
+> The Sprint 4 import for Jira lives at **`linalaaraich/jira/Sprint4-additions.csv`** (3 themed epics EPIC9/10/11 + 24 stories, 88 SP). See **`linalaaraich/jira/SPRINT4-README.md`** for the import + bulk-edit instructions.
 
 ---
 
