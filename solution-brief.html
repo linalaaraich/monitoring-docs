@@ -149,7 +149,8 @@
     <li class="sub"><a href="#clamp">5.4 Confidence clamp</a></li>
     <li class="sub"><a href="#bounded">5.5 Bounded-agency retry</a></li>
     <li><a href="#archetypes">6. The 14 archetypes</a></li>
-    <li><a href="#case-study">7. Case study — 0b215ef3</a></li>
+    <li><a href="#case-study">7. Case study — 0b215ef3 (failure that drove Epic 4)</a></li>
+    <li><a href="#case-study-success">7b. Case study — Epic 4 in production (2026-05-20)</a></li>
     <li><a href="#known-issues">7.5 Known output-quality issues + Sprint-4 fixes</a></li>
     <li><a href="#asks">8. What we need from you</a></li>
     <li><a href="#study-plan">9. Recommended reading</a></li>
@@ -183,8 +184,13 @@ either way; their feedback flows back into the suppression layer.
 </p>
 
 <p>
-End-to-end latency on the laptop: ~60–95 s typical, with hard pipeline timeouts.
-The system is currently running steady-state and has been for ~25 days.
+End-to-end latency under real load (2026-05-19 heavy-load investigation, 95 production
+RCAs): <strong>median 6–7 min, worst 23 min</strong>; cheap-path short-circuits (dedup,
+recurrence gate, suppression replay) complete in milliseconds. Sprint 4's P0 anchor
+bundle targets <strong>median 90 s</strong> after per-stage instrumentation + serial
+Ollama concurrency + 180 s hard timeout — see <a href="#known-issues">§7.5</a>. The
+triage container has been running steady-state on <code>adolin-wsl</code> since
+Sprint 3 kick-off on 2026-04-23 (~27 days at time of writing).
 </p>
 
 <!-- ────────────────────── 2 ────────────────────── -->
@@ -276,8 +282,11 @@ direct database read, no in-process Python module import of evidence, no
 ad-hoc <code>httpx</code> call to Prometheus. The MCP wall is the hallucination
 firewall — if the LLM tries to invent a metric name or a service that doesn't
 exist, the MCP call returns empty and the validator catches the unsupported
-claim downstream. (Three remaining code paths still bypass this; closing them
-is Sprint 3 Epic 4. See <a href="#asks">§8</a>.)
+claim downstream. The last three MCP-only invariant bypasses were closed by
+Sprint 3 Epic 4 (S3-HF-04 / S3-HF-05 / S3-HF-07, 15/15 SP shipped 2026-05-19);
+a CI lint at <code>scripts/check_mcp_invariant.py</code> guards against
+regression. See <a href="hallucination-firewall.html">hallucination-firewall.html</a>
+for the full six-mechanism landing page.
 </p>
 
 <!-- ────────────────────── 4 ────────────────────── -->
@@ -480,11 +489,92 @@ than we'd like and is a signal that an archetype is missing.
     <li><strong>S3-HF-02:</strong> defensive tests pinning the action-template lookup so a YAML regex widening can never key wrong-archetype actions.</li>
   </ul>
   <p>
-    <strong>What's still open:</strong>
+    <strong>Epic 4 close-out — shipped 2026-05-19 (Sprint 3, 15/15 SP):</strong>
   </p>
   <ul>
-    <li><strong>S3-HF-07 (Tier 1, Sprint 3, in flight):</strong> wire <code>get_trace(trace_id)</code> so the LLM sees per-span attributes (<code>db.statement</code>, <code>http.target</code>, error tags) for the failing trace. With this, the model can say <em>"hikaricp connection pool is exhausted: 27/30 active, all spans queued"</em> instead of <em>"upstream is slow."</em></li>
-    <li><strong>S3-HF-04/05 (Sprint 3):</strong> close the three remaining MCP-only invariant bypasses so the hallucination firewall is genuinely complete.</li>
+    <li><strong>S3-HF-07 (Tier 1, 3 SP):</strong> <code>get_trace(trace_id)</code> MCP tool plus PII sanitizer (<code>db.statement</code> literals → <code>?</code>, <code>http.target</code> IDs → <code>:id</code>) plus a new <code>## Trace span breakdown</code> prompt section. The LLM now sees per-span attributes on the failing trace and can say <em>"hikaricp connection pool exhausted: 27/30 active, all spans queued"</em> rather than <em>"upstream is slow."</em> 16 new tests.</li>
+    <li><strong>S3-HF-04 / S3-HF-05 / S3-HF-06 (4 SP combined):</strong> the last three MCP-only invariant bypasses closed (<code>entity_baselines.py</code> → <code>prometheus-mcp</code>; bounded-agency <code>rca_history.similar</code> path → <code>rca_history_mcp</code>; <code>get_similar_decisions(min_quality)</code> + <code>get_low_rated_examples_for_alert</code> on RCA-history MCP). Six in-process exemptions (config, drain3 poller, boot-time) explicitly documented.</li>
+    <li><strong>S3-HF-08 (2 SP):</strong> MCP-integrity CI lint at <code>scripts/check_mcp_invariant.py</code> + GitHub Actions workflow + 4 self-tests with synthetic-violation probes — regression guard for the firewall.</li>
+    <li><strong>S3-HF-09 (3 SP):</strong> chaos-corpus regression gate as the 5th evaluation axis. The hallucination firewall now has its own behavioural test corpus.</li>
+  </ul>
+  <p>See <a href="#case-study-success">§7b</a> for a live RCA from 2026-05-20 showing this work in production.</p>
+</div>
+
+<!-- ────────────────────── 7b ────────────────────── -->
+<h2 id="case-study-success"><span class="num-badge">7b</span>Case study — Epic 4 in production (2026-05-20)</h2>
+
+<div class="callout story">
+  <div class="callout-label">Real RCA · 2026-05-20 · the deliberate inverse of 0b215ef3</div>
+  <p>
+    <strong>The alert:</strong> <code>PodHighMemoryUsage</code> (critical) on
+    <code>spring-boot</code>, instance <code>10.0.1.194:10250</code>. Container
+    working set sat at <strong>99.63%</strong> of cgroup limit — the same shape of
+    alert that drove 0b215ef3, with the same tempting "just restart the pod"
+    remediation hanging in front of the LLM. RCA id <code>8891233d</code>, fired
+    <code>2026-05-20T12:47:04Z</code>.
+  </p>
+  <p>
+    <strong>What the LLM produced:</strong> Verdict <code>ESCALATE</code>, cause-first
+    prose pointing at frequent <code>/actuator/health</code>, <code>/actuator/prometheus</code>
+    and <code>/api/employee</code> requests, and high span counts on Kong. But the
+    prose hedged — <em>"could be a sign of either frequent monitoring or potential
+    performance bottlenecks"</em>, <em>"might be a significant number of concurrent
+    requests"</em>, <em>"could lead to increased resource utilization"</em>. That is
+    textbook hypothesis-menu language.
+  </p>
+  <p>
+    <strong>What the system actually emitted:</strong> the hypothesis-menu validator
+    (S3-HF-03) flagged the prose; the F-4 confidence clamp then fired, forcing
+    <code>llm_confidence</code> to exactly <code>0.40</code> and <strong>stripping
+    <code>suggested_actions</code> to <code>[]</code></strong>. In their place,
+    four read-only <code>diagnostic_steps</code> rendered. The fourth is the
+    load-bearing one, verbatim:
+  </p>
+  <ul>
+    <li><em>"Do NOT run <code>kubectl rollout/scale/set</code> or restart <code>spring-boot</code> until a specific cause (slow query / GC pause / pool exhaustion / downstream timeout) is named with trace or metric evidence."</em></li>
+  </ul>
+  <p>
+    That sentence is the lesson from 0b215ef3 baked into the
+    <code>diagnostic_steps</code> fallback template. The operator sees a clamped
+    verdict next to read-only investigation verbs and an explicit guard-rail — not
+    a kubectl command. That is the entire point of Epic 4.
+  </p>
+  <p>
+    <strong>Correlation surfaced as context, not cause:</strong> three nearby
+    <code>TargetDown</code> fires on the <code>monitoring</code> service landed in
+    <code>correlated_alerts</code> (timestamps within 3 min). The pipeline passed
+    them to the operator as evidence of a possible cluster <em>without</em>
+    letting the correlation become a causal claim in the RCA prose. Hypothesis-menu
+    discipline working on a live fire.
+  </p>
+  <p>
+    <strong>Secondary success — a different mode, same epic:</strong> earlier that
+    morning at <code>08:50 UTC</code> the audit-live cron fired a synthetic
+    <code>MediumCpuUsage</code> (RCA <code>275ddbaf</code>). Verdict
+    <code>DISMISS</code> at confidence <code>0.92</code> — <em>not</em> clamped, the
+    system was genuinely confident. The prose cited <em>"+0.4σ above the same-hour
+    baseline from one week ago"</em> and <em>"matches the prior 32 firings in the
+    last 7 days, all of which were dismissed."</em> Suggested actions pointed at
+    the alert rule itself (<code>stddev_over_time + offset 7d &gt; 3</code>), not
+    at the workload — the P7 "dismiss-with-recommendation" pattern. This is the
+    <em>adaptive-threshold-noop</em> archetype plus closed-loop feedback: the 32
+    prior dismisses arrive via the suppression layer and inform the next verdict.
+  </p>
+  <p>
+    <strong>What worked:</strong>
+  </p>
+  <ul>
+    <li><strong>S3-HF-01 (Tier 0), in production:</strong> clamp stripped <code>suggested_actions</code> on a hedged memory-pressure RCA — no kubectl in the operator-facing output.</li>
+    <li><strong>Diagnostic-steps fallback template:</strong> the "do NOT run rollout/scale/set" guard-rail prose, lifted from the 0b215ef3 postmortem, rendered verbatim on a live critical fire.</li>
+    <li><strong>S3-HF-03 hypothesis-menu validator:</strong> caught the "could be either X or Y" hedging that 0b215ef3 also exhibited; the clamp fired automatically.</li>
+    <li><strong>Closed-loop dismiss (P7 archetype):</strong> <code>MediumCpuUsage</code> dismissed at 0.92 with a rule-fix recommendation, informed by 32 prior suppressed firings.</li>
+  </ul>
+  <p>
+    <strong>Where it's still slow / still drifting:</strong>
+  </p>
+  <ul>
+    <li><strong>P0 latency (Sprint 4 anchor):</strong> investigation duration on the primary RCA was <strong>1,557 s (~26 min)</strong>. The verdict and the output shape are right; the speed is not — too late to be load-bearing in an active incident. See <a href="#known-issues">§7.5 P0</a>.</li>
+    <li><strong>P1 prose-quality drift:</strong> the RCA cited routine <code>/actuator/*</code> and <code>/api/employee</code> log volume as if causal to 99.63% memory pressure. The clamp blocked the bad remediation, but the LLM still produced surface-level evidence selection. Sprint 4's P1 (PromQL/numerical-noise scrubber + context sanitizer) tightens this.</li>
   </ul>
 </div>
 
@@ -501,9 +591,9 @@ than we'd like and is a signal that an archetype is missing.
 <table>
   <thead><tr><th>P-tag</th><th>Problem</th><th>Evidence</th><th>Proposed fix</th><th>Effort</th></tr></thead>
   <tbody>
-    <tr><td><strong>P0</strong></td><td>Pipeline latency unworkable for dev workflow</td><td>Median 6-7 min, worst 23 min (<code>PodHighMemoryUsage</code> 2026-04-29). Queue blowup observed under sustained load.</td><td>Bundle: per-stage instrumentation + hard 180s timeout + Ollama serial concurrency + MCP native tool-calling rewrite. GPU migration was on the table but dropped on cost.</td><td>~5 h + 5 SP</td></tr>
+    <tr><td><strong>P0</strong></td><td>Pipeline latency unworkable for dev workflow</td><td>Median 6-7 min, worst 23 min (<code>PodHighMemoryUsage</code> 2026-04-29). Queue blowup observed under sustained load. <strong>Reproduced 2026-05-20 08:42–08:57 UTC</strong> during audit-live run #3 — <code>/decisions</code> endpoint went unresponsive while Ollama processed the queued <code>MediumCpuUsage</code>; <code>/health</code> stayed up. Direct field evidence that this is the right Sprint 4 anchor.</td><td>Bundle: per-stage instrumentation + hard 180s timeout + Ollama serial concurrency + MCP native tool-calling rewrite. GPU migration was on the table but dropped on cost.</td><td>~5 h + 5 SP</td></tr>
     <tr><td><strong>P1</strong></td><td>PromQL / floats / Z-score equations leak into cause-prose</td><td>RCAs literally contain <code>"Z-score: (6.72-6.3)/0.65 = +0.6σ"</code>, <code>"histogram_quantile(0.95) = 8203.846153846154 ms"</code>, <code>"sum by(le)(rate(...))"</code></td><td>New validator rule rejects telemetry-in-prose. <code>translate_value(value, unit)</code> helper pre-renders metric values. Strip <code># TYPE</code> / <code># HELP</code> / <code>...truncated...</code> from context before LLM sees it.</td><td>~4 h</td></tr>
-    <tr><td><strong>P2</strong></td><td>Suppression cascade silences real follow-up fires</td><td>2026-05-19: one synthetic dismiss → 4 real <code>MediumCpuUsage</code> suppressed. One real dismiss → 3 real <code>TargetDown</code> suppressed.</td><td>3 sub-fixes: exclude <code>audit-live-*</code> fingerprints from suppression lookup · tighten 30 → 10 min window · widen recurrence-gate to TargetDown + HighP95Latency.</td><td>~1.5 h</td></tr>
+    <tr><td><strong>P2 ✓</strong></td><td>Suppression cascade silences real follow-up fires — <strong>SHIPPED 2026-05-19</strong></td><td>2026-05-19 evidence (now closed): one synthetic dismiss → 4 real <code>MediumCpuUsage</code> suppressed; one real dismiss → 3 real <code>TargetDown</code> suppressed.</td><td><strong>Shipped</strong> in <code>monitoring-triage-service@b96bbde</code> + <code>monitoring-project@54b18df</code>: synthetic-fingerprint filter excluding <code>audit-live-*</code> + tightened 30 → 10 min lookback + recurrence-gate widened to TargetDown / HighP95Latency / HighKongP95Latency. <strong>Acceptance gate closed 2026-05-20 09:00 UTC</strong> — 6/6 post-fix audit-live decisions across 3 runs landed <code>triage_decision=investigate</code>, zero <code>triage_suppressed</code>.</td><td>1.5 h actual</td></tr>
     <tr><td><strong>P3</strong></td><td>Diagnostic steps are boilerplate, not incident-specific</td><td>Two TargetDown RCAs (<code>111ded21</code> + <code>a4555bdd</code>) have word-for-word identical 4-step diagnostic blocks.</td><td>Move diagnostic-steps generation out of the LLM into <code>app/diagnostic_steps_for_alert(alert, ctx)</code>. Templates from concrete evidence (trace_id, service, window).</td><td>~6 h</td></tr>
     <tr><td><strong>P4</strong></td><td>Hallucination on truncated metric names</td><td>2026-04-29 <code>d763a9c9</code>: invented cause around <code>"jvm_threads_daem"</code> — a Prometheus output truncation artefact, not a metric.</td><td>Context sanitizer drops lines ending in <code>(truncated)</code> or <code>...]</code>. Validator cross-checks cited metric names against known registry.</td><td>~4 h</td></tr>
     <tr><td><strong>P5</strong></td><td>False-positive escalations (Drain3, empty actions)</td><td>2026-04-29 <code>73784801</code> escalated for "GET /robots.txt and Kong deprecation warnings" — no causal connection, "shelved" actions.</td><td>Post-LLM gate auto-downgrades escalations with no actions + no service named. <code>Drain3AnomalyDetected</code> requires ≥2 novel templates before escalating.</td><td>2-3 h</td></tr>
@@ -516,7 +606,7 @@ than we'd like and is a signal that an archetype is missing.
   </tbody>
 </table>
 
-<p><strong>Anchor pair for Sprint 4 week 1:</strong> P0-bundle (latency) + P2 (suppression cascade). Combined ~8 hours, largest perceived-quality improvement. Then P1 + P3 in week 2 — the "now the prose is honest" work.</p>
+<p><strong>Sprint 4 anchor:</strong> P0-bundle (latency, ~5 h + 5 SP) is week-1 priority. P2 (suppression cascade) shipped 2026-05-19 and validated 2026-05-20, freeing the week-1 budget for P0. Then P1 + P3 in week 2 — the "now the prose is honest" work.</p>
 
 <!-- ────────────────────── 8 ────────────────────── -->
 <h2 id="asks"><span class="num-badge">8</span>What we need from you</h2>
