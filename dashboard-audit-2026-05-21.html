@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard Output Audit — 2026-05-21 (last 4 h) — CIRES Observability Platform</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --bg-soft: #13151e;
+    --card: #1a1d27;
+    --card-alt: #1e2230;
+    --border: #2a2d3a;
+    --border-hi: #3a3f52;
+    --text: #e4e6ee;
+    --text-soft: #c0c5d0;
+    --muted: #8890a0;
+    --accent-blue: #4ea8de;
+    --accent-green: #6bcf7f;
+    --accent-orange: #f0a050;
+    --accent-purple: #b07ee8;
+    --accent-red: #e06070;
+    --accent-cyan: #40d0d0;
+    --accent-yellow: #e0d060;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { font-family:'Inter','Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); line-height:1.65; font-size:15px; -webkit-font-smoothing:antialiased; }
+  code, pre, .mono { font-family:'JetBrains Mono','Fira Code',ui-monospace,monospace; font-size:0.88em; }
+
+  .topnav { display:flex; align-items:center; gap:12px; padding:14px 40px; background:var(--bg-soft); border-bottom:1px solid var(--border); flex-wrap:wrap; }
+  .topnav span.nav-label { color:var(--muted); font-size:13px; font-weight:600; margin-right:4px; }
+  .navlink { display:inline-flex; align-items:center; gap:6px; padding:7px 14px; border-radius:8px; font-size:13px; font-weight:600; text-decoration:none; border:1px solid; transition:background .2s, transform .15s; }
+  .navlink:hover { transform:translateY(-1px); }
+  .navlink-home { color:var(--text); border-color:var(--border); background:var(--card); }
+  .navlink-log { color:var(--accent-orange); border-color:rgba(240,160,80,.4); background:rgba(240,160,80,.08); }
+  .navlink-sys { color:var(--accent-cyan); border-color:rgba(64,208,208,.4); background:rgba(64,208,208,.08); }
+  .navlink-triage { color:var(--accent-purple); border-color:rgba(176,126,232,.4); background:rgba(176,126,232,.12); }
+
+  .hero { padding:56px 40px 40px; border-bottom:1px solid var(--border); background:linear-gradient(180deg, #13151e 0%, var(--bg) 100%); }
+  .hero .inner { max-width:1040px; margin:0 auto; }
+  .hero .eyebrow { font-size:11px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:var(--accent-red); margin-bottom:12px; }
+  .hero h1 { font-size:36px; font-weight:800; letter-spacing:-.5px; margin-bottom:14px; line-height:1.2; }
+  .hero h1 span.accent { color:var(--accent-red); }
+  .hero p.lead { font-size:16px; color:var(--text-soft); max-width:820px; line-height:1.7; margin-bottom:20px; }
+  .hero .pill-row { display:flex; gap:8px; flex-wrap:wrap; }
+  .pill { font-size:11px; font-weight:600; padding:4px 10px; border-radius:12px; border:1px solid; letter-spacing:.2px; }
+  .pill.red { color:var(--accent-red); border-color:rgba(224,96,112,.35); background:rgba(224,96,112,.08); }
+  .pill.orange { color:var(--accent-orange); border-color:rgba(240,160,80,.35); background:rgba(240,160,80,.08); }
+  .pill.green { color:var(--accent-green); border-color:rgba(107,207,127,.35); background:rgba(107,207,127,.08); }
+  .pill.blue { color:var(--accent-blue); border-color:rgba(78,168,222,.35); background:rgba(78,168,222,.08); }
+
+  .stats-row { display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:14px; margin:28px 0 24px; }
+  .stat { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:16px 20px; }
+  .stat .n { font-size:28px; font-weight:700; color:var(--text); }
+  .stat .lbl { font-size:11px; font-weight:600; letter-spacing:1px; text-transform:uppercase; color:var(--muted); margin-bottom:4px; }
+  .stat.good { border-left:3px solid var(--accent-green); }
+  .stat.warn { border-left:3px solid var(--accent-orange); }
+  .stat.bad { border-left:3px solid var(--accent-red); }
+  .stat.info { border-left:3px solid var(--accent-blue); }
+
+  .layout { max-width:1040px; margin:0 auto; padding:32px 40px 80px; }
+  .content h2 { font-size:24px; font-weight:700; margin:40px 0 14px; letter-spacing:-.3px; scroll-margin-top:24px; padding-bottom:8px; border-bottom:1px solid var(--border); }
+  .content h2:first-child { margin-top:0; }
+  .content h3 { font-size:17px; font-weight:700; margin:24px 0 8px; color:var(--text); }
+  .content h4 { font-size:13px; font-weight:700; margin:14px 0 4px; letter-spacing:1px; text-transform:uppercase; color:var(--muted); }
+  .content p { margin-bottom:14px; color:var(--text-soft); }
+  .content p strong { color:var(--text); font-weight:600; }
+  .content ul, .content ol { margin:8px 0 16px 24px; color:var(--text-soft); }
+  .content li { margin-bottom:6px; }
+  .content code { background:var(--card); border:1px solid var(--border); padding:1px 6px; border-radius:4px; font-size:0.85em; color:var(--accent-cyan); }
+  .content pre { background:var(--card); border:1px solid var(--border); padding:14px 16px; border-radius:8px; margin:12px 0 18px; overflow-x:auto; line-height:1.5; font-size:12.5px; }
+  .content pre code { background:none; border:none; padding:0; color:var(--text); font-size:1em; }
+  .content a { color:var(--accent-blue); text-decoration:none; border-bottom:1px dashed rgba(78,168,222,.35); }
+  .content a:hover { border-bottom-style:solid; }
+
+  .callout { border-left:3px solid; border-radius:0 8px 8px 0; padding:14px 18px; margin:16px 0; background:var(--card); }
+  .callout.note { border-color:var(--accent-blue); }
+  .callout.tip { border-color:var(--accent-green); }
+  .callout.warn { border-color:var(--accent-orange); }
+  .callout.critical { border-color:var(--accent-red); }
+  .callout-label { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; margin-bottom:6px; }
+  .callout.note .callout-label { color:var(--accent-blue); }
+  .callout.tip .callout-label { color:var(--accent-green); }
+  .callout.warn .callout-label { color:var(--accent-orange); }
+  .callout.critical .callout-label { color:var(--accent-red); }
+
+  table { width:100%; border-collapse:collapse; margin:12px 0 20px; font-size:13px; }
+  table th, table td { padding:10px 12px; border-bottom:1px solid var(--border); text-align:left; vertical-align:top; }
+  table th { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--muted); background:var(--card); }
+  table tr:hover td { background:var(--card-alt); }
+  .tag-ok { color:var(--accent-green); font-weight:600; }
+  .tag-minor { color:var(--accent-orange); font-weight:600; }
+  .tag-major { color:var(--accent-red); font-weight:600; }
+  .tag-info { color:var(--accent-blue); font-weight:600; }
+</style>
+</head>
+<body>
+
+<nav class="topnav">
+  <span class="nav-label">CIRES Observability Platform</span>
+  <a href="index.html" class="navlink navlink-home">🏠 Home</a>
+  <a href="decisions-log.html" class="navlink navlink-log">📝 Decisions Log</a>
+  <a href="system-explained.html" class="navlink navlink-sys">🔬 System Explained</a>
+  <a href="triage-service.html" class="navlink navlink-triage">🧠 Triage Service</a>
+</nav>
+
+
+<section class="hero">
+  <div class="inner">
+    <div class="eyebrow">Dashboard Output Audit · 2026-05-21</div>
+    <h1>Operator-facing dashboard audit — <span class="accent">last 4 h, every row graded</span></h1>
+    <p class="lead">
+      What this is: a meticulous, row-by-row evaluation of every decision
+      that landed on the production GPU triage's <code>/dashboard</code>
+      between <strong>2026-05-21T14:55 UTC and 18:55 UTC</strong>. The
+      <a href="solution-brief.html#dashboard-audit" style="color:var(--accent-green);">§7d card in the Solution Brief</a>
+      is the condensed presentation version of these findings — this page
+      is the long-form working reference, intended to guide ongoing
+      refinement of the platform's output quality.
+    </p>
+    <p class="lead">
+      Ground truth for every "what actually happened" cell in the per-row
+      tables below is the operator's own action log (Lina's stress test
+      this afternoon — see <a href="solution-brief.html#case-study-stress" style="color:var(--accent-green);">§7c</a>
+      for the inductions: kong scale-to-0, cpu-stress pod, novel-log
+      injection, mem-stress pod, hey-load). RCAs are graded against what
+      I <em>did</em>, not against what the LLM said.
+    </p>
+    <div class="pill-row">
+      <span class="pill red">2 false-positive operator emails</span>
+      <span class="pill orange">1 verdict-conflict pair</span>
+      <span class="pill orange">2 duplicate-class patterns</span>
+      <span class="pill green">14b on GPU median ~28 s</span>
+    </div>
+  </div>
+</section>
+
+<main class="layout">
+<aside class="toc-sidebar">
+  <h4>CONTENTS</h4>
+  <ol>
+    <li><a href="#window">1. Window + window-level numbers</a></li>
+    <li><a href="#ground-truth">2. Ground truth — what I did to the system</a></li>
+    <li><a href="#row-by-row">3. Row-by-row grading (16 decisions)</a></li>
+    <li><a href="#conflicts">4. Verdict conflicts + duplicates matrix</a></li>
+    <li><a href="#sprint4">5. Sprint 4 refinement candidates (~13 SP)</a></li>
+    <li><a href="#how-to-use">6. How to use this going forward</a></li>
+  </ol>
+</aside>
+<section class="content">
+
+<h2 id="window">1. Window + window-level numbers</h2>
+<p>
+  Window: <strong>2026-05-21T14:55:00Z → 18:55:00Z</strong> (4 hours).
+  Production host: <code>http://observability-gpu-uswest2:8090</code> —
+  AWS g5.xlarge / A10G / qwen2.5:14b-instruct primary.
+</p>
+<table>
+  <thead><tr><th>Metric</th><th>Count</th><th>Note</th></tr></thead>
+  <tbody>
+    <tr><td>Total decisions</td><td>16</td><td>Persisted to <code>/decisions</code>; visible on <code>/dashboard</code></td></tr>
+    <tr><td>LLM-pathed (full Ollama call)</td><td>8</td><td>The ones the operator actually got prose on</td></tr>
+    <tr><td>Cheap-pathed (gate-absorbed)</td><td>8</td><td>4× recurrence_gated_pre_llm, 3× triage_suppressed, 1× suppressed_duplicate</td></tr>
+    <tr><td>LLM verdict mix</td><td>5 escalate / 2 dismiss / 1 needs_review-emailed</td><td>—</td></tr>
+    <tr><td>Correct operator emails</td><td>4 / 6</td><td>67% precision on the "did email" channel</td></tr>
+    <tr><td>False-positive emails</td><td>2 / 6</td><td>Bingbot drain3 (16:32) + spring-boot drain3 prose-vs-verdict mismatch (18:23)</td></tr>
+    <tr><td>Correct dismisses</td><td>2 / 2</td><td>100% — TargetDown/monitoring (18:41), HighCpuUsage recovery (18:47)</td></tr>
+    <tr><td>Verdict conflicts</td><td>1 pair</td><td><code>HighCpuUsage / k3s-node</code> fingerprint <code>c4e3f62b…</code> flipped escalate→dismiss in 5 min</td></tr>
+    <tr><td>Duplicate-class patterns</td><td>2</td><td>(a) drain3 fingerprint collisions; (b) HighCpu+CriticalCpu cross-family duplicates</td></tr>
+    <tr><td>Unsafe actions shipped</td><td>2 / 8</td><td><code>systemctl restart k3s-node.service</code> + <code>kubectl rollout restart deploy/spring-boot</code> on no-named-cause</td></tr>
+    <tr><td>14b RCA latency</td><td>median ~28 s, max 87 s</td><td>Compare 7b-laptop 6-7 min median — ~12-16× faster</td></tr>
+    <tr><td>RCAs that named the actual operational cause</td><td>1 / 8</td><td>Only the kong-SIGCHLD drain3 at 18:34 named the operator action</td></tr>
+  </tbody>
+</table>
+
+<h2 id="ground-truth">2. Ground truth — what I did to the system</h2>
+<p>
+  Every grading judgment below references this table. The audit's
+  validity depends on the audit-er knowing exactly what the system was
+  subjected to.
+</p>
+<table>
+  <thead><tr><th>Time UTC</th><th>Action</th><th>Expected effect on the alert pipeline</th></tr></thead>
+  <tbody>
+    <tr><td>17:59</td><td>Fired audit-live.sh at adolin-wsl (laptop — my mistake; cutover already done)</td><td>Decisions land on laptop dashboard, NOT GPU. Out of scope for this audit.</td></tr>
+    <tr><td>18:18</td><td>Fired audit-live.sh at GPU triage</td><td>3 synthetic webhook POSTs — no real evidence in Prom/Loki/Jaeger</td></tr>
+    <tr><td>18:32:35</td><td><code>kubectl scale deploy/kong-kong -n network --replicas=0</code></td><td>Kong pod SIGCHLD/SIGQUIT on shutdown (caught by Drain3); did NOT cause TargetDown (target removed entirely, not "unreachable")</td></tr>
+    <tr><td>18:32:40</td><td><code>kubectl run cpu-stress --cpu 4 --timeout 420s</code></td><td>Real CPU saturation on k3s-node — should fire MediumCpuUsage (for:1m), HighCpuUsage (for:5m), CriticalCpuUsage</td></tr>
+    <tr><td>18:32:50</td><td>150x <code>kubectl exec spring-boot logger 'ERROR audit-stress …'</code></td><td>Push drain3 anomaly rate past 0.10 → self-fire</td></tr>
+    <tr><td>18:37:30</td><td><code>kubectl scale deploy/kong-kong --replicas=1</code></td><td>Kong recovery</td></tr>
+    <tr><td>18:37:35</td><td><code>kubectl run mem-stress --vm 2 --vm-bytes 800M --timeout 300s</code></td><td>mem-stress pod uses 1.6 GB until ~18:42; does NOT touch spring-boot pod directly</td></tr>
+    <tr><td>18:37:40</td><td><code>kubectl run hey-load -- -z 5m -c 80 -m GET kong-proxy/api/employee</code></td><td>80 concurrent GETs against Kong → spring-boot for 5 min; real p95 sustained at 28.9 s</td></tr>
+  </tbody>
+</table>
+<p><strong>Note:</strong> rows in the audit time-window that pre-date 18:32 (16:32 and 18:23 drain3 events) were <em>not</em> caused by me — those are real production drain3 events or earlier audit-live induced. They're still graded; the verdict on them is what the operator would see in routine operation.</p>
+
+<h2 id="row-by-row">3. Row-by-row grading (16 decisions)</h2>
+
+<div class="callout story">
+  <div class="callout-label">Operator-facing reality check · 2026-05-21 14:55 → 18:55 UTC · 16 decisions, 8 LLM-pathed</div>
+  <p>
+    <strong>What this section is.</strong> Lina asked three concrete questions
+    that the supervisor will ask too: <em>(1) why am I notified when there
+    isn't really a problem, (2) why do I get conflicting RCAs sometimes,
+    (3) why do I get duplicates.</em> §7, §7b and §7c showcased individual
+    RCAs in isolation. This section grades every operator-facing decision in
+    the last 4 h against ground truth — what I (the operator) actually did to
+    the system — and surfaces the failure modes by name. No paper-over.
+  </p>
+  <p>
+    <strong>Why this matters for the production greenlight.</strong> The
+    selection-bias risk in §7/§7b/§7c is that we only show RCAs we
+    pre-vetted. The honest read is: across <strong>16 decisions in 4 h, 8
+    reached the LLM, 8 were cheap-pathed</strong>. The cheap path absorbed
+    every textbook P5 recurrence (4× MediumCpuUsage, 2× TargetDown
+    re-fires, 1× see_previous_rca). The LLM path produced <strong>5 correct
+    escalations, 1 correct dismiss, and 2 mis-shaped operator-facing
+    rows</strong> that we name below.
+  </p>
+</div>
+
+<h3 id="dashboard-audit-table">Headline table — all 8 LLM-pathed rows graded against ground truth</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>UTC</th>
+      <th>Alert / service</th>
+      <th>Verdict (conf)</th>
+      <th>What I actually did to cause it</th>
+      <th>Notification correct?</th>
+      <th>Key issue</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>16:32:53</td>
+      <td><code>Drain3AnomalyDetected</code> / drain3</td>
+      <td>escalate (0.00)</td>
+      <td>Nothing — pre-window real bingbot 404 noise on spring-boot, drain3 self-fired.</td>
+      <td><strong>No.</strong> The trigger was routine 404s from a search-engine crawler against <code>/view</code>. Not a real problem.</td>
+      <td>P5 false-positive escalation. Confidence is 0.00 and quality is <code>needs_review</code> — the model knew it had nothing, but the verdict was still <code>escalate</code> and an email went out.</td>
+    </tr>
+    <tr>
+      <td>18:23:20</td>
+      <td><code>Drain3AnomalyDetected</code> / spring-boot</td>
+      <td>escalate (0.40)</td>
+      <td>Likely earlier audit-live synthetic — no induction by me at 18:23.</td>
+      <td><strong>No.</strong> Cause-prose itself says "does not significantly deviate from its baseline" and "Logs show mostly known patterns and a few synthetic novelty templates that do not indicate real issues."</td>
+      <td><strong>Self-contradicting verdict.</strong> Prose says benign, verdict says escalate. Confidence 0.40 didn't gate the email. P1 prose-vs-verdict consistency check missing.</td>
+    </tr>
+    <tr>
+      <td>18:34:02</td>
+      <td><code>Drain3AnomalyDetected</code> / drain3</td>
+      <td>escalate (0.30)</td>
+      <td><code>kubectl scale deploy/kong-kong --replicas=0</code> at 18:32:35 — Kong worker emitted SIGCHLD/SIGQUIT, drain3 picked it up.</td>
+      <td><strong>Yes, with caveat.</strong> Lifecycle signal from an operator-initiated scale-down is technically a real log novelty event; escalating it to a human is borderline-justified given drain3 has no metric to corroborate.</td>
+      <td>Correctly named pod (<code>kong-kong-77f855b6cc-q4bxc</code>), correctly named signals. Hallucinated <code>loki query</code> CLI in suggested action. See §7c A3 for full breakdown.</td>
+    </tr>
+    <tr>
+      <td>18:40:22</td>
+      <td><code>CriticalCpuUsage</code> / k3s-node</td>
+      <td>escalate (0.95)</td>
+      <td><code>kubectl run cpu-stress --image=polinux/stress -- stress --cpu 4 --timeout 420s</code> at 18:32:40 — 4 cores at 100% for 7 min.</td>
+      <td><strong>Yes.</strong> Real CPU saturation at 98.6%, sustained &gt;2 min. Operator notification justified.</td>
+      <td>Verdict and confidence are right. <strong>But the suggested action is <code>systemctl restart k3s-node.service</code></strong> on a node CPU alert with no named culprit process — would have brought down the cluster. P3-class unsafe action that the validator did not block.</td>
+    </tr>
+    <tr>
+      <td>18:41:12</td>
+      <td><code>TargetDown</code> / monitoring</td>
+      <td>dismiss (0.40)</td>
+      <td>Nothing — transient scrape miss against <code>10.0.1.194:6443</code> (kube-apiserver) likely caused by the 98% CPU saturation from cpu-stress.</td>
+      <td><strong>Yes (dismiss was correct as an operator decision)</strong> — target self-recovered. But the cause-prose missed the actual cause.</td>
+      <td>RCA called it "transient network jitter or a scrape-time collision". <strong>The real cause is the CPU saturation in the correlated CriticalCpuUsage row 50 s earlier</strong> — the apiserver was starving on the same node. Correlated alert was visible to the model; it didn't connect them.</td>
+    </tr>
+    <tr>
+      <td>18:42:12</td>
+      <td><code>HighCpuUsage</code> / k3s-node</td>
+      <td>escalate (0.85)</td>
+      <td>Same cpu-stress pod from 18:32:40, now also overlapping with hey-load 80c HTTP fan-out at 18:37:40.</td>
+      <td><strong>Yes.</strong> 92.3% sustained CPU, real load. Escalation correct.</td>
+      <td><strong>Duplicate of the CriticalCpuUsage RCA 2 min earlier</strong> — same fingerprint family, same node, same root cause. Should have been collapsed (<code>see_previous_rca</code>) instead of paying for a second LLM call. Cause-prose says "unexpected load" without naming cpu-stress.</td>
+    </tr>
+    <tr>
+      <td>18:45:22</td>
+      <td><code>PodHighMemoryUsage</code> / spring-boot</td>
+      <td>escalate (0.00)</td>
+      <td>Nothing touched spring-boot memory directly. The <code>mem-stress</code> pod at 18:37:35 is a separate pod in <code>default</code> ns. The <code>hey-load</code> driving 80 concurrent GETs may have driven up spring-boot heap but no induction targeted it.</td>
+      <td><strong>Mixed.</strong> Memory was genuinely at 97.5% — this IS a real problem in shape. But the operator got escalated at <code>confidence 0.00</code> with PromQL that computes <code>requests/server_requests = 1.25</code> as if that were the memory metric.</td>
+      <td><strong>Two serious failure modes.</strong> (a) The cited PromQL in evidence is a <em>ratio of HTTP request rates</em>, not a memory query — wrong metric family entirely. (b) Suggested action is <code>kubectl rollout restart deploy/spring-boot</code> with no named cause — exactly the §7b P1 anti-pattern. (c) Confidence 0.00 should have gated the email.</td>
+    </tr>
+    <tr>
+      <td>18:47:14</td>
+      <td><code>HighCpuUsage</code> / k3s-node</td>
+      <td>dismiss (0.85)</td>
+      <td>cpu-stress ended ~18:39:40; hey-load ended ~18:42:40. By 18:47 the node was recovering — observed CPU 41.1%.</td>
+      <td><strong>Yes.</strong> Transient post-recovery spike, correct to dismiss.</td>
+      <td><strong>Direct conflict with the 18:42 escalate verdict on the same fingerprint</strong> (<code>c4e3f62ba279e5c0</code>) 5 min earlier. Same alert, same service, same fingerprint, opposite verdicts. This is exactly Lina's conflicting-RCA question. Suggested action proposes <code>ansible-playbook</code> changes to alert rules — operationally reasonable, but unrelated to this fire.</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>
+  Raw data: <code>/tmp/last4h.json</code> (16 rows in the 4 h window),
+  <code>/tmp/all-decisions.json</code> (200 rows historical). Pulled from
+  <code>/decisions?limit=200</code> at <strong>18:53 UTC</strong>.
+</p>
+
+<!-- ────────────────────── 7d — deep dive: false-positive escalation ────────────────────── -->
+<h3 id="dashboard-audit-falsepos">Deep dive 1 — the bingbot 404 escalation (Lina's question 1)</h3>
+
+<div class="callout warn">
+  <div class="callout-label">Failure mode · 2026-05-21 16:32:53 UTC · Drain3AnomalyDetected · drain3 · RCA id c4561c89</div>
+  <p>
+    <strong>What landed in the operator's inbox.</strong> An email titled
+    <em>Drain3 anomaly detected on service drain3</em>, action_taken
+    <code>emailed</code>, llm_verdict <code>escalate</code>,
+    llm_confidence <code>0.00</code>, rca_quality <code>needs_review</code>.
+  </p>
+  <p>
+    <strong>What the prose actually said</strong> (rca_report, verbatim):
+  </p>
+  <blockquote>
+    <em>"The alert triggered due to a low anomaly rate (3.19%) with three
+    lines flagged as anomalous in the logs. The anomalies are related to
+    HTTP GET requests returning status code 404 and involve bingbot activity,
+    but there isn't enough context or metric data to determine if this is an
+    actual issue or normal behavior."</em>
+  </blockquote>
+  <p>
+    <strong>What was actually happening.</strong> Bingbot was crawling
+    <code>/view</code> on spring-boot and getting 404s. That's the cause —
+    a search-engine crawler hitting a path that doesn't exist. It is not a
+    production problem. It does not require an email. The 14b model already
+    knew this — the cause-prose self-describes the input as "low anomaly
+    rate", "three lines", "bingbot activity", and explicitly hedges that
+    "there isn't enough context … to determine if this is an actual issue
+    or normal behavior."
+  </p>
+  <p>
+    <strong>So why did the operator get emailed.</strong> The verdict path
+    defaults <code>Drain3AnomalyDetected</code> to <code>escalate</code>
+    unless the model produces an affirmative <code>dismiss</code>. The
+    model produced uncertainty ("not enough context"), which is treated
+    as escalate-with-low-confidence. The confidence value (<code>0.00</code>)
+    did not gate the email. The single suggested action is a deadpan
+    <em>"Shelved — no correlation found, no remediation issued. Awaiting
+    recurrence."</em> — the model itself describes its own work as shelved,
+    yet the email went out anyway.
+  </p>
+  <p>
+    <strong>This is the answer to Lina's question 1</strong>: the operator
+    gets notified when there isn't a problem because the verdict policy
+    treats uncertain-drain3-anomaly as escalate. The fix is mechanical, not
+    LLM-quality-bound: when <code>llm_confidence &lt; 0.30</code> AND
+    <code>rca_quality = needs_review</code> AND no correlated alerts within
+    ±5 min, the verdict should be downgraded to <code>dismiss</code> or
+    queued without an email. Sprint 4 P5-bis candidate.
+  </p>
+</div>
+
+<!-- ────────────────────── 7d — deep dive: conflicting verdicts ────────────────────── -->
+<h3 id="dashboard-audit-conflict">Deep dive 2 — the HighCpuUsage verdict flip (Lina's question 2)</h3>
+
+<div class="callout warn">
+  <div class="callout-label">Failure mode · 2026-05-21 18:42:12 → 18:47:14 UTC · HighCpuUsage / k3s-node · fingerprint c4e3f62ba279e5c0</div>
+  <p>
+    <strong>Two RCAs, same fingerprint, opposite verdicts, 5 min apart.</strong>
+  </p>
+  <p>
+    <strong>18:42:12 — verdict escalate, confidence 0.85, rca_report:</strong>
+  </p>
+  <blockquote>
+    <em>"The k3s-node service on instance 10.0.1.194:6443 has been
+    experiencing elevated CPU usage, reaching 92.3%. The observed value is
+    above the threshold of 85% for over 5 minutes. … This suggests that
+    there may be unexpected load on the node."</em>
+  </blockquote>
+  <p>
+    <strong>18:47:14 — verdict dismiss, confidence 0.85, rca_report:</strong>
+  </p>
+  <blockquote>
+    <em>"The CPU usage on the k3s-node (10.0.1.194:6443) has spiked to
+    41.1%, which is above the static threshold but well within expected
+    seasonal variations. The metric values show a transient spike that
+    quickly returned to normal levels … This pattern suggests a known
+    traffic fluctuation rather than an actual degradation."</em>
+  </blockquote>
+  <p>
+    <strong>Is this actually a conflict.</strong> Both RCAs are looking at
+    the same alert fingerprint, but at different moments along the cpu-stress
+    decay curve. At 18:42 CPU was at 92% with hey-load still running. By
+    18:47 cpu-stress had ended (~18:39:40) and hey-load had ended
+    (~18:42:40); the node was at 41% recovering. Both verdicts are
+    individually defensible. <strong>But the operator sees two adjacent
+    rows with the same alert name, same service, same fingerprint, and
+    opposite calls.</strong>
+  </p>
+  <p>
+    <strong>The real problem.</strong> Neither RCA names the operational
+    cause (cpu-stress pod from default namespace, hey-load synthetic
+    traffic). The first says "unexpected load" — generic. The second says
+    "seasonal variation" — wrong, this was synthetic stress, not
+    seasonality. <strong>Without a named cause in the first RCA, the
+    second RCA can't tell that the cause has cleared</strong> — it has to
+    re-derive intent from the metric value alone, which is why it lands on
+    "seasonal".
+  </p>
+  <p>
+    <strong>This is the answer to Lina's question 2</strong>: RCAs conflict
+    because the model is reasoning from instantaneous metric values rather
+    than from named-cause continuity across the alert lifecycle. The fix
+    is the §7.5 P1 axis (cause-prose must name a culprit), extended with a
+    cross-row coherence check: when a re-fire of the same fingerprint flips
+    verdict, the new RCA must explicitly reference and reconcile the prior
+    one. Sprint 4 candidate, new axis.
+  </p>
+</div>
+
+<!-- ────────────────────── 7d — deep dive: wrong-metric evidence + unsafe action ────────────────────── -->
+<h3 id="dashboard-audit-wrongmetric">Deep dive 3 — wrong-metric evidence and unsafe actions (the two worst LLM outputs)</h3>
+
+<div class="callout warn">
+  <div class="callout-label">Failure mode A · 2026-05-21 18:45:22 UTC · PodHighMemoryUsage / spring-boot · RCA id 4aa43e6f</div>
+  <p>
+    Real <code>PodHighMemoryUsage</code> at 97.49% (spring-boot heap under
+    hey-load HTTP fan-out). Verdict <code>escalate</code> at
+    <code>confidence 0.00</code>. Email sent.
+    <strong>The cited evidence</strong> (verbatim):
+  </p>
+  <blockquote>
+    <em>"<code>sum(rate(spring_boot_http_requests_seconds_count{...}[1m])) / sum(rate(spring_boot_http_server_requests_seconds_count{...}[1m])) = 1.25</code>"</em>
+  </blockquote>
+  <p>
+    The alert's actual rule is
+    <code>(container_memory_working_set_bytes / container_spec_memory_limit_bytes) * 100</code>
+    — a memory query. The cited evidence is a <em>ratio of two HTTP
+    request-rate counters</em>, value 1.25, which is neither the memory
+    value (97.5%) nor evidence for the memory hypothesis. <strong>The
+    model produced PromQL that looks plausible for spring-boot but is the
+    wrong metric family for the firing alert.</strong> The suggested
+    action: <em>"<code>kubectl rollout restart deploy/spring-boot</code>
+    — universal first-line remedy for k8s services"</em> — the §7b P1
+    anti-pattern verbatim. The clamp didn't fire because severity is
+    <code>info</code> and the clamp currently runs warning+. The verdict
+    was correct (real problem); the email body was misshapen.
+  </p>
+</div>
+
+<div class="callout warn">
+  <div class="callout-label">Failure mode B · 2026-05-21 18:40:22 UTC · CriticalCpuUsage / k3s-node · RCA id aaea032e</div>
+  <p>
+    Real 98.6% sustained CPU; verdict <code>escalate</code> at
+    <code>confidence 0.95</code> — correct call on a real problem. But the
+    suggested action (verbatim):
+  </p>
+  <blockquote>
+    <em>"<code>ssh root@10.0.1.194 'systemctl restart k3s-node.service'</code>
+    — restart the k3s service to clear transient issues"</em>
+  </blockquote>
+  <p>
+    Restarting k3s on the only k3s node would bring down every pod —
+    spring-boot, kong-kong, prometheus, loki, drain3, the triage service
+    itself. The actual cause was a <code>polinux/stress</code> pod in
+    <code>default</code> ns, which the prose does not name. The safe
+    remediation is <code>kubectl delete pod cpu-stress -n default</code>.
+    The §5.3 clamp keys on "rollout restart" / "universal first-line
+    remedy" — it does not currently key on <code>systemctl restart</code>.
+    <strong>Sprint 4: extend blocklist to include
+    <code>systemctl restart k3s</code>, <code>kubectl delete node</code>,
+    <code>shutdown</code>, <code>reboot</code>; run clamp at all
+    severities.</strong>
+  </p>
+</div>
+
+<!-- ────────────────────── 7d — conflict & duplicate matrix ────────────────────── -->
+<h3 id="dashboard-audit-matrix">Conflict and duplicate matrix (Lina's question 3)</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Pattern</th>
+      <th>(Alert, service)</th>
+      <th>Fingerprint</th>
+      <th>Rows in window</th>
+      <th>Verdicts</th>
+      <th>Sensible or spurious</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Duplicate fingerprint, same verdict</td>
+      <td>Drain3AnomalyDetected / drain3</td>
+      <td><code>drain3-drain3</code></td>
+      <td>2 (16:32, 18:34)</td>
+      <td>escalate × 2</td>
+      <td><strong>Spurious.</strong> 2 h apart, but they're triggered by completely different log sources (bingbot 404s vs Kong SIGCHLD). Same fingerprint because drain3-self-firing uses a static fingerprint. <strong>The fingerprinting collapses unrelated events</strong> — this is a drain3 webhook configuration issue, not LLM quality.</td>
+    </tr>
+    <tr>
+      <td>Duplicate fingerprint, flipped verdict</td>
+      <td>HighCpuUsage / k3s-node</td>
+      <td><code>c4e3f62ba279e5c0</code></td>
+      <td>2 (18:42, 18:47)</td>
+      <td>escalate, dismiss</td>
+      <td><strong>Sensible per-row, confusing to the operator.</strong> Different moments along the cpu-stress decay curve. The dedupe gate let it through because the verdicts differed. See Deep dive 2 above for the cross-row coherence fix.</td>
+    </tr>
+    <tr>
+      <td>Re-fire suppressed via see_previous_rca</td>
+      <td>CriticalCpuUsage / k3s-node</td>
+      <td><code>348e2504154187df</code></td>
+      <td>2 (18:40 LLM, 18:44 cheap)</td>
+      <td>escalate, (no LLM)</td>
+      <td><strong>Working as designed.</strong> Cheap-path correctly recognized the re-fire and pointed at the prior RCA. This is the dedupe gate doing its job.</td>
+    </tr>
+    <tr>
+      <td>Re-fire suppressed (MediumCpu)</td>
+      <td>MediumCpuUsage / k3s-node</td>
+      <td><code>0c7f813d019d83c6</code>, <code>82e5f2075dd65ffb</code></td>
+      <td>4 (2× at 17:34, 2× at 18:34)</td>
+      <td>(all cheap-pathed)</td>
+      <td><strong>Working as designed.</strong> Pre-LLM recurrence gate from §7c. Two pairs of double-fires, all 4 absorbed without LLM cost.</td>
+    </tr>
+    <tr>
+      <td>Re-fire suppressed (TargetDown)</td>
+      <td>TargetDown / monitoring</td>
+      <td><code>593aa9a672c66a34</code>, <code>12931ab085203e2b</code></td>
+      <td>4 (2× at 18:41, 2× at 18:50)</td>
+      <td>dismiss, then all cheap</td>
+      <td><strong>Working as designed.</strong> First fire got LLM dismiss; three subsequent re-fires within 10 min were correctly suppressed. The dedupe gate held.</td>
+    </tr>
+    <tr>
+      <td>Cross-fingerprint duplicate (logical)</td>
+      <td>HighCpu + CriticalCpu / k3s-node</td>
+      <td>(different fingerprints, same root cause)</td>
+      <td>2 LLM calls (18:40, 18:42)</td>
+      <td>escalate, escalate</td>
+      <td><strong>Spurious — paid for two LLM calls on the same root cause.</strong> CriticalCpu (98.6%) and HighCpu (92.3%) on the same node 2 min apart are the same incident at different threshold crossings. The dedupe gate keys on fingerprint, not on (service, time-bucket, cause-family). Sprint 4 candidate: logical-dedupe across alert-family on same service within N min.</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- ────────────────────── 7d — honest summary ────────────────────── -->
+<h3 id="dashboard-audit-summary">Honest summary — the brutal numbers</h3>
+
+<div class="callout note">
+  <div class="callout-label">Numerical readout · 16 decisions, 8 LLM-pathed, 4 h window</div>
+  <table>
+    <thead>
+      <tr>
+        <th>Metric</th>
+        <th>Value</th>
+        <th>Interpretation</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Total / cheap-pathed / LLM-pathed</td>
+        <td>16 / 8 / 8</td>
+        <td>Pre-LLM recurrence gate + see_previous_rca absorbed 50% of the load. GPU spend halved.</td>
+      </tr>
+      <tr>
+        <td>Operator emails sent (action_taken=emailed)</td>
+        <td>6</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td>Correct emails (real problem, justified page)</td>
+        <td>4 of 6 (67%)</td>
+        <td>CriticalCpu 18:40, HighCpu 18:42, PodHighMem 18:45, Drain3 Kong-signals 18:34.</td>
+      </tr>
+      <tr>
+        <td>False-positive emails (no real problem)</td>
+        <td>2 of 6 (33%)</td>
+        <td>Drain3 bingbot 16:32 (conf 0.00), Drain3 spring-boot 18:23 (conf 0.40, self-contradicting prose). <strong>This is Lina's question 1.</strong></td>
+      </tr>
+      <tr>
+        <td>Correct dismisses (suppressed, was benign)</td>
+        <td>2 of 2 (100%)</td>
+        <td>TargetDown 18:41, HighCpu recovery 18:47. Both correct calls.</td>
+      </tr>
+      <tr>
+        <td>Verdict conflicts (same fingerprint, different verdict)</td>
+        <td>1 pair</td>
+        <td>HighCpuUsage / k3s-node flipped escalate→dismiss in 5 min. <strong>Lina's question 2.</strong></td>
+      </tr>
+      <tr>
+        <td>Spurious duplicates (same fingerprint, unrelated cause)</td>
+        <td>1 pair</td>
+        <td>Drain3-drain3 fingerprint bucketed bingbot 404s and Kong shutdown signals together. <strong>Lina's question 3.</strong></td>
+      </tr>
+      <tr>
+        <td>Cross-alert-family duplicates (paid 2× for one incident)</td>
+        <td>1 pair</td>
+        <td>HighCpu+CriticalCpu on k3s-node, same root cause, 2 LLM calls.</td>
+      </tr>
+      <tr>
+        <td>Unsafe suggested actions (would worsen incident)</td>
+        <td>2 of 8 LLM rows</td>
+        <td><code>systemctl restart k3s-node.service</code> on CriticalCpu, <code>kubectl rollout restart deploy/spring-boot</code> with no named cause on PodHighMem.</td>
+      </tr>
+      <tr>
+        <td>Wrong-metric-family evidence (cited PromQL doesn't match alert)</td>
+        <td>1 of 8 LLM rows</td>
+        <td>PodHighMemoryUsage cited HTTP request-rate ratio instead of memory utilization.</td>
+      </tr>
+      <tr>
+        <td>RCAs that named the actual operational cause</td>
+        <td>1 of 8 (Drain3 Kong-signals at 18:34)</td>
+        <td>The other 7 either named generic causes ("unexpected load", "seasonal variation", "transient jitter") or hedged without a named culprit. <strong>This is the §7.5 P1 axis showing up at scale.</strong></td>
+      </tr>
+      <tr>
+        <td>Investigation duration p50 / max (LLM-pathed)</td>
+        <td>p50 ~28 s, max 87.6 s</td>
+        <td>14b on GPU is delivering acceptable latency. Speed is no longer the dominant issue; <strong>verdict-policy and prose-quality are</strong>.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="callout warn">
+  <div class="callout-label">Sprint 4 candidates surfaced by this audit (in priority order)</div>
+  <ol>
+    <li><strong>Verdict-policy gate on low-confidence drain3.</strong> When <code>llm_confidence &lt; 0.30</code> AND no correlated alert within ±5 min AND <code>rca_quality ∈ {needs_review, data_starved}</code>, downgrade verdict from escalate to queue-without-email. Closes the bingbot-style false-positive (Lina's Q1). Mechanical fix, ~1 SP.</li>
+    <li><strong>Prose-vs-verdict consistency check.</strong> If the cause-prose contains phrases like "does not significantly deviate", "not enough context", "normal behavior" — verdict must not be <code>escalate</code>. Static text classifier, ~2 SP.</li>
+    <li><strong>Cross-row verdict-flip reconciliation.</strong> When a re-fire of the same fingerprint produces a flipped verdict, the new RCA must reference the prior RCA id and explicitly reconcile. Closes Lina's Q2. ~3 SP.</li>
+    <li><strong>Logical dedupe across alert-family.</strong> Within N min on the same service, treat (HighCpu, CriticalCpu) as a single incident regardless of fingerprint. Closes the "paid 2× for one incident" duplicate (Lina's Q3). ~3 SP.</li>
+    <li><strong>Unsafe-action blocklist extension.</strong> Add <code>systemctl restart k3s</code>, <code>kubectl delete node</code>, <code>shutdown</code>, <code>reboot</code> to §5.3 clamp keyword set. Run clamp at all severities, not just warning+. ~1 SP.</li>
+    <li><strong>Evidence PromQL family-match check.</strong> If alert is in family memory/cpu/latency, the evidence PromQL must contain a metric from the matching family. Reject HTTP-rate evidence on a memory alert. ~2 SP.</li>
+    <li><strong>Drain3 fingerprint disaggregation.</strong> Drain3-self-fires currently share fingerprint <code>drain3-{service}</code>. Add a content-hash suffix so bingbot 404s and Kong SIGCHLDs land on different fingerprints. ~1 SP.</li>
+  </ol>
+</div>
+
+<div class="callout story">
+  <div class="callout-label">The honest read for the production greenlight conversation</div>
+  <p>
+    <strong>What is genuinely working.</strong> The dedupe gate, the
+    recurrence gate, the see_previous_rca path, the 14b-on-GPU latency
+    (median ~28 s), and the Kong-SIGCHLD identification at 18:34 where the
+    model resisted the volumetric red herring and named the operational
+    change.
+  </p>
+  <p>
+    <strong>What is genuinely not.</strong> Verdict policy on
+    low-confidence drain3 (Q1). Cross-row coherence on verdict flips (Q2).
+    Cross-alert-family dedupe (Q3). And the §7.5 P1 axis — cause-prose
+    that names a culprit — is showing 1-of-8 hit rate on this window.
+    That is the dominant Sprint 4 axis, with the 7 candidates above as
+    the concrete work items.
+  </p>
+  <p>
+    <strong>Production-readiness call.</strong> The gaps above are
+    mechanical fixes (~13 SP of Sprint 4 work). None require a model swap
+    or re-architecture. The 14b-on-GPU substrate is delivering the
+    latency and partial prose quality needed; the deterministic
+    guardrails around it need the Sprint 4 pass. <strong>Recommend
+    conditional greenlight: pilot on one operator queue with the Sprint 4
+    fixes shipped, gate broader rollout on a re-audit of the same shape
+    against a fresh 4 h window.</strong>
+  </p>
+</div>
+
+
+<h2 id="how-to-use">6. How to use this going forward</h2>
+<p>
+  This page is intended as a working reference for refining the triage
+  service. After each sprint that closes a Sprint 4 candidate above,
+  expect to:
+</p>
+<ol>
+  <li><strong>Re-run a 4 h audit-of-the-output</strong> using the same
+  shape as this page — pick a real 4 h window with at least 1
+  operationally-stressful event, pull <code>/decisions?limit=200</code>,
+  filter to the window, and grade each LLM-pathed row against ground
+  truth. Use this page's structure as the template.</li>
+  <li><strong>Track the headline metrics over time</strong>:
+  false-positive email rate, verdict-conflict pair count, "RCAs that
+  named the actual operational cause" rate. The last one is the
+  dominant axis — it should climb above 1/8 across runs.</li>
+  <li><strong>Compare against the Sprint 4 candidates list above</strong> —
+  for each candidate, name the row(s) in this page that motivated it,
+  and once the candidate ships, verify the next audit shows a delta on
+  that specific failure mode.</li>
+  <li><strong>The supervisor presentation moment</strong> (the §7d card
+  in Solution Brief) should be re-derivable from this page in &lt;5
+  minutes — pick the most operator-relevant question of the day, find
+  the worst row, find the best row, build the slide. Keep this page as
+  the source of truth.</li>
+</ol>
+<p>
+  The framing matters: the system is honest about its failure modes
+  because they're written down here, with the actual row IDs, in the
+  same repo as the service. A reviewer who doesn't trust the §7d card
+  can come here and re-grade every row. That's the contract.
+</p>
+
+</section>
+</main>
+
+</body>
+</html>
