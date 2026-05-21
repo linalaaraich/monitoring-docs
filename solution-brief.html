@@ -1050,6 +1050,49 @@ than we'd like and is a signal that an archetype is missing.
 <!-- ────────────────────── 7d ────────────────────── -->
 <h2 id="dashboard-audit"><span class="num-badge">7d</span>Critical audit — what the operator actually sees on /dashboard (last 4 h)</h2>
 
+<div class="callout ask">
+  <div class="callout-label">The honest framing — useful today, still in training</div>
+  <p>
+    <strong>What this audit demonstrates is that the system is real.</strong>
+    It's working through real alerts on real production traffic, the
+    cheap-path gates are absorbing half the load without burning the GPU,
+    the 14b on the A10G is producing cause-first RCAs in 22 s median
+    against a 6–7 min 7b-laptop baseline, and one of the eight LLM-pathed
+    decisions today demonstrated the kind of selectivity (the kong-SIGCHLD
+    attribution in §7c) that justifies an AI layer on top of conventional
+    observability at all. The platform earns its keep on those rows.
+  </p>
+  <p>
+    <strong>It is also still in training.</strong> Two of six operator
+    emails in the last four hours were false positives. One alert
+    fingerprint produced opposite verdicts five minutes apart. Two
+    distinct duplicate-class patterns let unrelated events share buckets,
+    and two unsafe actions reached the operator inbox. Only one of eight
+    LLM-pathed RCAs named the actual operational cause. None of these are
+    architecture failures — they are <em>training data gaps</em> and
+    <em>gate-tuning gaps</em>. Treated as a triage assistant that learns
+    from operator feedback, the system is useful today and will become
+    measurably better with every override-loop cycle.
+  </p>
+  <p>
+    <strong>How Sprint 4 closes the gap.</strong> The feedback loop being
+    added in <a href="sprint-history.html">Sprint 4</a> (operator override
+    schema extension on the <code>feedback</code> table, <code>rate.html</code>
+    UI on every escalation email, four new MCP tools for
+    <code>rca_history.list_feedback</code> /
+    <code>get_similar_overrides</code> / <code>get_archetype_quality</code> /
+    <code>flag_action_unsafe</code>) is the structural answer to most
+    findings below: every operator "this was noise" override teaches the
+    suppression cache; every "wrong remediation" flag adds to the
+    hallucination blocklist; every cross-row verdict conflict resolved by
+    an operator becomes a tuning example. Combined with the four other
+    Sprint 4 candidates surfaced by this audit (~13 SP total, named on the
+    <a href="dashboard-audit-2026-05-21.html">detail page</a>), the
+    failure modes here are not "fix forever" problems — they are
+    "fix once, then keep refining with operator signal."
+  </p>
+</div>
+
 <div class="callout story">
   <div class="callout-label">Operator-facing reality check · 2026-05-21 14:55 → 18:55 UTC · 16 decisions, 8 LLM-pathed</div>
   <p>

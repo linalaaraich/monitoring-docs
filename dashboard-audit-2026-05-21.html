@@ -171,6 +171,66 @@
   </p>
 </div>
 
+<div style="border-left:3px solid var(--accent-blue); background:rgba(78,168,222,.05); padding:18px 22px; margin:0 0 28px; border-radius:0 8px 8px 0;">
+  <div style="font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--accent-blue); margin-bottom:8px;">Framing — useful today, still in training</div>
+  <p style="margin-bottom:10px;">
+    <strong>The good.</strong> This audit shows the platform doing real
+    work on real traffic: 8/16 decisions in the window were absorbed
+    without an LLM call by the recurrence gate, dedupe, and
+    see_previous_rca paths — half the load handled cheaply. The 14b on
+    the GPU produced cause-first RCAs at a 22 s median (vs. 6–7 min on
+    the 7b laptop baseline). Both dismisses in the window were correct
+    — the system <em>did</em> let benign signals go. The kong-SIGCHLD
+    attribution at 18:34 (see <a href="solution-brief.html#case-study-stress-drain3">§7c.2</a>)
+    is the kind of selectivity an AI layer can add on top of conventional
+    observability — the model picked the operationally-meaningful side
+    effect over the louder volumetric signal.
+  </p>
+  <p style="margin-bottom:10px;">
+    <strong>The bad — what this page documents in detail.</strong>
+    2/6 operator emails in the window were false positives. 1 alert
+    fingerprint flipped verdict in 5 minutes. 2 duplicate-class patterns
+    let unrelated events share buckets. 2 unsafe-or-misleading actions
+    reached the operator inbox. Only 1 of 8 LLM-pathed RCAs named the
+    actual operational cause. These are real failure modes; they are
+    also <em>not</em> architecture failures — they are gate-tuning gaps
+    and training-data gaps that show up because the system is being
+    asked to make judgment calls without yet having an operator
+    feedback signal to learn from.
+  </p>
+  <p style="margin-bottom:0;">
+    <strong>How Sprint 4 + the operator feedback loop close the gap.</strong>
+    Two structural changes in Sprint 4 attack most of these findings
+    directly:
+  </p>
+  <ul style="margin:8px 0 0 24px;">
+    <li><strong>Feedback loop (Sprint 4 — operator override schema +
+    <code>rate.html</code> UI + 4 MCP tools).</strong> Every operator
+    "this was noise" override feeds the suppression cache; every
+    "wrong remediation" flag adds to the hallucination blocklist;
+    every operator-confirmed root cause becomes an exemplar; every
+    cross-row verdict conflict resolved by an operator becomes a
+    tuning example. Q1, Q2 and the unsafe-actions class of findings
+    all gain a learnable signal.</li>
+    <li><strong>Mechanical Sprint 4 candidates (~13 SP, named in §5
+    below).</strong> The shelved-in-disguise email gate (<strong>already
+    shipped — see status banner above</strong>), drain3 fingerprint
+    hashing, alertname-family dedupe equivalence, cross-row coherence
+    check, and unsafe-action stripping independent of the clamp.
+    Each maps to a specific row in §3 below.</li>
+  </ul>
+  <p style="margin:10px 0 0 0;">
+    <strong>The framing for the supervisor.</strong> The platform is
+    useful today as a triage assistant — it routes 50% of alerts
+    cheaply, names operational causes when it can, and keeps the
+    dashboard row even when it shouldn't have paged. It will become
+    measurably better as Sprint 4 lands and operator overrides start
+    flowing into the cache. The honest claim is not "this is finished";
+    it is "this is the right architecture and the right hardware; the
+    refinement work is named, scoped, and underway."
+  </p>
+</div>
+
 <h2 id="window">1. Window + window-level numbers</h2>
 <p>
   Window: <strong>2026-05-21T14:55:00Z → 18:55:00Z</strong> (4 hours).
