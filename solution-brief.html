@@ -152,6 +152,11 @@
     <li><a href="#case-study">7. Case study — 0b215ef3 (failure that drove Epic 4)</a></li>
     <li><a href="#case-study-success">7b. Case study — Epic 4 in production (2026-05-20)</a></li>
     <li><a href="#known-issues">7.5 Known output-quality issues + Sprint-4 fixes</a></li>
+    <li><a href="#architecture-review">7.6 Architecture review — what scales, what doesn't yet</a></li>
+    <li class="sub"><a href="#arch-strengths">7.6.1 What's well-designed</a></li>
+    <li class="sub"><a href="#arch-strain">7.6.2 Where it's showing strain</a></li>
+    <li class="sub"><a href="#arch-scalability">7.6.3 Scalability verdict</a></li>
+    <li class="sub"><a href="#arch-multitenancy">7.6.4 Co-located-apps snapshot — car-rental</a></li>
     <li><a href="#asks">8. What we need from you</a></li>
     <li><a href="#study-plan">9. Recommended reading</a></li>
     <li><a href="#glossary">10. Glossary</a></li>
@@ -163,35 +168,23 @@
 <!-- ────────────────────── 1 ────────────────────── -->
 <h2 id="pitch"><span class="num-badge">1</span>The 60-second pitch</h2>
 
-<p>
-CIRES Technologies (Tanger Med, Digital Factory Observability Service) runs a
-small Java/Spring-Boot stack — 6 microservices behind Kong, on k3s, with a
-monitoring VM running Grafana / Prometheus / Loki / Jaeger. The alert volume is
-small (~10–40 fires per day in steady state) but every one of them hits the same
-small on-call team. Without an AI layer, every alert demands the same human
-investigation regardless of whether it's a real incident or a flake.
-</p>
+<p><strong>Problem.</strong> The operational gap that motivated this work, surfaced in Sprint-0 field research: production incidents were being discovered <em>after the fact</em> — by clients or during retrospective log review — rather than by the monitoring system itself. Per-alert investigation cost was high and uniform regardless of whether an alert was a real incident, a flake, or a known recurrent pattern.</p>
 
-<p>
-The triage service consumes Grafana alert webhooks and a separate stream of
-Drain3-detected log anomalies, then for each one it: gathers metric / log /
-trace context through a wall of MCP servers, picks the closest of 14 RCA
-archetypes, asks a local LLM (<code>qwen2.5:7b-instruct</code> on a GTX 1060) to
-produce a cause-first root-cause analysis, runs the answer through three
-validators, and emits a verdict — <code>ESCALATE</code> (email the on-call) or
-<code>DISMISS</code> (record the reason and move on). Operators can override
-either way; their feedback flows back into the suppression layer.
-</p>
+<p><strong>What it does.</strong> The CIRES Observability Platform is a two-layer response. The foundation: a conventional open-source observability stack (Prometheus / Loki / Jaeger / Grafana on AWS, Ansible-deployable). The differentiator: an <strong>AI triage service</strong> on top that, for every Grafana webhook, gathers cross-pillar context through five MCP servers, picks the closest of 14 RCA archetypes, asks a local LLM (<code>qwen2.5:7b-instruct</code> on Ollama) for a cause-first analysis, runs three validators, and emits <code>ESCALATE</code> (email the on-call) or <code>DISMISS</code> (record the reason and move on). Operators can override either way; their feedback flows back into the suppression and exemplar layers.</p>
 
-<p>
-End-to-end latency under real load (2026-05-19 heavy-load investigation, 95 production
-RCAs): <strong>median 6–7 min, worst 23 min</strong>; cheap-path short-circuits (dedup,
-recurrence gate, suppression replay) complete in milliseconds. Sprint 4's P0 anchor
-bundle targets <strong>median 90 s</strong> after per-stage instrumentation + serial
-Ollama concurrency + 180 s hard timeout — see <a href="#known-issues">§7.5</a>. The
-triage container has been running steady-state on <code>adolin-wsl</code> since
-Sprint 3 kick-off on 2026-04-23 (~27 days at time of writing).
-</p>
+<p><strong>Scope of this brief.</strong> This is a <strong>proof of concept</strong>, built and validated on a local test bed — a sample <code>react-springboot-mysql</code> application (Spring Boot + Kong + MySQL + React) plus an additional co-located test application — running on a lab AWS environment with a Tailscale-attached laptop GPU for inference. <strong>Intended deployment target: CIRES Technologies (Tanger Med) production, contingent on the greenlight this brief supports.</strong> Alert volumes, latencies, and load shapes discussed below describe the test bed, not CIRES production — see <a href="#architecture-review">§7.6</a> for an honest read on how the architecture would scale.</p>
+
+<p><strong>Why it's worth your time.</strong> Three things distinguish this from a typical LLM-on-alerts integration:</p>
+
+<ol>
+  <li><strong>Hallucination firewall.</strong> Every data source the LLM ever sees flows through an MCP bridge — no direct DB reads, no in-process module imports of evidence, no ad-hoc HTTP calls. The invariant is enforced by a CI lint (<code>scripts/check_mcp_invariant.py</code>), not just convention. If the LLM tries to invent a metric or a service that doesn't exist, the MCP call returns empty and the validator catches the unsupported claim downstream. See <a href="#quality">§5</a> and <a href="hallucination-firewall.html">hallucination-firewall.html</a>.</li>
+  <li><strong>Five reinforcing output-quality defenses.</strong> Exemplar retrieval, alert-keyed hallucination blocklist, surface-only LEDE + hypothesis-menu validators, confidence clamp, bounded-agency single retry. Each catches a different failure mode; together they make LLM mistakes recoverable rather than load-bearing.</li>
+  <li><strong>Operational track record, not promises.</strong> The triage container has run on <code>adolin-wsl</code> for 27+ days since Sprint 3 kickoff (2026-04-23). 252 / 252 triage tests pass, the MCP-invariant lint is clean, and the 2026-05-19 heavy-load test produced 95 production-shape RCAs with a documented quality grade per RCA. Five of the twelve issues that test surfaced are already shipped or scheduled into Sprint 4.</li>
+</ol>
+
+<p><strong>What we deliberately didn't build.</strong> The system prefers <strong>determinism and auditability over raw model capability</strong>. No agentic multi-step planning loop (one bounded retry max). No vector DB (the exemplar library is a curated YAML, deliberately frozen until operator feedback can curate retrieval well). No microservice mesh (one pipeline, one process, deterministic ordering). No native tool-calling (structured JSON output schemas instead, until we move off the laptop to a larger model). Every quality mechanism exists to make the LLM's mistakes recoverable. If you'd weight that trade-off differently, <a href="#asks">§8</a> is the conversation we want to have.</p>
+
+<p><strong>End-to-end latency under the heavy-load test.</strong> Median 6–7 min, worst 23 min on current laptop-GPU hardware; cheap-path short-circuits (dedup, recurrence gate, suppression replay) complete in milliseconds. Sprint 4's P0 anchor bundle targets median 90 s after per-stage instrumentation + serial Ollama concurrency + a hard 180 s timeout — see <a href="#known-issues">§7.5</a> for the full P0–P11 list.</p>
 
 <!-- ────────────────────── 2 ────────────────────── -->
 <h2 id="what"><span class="num-badge">2</span>What we built (and what we deliberately didn't)</h2>
@@ -607,6 +600,84 @@ than we'd like and is a signal that an archetype is missing.
 </table>
 
 <p><strong>Sprint 4 anchor:</strong> P0-bundle (latency, ~5 h + 5 SP) is week-1 priority. P2 (suppression cascade) shipped 2026-05-19 and validated 2026-05-20, freeing the week-1 budget for P0. Then P1 + P3 in week 2 — the "now the prose is honest" work.</p>
+
+<!-- ────────────────────── 7.6 ────────────────────── -->
+<h2 id="architecture-review">Architecture review — what scales, what doesn't yet</h2>
+
+<p>Honest structural read drafted 2026-05-20. Distinct from the output-quality findings above: those are <em>prose-level</em> failures on a sound foundation. This section is about the foundation itself — what holds up under inspection, where it's already creaking, and what would break first if you doubled the load or onboarded a second comparably-sized application.</p>
+
+<div class="callout warn">
+  <div class="callout-label">One-line verdict</div>
+  <p>Sound bones, single-host fragility. The architecture is above-average for a single-engineer prototype — invariants enforced by CI rather than docs, layered safety nets, external instrumentation — but it has not been load-tested, fault-tested, or multi-tenancy-tested in any serious way. The laptop-GPU inference path is the dominant scalability ceiling, and we already see it strain under three concurrent alerts.</p>
+</div>
+
+<h3 id="arch-strengths">7.6.1 What's well-designed</h3>
+
+<table>
+  <thead><tr><th>Property</th><th>Why it matters</th></tr></thead>
+  <tbody>
+    <tr><td><strong>MCP-only data access invariant</strong></td><td>Every data source the LLM ever sees flows through an MCP bridge — no direct DB, Prometheus, or in-process reads. Hallucination firewall enforced by <code>scripts/check_mcp_invariant.py</code> as a CI lint, not just doc-level convention. The last three bypasses closed in Sprint 3 Epic 4 (15/15 SP shipped 2026-05-19).</td></tr>
+    <tr><td><strong>External-instrumentation principle</strong></td><td>Application code is untouched. OTel Java agent is injected via initContainer; the app deployment YAMLs import no monitoring library. Blast-radius of a monitoring change on app teams is zero.</td></tr>
+    <tr><td><strong>Layered output-quality defenses</strong></td><td>Exemplar retrieval + hallucination blocklist + surface-only LEDE validator + confidence clamp + bounded-agency retry. Five independent gates between a wrong inference and an operator-facing verdict; each catches a different failure mode.</td></tr>
+    <tr><td><strong>Recurrence gate + suppression-cascade fix</strong></td><td>The system models alert fatigue structurally — repeated fires escalate, dismisses suppress follow-ups within a window. The P2 suppression-cascade fix shipped 2026-05-19 closed the false-suppress side without disabling the mechanism (validated 6/6 across 3 audit-live runs).</td></tr>
+    <tr><td><strong>Closed-loop operator feedback</strong> <em>(Epic 2, in flight)</em></td><td>Every operator rating updates the quality classifier's training signal. Once shipped, the system's prose-quality bar can rise without engineer involvement — the right structural feature for long-term quality.</td></tr>
+  </tbody>
+</table>
+
+<h3 id="arch-strain">7.6.2 Where the architecture is showing strain</h3>
+
+<table>
+  <thead><tr><th>Stress point</th><th>Evidence (today, not theory)</th><th>Status</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Single-LLM bottleneck</strong></td><td>Laptop GTX 1060 + qwen2.5:7b serialises badly. 2026-05-20 08:42–08:57 UTC: <code>/decisions</code> went unresponsive while Ollama processed a queued <code>MediumCpuUsage</code>; <code>/health</code> stayed up. 12:00 UTC cron run hit the same condition. Median RCA 6–7 min, worst 23 min.</td><td>P0-bundle attacks symptoms (~5 h). Structural fix — GPU-on-AWS (g5.xlarge) + queue dispatcher + qwen2.5:14b — was scoped at 3–5 days and dropped 2026-05-19 on cost grounds (~$300–720/month). Deferred decision, not closed.</td></tr>
+    <tr><td><strong>No incident correlator</strong></td><td>4 × <code>MediumCpuUsage</code> in 5 min, 4 × <code>TargetDown</code> in 15 min — treated as 8 independent incidents. Real outages produce <em>clusters</em>; the cluster <em>is</em> the signal. The system throws it away.</td><td>Sprint 4 P10 (US-5.2 incident correlator), 1–2 days.</td></tr>
+    <tr><td><strong>Prompt-assembly layer is too thin</strong></td><td>Raw PromQL strings (<code>histogram_quantile(0.95) = 8203.846153846154 ms</code>) and unconverted floats land in operator-facing prose. The layer between MCP results and LLM input does not pre-render values, scrub noise, or strip <code># TYPE</code> / <code># HELP</code> lines.</td><td>Sprint 4 P1, ~4 h. Architectural shape issue, not a bug.</td></tr>
+    <tr><td><strong>Diagnostic-step generation is in the wrong layer</strong></td><td>Two different <code>TargetDown</code> fires (<code>111ded21</code>, <code>a4555bdd</code>) produced word-for-word identical 4-step diagnostic blocks. The LLM is templating, not synthesising — wrong tool for the job.</td><td>Sprint 4 P3, ~6 h. Move generation out of the LLM into <code>app/diagnostic_steps_for_alert(alert, ctx)</code>: a deterministic templater fed from concrete evidence.</td></tr>
+    <tr><td><strong>New-application onboarding is bolt-on</strong></td><td>The car-rental side-deployment (2026-05-19) required: Kong route config edit, alert-rule regex widening (<code>namespace=~"app|rental"</code>), <code>service_deployment_type</code> map edits, OTel patcher script — 3 repos touched. No abstraction layer; onboarding a third application will look identical.</td><td>Not on Sprint 4. The abstraction-boundary question is open — see <a href="#arch-multitenancy">§7.6.4</a>.</td></tr>
+    <tr><td><strong>No HA on inference path</strong></td><td>Laptop offline = no triage. Tailscale link drop or laptop reboot = blind. RDS is durable; the inference path is not.</td><td>Partially mitigated by raw-alert fallback on 180s timeout (Sprint 4 P9 sub-task). Not a full HA story — there is no warm standby.</td></tr>
+  </tbody>
+</table>
+
+<h3 id="arch-scalability">7.6.3 Scalability verdict</h3>
+
+<p>Sound for <strong>one mid-sized application stack with bursty-but-low-concurrency alert volume</strong>, which is what the PoC test bed has demonstrated. CIRES production load shape has not been measured on this stack and is materially larger — that gap is the central question the greenlight conversation needs to address. The architecture will not survive, in order of likelihood:</p>
+
+<ul>
+  <li><strong>(a)</strong> a second comparably-loaded application on the same inference host — Ollama serialises and one application's storm starves the other's triage;</li>
+  <li><strong>(b)</strong> a sustained alert storm above ~3 concurrent fires — directly reproduced today, the symptom is <code>/decisions</code> unresponsiveness while one inference is in flight;</li>
+  <li><strong>(c)</strong> loss of the inference host with no warm failover — current MTTR is "Lina powers her laptop back on."</li>
+</ul>
+
+<p>The P0-bundle buys breathing room — target median <code>~90 s</code> with a hard <code>180 s</code> timeout and serial Ollama concurrency — but does not lift the structural ceiling. The structural fix (GPU-on-AWS + queue-based dispatcher + per-application isolation) was scoped 3–5 days and dropped on cost grounds, with no observed quality regression in 25+ days of laptop steady-state. <strong>This is a deferred decision, not a closed one</strong> — the AWS G+VT quota in us-west-2 (4 vCPU, approved 2026-04-27) is held open precisely for re-evaluation if 7b output quality regresses or load patterns change.</p>
+
+<div class="callout note">
+  <div class="callout-label">Where we'd value your steer</div>
+  <p>If you've operated a similar AI-in-the-loop alerting system: at what load shape do you'd expect this architecture to fall over first? Is the right next investment <strong>more inference horsepower</strong> (GPU migration), <strong>better correlation</strong> (US-5.2 correlator drops the alert <em>count</em> the LLM sees), or <strong>better gating</strong> (push more verdicts into deterministic paths so the LLM is only asked to write prose)? We have engineering budget for one of these in Sprint 4; the other two slip to Sprint 5+.</p>
+</div>
+
+<h3 id="arch-multitenancy">7.6.4 Co-located-apps snapshot — what the car-rental side-deployment revealed about onboarding cost</h3>
+
+<p>A second application stack (Spring Boot + Angular + MySQL — an unrelated car-rental project) was bolted onto the existing k3s cluster on 2026-05-19, in namespace <code>rental</code>. Useful as an unintentional load-shape sanity check for the onboarding flow:</p>
+
+<table>
+  <thead><tr><th>Layer</th><th>Rental coverage</th></tr></thead>
+  <tbody>
+    <tr><td>Traces (Jaeger)</td><td>✅ OTel Java agent injected via initContainer; <code>rental-backend</code> enrolled. JDBC + Spring Web instrumentation active.</td></tr>
+    <tr><td>Logs (Loki)</td><td>⚠ Reach Loki under <code>namespace="rental"</code> only — no <code>service_name=rental-backend</code> label. Workable for <code>{namespace="rental"}</code> queries; thin for service-grain queries.</td></tr>
+    <tr><td>Pod-level metrics + alerts</td><td>✅ <code>PodHighCpuUsage</code> / <code>PodHighMemoryUsage</code> rules widened to <code>namespace=~"app|rental"</code>.</td></tr>
+    <tr><td>Kong gateway metrics + latency alerts</td><td>✅ <code>kong_http_requests_total{service="rental-backend-api"}</code> auto-populates (Kong's per-upstream metrics are automatic). <code>HighKongP95Latency</code> covers <code>/rental/*</code> for free because the rule scans every upstream.</td></tr>
+    <tr><td>Per-service Spring HTTP metrics</td><td>❌ Spring actuator not enabled on rental + otel-collector has no metrics pipeline (only traces + logs). <code>http_server_requests_seconds_bucket</code> does not exist for rental, so <code>HighP95Latency</code> (the per-service Spring rule) cannot fire. <strong>Compensated</strong> by the Kong-side <code>HighKongP95Latency</code>.</td></tr>
+    <tr><td>Triage-service awareness</td><td>✅ <code>service_deployment_type</code> map carries <code>rental-backend</code> / <code>rental-frontend</code> / <code>rental-mysql</code> entries, all typed <code>k8s</code>. RCAs for rental will receive the right remediation archetype hints.</td></tr>
+    <tr><td>Drain3 per-service baseline</td><td>Implicit (global polling picks up rental log templates) but no explicit per-service baseline tag — rental templates merge into the global Drain3 model. Acceptable for one secondary app; not for many.</td></tr>
+  </tbody>
+</table>
+
+<p>Net: rental is covered at the <strong>infrastructure + gateway</strong> layers but <em>not</em> at the <strong>app-metric</strong> layer. For RCAs the difference is concrete — pod-resource and gateway-latency RCAs will fire; slow-endpoint and JVM-internal RCAs will not. Adding a metrics pipeline to otel-collector and enabling actuator is ~2 hours of engineering; deferred because Kong-side coverage was sufficient for the side-task demo. The deferral is itself the signal: <strong>there is no policy that says what level of monitoring a newly-onboarded application is entitled to</strong>, so the answer drifts toward "whatever was cheapest at the time."</p>
+
+<div class="callout ask">
+  <div class="callout-label">Reviewer ask — extends §8</div>
+  <p>If you have time after the four asks in §8, the highest-leverage extra topic is a <strong>new-application onboarding policy</strong>. Specifically: what should the minimum SLO be on a new application before it's allowed on the platform (actuator enabled? Drain3 baseline tagged? per-service Loki label?), and where should the abstraction boundary live so onboarding application #3 doesn't require touching 3 repos again? We'll codify your answer into <code>monitoring-docs/app-onboarding.md</code>.</p>
+</div>
 
 <!-- ────────────────────── 8 ────────────────────── -->
 <h2 id="asks"><span class="num-badge">8</span>What we need from you</h2>
