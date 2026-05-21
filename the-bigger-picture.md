@@ -169,7 +169,7 @@ Everything below this table is the story of how Sprint 2 got here; this table is
 
 | System | State | Evidence |
 |---|---|---|
-| **AWS infra** (Terraform) | ✅ applied | VPC + 2 EC2s (monitoring t3.large, k3s t3.xlarge) + RDS MySQL + S3. SG opens 3000/9090/3100/16686/30080 to operator IP. *(GPU EC2 was disabled pending quota at this 2026-04-22 snapshot; quota landed 2026-04-27 in us-west-2, then the GPU migration was dropped 2026-05-19 on cost grounds — Ollama runs on the laptop GTX 1060.)* |
+| **AWS infra** (Terraform) | ✅ applied | VPC + 2 EC2s (monitoring t3.large, k3s t3.xlarge) + RDS MySQL + S3. SG opens 3000/9090/3100/16686/30080 to operator IP. *(GPU EC2 was disabled pending quota at this 2026-04-22 snapshot; quota landed 2026-04-27 in us-west-2; the GPU migration was dropped 2026-05-19 on cost grounds, then **reversed and shipped 2026-05-21** — see `decisions-log.html#d24`. Ollama now runs primarily on the us-west-2 `g5.xlarge` `observability-gpu-uswest2`, with the laptop GTX 1060 retained as warm fallback.)* |
 | **Monitoring VM** (docker-compose) | ✅ running | Prometheus, Grafana, Loki, Jaeger, OTel Collector all up. Grafana `admin/*` login works at http://52.202.21.192:3000. |
 | **k3s cluster** | ✅ 1 node Ready | v1.30.6+k3s1, 12 workload pods `1/1 Running` across app/network/ai/observability namespaces. |
 | **Kong ingress** | ✅ 1/1 Running | Routes `/` + `/api/*` + `/actuator/*` to Spring Boot. HTTP 200 from public internet on `:30080`. |

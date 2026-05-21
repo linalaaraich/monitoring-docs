@@ -475,9 +475,9 @@ Add `expected_cause_tokens: list[str]` to the `ChaosTest` base class. Score 1.0 
 
 > **Superseded 2026-05-19.** The 16-item list previously held here has been replaced by a 24-item P-tag-integrated ranking after the 2026-05-19 real-load investigation surfaced findings P0–P11. See **`sprint-history.html` §"Sprint 4 candidates — ranked priority list"** for the authoritative ordered list with per-item evidence and gate.
 >
-> **GPU migration to us-west-2 + `qwen2.5:14b` was dropped on cost grounds 2026-05-19** (`sprint-history.html` §"Removed from the Sprint 4 plan"). The MCP native tool-calling rewrite (previously gated on the GPU) is now Sprint 4 item #10 and proceeds on the laptop runner directly.
+> **GPU migration to us-west-2 + `qwen2.5:14b` was dropped on cost grounds 2026-05-19, then reversed and shipped 2026-05-21 after a Lambda-autoshutoff cost-frame rebuild** — see `decisions-log.html#d24`. The Sprint-4 P0 latency bundle ships as defensive margin now rather than as the primary latency intervention. The MCP native tool-calling rewrite (previously gated on the GPU) is Sprint 4 item #10 and can take advantage of the larger model's better function-calling reliability.
 >
-> The Sprint 4 import for Jira lives at **`linalaaraich/jira/Sprint4-additions.csv`** (3 themed epics EPIC9/10/11 + 24 stories, 88 SP). See **`linalaaraich/jira/SPRINT4-README.md`** for the import + bulk-edit instructions.
+> The Sprint 4 import for Jira lives at **`linalaaraich/jira/Sprint4-additions.csv`** (4 themed epics EPIC9/10/11/12 + 29 stories, 100 SP — EPIC12 predictive observability + S4-HF-01 bounded-agency widening added 2026-05-20/21). See **`linalaaraich/jira/SPRINT4-README.md`** for the import + bulk-edit instructions.
 
 ---
 

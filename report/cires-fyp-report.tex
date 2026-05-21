@@ -278,9 +278,11 @@ explicitly scopes \emph{out} the following:
         itself.  The platform runs in \texttt{us-east-1} (or local
         on-premises) and is not multi-AZ.
   \item A cloud GPU runner for the LLM layer.  This was originally
-        scoped as a Sprint-4 candidate and was dropped on cost grounds
-        on 2026-05-19 in favour of a laptop-based runner that proved
-        sufficient (see \S\ref{sec:gpu-dropped}).
+        scoped as a Sprint-4 candidate, dropped on cost grounds
+        on 2026-05-19, and then reinstated and shipped on
+        2026-05-21 once the cost frame was rebuilt around a
+        Lambda autoshutoff gateway (see
+        \S\ref{sec:gpu-dropped}).
 \end{itemize}
 
 \section{Structure of the dissertation}
@@ -2000,10 +2002,15 @@ in table~\ref{tab:sprint4}.  The list integrates the twelve findings
 (P0--P11) from the 2026-05-19 real-load investigation with the
 existing carry-forward backlog items, ranked by
 $(\text{impact}\times\text{frequency})\div\text{effort}$.  The two
-anchor items are \textbf{(P0+P9)} \emph{Latency bundle} --- the
-latency unblocker, attacked as a bundle of small fixes after the
-GPU-migration option was dropped on cost grounds (\S\ref{sec:gpu-dropped}) ---
-and \textbf{P2} \emph{Suppression-cascade fixes} --- the
+original anchor items were \textbf{(P0+P9)} \emph{Latency bundle}
+--- the latency unblocker, scoped as a bundle of small fixes
+after the 2026-05-19 GPU-migration drop --- and \textbf{P2}
+\emph{Suppression-cascade fixes}.  The 2026-05-21 reversal of the
+GPU drop (\S\ref{sec:gpu-dropped}) shipped the underlying latency
+fix directly, so the P0 bundle now ships as defensive margin
+rather than as the primary latency intervention; the
+output-quality dimensions (P1, P3, P11, P6) become the binding
+Sprint-4 constraints, with P2's suppression-cascade fix still the
 cheapest-impact win, $\sim$1.5\,h for a class of false-negative
 caught twice in a single day's evidence.
 
@@ -2222,37 +2229,66 @@ items that were not blocking but are worth Sprint~4 inclusion:
         into the O-10 nightly-backup work.
 \end{itemize}
 
-\section{Dropped scope: cloud GPU migration}
+\section{Cloud GPU migration: dropped 2026-05-19, shipped 2026-05-21}
 \label{sec:gpu-dropped}
 
 The cloud-GPU migration to \texttt{us-west-2} (\texttt{g5.xlarge}
-A10G 24\,GB, host for \texttt{qwen2.5:14b} or \texttt{32b-q4}) sat as
-a Sprint-4 candidate from 2026-04-27, when the
-\texttt{G+VT} on-demand vCPU quota was approved.  It is
-\textbf{dropped on cost grounds on 2026-05-19}.
+A10G 24\,GB, host for \texttt{qwen2.5:14b}) sat as a Sprint-4
+candidate from 2026-04-27, when the \texttt{G+VT} on-demand vCPU
+quota was approved. The decision was \textbf{dropped on cost
+grounds on 2026-05-19}, then \textbf{reversed and shipped on
+2026-05-21} after a cost-frame rebuild. Both halves of the
+decision are recorded here because the reversal is itself the
+interesting story.
 
+\paragraph{The 2026-05-19 drop.}
 A \texttt{g5.xlarge} runs approximately one US dollar per hour
 on-demand, or roughly \$720 per month if left running, with
 aggressive auto-stop bringing the realistic monthly cost to
-\$200--300.  This is an order of magnitude more than the laptop
-GTX~1060 + \texttt{qwen2.5:7b} setup that has been the production
-runner for twenty-seven days with no quality regression surfaced in
-the daily audits or the investigation-window RCA scoring.  The
-\texttt{qwen2.5:14b} / \texttt{32b-q4} upgrade path is parked
-indefinitely; the gating condition for revisiting the decision is
-either a material degradation of 7b output quality or the
-availability of a free or heavily subsidised GPU.
+\$200--300.  Under the 24/7-baseline frame this is an order of
+magnitude more than the laptop GTX~1060 + \texttt{qwen2.5:7b}
+runner, which had been the production runner for twenty-seven
+days with no quality regression surfaced in the daily audits or
+the investigation-window RCA scoring.  Under that frame, the
+migration was indefensible.
 
-The decision has two knock-on effects.  First, the MCP native
-tool-calling rewrite (Sprint~4 candidate~\#10) was previously gated
-on the GPU migration; the larger model is more reliable on
-function-calling benchmarks than the 7B and the rewrite was held
-until the migration shipped.  With the migration dropped, the
-rewrite proceeds on the 7B model directly; the structured-output
-schema enforcement and the bounded-agency retry combine to keep
-tool-calling reliability operationally adequate at this scale.
-Second, the \texttt{us-west-2} G+VT quota approval (4 vCPU, granted
-2026-04-27) remains on the account but stays unused.
+\paragraph{The 2026-05-21 reversal.}
+Two days later the cost calculation was rebuilt around a Lambda
+autoshutoff gateway and the answer flipped.  The actual usage
+shape is bursty (one webhook every $\sim$15~minutes during a
+flap, idle the rest of the time); 24/7 was the wrong baseline.
+A Lambda watching for idle traffic stops the instance after 20
+minutes of no webhooks; SQS buffers the cold-start ($\sim$90~s
+wake on the first webhook of a quiet window); a CloudWatch
+billing alarm hard-caps the account at \$50/month.  Realistic
+duty cycle under \$15\%\$, pushing effective on-demand cost from
+\$730 to \$$\sim$100/mo.  Migration shipped same day as documented
+in decisions-log entry D24: instance
+\texttt{i-03aec662b1a47ad8f}, Tailscale hostname
+\texttt{observability-gpu-uswest2}, \texttt{qwen2.5:14b-instruct}
+primary with the laptop runner retained as failover (a
+DNS-level flip on Grafana's webhook target).  Phase~2 smoke test
+on the new runner produced end-to-end median $\sim$38~s versus
+the laptop's $\sim$5~min baseline --- an $\sim$8$\times$ speedup
+without behavioural regressions (test suite stays 252/252 green).
+A co-shipped access lockdown (D25) routes the Grafana webhook
+through an IP-allowlisted API Gateway, restricts operator paths
+to Tailscale, and disables public SSH on the instance.
+
+\paragraph{Knock-on effects.}
+First, the original Sprint-4 P0 latency bundle (per-stage
+instrumentation, hard 180~s pipeline timeout, Ollama serial
+concurrency, MCP native tool-calling rewrite) ships as
+defensive margin rather than as the latency fix --- the
+migration addressed the underlying single-LLM-on-consumer-GPU
+ceiling that the bundle was attempting to work around.
+Second, the \texttt{us-west-2} G+VT quota approval (4 vCPU,
+granted 2026-04-27) is now in use rather than held in reserve.
+Third, the lesson on the methodology: cost-grounds drops should
+specify the duty-cycle assumption explicitly; the 2026-05-19
+decision was correct under a 24/7 frame and wrong under a
+bursty-duty-cycle frame, and the frame was the load-bearing
+assumption.
 
 \section{Beyond Sprint 4}
 

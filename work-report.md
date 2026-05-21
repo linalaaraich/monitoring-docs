@@ -154,7 +154,7 @@ All code that can be written locally has been written. 4 repositories were modif
 
 ### 2.5 Ollama Model Pull (laptop runner)
 
-> *Historical note (2026-05-20):* This section originally said "requires GPU EC2 running" and pulled `llama3.1:8b`. The GPU EC2 stand-up was deferred in Sprint 2 and the us-west-2 GPU migration was dropped 2026-05-19 on cost grounds. **Live runner is now the laptop GTX 1060 with `qwen2.5:7b-instruct`** via the docker-compose stack at `~/cires-ai/`, rolled by the `roles/triage_laptop` ansible playbook from `claude-controller`. The K8s `kubectl exec` verification below no longer applies.
+> *Historical note (last updated 2026-05-21):* This section originally said "requires GPU EC2 running" and pulled `llama3.1:8b`. The GPU EC2 stand-up was deferred in Sprint 2; the us-west-2 GPU migration was dropped 2026-05-19 on cost grounds, then **reversed and shipped 2026-05-21** after a Lambda-autoshutoff cost-frame rebuild (see `decisions-log.html#d24`). **Live runner (2026-05-21+): AWS `g5.xlarge` `observability-gpu-uswest2` with `qwen2.5:14b-instruct`**; the laptop GTX 1060 + `qwen2.5:7b` is retained as warm failover via `~/cires-ai/` + the `roles/triage_laptop` ansible playbook. The K8s `kubectl exec` verification below no longer applies.
 
 - ~~After AI stack Helm chart is deployed, the init container will pull `llama3.1:8b`~~ — superseded
 - ~~This downloads ~4.7GB — takes 5-10 minutes on first deploy~~ — superseded
