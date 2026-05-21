@@ -1536,6 +1536,226 @@ the actionability score but raises operational trust.}
 \label{tab:rca-quality}
 \end{table}
 
+\section{Critical RCA output audit --- 12 representative cases (2026-05-21)}
+\label{sec:critical-rca-audit}
+
+The 28-decision baseline in the previous section uses a permissive
+four-axis rubric inherited from the chaos harness.  A complementary
+critical audit ran 2026-05-21 against the persisted
+\texttt{/decisions} corpus (271 rows over the 28-day operating
+window), sampling 12~RCAs across the six dominant alert families
+(\texttt{TargetDown}, \texttt{HighKongP95Latency},
+\texttt{MediumCpuUsage}, \texttt{HighP95Latency},
+\texttt{Drain3AnomalyDetected}, \texttt{PodHighMemoryUsage}) with
+deliberate inclusion of both verdict outcomes per family.  The
+purpose was to evaluate the platform against the stricter standards
+the P0--P11 Sprint-4 plan was scoped to enforce, not the looser
+chaos-harness baseline.
+
+\subsection{Audit rubric}
+
+Eight pass/fail criteria, grounded in the project's documented
+output-quality standards
+(\texttt{feedback\_rca\_prose\_quality} + the P0--P11
+findings):
+
+\begin{enumerate}
+  \item \textbf{C1 Cause-first lede} --- first sentence of
+        \texttt{rca\_report} names a specific root cause or
+        mechanism, not the alert.
+  \item \textbf{C2 Verdict appropriateness} ---
+        \texttt{escalate}/\texttt{dismiss} defensible from the
+        available evidence.
+  \item \textbf{C3 Evidence concreteness} --- \texttt{evidence}
+        list contains specific values, not template prose or
+        placeholders.
+  \item \textbf{C4 No-noise prose (P1)} --- no PromQL function
+        calls, raw floats $>$4 significant figures, Z-score
+        equations, or \texttt{\# TYPE}/\texttt{\# HELP}
+        Prometheus-output markers in \texttt{rca\_report}.
+  \item \textbf{C5 Suggested actions correct (P5)} --- actions
+        are concrete + deployment-type-correct; empty list is
+        acceptable only for \texttt{dismiss} verdicts.
+  \item \textbf{C6 Diagnostic-steps non-templated (P3)} ---
+        same-alert-type RCAs from different fires have $\geq$3
+        distinct diagnostic-step strings each.
+  \item \textbf{C7 \texttt{rca\_quality} tag accurate (P11)} ---
+        the \texttt{actionable} tag requires (named cause)
+        $\land$ ($\geq$1 evidence item) $\land$ ($\geq$1 action
+        OR explicit dismiss reasoning).
+  \item \textbf{C8 No truncated-metric hallucination (P4)} ---
+        \texttt{rca\_report} does not cite truncation artefacts
+        (e.g. metric names ending in
+        \texttt{\_daem (truncated)\ldots]}) as real metric
+        names.
+\end{enumerate}
+
+\subsection{Per-criterion pass rate}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{llrr}
+\toprule
+\textbf{ID} & \textbf{Criterion} & \textbf{Pass} & \textbf{Fail/borderline} \\
+\midrule
+C1 & Cause-first lede           &  6/12 (50\%) & 6/12 \\
+C2 & Verdict appropriateness    &  7/12 (58\%) & 5/12 \\
+C3 & Evidence concreteness      &  5/12 (42\%) & 7/12 \\
+C4 & No-noise prose (P1)        &  4/12 (33\%) & 8/12 \\
+C5 & Actions correct (P5)       &  5/12 (42\%) & 7/12 \\
+C6 & Diagnostic-steps non-template (P3) & 2/12 (17\%) & 10/12 \\
+C7 & \texttt{rca\_quality} tag accurate (P11) & 4/12 (33\%) & 8/12 \\
+C8 & No truncated-metric (P4)   &  9/12 (75\%) & 3/12 \\
+\midrule
+\textbf{Cases rated GOOD overall}     & & 3/12 (25\%) & \\
+\textbf{Cases rated OK overall}       & & 2/12 (17\%) & \\
+\textbf{Cases rated BAD overall}      & & 7/12 (58\%) & \\
+\bottomrule
+\end{tabular}
+\caption{Critical RCA audit per-criterion pass rates on 12 sampled
+cases.  C4 (no-noise) and C6 (non-templated diagnostic steps) are
+the two worst dimensions; C8 (no truncated-metric hallucination) is
+the strongest only because the specific artefact is rare in the
+corpus, not because the safeguard exists yet (P4 is unshipped).}
+\label{tab:critical-rca}
+\end{table}
+
+\subsection{Failure-mode taxonomy with specific cases}
+
+Six dominant failure modes recur across the sample, in descending
+order of severity.
+
+\paragraph{F1.~Exemplar placeholders leak through verbatim (P6).}
+Cases \texttt{1a95f6a6} (\texttt{HighKongP95Latency},
+\texttt{confidence=0.92}) and \texttt{0c76258b}
+(\texttt{Drain3AnomalyDetected}, \texttt{confidence=0.82}) emitted
+RCA prose containing literal \texttt{\{service\}}, \texttt{<X>},
+\texttt{<verbatim>}, \texttt{Y-Z}, \texttt{HH:MM} placeholders
+that the LLM failed to substitute with concrete values.  Both
+carry high LLM confidence, which makes the failure dangerous: the
+output looks authoritative but the substitution layer never ran.
+This is the textbook case for Sprint~4 P6
+(\texttt{S4-PR-06} exemplar prose rewrites + overlap-detection
+validator).
+
+\paragraph{F2.~PromQL / numerical noise in cause-prose (P1).}
+Cases \texttt{a9393ef6} (full \texttt{up\{instance=...\} = 0}
+PromQL in the lede), \texttt{0b215ef3} (\texttt{histogram\_quantile(0.95)
+= 8203.846153846154 ms}), \texttt{79119df0} (the full
+\texttt{100 - (avg by(instance) (rate(node\_cpu\_seconds\_total\{mode="idle"\}[1m])) * 100)}
+expression in the lede), and \texttt{d763a9c9} (\texttt{\# TYPE
+jvm\_threads\_daem (truncated)\ldots]} quoted verbatim).  Four of
+twelve sample RCAs leak raw telemetry into operator-facing prose.
+Sprint~4 P1 (\texttt{S4-PR-01}) scrubber is scoped for this.
+
+\paragraph{F3.~\texttt{rca\_quality=actionable} over-applied (P11).}
+Seven of twelve sampled RCAs carry \texttt{actionable} when they
+shouldn't.  \texttt{0b215ef3} has actions but they are
+wrong-archetype (kubectl OOM remediations on a latency alert).
+\texttt{1a95f6a6} has placeholder evidence.  \texttt{79119df0} has
+zero evidence and zero actions.  \texttt{d763a9c9} cites a
+truncation artefact as cause.  \texttt{0c76258b} has placeholder
+actions.  \texttt{be7019bf} has the explicit
+\texttt{Shelved --- awaiting recurrence} non-action.
+\texttt{8891233d} names no cause for a 99.6\%-memory pod.  Sprint~4
+P11 (\texttt{S4-PR-04}) tightens the classifier and P8
+(\texttt{S4-PR-05}) reclassifies the corpus.
+
+\paragraph{F4.~Diagnostic-step boilerplate (P3).}
+Eight of twelve sampled RCAs that have non-empty
+\texttt{diagnostic\_steps} draw from the same four-string
+clamp-fallback template (\texttt{Open Grafana Explore\ldots},
+\texttt{Check kube events\ldots}, \texttt{Open Jaeger and inspect
+the slowest trace\ldots}, \texttt{Do NOT run kubectl
+rollout/scale/set\ldots}).  Two distinct \texttt{TargetDown} fires
+(\texttt{64e46e6c}, \texttt{a9393ef6}) and two distinct
+\texttt{PodHighMemoryUsage} fires (\texttt{0de9801c},
+\texttt{8891233d}) carry near-identical step sets.  Sprint~4 P3
+(\texttt{S4-PR-02}) moves generation into a deterministic
+templater fed from concrete evidence.
+
+\paragraph{F5.~Wrong-archetype suggested actions (P8).}
+\texttt{0b215ef3} suggests \texttt{kubectl set resources
+deploy/spring-boot --limits=memory=2Gi} for a Kong latency alert;
+\texttt{d763a9c9} suggests memory-limit + JVM-flag changes for a
+truncated-metric-name hallucination.  Both rows sit in the
+exemplar corpus as \texttt{actionable} and thus pollute future
+RCAs that retrieve them via \texttt{get\_similar\_decisions}.
+Sprint~4 P8 (\texttt{S4-PR-05}) manually demotes
+\texttt{0b215ef3} and adds a nightly post-hoc revalidator.
+
+\paragraph{F6.~No-action escalations (P5).}
+\texttt{79119df0}, \texttt{be7019bf}, \texttt{8891233d} all carry
+\texttt{verdict=escalate} (or \texttt{verdict=dismiss} with a
+\texttt{shelved} non-action) with no concrete suggested action.
+The 2026-05-20
+\texttt{PodHighMemoryUsage} case (\texttt{8891233d}) is the
+specific incident that produced the Sprint-4 carry story
+\texttt{S4-HF-01} (widen bounded-agency trigger to low-confidence
++ clamp-fired verdicts): the system saw memory at 99.6\% and
+returned five debug-log lines, no named cause, no actions, but
+verdict \texttt{escalate}.
+
+\subsection{What is working}
+
+The audit also confirms several mechanisms behaving exactly as
+designed:
+
+\begin{itemize}
+  \item \textbf{Adaptive thresholds with $\sigma$-claims} (US-5.4)
+        in case \texttt{98bef564}: ``current CPU usage of 3.4\% is
+        +0.4$\sigma$ above the same-hour baseline from one week
+        ago (\texttt{stddev\_over\_time} + offset 7d), well within
+        the natural seasonality of the load curve.''  The rule-design
+        framing is correct and actionable.
+  \item \textbf{Synthetic-alert detection} in case
+        \texttt{c29e557b}: the system identifies an
+        \texttt{audit-live.sh}-fired
+        \texttt{HighP95Latency} probe and correctly labels it
+        \texttt{data\_starved} with \texttt{verdict=dismiss}.
+  \item \textbf{Deep-trace integration} (S3-HF-07) in case
+        \texttt{0de9801c}: the RCA cites
+        \texttt{Jaeger trace 7f3a2c1d9b4e: GET /api/employee took
+        2347 ms, span waits on MySQL connection pool} ---
+        a concrete trace ID with span-level evidence.  This is the
+        bounded-agency MCP path working as intended.
+  \item \textbf{Transient-fault discrimination} in case
+        \texttt{64e46e6c}: a two-scrape-interval \texttt{up=0}
+        flap is correctly identified as ``transient scrape
+        collision or network jitter, not an actual outage''.  The
+        absence of corroborating Drain3 or host-metric signal is
+        used as the discriminating evidence, not just dismissed
+        as silence.
+\end{itemize}
+
+\subsection{Overall verdict and Sprint-4 alignment}
+
+Three of the twelve sampled RCAs would survive a strict operator
+review unmodified (\texttt{64e46e6c}, \texttt{98bef564},
+\texttt{c29e557b}); two more are borderline-acceptable
+(\texttt{a9393ef6}, \texttt{0de9801c}); seven exhibit at least one
+structural defect that the Sprint-4 P0--P11 plan was specifically
+scoped to fix.  The distribution matches expectations: the
+structural foundation (MCP-only invariant, exemplar retrieval,
+confidence clamp, recurrence gate, deep-trace path) is sound, and
+the binding constraint on output quality lives one layer up --- in
+the prompt-assembly thinness (P1, F2), the exemplar-substitution
+gap (P6, F1), the over-permissive quality classifier (P11, F3),
+and the diagnostic-step layer placement (P3, F4).  The same
+binding constraint was independently identified by the
+2026-05-19 heavy-load investigation that produced the P0--P11
+plan; the critical audit confirms the priorities without
+revising them.
+
+The next critical re-audit is scheduled for the close of Sprint~4,
+against the same 8-criterion rubric.  Sprint-4 acceptance: the
+pass rate for C4 (no-noise) is expected to move from 33\% to
+$\geq$80\%, C7 (\texttt{rca\_quality} accuracy) from 33\% to
+$\geq$70\%, C6 (non-templated diagnostic steps) from 17\% to
+$\geq$60\%.  If those three move, the structural-foundation /
+output-quality framing of this audit is empirically validated.
+
 \section{Chaos-run outcomes}
 
 The chaos-test harness in
