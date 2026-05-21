@@ -160,6 +160,12 @@
     <li><a href="#asks">8. What we need from you</a></li>
     <li><a href="#study-plan">9. Recommended reading</a></li>
     <li><a href="#glossary">10. Glossary</a></li>
+    <li><a href="#presentation-playbook">11. Presentation playbook</a></li>
+    <li class="sub"><a href="#pp-framing">11.1 Framing before you open the page</a></li>
+    <li class="sub"><a href="#pp-walk">11.2 Walk order &amp; time budget</a></li>
+    <li class="sub"><a href="#pp-anchors">11.3 Two anchor moments</a></li>
+    <li class="sub"><a href="#pp-ask">11.4 Landing the ask</a></li>
+    <li class="sub"><a href="#pp-closer">11.5 Closer — the greenlight</a></li>
   </ol>
 </aside>
 
@@ -774,10 +780,249 @@ depth on specific layers, drill in as needed.
   </tbody>
 </table>
 
+<!-- ────────────────────── 11 ────────────────────── -->
+<h2 id="presentation-playbook"><span class="num-badge">11</span>Presentation playbook — how to walk a busy supervisor through this</h2>
+
+<p>
+This section is a private note-to-self: a tight, time-budgeted plan for the
+live walkthrough meeting. The rest of the page is the reference; this is the
+script. Aim for <strong>~45 minutes for the walkthrough, then ~30 minutes for
+the working-session ask in §8</strong>. If the supervisor only has 30 minutes
+total, collapse §11.2 to the three bolded items and skip straight to §11.4.
+</p>
+
+<h3 id="pp-framing">11.1 Framing before you open the page (60 seconds, verbal)</h3>
+
+<p>
+Say this <em>before</em> the screen-share starts, so the supervisor knows the
+shape of the meeting:
+</p>
+
+<ul>
+  <li><strong>What this is.</strong> "A proof-of-concept observability + AI
+  triage platform I built and ran on a local test bed for ~3 months. It works,
+  in the limited sense that it's been live for 27+ days and produces
+  cause-first RCAs on real alerts. I'm here to ask whether it's worth bringing
+  into CIRES production, and where the gaps are."</li>
+  <li><strong>What this is <em>not</em>.</strong> "I'm not pitching predictive
+  AI or a finished product. The system is reactive RCA with detective
+  signals — there's a real roadmap from here to predictive, but I want to be
+  precise about where we are today."</li>
+  <li><strong>How I'd like to use your time.</strong> "I'll walk through the
+  platform for ~45 minutes — you can stop me anywhere. Then I have four
+  specific questions where your judgement would change what I work on next.
+  No written deliverable expected; a screen-share working session is the
+  format I'm hoping for."</li>
+</ul>
+
+<p>
+Then open the page at <a href="#pitch">§1</a>.
+</p>
+
+<h3 id="pp-walk">11.2 Walk order &amp; time budget (≈45 min, screen-shared)</h3>
+
+<table>
+  <thead>
+    <tr><th>Min</th><th>Section</th><th>What to say</th><th>What to skip</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>0–3</td>
+      <td><a href="#pitch">§1 Pitch</a></td>
+      <td><strong>Read the four bold paragraphs out loud:</strong> problem, what it does, scope (PoC for greenlight), why it's worth their time. End on "operational track record, not promises."</td>
+      <td>Do not read the latency numbers in §1's last paragraph — they belong in §11.3.</td>
+    </tr>
+    <tr>
+      <td>3–8</td>
+      <td><a href="#what">§2 What we built</a> + <a href="#shape">§3 Shape of the system</a></td>
+      <td>Skim the diagram in §3. Name the five MCP servers and the local LLM. Land the line: <strong>"every data source the LLM ever sees flows through an MCP bridge — that's the hallucination firewall."</strong></td>
+      <td>Skip the file-tree detail; that's in <code>repository-map.html</code>.</td>
+    </tr>
+    <tr>
+      <td>8–13</td>
+      <td><a href="#pipeline">§4 The 10-step pipeline</a></td>
+      <td>Walk the 10 steps once at a moderate pace. Highlight steps 5 (exemplar match), 7 (validators), and 8 (clamp / bounded retry).</td>
+      <td>Don't dive into individual validator regexes. Pause for questions instead.</td>
+    </tr>
+    <tr>
+      <td>13–20</td>
+      <td><a href="#quality">§5 How we keep it honest</a></td>
+      <td>This is the substance of the pitch. Walk all five sub-sections (exemplars, blocklist, validators, clamp, bounded agency). End on: <strong>"each catches a different failure mode; together they make LLM mistakes recoverable rather than load-bearing."</strong></td>
+      <td>If running short, collapse 5.4 + 5.5 into one sentence: "and two more layers — a confidence clamp and a one-shot retry — for the cases the first three miss."</td>
+    </tr>
+    <tr>
+      <td>20–22</td>
+      <td><a href="#archetypes">§6 The 14 archetypes</a></td>
+      <td>Just show the table. Name three (PodHighMemoryUsage, HighKongP95Latency, Drain3AnomalyDetected) as examples. Flag that <strong>completeness of this list is one of the four questions in §8</strong>.</td>
+      <td>Don't read all 14 out loud.</td>
+    </tr>
+    <tr>
+      <td>22–28</td>
+      <td><a href="#case-study">§7 Case study — 0b215ef3 (the failure)</a></td>
+      <td><strong>First anchor moment — slow down here.</strong> Walk the timeline: the alert, what the LLM produced, why it was wrong, what Epic 4 added to prevent it. See §11.3 for the exact framing.</td>
+      <td>Don't skip — this is the credibility moment.</td>
+    </tr>
+    <tr>
+      <td>28–33</td>
+      <td><a href="#case-study-success">§7b Case study — Epic 4 in production (2026-05-20)</a></td>
+      <td>The deliberate inverse. Walk the 12:47 UTC PodHighMemoryUsage RCA — hypothesis-menu validator caught the hedging, clamp stripped actions, operator got 4 read-only diagnostic steps. <strong>"Same failure shape as 0b215ef3; this time the platform caught itself."</strong></td>
+      <td>Don't go into the secondary 08:50 dismiss case unless asked.</td>
+    </tr>
+    <tr>
+      <td>33–37</td>
+      <td><a href="#known-issues">§7.5 Known output-quality issues</a> + <a href="#architecture-review">§7.6 Architecture review</a></td>
+      <td>This is the honesty moment. Skim the P0–P11 list; name three (P0 latency, P2 suppression cascade — shipped, P10 incident correlator). Then §7.6: <strong>"here's where this architecture would and wouldn't survive a transition to CIRES production."</strong></td>
+      <td>Do not read all 12 P-items aloud — point at the table.</td>
+    </tr>
+    <tr>
+      <td>37–45</td>
+      <td>Quantified-results moment (verbal — no slide on the page yet)</td>
+      <td><strong>Second anchor moment.</strong> See §11.3.</td>
+      <td>—</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="pp-anchors">11.3 Two anchor moments — the parts that earn the ask</h3>
+
+<div class="callout story">
+  <div class="callout-label">Anchor 1 · The failure story — §7 (~6 min)</div>
+  <p>
+  Three bullets, said in this order:
+  </p>
+  <ul>
+    <li><strong>What happened.</strong> 2026-04-29, HighKongP95Latency on the
+    Kong gateway. The LLM produced a confident RCA — but with the wrong
+    remediation (kubectl OOM steps for a latency-on-a-gateway alert). If an
+    operator had run those steps, they'd have made things worse.</li>
+    <li><strong>Why it happened.</strong> The LLM pattern-matched on the word
+    "high" and reached for the most-common high-resource-usage script. No
+    mechanism to say "the cited metric doesn't actually exist on this
+    service" or "these actions don't match this alert family."</li>
+    <li><strong>What we did.</strong> Epic 4 — 15 SP, shipped 2026-05-19.
+    Five reinforcing mechanisms now sit between the LLM and the email: the
+    hallucination blocklist, the surface-only validator, the
+    hypothesis-menu validator, the confidence clamp, the bounded-agency
+    retry. <strong>Plus a CI lint that fails the build if anyone bypasses
+    the MCP-only rule.</strong></li>
+  </ul>
+  <p>
+  Land this: <em>"That incident is why I trust the design — not because the
+  LLM got it right, but because we know what to do when it doesn't."</em>
+  </p>
+</div>
+
+<div class="callout story">
+  <div class="callout-label">Anchor 2 · Quantified results — verbal, ~3 min</div>
+  <p>
+  Four numbers, in this order. No slide on the page; just say them.
+  </p>
+  <ul>
+    <li><strong>252 / 252 triage tests passing.</strong> Plus the MCP-invariant
+    CI lint clean. Plus the chaos-corpus regression gate at 5 / 5.</li>
+    <li><strong>27+ days of steady-state operation</strong> on the laptop GPU
+    since Sprint 3 kickoff (2026-04-23). No restarts, no data loss.</li>
+    <li><strong>95 production-shape RCAs from the 2026-05-19 heavy-load test.</strong>
+    Each one quality-graded; 12 issues surfaced; 5 already shipped or
+    scheduled into Sprint 4.</li>
+    <li><strong>Honest latency.</strong> Median 6–7 minutes, worst 23
+    minutes on the laptop GPU under heavy load. Sprint 4's P0 bundle targets
+    median 90 seconds — that's the next two weeks of work.</li>
+  </ul>
+  <p>
+  Land this: <em>"I'm not asking you to take my word that the architecture is
+  sound — I'm asking you to look at 27 days of receipts."</em>
+  </p>
+</div>
+
+<h3 id="pp-ask">11.4 Landing the ask — §8, ~25–30 min</h3>
+
+<p>
+Transition with: <em>"That's the platform. Here's where I need your steer."</em>
+Open <a href="#asks">§8</a> on the screen and walk the four questions in
+order. Don't rush — this is the part of the meeting where the supervisor's
+time is most useful, and the rest of the walkthrough was earning the right
+to ask.
+</p>
+
+<ol>
+  <li><strong>Question 1 — Archetype gaps.</strong> "Here are the 14
+  archetypes we have. Are there CIRES-specific failure shapes that aren't
+  represented? What do you see day-to-day that wouldn't fit any of these?"
+  Have <a href="#archetypes">§6</a> open in a second tab.</li>
+  <li><strong>Question 2 — RCA flow walkthrough.</strong> "Pick 3–5
+  archetypes you have the strongest mental model for. Tell me what evidence
+  you'd want, in what order; what hypotheses you'd rule out first; what
+  makes you commit to a cause vs. keep digging." Take notes; this is the
+  highest-value 15 minutes of the meeting.</li>
+  <li><strong>Question 3 — Live RCAs on /dashboard.</strong> Open
+  <code>http://adolin-wsl:8090/dashboard</code> over Tailscale (test the
+  link before the meeting). Walk the last 5–10 verdicts together. Ask:
+  "anything reads wrong to you — too confident, too hedged, wrong cause,
+  wrong remediation?"</li>
+  <li><strong>Question 4 — Quality-mechanism blind spots.</strong> "The
+  blocklist is alert-keyed banned phrases. The surface-only validator is
+  regex. The clamp triggers on three explicit conditions. What failure
+  modes would you expect these to miss?"</li>
+</ol>
+
+<p>
+Use the <a href="#asks">§8 format-suggestion callout</a> to set
+expectations: no written deliverable, screen-share working session, you'll
+send a follow-up doc with what was extracted and the supervisor signs off.
+</p>
+
+<h3 id="pp-closer">11.5 Closer — asking for the greenlight (final ~2 min)</h3>
+
+<div class="callout ask">
+  <div class="callout-label">The ask — say this verbatim at the end</div>
+  <p>
+  "This is a proof of concept, but it is not a toy. The architecture is
+  honest about its limits — we've documented where it scales and where it
+  doesn't, the P0–P11 issues are being worked, and the next two weeks of
+  Sprint 4 are already mapped (latency bundle, suppression cascade —
+  already shipped — incident correlator, and a capacity-runway dashboard
+  as the first predictive surface)."
+  </p>
+  <p>
+  "What I'm asking for is your <strong>greenlight to begin a controlled
+  transition into CIRES production</strong> — starting with a single
+  application's monitoring stack, behind the same hallucination firewall
+  this PoC has been running, and with the operator-feedback loop wired in
+  so the platform learns from your team's overrides from day one."
+  </p>
+  <p>
+  "I built this because the operational gap was real, and because I think
+  this architecture — open-source stack on the bottom, local-LLM triage
+  with deterministic guardrails on top — is the right shape for CIRES.
+  I'd like the chance for this work to be <strong>genuinely useful</strong>
+  to the team, not a final-year-project artefact that ends when the
+  semester does."
+  </p>
+</div>
+
+<p>
+Then stop talking. Let the supervisor respond. If the answer is "tell me
+more about X before I commit," you have the rest of the page to drill into;
+if it's "let me think about it," the follow-up doc from §11.4 is what
+re-opens the conversation.
+</p>
+
+<div class="callout note">
+  <div class="callout-label">If the meeting gets cut short</div>
+  <p>
+  Compression order, hardest to easiest cuts: drop §11.2 rows 4 (§5) and 8
+  (§7.5 + §7.6) <em>last</em>. Drop §6 and §7b <em>first</em>. The
+  non-negotiable minimum is: <strong>§1 pitch (3 min) → §7 failure story
+  (6 min) → §11.3 quantified results (3 min) → §11.4 ask (15 min)</strong>.
+  That's 27 minutes and still earns the greenlight conversation.
+  </p>
+</div>
+
 <p style="margin-top:40px; padding-top:20px; border-top:1px solid var(--border); font-size:13px; color:var(--muted);">
-Brief drafted 2026-05-19. Maintainer: Lina Laaraich. If anything here reads
-inconsistently with the live system, the live system is authoritative — flag it
-and we'll update.
+Brief drafted 2026-05-19; presentation playbook added 2026-05-21.
+Maintainer: Lina Laaraich. If anything here reads inconsistently with the
+live system, the live system is authoritative — flag it and we'll update.
 </p>
 
 </section>
