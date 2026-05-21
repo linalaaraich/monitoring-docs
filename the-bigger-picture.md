@@ -3,10 +3,29 @@
 > **Project:** AI-Powered Observability Platform with Root Cause Analysis
 > **Organization:** CIRES Technologies, Tanger Med (Digital Factory Observability Service)
 > **Author:** Lina Laaraich
-> **Last Updated:** 2026-05-19 (Sprint 3 resumed after a 20-day prototyping + doc-refresh window)
-> **Sprint 2 Deadline:** ~~April 9, 2026~~ ~~April 23, 2026~~ **Sprint 2 closed 2026-04-23; Epic 5 (UEBA-inspired stories) is the active workstream**
+> **Last Updated:** 2026-05-21 (GPU migration to AWS us-west-2 shipped; AI triage stack promoted off laptop)
+> **Sprint 2 Deadline:** ~~April 9, 2026~~ ~~April 23, 2026~~ **Sprint 2 closed 2026-04-23; Epic 5 (UEBA-inspired stories) absorbed into Sprint 3**
 > **Jira Project:** SCRUM | **Jira Source:** `github.com/linalaaraich/jira`
 > **Repositories:** 6 (monitoring-project, provisioning-monitoring-infra, monitoring-docs, monitoring-mcp-servers, monitoring-triage-service, jira)
+
+---
+
+## 2026-05-21 — GPU migration to AWS us-west-2 shipped; triage stack promoted off laptop
+
+**Migration completed today.** The AI triage stack ran on `adolin-wsl` (laptop GTX 1060) for 28 days from Sprint 3 kickoff (2026-04-23). On 2026-05-21 it was promoted to a dedicated AWS `g5.xlarge` in us-west-2 (A10G GPU 24 GB VRAM, instance `i-03aec662b1a47ad8f`, Tailscale hostname `observability-gpu-uswest2`). The laptop is kept as a rollback fallback until at least one full daily-audit cycle clears on the new host.
+
+**Key changes:**
+
+- **Model**: `qwen2.5:7b-instruct` → **`qwen2.5:14b-instruct`** as primary (7b retained as fallback). A10G's 24 GB VRAM unlocks the 14B without quantization headaches.
+- **Latency** (Phase 2 smoke test): **~38 s end-to-end** vs the prior ~5 min real-load median on 7b/laptop. ~8× speedup. 14b runs at ~50-65 tok/s; prompt eval at ~1350 tok/s; cached model load ~177 ms.
+- **Grafana webhook**: was `http://100.117.118.70:8090/webhook/grafana` (direct to laptop), now `https://l5anj15qi0.execute-api.us-west-2.amazonaws.com/webhook/grafana` (API Gateway → Lambda router → instance or SQS).
+- **Dashboard**: was `http://adolin-wsl:8090/dashboard`, now `http://observability-gpu-uswest2:8090/dashboard` (Tailscale-only).
+- **Cost defenses**: Lambda 20-min idle autoshutoff (instance stops automatically); CloudWatch billing alarm at $50/mo; realistic duty cycle ~15% → ~$100/mo on-demand.
+- **Access control**: dashboard Tailscale-only; API Gateway gated by source-IP allowlist (Grafana host `52.202.21.192` + Lina home `102.97.79.206`); public SSH disabled — Tailscale SSH + SSM only.
+- **rca_history.db hygiene**: cleaned today, 260 rows (131 actionable / 106 needs_review / 16 data_starved / 7 NULL). 36 junk rows removed (synthetic fingerprints + LLM-down fallbacks). 90-day retention policy now active via daily systemd timer.
+- **Reverses** the 2026-05-19 "cloud-GPU dropped on cost grounds" decision: Lambda autoshutoff bounded the cost the original drop hit on. See [decisions-log.html#d24](decisions-log.html#d24) and [d25](decisions-log.html#d25).
+
+**Framing intact:** still a PoC on a local test bed asking for CIRES production greenlight. The AWS estate is the PoC's runner, not CIRES production.
 
 ---
 
@@ -56,7 +75,7 @@
 - ✅ Audit pushed (`audits/2026-05-19.md`).
 - ✅ Doc refresh landed — `sprint-history.html` + `solution-brief.html` shipped; metric name/label mismatches in `triage-service.html` §7 fixed; archetype-count prose updated 11 → 14 with the 3 new archetypes named; `figma-architecture-prompt.md` deleted (not needed) + its card removed from `index.html`. Net effect: audit drift list 7 → 0.
 - ⏳ Live-audit cron diagnosis pending until 12:00 UTC slot today.
-- ✅ Sprint 4 plan simplified: GPU migration to us-west-2 + larger model dropped on cost grounds (~$720/month for a g5.xlarge vs. laptop GTX 1060 holding steady at 25+ days). See [sprint-history.html §Removed from the Sprint 4 plan](sprint-history.html#sprint-4-removed). MCP native tool-calling rewrite no longer gated by GPU.
+- ⚠ **Superseded 2026-05-21** — GPU migration to us-west-2 reinstated and shipped today. Lambda autoshutoff (20-min idle stop) defeats the cost gate the 2026-05-19 drop hit on. See [decisions-log.html#d24](decisions-log.html#d24) + the 2026-05-21 section at the top of this file.
 - Triage favicon shipped on the side (`02fa96f` + `a1733bd` in `monitoring-triage-service`) — chevron-drilling-to-dot in dashboard accent blue. Not on the Sprint 3 board; lightweight polish.
 
 **Next step:** Epic 2 (operator feedback loop) or Epic 3 (Drain3 baseline lifecycle) — 13 SP combined still untouched. Supervisor call on whether to absorb into the current sprint or roll to Sprint 4. With Epic 4 fully shipped on 2026-05-19, the hallucination firewall is no longer on the critical path; the remaining work is feature-shaped rather than safety-shaped.

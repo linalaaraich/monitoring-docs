@@ -391,8 +391,8 @@
 <p><strong>Dates.</strong> TBD at the Sprint 3 retro. <strong>Estimated total effort: 10–14 d for one engineer</strong> if scoped to items 1–12 below.</p>
 
 <div class="callout note">
-  <div class="callout-label">P0 reframed 2026-05-19 — no GPU migration</div>
-  <p>The original P0 was the GPU migration to us-west-2 + <code>qwen2.5:14b</code>. <strong>Dropped on cost grounds 2026-05-19.</strong> The latency problem (6-23 min per RCA) is now attacked as a <em>bundle of smaller fixes</em> rather than a single hardware swap: hard pipeline timeout (P9), per-stage instrumentation, Ollama concurrency cap, and the MCP native tool-calling rewrite (smaller prompt → faster inference). Combined target: median ≤ 90s, worst ≤ 240s.</p>
+  <div class="callout-label">P0 structurally addressed 2026-05-21 — GPU migration shipped</div>
+  <p>The 2026-05-19 cost-grounds drop was reversed 2026-05-21 (see <a href="decisions-log.html#d24">D24</a>) — Lambda autoshutoff (20-min idle stop) bounds the cost the original drop hit on. Shipped today: <code>g5.xlarge</code> in us-west-2 with <code>qwen2.5:14b-instruct</code> on A10G. Phase 2 smoke test: ~38 s end-to-end (prior 7b/laptop median ~5 min). The original software bundle (hard 180 s timeout, per-stage instrumentation, Ollama concurrency cap, MCP native tool-calling rewrite) now ships as defensive margin rather than gating work.</p>
 </div>
 
 <div class="callout note">
@@ -439,12 +439,13 @@
 
 <p><strong>Suggested execution order for week 1 of Sprint 4:</strong> items 1 → 2 → 3 → 4 + 8 (paired). Items 1 + 2 + 8 together are ~8 hours of effort and deliver the biggest perceived-quality improvement. Items 3 + 4 are the "now the prose is honest" work. Items 5–7 close the false-positive escalation paths. Items 9–24 are wave 2. Item 25 (added 2026-05-20) pairs with item 1. <strong>Items 26–29 (added 2026-05-21, EPIC12 predictive layer):</strong> item 26 is a same-day quick win that ships the early-warning tab from existing data; item 27 (capacity-runway dashboard) is the supervisor-demo unlock and slots in Day 2–3 of Sprint 4; items 28 + 29 sit alongside items 5 and the US-5.1 carry, taking 3–5 d each in wave 2.</p>
 
-<h3 id="sprint-4-removed">Removed from the Sprint 4 plan (2026-05-19)</h3>
+<h3 id="sprint-4-removed">Reinstated and shipped 2026-05-21 — GPU migration to us-west-2 + qwen2.5:14b</h3>
 
-<div class="callout warn">
-  <div class="callout-label">Dropped — GPU migration to us-west-2 + larger model</div>
-  <p>Previously sat as Sprint 4 candidate #8 (3–5 day effort: stand up a g5.xlarge in <code>us-west-2</code> over Tailscale and move the LLM runner there to host <code>qwen2.5:14b</code> or <code>32b-q4</code>). <strong>Decision 2026-05-19: drop entirely on cost grounds.</strong> A g5.xlarge in us-west-2 is roughly $1.00/hour on-demand (~$720/month if left running, ~$300/month with aggressive auto-stop) — order-of-magnitude more than the laptop GTX 1060 + <code>qwen2.5:7b</code> setup that's been the production runner for 25+ days with no quality regression surfaced in the daily audits or the investigation-window RCA scoring. The us-west-2 G+VT quota approval (4 vCPU, granted 2026-04-27) remains on the account but stays unused.</p>
-  <p>Knock-on effects: (a) MCP native tool-calling rewrite (now Sprint 4 #8) loses its GPU gate and can proceed on the laptop directly; (b) <code>qwen2.5:14b</code> / <code>32b-q4</code> upgrade path is parked indefinitely — revisited only if 7b output quality degrades materially or a free / heavily subsidised GPU appears.</p>
+<div class="callout note">
+  <div class="callout-label">Reversed — see <a href="decisions-log.html#d24">Decisions Log D24</a></div>
+  <p>Originally Sprint 4 candidate #8 (3–5 day effort). Dropped 2026-05-19 on cost grounds (~$720/month for a g5.xlarge left running). <strong>Reinstated and shipped 2026-05-21</strong> once the Lambda autoshutoff design defeated the cost gate: a 20-min idle stop reduces effective runtime to active-incident windows; CloudWatch billing alarm at $50/mo provides the hard guardrail. Realistic duty cycle is &lt;15% (~100 hours/month), pushing on-demand cost from ~$730 to ~$100/mo.</p>
+  <p>Now live: <code>g5.xlarge</code> in us-west-2 (instance <code>i-03aec662b1a47ad8f</code>, Tailscale name <code>observability-gpu-uswest2</code>), A10G GPU 24 GB VRAM, running <code>qwen2.5:14b-instruct</code> primary with 7b retained as fallback. Phase 2 smoke test (2026-05-21): real-load median ~38 s end-to-end on the new runner vs prior 7b/laptop median ~5 min — ~8× speedup. Grafana webhook URL flipped to API Gateway <code>https://l5anj15qi0.execute-api.us-west-2.amazonaws.com/webhook/grafana</code> (Lambda router with IP allowlist). Dashboard URL moves to <code>http://observability-gpu-uswest2:8090/dashboard</code> (Tailscale-only). <code>adolin-wsl</code> retained as rollback fallback.</p>
+  <p>Knock-on effects: (a) original P0 software bundle (per-stage instrumentation + hard 180 s timeout + Ollama serial concurrency + MCP native tool-calling rewrite) now ships as defensive margin rather than gating; (b) the us-west-2 G+VT quota (4 vCPU, approved 2026-04-27) is consumed by this instance; (c) access lockdown co-shipped — see <a href="decisions-log.html#d25">D25</a> (Tailscale-only dashboard + IP-allowlisted API Gateway + public SSH disabled).</p>
 </div>
 
 <h3>New for Sprint 4 — resilience improvements (surfaced during the investigation window)</h3>
@@ -475,7 +476,7 @@
     <tr><td>Curated RAG retrieval</td><td>Sprint 3 (US-3.3 + US-3.4)</td><td><strong>Sprint 4 candidate #3, #4</strong></td><td>Depends on accumulated operator feedback volume</td></tr>
     <tr><td>Tier 3 iterative agentic gather</td><td>Sprint 3 (post-<code>0b215ef3</code> design)</td><td><strong>Sprint 4 candidate #2</strong></td><td>Depends on Sprint 3 Tier 4 (S3-HF-09) scoreboard</td></tr>
     <tr><td>Pod-level alert rule query bugs (mem cgroup-churn + CPU label mismatch)</td><td>Sprint 2 close-out (US-3-CO9)</td><td><strong>Sprint 4 candidate #5</strong></td><td>Filed at ship time; ~30 min each but not a Sprint-3 priority</td></tr>
-    <tr><td>GPU migration to us-west-2 + <code>qwen2.5:14b</code></td><td>Sprint 3 deferral</td><td><strong>Dropped 2026-05-19</strong></td><td>Cost vs. laptop steady-state — kill decision; see Sprint 4 §removed</td></tr>
+    <tr><td>GPU migration to us-west-2 + <code>qwen2.5:14b</code></td><td>Sprint 3 deferral</td><td><strong>Shipped 2026-05-21</strong></td><td>2026-05-19 cost drop reversed by Lambda-autoshutoff design (D24); g5.xlarge live in us-west-2, ~38 s end-to-end smoke test</td></tr>
     <tr><td>O-9 webhook auth + O-10 S3 backup</td><td>Sprint 3 Friday-slot reminders</td><td><strong>Sprint 4 candidate #7</strong></td><td>30 min each, never got the slot</td></tr>
     <tr><td>Resilience tier (R-1 to R-5)</td><td><strong>Sprint 3 investigation window</strong></td><td><strong>Proposed Sprint 4 inclusion</strong></td><td>Surfaced during the 2026-04-30 → 2026-05-19 prototyping window while operational tooling sat idle</td></tr>
   </tbody>
