@@ -126,15 +126,7 @@
   <a href="dashboard-guide.html" class="navlink" style="color:#e88aa0; border-color:rgba(232,138,160,.4); background:rgba(232,138,160,.08);">📋 Dashboard Guide</a>
   <a href="build-pipeline.html" class="navlink navlink-build">⚙️ Build Pipeline</a>
   <a href="reproducibility-guide.html" class="navlink" style="color:var(--accent-green);">🧭 Reproducibility</a>
-  <a href="chaos-report-2026-04-28.html" class="navlink" style="color:var(--accent-orange); border-color:rgba(240,160,80,.4); background:rgba(240,160,80,.08);">💥 Chaos Report</a>
-  <a href="alerts-audit.html" class="navlink" style="color:var(--accent-red); border-color:rgba(224,96,112,.4); background:rgba(224,96,112,.08);">🔍 Alerts Audit</a>
-  <a href="prepare.html" class="navlink" style="color:var(--accent-purple); border-color:rgba(176,126,232,.4); background:rgba(176,126,232,.08);">🎤 Prepare (S2)</a>
-  <a href="build-guide.html" class="navlink navlink-arch">📖 Build Guide (S1)</a>
-  <a href="sprint2-guide.html" class="navlink navlink-sprint">🛠️ Sprint 2 Guide</a>
-  <a href="sprint2-extension-guide.html" class="navlink" style="color:var(--accent-orange);">📋 Sprint 2 Extension</a>
-  <a href="sprint2-epic5-ueba.html" class="navlink" style="color:var(--accent-yellow); border-color:rgba(224,208,96,.4); background:rgba(224,208,96,.08);">🧬 Epic 5 — UEBA</a>
-  <a href="kubernetes-guide.html" class="navlink navlink-k8s">☸️ Kubernetes Guide</a>
-  <a href="k3s-migration-guide.html" class="navlink" style="color:var(--accent-green);">🚀 k3s Migration</a>
+  <a href="learning-resources.html" class="navlink navlink-k8s">📚 Learning Resources</a>
 </div>
 
 <div class="hero">
@@ -174,7 +166,7 @@
       <div class="card-icon" style="background:rgba(224,208,96,.12);">📅</div>
       <div class="card-header-text">
         <h2>Sprint History &amp; Roadmap</h2>
-        <p>Canonical timeline of all four sprints in one page. Sprint 1 (observability foundation, March 2026), Sprint 2 (AWS + AI RCA MVP, April), Sprint 3 (RCA quality + hallucination firewall — heads-down first week, then a 20-day prototyping + doc-refresh window before committing to Epic 4's larger refactors; closing 2026-05-21), and Sprint 4 (2026-05-20 → 2026-06-03, <strong>active</strong> — output-quality close-out, 15 ranked candidates + R-1..R-5 resilience tier). Includes the cross-sprint carry-forward map. Built for report writing.</p>
+        <p>Canonical timeline of all four sprints in one page. Sprint 1 (observability foundation, March 2026), Sprint 2 (AWS + AI RCA MVP, April; <em>Epic 5 UEBA</em> shipped per-service Drain3, adaptive thresholds, recurrence gates, closed-loop feedback — absorbed into Sprint 3 Epic 1), the 2026-04-24 <em>founding alerts audit</em> that seeded the Sprint 3 quality work, Sprint 3 (RCA quality + hallucination firewall — heads-down first week, then a 20-day prototyping + doc-refresh window before committing to Epic 4's larger refactors; closing 2026-05-21), and Sprint 4 (2026-05-20 → 2026-06-03, <strong>active</strong> — output-quality close-out, 15 ranked candidates + R-1..R-5 resilience tier). Includes the cross-sprint carry-forward map. Built for report writing.</p>
       </div>
     </div>
     <div class="card-footer">
@@ -200,24 +192,6 @@
         <span class="tag" style="background:rgba(224,96,112,.1); color:var(--accent-red);">Epic 4</span>
         <span class="tag tag-purple">6 mechanisms</span>
         <span class="tag tag-cyan">MCP-only</span>
-      </div>
-      <div class="card-arrow">&rarr;</div>
-    </div>
-  </a>
-
-  <a href="chaos-report-2026-04-28.html" class="card" style="border-color:rgba(240,160,80,.4);">
-    <div class="card-header">
-      <div class="card-icon" style="background:rgba(240,160,80,.1);">💥</div>
-      <div class="card-header-text">
-        <h2>Chaos Report — 2026-04-28</h2>
-        <p>Output of the chaos-injection test harness at <code>monitoring-project/scripts/chaos/</code>. Five scenarios (<code>target_down</code>, <code>high_memory_usage</code>, <code>high_cpu_usage</code>, <code>drain3_anomaly</code>, plus the new <code>0b215ef3</code>-corpus seed) — each induces a controlled failure, polls <code>/decisions</code> for the matching alert, and scores the RCA on the 4-axis quality rubric. The harness is how the platform regression-tests itself.</p>
-      </div>
-    </div>
-    <div class="card-footer">
-      <div class="card-tags">
-        <span class="tag tag-orange">Chaos harness</span>
-        <span class="tag tag-green">4-axis scoring</span>
-        <span class="tag tag-purple">5 scenarios</span>
       </div>
       <div class="card-arrow">&rarr;</div>
     </div>
@@ -259,60 +233,6 @@
     </div>
   </a>
 
-  <a href="prepare.html" class="card" style="border-color:rgba(176,126,232,.35); background:linear-gradient(180deg, rgba(176,126,232,.05), var(--card));">
-    <div class="card-header">
-      <div class="card-icon" style="background:rgba(176,126,232,.12);">🎤</div>
-      <div class="card-header-text">
-        <h2>Prepare — Sprint 2 Presentation Notes</h2>
-        <p>Frozen prep doc from the 2026-04-23 Sprint 2 close-out presentation. Big-picture-to-small: architecture, decisions, Terraform + Ansible + k3s + Helm + MCP + triage, evolution path, retro, Q&amp;A. Kept as a snapshot of what we shipped at Sprint 2 close; for current state see the Sprint History page.</p>
-      </div>
-    </div>
-    <div class="card-footer">
-      <div class="card-tags">
-        <span class="tag tag-purple">Sprint 2</span>
-        <span class="tag tag-green">Closed · snapshot</span>
-        <span class="tag tag-cyan">Q&amp;A</span>
-      </div>
-      <div class="card-arrow">&rarr;</div>
-    </div>
-  </a>
-
-  <a href="build-guide.html" class="card card-arch" style="border-color:rgba(107,207,127,.25);">
-    <div class="card-header">
-      <div class="card-icon" style="background:rgba(107,207,127,.1);">📖</div>
-      <div class="card-header-text">
-        <h2>Complete Build Guide</h2>
-        <p>Deep-dive documentation covering every Ansible role, Docker Compose template, service config, pipeline, dashboard, alert rule, and operational runbook. The full reference for Sprint 1.</p>
-      </div>
-    </div>
-    <div class="card-footer">
-      <div class="card-tags">
-        <span class="tag tag-green">Ansible</span>
-        <span class="tag tag-blue">Docker</span>
-        <span class="tag tag-orange">Operations</span>
-      </div>
-      <div class="card-arrow">&rarr;</div>
-    </div>
-  </a>
-
-  <a href="sprint2-guide.html" class="card card-sprint" style="border-color:rgba(240,160,80,.25);">
-    <div class="card-header">
-      <div class="card-icon" style="background:rgba(240,160,80,.1);">🛠️</div>
-      <div class="card-header-text">
-        <h2>Sprint 2 Build Guide</h2>
-        <p>Step-by-step implementation guide for the AI RCA pipeline: AWS setup, Drain3 anomaly detection, FastAPI triage service, Ollama LLM, end-to-end integration. <em>Frozen historical reference</em> — Sprint 2 closed 2026-04-23.</p>
-      </div>
-    </div>
-    <div class="card-footer">
-      <div class="card-tags">
-        <span class="tag tag-purple">AI RCA</span>
-        <span class="tag tag-cyan">Drain3</span>
-        <span class="tag tag-green">Sprint 2 · closed</span>
-      </div>
-      <div class="card-arrow">&rarr;</div>
-    </div>
-  </a>
-
   <a href="architecture.html" class="card card-arch">
     <div class="card-header">
       <div class="card-icon">🏗️</div>
@@ -336,7 +256,7 @@
       <div class="card-icon">🧠</div>
       <div class="card-header-text">
         <h2>Triage Service — Reference</h2>
-        <p>Deep dive on the AI RCA service: the 10-stage pipeline (exemplar injection, response validator, hallucination blocklist, surface-only + hypothesis-menu validators, confidence clamp with <code>diagnostic_steps</code> fallback, bounded-agency retry, action-template fallback), HTTP API (<code>/webhook/grafana</code>, <code>/decisions</code>, <code>/dashboard</code>, <code>/feedback/*</code>), data model, 252-test suite, Prometheus metrics, dedup + suppression. Real-load median ~5 min, worst ~26 min on laptop GTX 1060 + <code>qwen2.5:7b</code>; Sprint 4 P0 anchor bundle targets 90 s median. Pairs with the Hallucination Firewall page.</p>
+        <p>Deep dive on the AI RCA service: the 10-stage pipeline (exemplar injection, response validator, hallucination blocklist, surface-only + hypothesis-menu validators, confidence clamp with <code>diagnostic_steps</code> fallback, bounded-agency retry, action-template fallback), HTTP API (<code>/webhook/grafana</code>, <code>/decisions</code>, <code>/dashboard</code>, <code>/feedback/*</code>), data model, 252-test suite, Prometheus metrics, dedup + suppression. Real-load median ~5 min, worst ~26 min on laptop GTX 1060 + <code>qwen2.5:7b</code>; Sprint 4 P0 anchor bundle targets 90 s median. Regression-tested by the chaos-injection harness at <code>monitoring-project/scripts/chaos/</code> (5 scenarios, 4-axis quality rubric). Pairs with the Hallucination Firewall page.</p>
       </div>
     </div>
     <div class="card-footer">
@@ -367,55 +287,19 @@
     </div>
   </a>
 
-  <a href="kubernetes-guide.html" class="card card-k8s">
+  <a href="learning-resources.html" class="card card-k8s">
     <div class="card-header">
-      <div class="card-icon">☸️</div>
+      <div class="card-icon">📚</div>
       <div class="card-header-text">
-        <h2>Kubernetes Learning Guide</h2>
-        <p>From zero to confident: big-picture mind map, core concepts, architecture, how K8s actually works, tools, reproducibility, distribution comparison, and a deep dive on k3s. Designed to be revisited one tab at a time.</p>
+        <h2>Learning Resources — Tools Primer</h2>
+        <p>One-page primer on the four infrastructure tools the platform is built on: <strong>Kubernetes</strong> (orchestrator), <strong>k3s</strong> (lightweight single-binary distribution used for the application workload), <strong>Terraform</strong> (the entire AWS estate as code), and <strong>Ansible</strong> (agentless VM configuration on top of Terraform-created hosts). Each tool gets a concept list, the actual files in this project that use it, day-to-day commands, and curated jump-offs to the canonical external docs.</p>
       </div>
     </div>
     <div class="card-footer">
       <div class="card-tags">
-        <span class="tag tag-cyan">k3s</span>
-        <span class="tag tag-blue">Architecture</span>
-        <span class="tag tag-green">Reference</span>
-      </div>
-      <div class="card-arrow">→</div>
-    </div>
-  </a>
-
-  <a href="k3s-migration-guide.html" class="card" style="border-color:rgba(107,207,127,.3);">
-    <div class="card-header">
-      <div class="card-icon" style="background:rgba(107,207,127,.1);">🚀</div>
-      <div class="card-header-text">
-        <h2>k3s Migration Guide</h2>
-        <p>Step-by-step guide for migrating from per-VM docker-compose to k3s + Helm charts. Covers Terraform rescope, Ansible k3s bootstrap, Helm chart creation, GPU setup, OTel DaemonSet, Prometheus k8s_sd, and alert rule migration.</p>
-      </div>
-    </div>
-    <div class="card-footer">
-      <div class="card-tags">
-        <span class="tag tag-green">Epic 3</span>
-        <span class="tag tag-cyan">k3s</span>
-        <span class="tag tag-blue">Helm</span>
-      </div>
-      <div class="card-arrow">→</div>
-    </div>
-  </a>
-
-  <a href="sprint2-extension-guide.html" class="card" style="border-color:rgba(240,160,80,.3);">
-    <div class="card-header">
-      <div class="card-icon" style="background:rgba(240,160,80,.1);">📋</div>
-      <div class="card-header-text">
-        <h2>Sprint 2 Extension — Complete Reference</h2>
-        <p>Comprehensive documentation of the Sprint 2 extension work: Terraform rescope, k3s bootstrap, Helm charts deep dive, OTel DaemonSet, Prometheus K8s discovery, alert migration, AI hardening (circuit breaker, JSON schema, observability), and full deployment runbook.</p>
-      </div>
-    </div>
-    <div class="card-footer">
-      <div class="card-tags">
-        <span class="tag tag-green">Epic 3</span>
-        <span class="tag tag-purple">Epic 4</span>
-        <span class="tag tag-orange">Runbook</span>
+        <span class="tag tag-cyan">k8s + k3s</span>
+        <span class="tag tag-blue">Terraform</span>
+        <span class="tag tag-orange">Ansible</span>
       </div>
       <div class="card-arrow">→</div>
     </div>
@@ -426,7 +310,7 @@
       <div class="card-icon" style="background:rgba(107,207,127,.1);">🧭</div>
       <div class="card-header-text">
         <h2>Reproducibility Guide</h2>
-        <p>End-to-end deployment runbook: clone the 6 repos → <code>terraform apply</code> → Ansible monitoring VM → k3s bootstrap → Helm charts → validate. Covers prerequisites, secrets, troubleshooting, and clean tear-down. Designed so a fresh operator reaches a working platform in under a day.</p>
+        <p>End-to-end deployment runbook: clone the 6 repos → <code>terraform apply</code> → Ansible monitoring VM → k3s bootstrap → Helm charts → validate. Covers prerequisites, secrets, every Ansible role for the observability stack (Prometheus / Loki / Jaeger / Grafana / OTel Collector / node-exporter), alert-rule provenance, troubleshooting, and clean tear-down. Designed so a fresh operator reaches a working platform in under a day.</p>
       </div>
     </div>
     <div class="card-footer">
@@ -475,24 +359,6 @@
     </div>
   </a>
 
-  <a href="alerts-audit.html" class="card" style="border-color:rgba(224,96,112,.35);">
-    <div class="card-header">
-      <div class="card-icon" style="background:rgba(224,96,112,.1);">🔍</div>
-      <div class="card-header-text">
-        <h2>Alerts Audit (frozen 2026-04-24)</h2>
-        <p>The original full-sweep RCA audit that seeded the Sprint 3 quality work — per-alert accuracy assessments, Drain3 deep-dive (why zero self-alerts in 123 k lines), trace-analysis proposal, and the four-track improvement plan that became Epics 1 + 4. <em>Frozen as historical evidence</em>; the rolling daily audits since 2026-04-28 live in the private <code>monitoring-audit-results</code> repo.</p>
-      </div>
-    </div>
-    <div class="card-footer">
-      <div class="card-tags">
-        <span class="tag tag-orange">Founding audit</span>
-        <span class="tag tag-purple">RCA quality</span>
-        <span class="tag" style="background:rgba(224,96,112,.1); color:var(--accent-red);">2026-04-24 · frozen</span>
-      </div>
-      <div class="card-arrow">→</div>
-    </div>
-  </a>
-
   <a href="dashboard-guide.html" class="card" style="border-color:rgba(232,138,160,.35);">
     <div class="card-header">
       <div class="card-icon" style="background:rgba(232,138,160,.1);">📋</div>
@@ -506,24 +372,6 @@
         <span class="tag" style="background:rgba(232,138,160,.1); color:#e88aa0;">Operator</span>
         <span class="tag tag-purple">Codes &amp; abbreviations</span>
         <span class="tag tag-green">2026-04-27</span>
-      </div>
-      <div class="card-arrow">→</div>
-    </div>
-  </a>
-
-  <a href="sprint2-epic5-ueba.html" class="card" style="border-color:rgba(224,208,96,.35);">
-    <div class="card-header">
-      <div class="card-icon" style="background:rgba(224,208,96,.1);">🧬</div>
-      <div class="card-header-text">
-        <h2>Sprint 2 Epic 5 — UEBA</h2>
-        <p>Seven user stories lifting UEBA patterns from SIEM into AIOps. Per-service Drain3 baselines (<strong>shipped</strong>), closed-loop feedback (<strong>shipped</strong>), adaptive thresholds (<strong>shipped</strong>), recurrence gates (<strong>shipped</strong>) all landed 2026-04-27/28 and were absorbed into the Sprint 3 Epic 1 close-out. Stretch stories (US-5.2 incident correlator, US-5.5/6/7 stretch) carried forward to Sprint 4.</p>
-      </div>
-    </div>
-    <div class="card-footer">
-      <div class="card-tags">
-        <span class="tag tag-green">4 of 7 shipped</span>
-        <span class="tag tag-purple">Absorbed into Sprint 3 Epic 1</span>
-        <span class="tag tag-orange">3 carried to Sprint 4</span>
       </div>
       <div class="card-arrow">→</div>
     </div>

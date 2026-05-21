@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Learning Resources — CIRES Observability Platform</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --bg-soft: #13151e;
+    --card: #1a1d27;
+    --card-alt: #1e2230;
+    --border: #2a2d3a;
+    --text: #e4e6ee;
+    --text-soft: #c0c5d0;
+    --muted: #8890a0;
+    --accent-blue: #4ea8de;
+    --accent-green: #6bcf7f;
+    --accent-orange: #f0a050;
+    --accent-purple: #b07ee8;
+    --accent-cyan: #40d0d0;
+    --accent-yellow: #e0d060;
+    --accent-red: #e06070;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { font-family:'Inter','Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); line-height:1.65; font-size:15px; -webkit-font-smoothing:antialiased; }
+  code, pre, .mono { font-family:'JetBrains Mono','Fira Code',ui-monospace,monospace; font-size:0.88em; }
+
+  .topnav { display:flex; align-items:center; gap:12px; padding:14px 40px; background:var(--bg-soft); border-bottom:1px solid var(--border); flex-wrap:wrap; }
+  .topnav span.nav-label { color:var(--muted); font-size:13px; font-weight:600; margin-right:4px; }
+  .navlink { display:inline-flex; align-items:center; gap:6px; padding:7px 14px; border-radius:8px; font-size:13px; font-weight:600; text-decoration:none; border:1px solid; transition:background .2s, transform .15s; }
+  .navlink:hover { transform:translateY(-1px); }
+  .navlink-home { color:var(--text); border-color:var(--border); background:var(--card); }
+  .navlink-arch { color:var(--accent-blue); border-color:rgba(78,168,222,.4); background:rgba(78,168,222,.08); }
+  .navlink-tri { color:var(--accent-purple); border-color:rgba(176,126,232,.4); background:rgba(176,126,232,.08); }
+
+  .hero { padding:48px 40px 36px; border-bottom:1px solid var(--border); background:linear-gradient(180deg, #13151e 0%, var(--bg) 100%); }
+  .hero .inner { max-width:1040px; margin:0 auto; }
+  .hero .eyebrow { font-size:11px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:var(--accent-cyan); margin-bottom:12px; }
+  .hero h1 { font-size:32px; font-weight:800; letter-spacing:-.5px; margin-bottom:10px; line-height:1.2; }
+  .hero h1 span { color:var(--accent-cyan); }
+  .hero p.lead { font-size:15px; color:var(--text-soft); max-width:760px; line-height:1.7; }
+
+  .layout { max-width:1040px; margin:0 auto; padding:32px 40px 80px; }
+
+  h2.section { font-size:22px; font-weight:700; margin:32px 0 12px; letter-spacing:-.3px; padding-bottom:8px; border-bottom:1px solid var(--border); }
+  p { margin-bottom:12px; color:var(--text-soft); }
+  p strong { color:var(--text); font-weight:600; }
+  code { background:var(--card); border:1px solid var(--border); padding:1px 6px; border-radius:4px; font-size:0.85em; color:var(--accent-cyan); }
+  a { color:var(--accent-blue); text-decoration:none; border-bottom:1px dashed rgba(78,168,222,.35); }
+  a:hover { border-bottom-style:solid; }
+  ul { margin:8px 0 14px 22px; color:var(--text-soft); }
+  li { margin-bottom:5px; }
+
+  .tool {
+    background:var(--card); border:1px solid var(--border); border-radius:12px;
+    padding:22px 24px; margin-bottom:18px;
+  }
+  .tool-head { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:6px; }
+  .tool-name { font-size:18px; font-weight:700; color:var(--text); display:flex; align-items:center; gap:10px; }
+  .tool-icon { font-size:24px; }
+  .tool-tags { display:flex; gap:6px; flex-wrap:wrap; }
+  .tool-tag { font-size:11px; padding:2px 8px; border-radius:10px; font-weight:600; border:1px solid; }
+  .t-infra    { color:var(--accent-blue);   border-color:rgba(78,168,222,.4); background:rgba(78,168,222,.08); }
+  .t-orch     { color:var(--accent-cyan);   border-color:rgba(64,208,208,.4); background:rgba(64,208,208,.08); }
+  .t-cfg      { color:var(--accent-orange); border-color:rgba(240,160,80,.4); background:rgba(240,160,80,.08); }
+  .t-light    { color:var(--accent-green);  border-color:rgba(107,207,127,.4); background:rgba(107,207,127,.08); }
+  .tool-blurb { font-size:14.5px; color:var(--text-soft); margin:6px 0 10px; }
+  .tool-blurb strong { color:var(--text); }
+  .tool h4 { font-size:13px; font-weight:700; letter-spacing:0.5px; text-transform:uppercase; color:var(--muted); margin:14px 0 6px; }
+  .tool ul { font-size:14px; color:var(--text-soft); margin:4px 0 10px 22px; }
+  .tool ul li { margin-bottom:4px; }
+  .tool ul li code { color:var(--accent-cyan); }
+</style>
+</head>
+<body>
+
+<div class="topnav">
+  <span class="nav-label">Pages:</span>
+  <a href="index.html" class="navlink navlink-home">← Home</a>
+  <a href="architecture.html" class="navlink navlink-arch">🏗️ Architecture</a>
+  <a href="reproducibility-guide.html" class="navlink navlink-arch">🧭 Reproducibility</a>
+  <a href="repository-map.html" class="navlink" style="color:var(--accent-cyan); border-color:rgba(64,208,208,.4); background:rgba(64,208,208,.08);">🗃️ Repository Map</a>
+  <a href="triage-service.html" class="navlink navlink-tri">🧠 Triage Service</a>
+</div>
+
+<div class="hero">
+  <div class="inner">
+    <div class="eyebrow">CIRES Observability Platform</div>
+    <h1>Learning <span>resources</span></h1>
+    <p class="lead">A focused primer on the four infrastructure tools this project uses — <strong>Kubernetes / k3s</strong> for the application workload, <strong>Terraform</strong> for the AWS estate, and <strong>Ansible</strong> for everything that runs on the VMs after Terraform creates them. Each section is one paragraph of "what it is and why it's here", a short concept list, the actual files in this project that use it, and a curated jump-off to the canonical external docs.</p>
+  </div>
+</div>
+
+<div class="layout">
+
+  <h2 class="section" id="kubernetes">1. Kubernetes</h2>
+
+  <div class="tool" id="k8s">
+    <div class="tool-head">
+      <div class="tool-name"><span class="tool-icon">☸️</span> Kubernetes</div>
+      <div class="tool-tags">
+        <span class="tool-tag t-orch">Orchestration</span>
+        <span class="tool-tag t-orch">Application layer</span>
+      </div>
+    </div>
+    <p class="tool-blurb">Container orchestrator. In this project Kubernetes runs the <strong>application workload</strong> (the <code>react-springboot-mysql</code> demo plus the secondary car-rental app) on <code>observability-rca-k3s</code>. We picked it over plain docker-compose so the same deploy primitives could survive a multi-node future, and because Helm charts make the per-service configuration auditable.</p>
+    <h4>Core concepts to know</h4>
+    <ul>
+      <li><strong>Pod</strong> — the smallest deployable unit (one or more containers sharing a network namespace).</li>
+      <li><strong>Deployment</strong> — declarative spec of "I want N replicas of this pod, with these env / probes / resources".</li>
+      <li><strong>Service</strong> — a stable DNS name + virtual IP that load-balances across the pods behind it.</li>
+      <li><strong>Ingress</strong> — external entry point routing host/path → service. Replaced here by <code>Kong</code> as an in-cluster API gateway.</li>
+      <li><strong>Namespace</strong> — soft tenant boundary; we use <code>app</code> (main stack) and <code>rental</code> (car-rental side-deploy).</li>
+      <li><strong>Helm chart</strong> — a packaged set of templated manifests with a <code>values.yaml</code> override layer. Every service in <code>monitoring-project/charts/</code> is a Helm chart.</li>
+    </ul>
+    <h4>Where this project uses it</h4>
+    <ul>
+      <li><code>monitoring-project/charts/</code> — Helm charts for <code>spring-boot</code>, <code>react-frontend</code>, <code>mysql</code>, <code>kong</code>, <code>rental-*</code>.</li>
+      <li><code>monitoring-project/manifests/node-exporter/daemonset.yaml</code> — node-level Prometheus exporter as a DaemonSet.</li>
+      <li><code>monitoring-project/playbooks/k3s-bootstrap.yml</code> — Ansible playbook that brings k3s up and deploys the workload Helm charts.</li>
+    </ul>
+    <h4>Deeper reading</h4>
+    <ul>
+      <li><a href="https://kubernetes.io/docs/concepts/" target="_blank" rel="noopener">Kubernetes Concepts ↗</a> — the official conceptual overview.</li>
+      <li><a href="https://kubernetes.io/docs/tutorials/kubernetes-basics/" target="_blank" rel="noopener">Kubernetes Basics tutorial ↗</a> — hands-on walk-through.</li>
+      <li><a href="https://helm.sh/docs/" target="_blank" rel="noopener">Helm docs ↗</a> — package manager.</li>
+    </ul>
+  </div>
+
+  <h2 class="section" id="k3s">2. k3s</h2>
+
+  <div class="tool" id="k3s-section">
+    <div class="tool-head">
+      <div class="tool-name"><span class="tool-icon">🚀</span> k3s</div>
+      <div class="tool-tags">
+        <span class="tool-tag t-light">Lightweight Kubernetes</span>
+        <span class="tool-tag t-orch">Single-binary</span>
+      </div>
+    </div>
+    <p class="tool-blurb">A <strong>certified Kubernetes distribution packaged as a single binary</strong>, designed to run on resource-constrained or single-node environments. We use k3s instead of full k8s on <code>observability-rca-k3s</code> (one <code>t3.xlarge</code> EC2 instance) because the full control plane would dominate the workload's resource budget on a single VM. From an application perspective k3s is just Kubernetes — every concept above applies — but the install is one <code>curl | sh</code> instead of <code>kubeadm</code>.</p>
+    <h4>What's different from "vanilla" Kubernetes</h4>
+    <ul>
+      <li><strong>Single binary</strong> — controller + scheduler + kubelet + kube-proxy all in one process.</li>
+      <li><strong>Embedded SQLite datastore</strong> by default instead of etcd (we use the default; for HA you'd swap in an embedded etcd cluster or an external one).</li>
+      <li><strong>Built-in Traefik, ServiceLB, and local-path storage class</strong> — most things you'd otherwise install via Helm post-bootstrap are pre-wired. We disabled Traefik (Kong handles ingress instead) but kept <code>local-path</code> for stateful workloads.</li>
+      <li><strong>Kubeconfig path</strong> — <code>/etc/rancher/k3s/k3s.yaml</code> instead of <code>~/.kube/config</code>.</li>
+    </ul>
+    <h4>Where this project uses it</h4>
+    <ul>
+      <li><code>monitoring-project/playbooks/k3s-bootstrap.yml</code> — single-node bootstrap on the <code>observability-rca-k3s</code> EC2 instance.</li>
+      <li><code>monitoring-project/inventory/tailnet.yml</code> — points Ansible at the host via MagicDNS.</li>
+      <li><code>kubectl</code> on the host is shimmed via <code>sudo k3s kubectl</code>; the kubeconfig is owned by root.</li>
+    </ul>
+    <h4>Deeper reading</h4>
+    <ul>
+      <li><a href="https://docs.k3s.io/" target="_blank" rel="noopener">k3s docs ↗</a> — concepts, install, configuration.</li>
+      <li><a href="https://docs.k3s.io/architecture" target="_blank" rel="noopener">k3s architecture ↗</a> — what's bundled vs upstream.</li>
+    </ul>
+  </div>
+
+  <h2 class="section" id="terraform">3. Terraform</h2>
+
+  <div class="tool" id="terraform-section">
+    <div class="tool-head">
+      <div class="tool-name"><span class="tool-icon">🏗️</span> Terraform</div>
+      <div class="tool-tags">
+        <span class="tool-tag t-infra">Infra as Code</span>
+        <span class="tool-tag t-infra">AWS estate</span>
+      </div>
+    </div>
+    <p class="tool-blurb">Declarative tool for provisioning <strong>cloud infrastructure</strong>. You describe the desired end state in HCL files (<code>.tf</code>); Terraform diffs against the recorded state, computes a plan, and applies the delta. In this project every AWS resource — VPC, subnets, security groups, EC2 instances, RDS, S3 buckets, IAM, EIPs — is created via Terraform; the AWS console is read-only by convention. <strong>Why it's here:</strong> no clickops, no untracked drift, reproducible from a fresh account, and changes are diffable in git.</p>
+    <h4>Core concepts to know</h4>
+    <ul>
+      <li><strong>Provider</strong> — the plugin that translates HCL into API calls (e.g. <code>hashicorp/aws</code>).</li>
+      <li><strong>Resource</strong> — one cloud object (e.g. <code>aws_instance</code>, <code>aws_db_instance</code>).</li>
+      <li><strong>State</strong> — the file Terraform uses to remember what it created. Stored remotely in an S3 bucket here, so multiple operators see the same world.</li>
+      <li><strong>Variable / tfvars</strong> — parameterised inputs. The only file an operator normally edits during day-to-day work is <code>terraform.tfvars</code>.</li>
+      <li><strong>Plan vs apply</strong> — <code>terraform plan</code> shows the diff; <code>terraform apply</code> executes it. Never skip the plan on a shared environment.</li>
+      <li><strong>Output</strong> — values exported from the plan for downstream tools (we use outputs to feed Ansible the EC2 IPs).</li>
+    </ul>
+    <h4>Where this project uses it</h4>
+    <ul>
+      <li><code>provisioning-monitoring-infra/</code> — the entire AWS estate.</li>
+      <li><code>terraform.tfvars</code> — the operator-editable knobs (<code>allowed_ssh_cidrs</code>, instance types, AMI pin).</li>
+      <li><strong>Managed resources:</strong> <code>observability-rca-monitoring</code> (<code>t3.large</code>), <code>observability-rca-k3s</code> (<code>t3.xlarge</code>), <code>observability-rca-mysql</code> (RDS), the Loki S3 bucket, the Terraform state bucket.</li>
+      <li><strong>Account:</strong> <code>735115318342</code>, region <code>us-east-1</code>.</li>
+    </ul>
+    <h4>Day-to-day commands</h4>
+    <ul>
+      <li><code>terraform init</code> — first time in a clone; downloads providers + wires up the S3 backend.</li>
+      <li><code>terraform plan</code> — see what would change.</li>
+      <li><code>terraform apply</code> — execute the plan (asks for confirmation).</li>
+      <li><code>terraform output</code> — read exported values (e.g. EC2 public IPs to feed Ansible).</li>
+    </ul>
+    <h4>Deeper reading</h4>
+    <ul>
+      <li><a href="https://developer.hashicorp.com/terraform/intro" target="_blank" rel="noopener">Terraform introduction ↗</a>.</li>
+      <li><a href="https://developer.hashicorp.com/terraform/tutorials/aws-get-started" target="_blank" rel="noopener">AWS getting-started tutorial ↗</a>.</li>
+      <li><a href="https://registry.terraform.io/providers/hashicorp/aws/latest/docs" target="_blank" rel="noopener">AWS provider reference ↗</a>.</li>
+    </ul>
+  </div>
+
+  <h2 class="section" id="ansible">4. Ansible</h2>
+
+  <div class="tool" id="ansible-section">
+    <div class="tool-head">
+      <div class="tool-name"><span class="tool-icon">⚙️</span> Ansible</div>
+      <div class="tool-tags">
+        <span class="tool-tag t-cfg">Config management</span>
+        <span class="tool-tag t-cfg">Agentless</span>
+      </div>
+    </div>
+    <p class="tool-blurb">Agentless configuration management. Ansible takes a target host (over SSH), a <strong>playbook</strong> (an ordered list of tasks grouped into <strong>roles</strong>), and an <strong>inventory</strong> (the hosts to apply it to), and brings each host to the declared state. In this project Terraform creates the empty VMs; Ansible turns them into the monitoring VM, the k3s host, the laptop, etc. <strong>Why it's here:</strong> idempotent VM configuration, role-level reuse, single source of truth for what each host is supposed to look like.</p>
+    <h4>Core concepts to know</h4>
+    <ul>
+      <li><strong>Inventory</strong> — the list of target hosts and how to reach them (here: a Tailscale tailnet declared in <code>inventory/tailnet.yml</code>).</li>
+      <li><strong>Playbook</strong> — a YAML file pairing a set of hosts with a list of roles or tasks.</li>
+      <li><strong>Role</strong> — a reusable directory of tasks / templates / files / handlers / defaults. One role per service is the convention.</li>
+      <li><strong>Task</strong> — one declarative action (install a package, render a template, restart a service).</li>
+      <li><strong>Handler</strong> — a task that only runs when notified by another task (e.g. restart Prometheus when its config template changed).</li>
+      <li><strong>Template</strong> — a Jinja2 file rendered into the target host's filesystem.</li>
+      <li><strong>Idempotency</strong> — running the same playbook twice should be a no-op the second time.</li>
+    </ul>
+    <h4>Where this project uses it</h4>
+    <ul>
+      <li><code>monitoring-project/roles/</code> — one directory per service: <code>prometheus</code>, <code>loki</code>, <code>jaeger</code>, <code>grafana</code>, <code>otel-collector</code>, <code>node-exporter</code>, plus app-side roles.</li>
+      <li><code>monitoring-project/playbooks/monitoring.yml</code> — the top-level playbook for the monitoring VM.</li>
+      <li><code>monitoring-project/inventory/tailnet.yml</code> — Tailscale-MagicDNS-keyed inventory; means IPs don't matter and hosts are reachable from anywhere on the tailnet.</li>
+      <li><code>monitoring-project/roles/grafana/templates/alertrules.yml.j2</code> — the Jinja2 template that produces Grafana alert rules; this file is the source of truth for every alert the platform fires.</li>
+    </ul>
+    <h4>Day-to-day commands</h4>
+    <ul>
+      <li><code>ansible -m ping all</code> — sanity check: every host in the inventory reachable?</li>
+      <li><code>ansible-playbook playbooks/monitoring.yml</code> — apply the monitoring stack.</li>
+      <li><code>ansible-playbook playbooks/monitoring.yml --tags monitoring</code> — narrow to one tag.</li>
+      <li><code>ansible-playbook playbooks/monitoring.yml --check --diff</code> — dry-run with diffs.</li>
+    </ul>
+    <h4>Deeper reading</h4>
+    <ul>
+      <li><a href="https://docs.ansible.com/ansible/latest/getting_started/index.html" target="_blank" rel="noopener">Ansible getting started ↗</a>.</li>
+      <li><a href="https://docs.ansible.com/ansible/latest/playbook_guide/index.html" target="_blank" rel="noopener">Playbooks guide ↗</a>.</li>
+      <li><a href="https://docs.ansible.com/ansible/latest/playbook_guide/playbooks_reuse_roles.html" target="_blank" rel="noopener">Roles ↗</a> — the unit of reuse.</li>
+    </ul>
+  </div>
+
+  <h2 class="section" id="end-to-end">How the four tools fit together</h2>
+
+  <p>The provisioning chain that produces the entire platform from a fresh AWS account, top to bottom:</p>
+
+  <ol style="margin:8px 0 14px 22px; color:var(--text-soft);">
+    <li><strong>Terraform</strong> creates the AWS estate — VPC, EC2 instances (monitoring VM + k3s host), RDS, S3 buckets, IAM. Outputs the EC2 IPs.</li>
+    <li><strong>Ansible</strong> takes those hosts (via Tailscale MagicDNS) and brings the monitoring VM up to spec — Prometheus, Loki, Jaeger, Grafana, OTel Collector, alert rules.</li>
+    <li><strong>Ansible</strong> (different playbook) bootstraps <strong>k3s</strong> on the k3s EC2 instance.</li>
+    <li><strong>Helm</strong> deploys the <strong>Kubernetes</strong> workload (Spring Boot, MySQL, React, Kong, rental-*) onto the k3s cluster.</li>
+    <li>The AI triage layer runs separately on a Tailscale-attached laptop GPU and reads from this stack via MCP servers — see <a href="architecture.html">Architecture</a>.</li>
+  </ol>
+
+  <p>The exact end-to-end sequence with commands is in the <a href="reproducibility-guide.html">Reproducibility Guide</a>. The mapping from each tool to the repo that owns it is in the <a href="repository-map.html">Repository Map</a>.</p>
+
+</div>
+
+</body>
+</html>
