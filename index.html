@@ -132,7 +132,7 @@
 <div class="hero">
   <div class="eyebrow">CIRES Technologies · Tanger Med</div>
   <h1>Observability <span>Platform</span></h1>
-  <p>Full-stack observability for <code>react-springboot-mysql</code>. Metrics, logs, distributed traces, log-template anomalies, and AI-assisted root-cause analysis — Terraform on AWS for the monitoring + application stack, the AI layer on a Tailscale-attached laptop GPU. <strong>What makes it different:</strong> an MCP-only hallucination firewall, a 14-archetype exemplar library, and 28 days of operational track record (262/262 tests; 95-RCA heavy-load validation on 2026-05-19). Proof of concept on a local test bed, asking for CIRES production greenlight — see <a href="solution-brief.html" style="color:var(--accent-blue);">Solution Brief</a>.</p>
+  <p>Full-stack observability for <code>react-springboot-mysql</code>. Metrics, logs, distributed traces, log-template anomalies, and AI-assisted root-cause analysis — Terraform on AWS for the monitoring + application stack, the AI layer on a Tailscale-attached laptop GPU. <strong>What makes it different:</strong> an MCP-only hallucination firewall, a 14-archetype exemplar library, and 28 days of operational track record (252/252 tests; 95-RCA heavy-load validation on 2026-05-19). Proof of concept on a local test bed, asking for CIRES production greenlight — see <a href="solution-brief.html" style="color:var(--accent-blue);">Solution Brief</a>.</p>
   <div class="hero-meta">
     <div class="meta-item"><div class="meta-dot" style="background:var(--accent-blue)"></div>Prometheus · Loki · Jaeger · Drain3</div>
     <div class="meta-item"><div class="meta-dot" style="background:var(--accent-green)"></div>OTel Collector · Kong Gateway</div>
@@ -263,7 +263,7 @@
       <div class="card-tags">
         <span class="tag tag-purple">AI RCA</span>
         <span class="tag tag-blue">FastAPI · 10 stages</span>
-        <span class="tag tag-green">262/262 tests</span>
+        <span class="tag tag-green">252/252 tests</span>
       </div>
       <div class="card-arrow">→</div>
     </div>
@@ -364,7 +364,7 @@
       <div class="card-icon" style="background:rgba(232,138,160,.1);">📋</div>
       <div class="card-header-text">
         <h2>Dashboard Guide</h2>
-        <p>Operator reference for the triage dashboard at <code>http://adolin-wsl:8090/dashboard</code> and the escalation emails. Every column, every internal code (action_taken, rca_quality, triage_decision), every abbreviation (RCA, MCP, refId, fingerprint, p95, kill-chain, shelved, data_starved). Six worked scenarios covering ESCALATE / DISMISS / shelved Drain3 / deduped / timeout / thin-RCA rows.</p>
+        <p>Operator reference for the triage dashboard at <code>http://observability-gpu-uswest2:8090/dashboard</code> and the escalation emails. Every column, every internal code (action_taken, rca_quality, triage_decision), every abbreviation (RCA, MCP, refId, fingerprint, p95, kill-chain, shelved, data_starved). Six worked scenarios covering ESCALATE / DISMISS / shelved Drain3 / deduped / timeout / thin-RCA rows.</p>
       </div>
     </div>
     <div class="card-footer">
@@ -411,7 +411,7 @@
 <div class="status-row">
   <div class="status-item"><div class="status-dot dot-done"></div>Sprint 1 complete — observability foundation, reproducible from one Ansible playbook</div>
   <div class="status-item"><div class="status-dot dot-done"></div>Sprint 2 closed 2026-04-23 — AWS + AI RCA MVP shipped; production runner moved to laptop GPU on close day</div>
-  <div class="status-item"><div class="status-dot dot-done"></div>Sprint 3 closing 2026-05-21 — Epic 1 (49/50 SP) + Epic 4 hallucination firewall (15/15 SP, shipped 2026-05-19); Epic 2 + Epic 3 carrying into Sprint 4; triage suite <strong>262/262</strong>; daily static + live audits running</div>
+  <div class="status-item"><div class="status-dot dot-done"></div>Sprint 3 closing 2026-05-21 — Epic 1 (49/50 SP) + Epic 4 hallucination firewall (15/15 SP, shipped 2026-05-19); Epic 2 + Epic 3 carrying into Sprint 4; triage suite <strong>252/252</strong>; daily static + live audits running</div>
   <div class="status-item"><div class="status-dot dot-active"></div>Sprint 4 (2026-05-20 → 2026-06-03) <strong>active</strong> — output-quality close-out: per-stage latency instrumentation, P0 anchor bundle (median 90 s target), incident correlator, curated RAG, R-1..R-5 resilience tier. <code>qwen2.5:7b</code> on laptop GTX 1060 — real-load median ~5 min, worst ~26 min (last-40 sample). <a href="sprint-history.html#sprint-4-removed" style="color:var(--accent-purple);">Cloud-GPU migration dropped on cost grounds 2026-05-19</a>.</div>
 </div>
 

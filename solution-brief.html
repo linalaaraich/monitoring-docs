@@ -193,7 +193,7 @@
 <ol>
   <li><strong>Hallucination firewall.</strong> Every data source the LLM ever sees flows through an MCP bridge — no direct DB reads, no in-process module imports of evidence, no ad-hoc HTTP calls. The invariant is enforced by a CI lint (<code>scripts/check_mcp_invariant.py</code>), not just convention. If the LLM tries to invent a metric or a service that doesn't exist, the MCP call returns empty and the validator catches the unsupported claim downstream. See <a href="#quality">§5</a> and <a href="hallucination-firewall.html">hallucination-firewall.html</a>.</li>
   <li><strong>Five reinforcing output-quality defenses.</strong> Exemplar retrieval, alert-keyed hallucination blocklist, surface-only LEDE + hypothesis-menu validators, confidence clamp, bounded-agency single retry. Each catches a different failure mode; together they make LLM mistakes recoverable rather than load-bearing.</li>
-  <li><strong>Operational track record, not promises.</strong> The triage container has run on <code>adolin-wsl</code> for 28 days since Sprint 3 kickoff (2026-04-23). 262 / 262 triage tests pass, the MCP-invariant lint is clean, and the 2026-05-19 heavy-load test produced 95 production-shape RCAs with a documented quality grade per RCA. Five of the twelve issues that test surfaced are already shipped or scheduled into Sprint 4.</li>
+  <li><strong>Operational track record, not promises.</strong> The triage container has run on <code>adolin-wsl</code> for 28 days since Sprint 3 kickoff (2026-04-23). 252 / 252 triage tests pass, the MCP-invariant lint is clean, and the 2026-05-19 heavy-load test produced 95 production-shape RCAs with a documented quality grade per RCA. Five of the twelve issues that test surfaced are already shipped or scheduled into Sprint 4.</li>
 </ol>
 
 <p><strong>What we deliberately didn't build.</strong> The system prefers <strong>determinism and auditability over raw model capability</strong>. No agentic multi-step planning loop (one bounded retry max). No vector DB (the exemplar library is a curated YAML, deliberately frozen until operator feedback can curate retrieval well). No microservice mesh (one pipeline, one process, deterministic ordering). No native tool-calling (structured JSON output schemas instead, until we move off the laptop to a larger model). Every quality mechanism exists to make the LLM's mistakes recoverable. If you'd weight that trade-off differently, <a href="#asks">§8</a> is the conversation we want to have.</p>
@@ -1180,7 +1180,7 @@ Four concrete inputs. We've tried to scope each so it doesn't cost you a week.
   </li>
   <li>
     <strong>3. Review a handful of recent live RCAs.</strong> The dashboard at
-    <code>http://adolin-wsl:8090/dashboard</code> (Tailscale-only) shows the
+    <code>http://observability-gpu-uswest2:8090/dashboard</code> (Tailscale-only) shows the
     last 50 verdicts. Flag any RCA that reads wrong to you — too confident,
     too hedged, wrong cause, wrong remediation, evidence cited that doesn't
     actually support the claim. Especially anything in the
@@ -1387,7 +1387,7 @@ Then open the page at <a href="#pitch">§1</a>.
   Four numbers, in this order. No slide on the page; just say them.
   </p>
   <ul>
-    <li><strong>262 / 262 triage tests passing.</strong> Plus the MCP-invariant
+    <li><strong>252 / 252 triage tests passing.</strong> Plus the MCP-invariant
     CI lint clean. Plus the chaos-corpus regression gate at 5 / 5.</li>
     <li><strong>28 days of steady-state operation</strong> on the laptop GPU
     since Sprint 3 kickoff (2026-04-23). No restarts, no data loss.</li>
@@ -1425,7 +1425,7 @@ to ask.
   makes you commit to a cause vs. keep digging." Take notes; this is the
   highest-value 15 minutes of the meeting.</li>
   <li><strong>Question 3 — Live RCAs on /dashboard.</strong> Open
-  <code>http://adolin-wsl:8090/dashboard</code> over Tailscale (test the
+  <code>http://observability-gpu-uswest2:8090/dashboard</code> over Tailscale (test the
   link before the meeting). Walk the last 5–10 verdicts together. Ask:
   "anything reads wrong to you — too confident, too hedged, wrong cause,
   wrong remediation?"</li>

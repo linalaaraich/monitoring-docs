@@ -149,6 +149,13 @@
     <li><a href="#d16"><strong>UEBA framing for Sprint 2 Epic 5</strong></a></li>
     <li><a href="#d17">Exemplar library — pre-LLM injection of canonical good-RCA shapes</a></li>
     <li><a href="#d18"><strong>Adaptive thresholds — Epic 5 US-5.4</strong></a></li>
+    <li><a href="#d19">RCA prose quality — telemetry is the means, not the end</a></li>
+    <li><a href="#d20">Closed-loop feedback (US-5.3) — operator decisions become routing signal</a></li>
+    <li><a href="#d21">Recurrence gate (US-5.8) — pre-LLM and post-LLM hysteresis</a></li>
+    <li><a href="#d22">SESSION_HANDOFF kept controller-local, scrubbed from public history</a></li>
+    <li><a href="#d23">Per-service Drain3 template trees (US-5.1 Phase A)</a></li>
+    <li><a href="#d24"><strong>Cloud GPU migration to us-west-2 — supersedes 2026-05-19 drop</strong></a></li>
+    <li><a href="#d25"><strong>GPU runner access lockdown — Tailscale-only + IP-allowlisted API GW</strong></a></li>
   </ol>
 </div>
 
@@ -2010,6 +2017,109 @@
         (wired into <code>MetricFacts.as_prompt_block</code>) shipped earlier
         2026-04-28; this Phase A completes US-5.1.
       </p>
+    </div>
+  </div>
+</div>
+
+<h2 id="d24">D24 · Cloud GPU migration to us-west-2 — supersedes the 2026-05-19 cost-grounds drop</h2>
+<div class="decision">
+  <div class="decision-meta">
+    <span class="tag tag-fixed">✅ Shipped 2026-05-21</span>
+    <span class="date">2026-05-21</span>
+  </div>
+  <h3 class="problem-title">The laptop GTX 1060 + qwen2.5:7b runner was producing real-load medians of ~5 minutes and worst-case ~26 minutes — too slow to be operationally credible. Cloud-GPU migration was considered and dropped 2026-05-19 on cost grounds. Two days later the cost calculation was rebuilt around a Lambda autoshutoff gateway and the answer flipped.</h3>
+
+  <div class="section-block">
+    <span class="block-label">Problem</span>
+    <div class="block-body">
+      <p>Operational reality after Sprint 3 close: the laptop runner's latency floor was the qwen2.5:7b ceiling — F-2/F-3 regressions on multi-step causal chains weren't a prompt problem, they were a model-size problem. The 2026-05-19 drop-decision used the naive "g5.xlarge on-demand × 720 hours/month" frame; under that frame migration was indefensible. But the actual usage shape is bursty (one webhook every ~15 minutes during a flap, idle the rest of the time) — 24/7 was the wrong baseline.</p>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <span class="block-label">Reasoning</span>
+    <div class="block-body">
+      <p>Three reframings:</p>
+      <ul>
+        <li><strong>Cost frame.</strong> A Lambda watching for idle stops the instance after 20 minutes of no traffic. Realistic duty cycle is &lt;15% (~100 hours/month), pushing on-demand cost from ~$730 to ~$100/mo — capped hard by a $50 CloudWatch billing alarm.</li>
+        <li><strong>Model frame.</strong> A10G's 24 GB VRAM unlocks <code>qwen2.5:14b-instruct</code> as the primary model (7B retained as fallback). The 7→14B step is exactly the structural fix F-2/F-3 needed — prompt engineering had hit its ceiling.</li>
+        <li><strong>Access frame.</strong> Don't expose the instance publicly. Tailnet-only for operators; Grafana webhooks land via API Gateway with an IP allowlist (so Grafana on the monitoring VM can reach the webhook without opening the instance itself); SSH disabled on the public interface.</li>
+      </ul>
+      <p>Rollback story: adolin-wsl + qwen2.5:7b stays warm as the fallback runner. If the us-west-2 stack fails, flip Grafana's webhook target back to the laptop. Failover is a DNS-level decision; no code change required.</p>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <span class="block-label">Solution</span>
+    <div class="block-body">
+      <p>Shipped 2026-05-21:</p>
+      <ul>
+        <li>EC2 <code>g5.xlarge</code> in <code>us-west-2</code>, instance <code>i-03aec662b1a47ad8f</code>, Tailscale hostname <code>observability-gpu-uswest2</code>. Ollama + the triage compose stack moved over wholesale; <code>rca_history.db</code> + Drain3 state migrated via <code>scp</code> from adolin-wsl.</li>
+        <li><code>qwen2.5:14b-instruct</code> as primary model, 7B retained as fallback. Ollama runs as a host systemd service (not in the compose stack); the 6 bridge containers reach it via <code>host.docker.internal:11434</code>.</li>
+        <li>API Gateway endpoint <code>https://l5anj15qi0.execute-api.us-west-2.amazonaws.com/webhook/grafana</code> as the Grafana webhook target, with IP allowlist scoped to the monitoring VM's egress (<code>52.202.21.192</code>) + Lina's home (<code>102.97.79.206</code>).</li>
+        <li>Lambda autoshutoff (20-min idle on DDB <code>last_traffic_at</code>) + SQS-buffered cold start (~90 s wake) + CloudWatch billing alarm at $50/mo + public SSH disabled on the instance.</li>
+        <li>Dashboard URL moves from <code>http://adolin-wsl:8090/dashboard</code> to <code>http://observability-gpu-uswest2:8090/dashboard</code> (Tailscale-only).</li>
+        <li><code>rca_history.db</code> migrated and pruned: 260 rows post-cleanup (131 actionable / 106 needs_review / 16 data_starved); a daily systemd retention timer keeps it bounded going forward.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <span class="block-label">Evaluation</span>
+    <div class="block-body">
+      <p>Immediate: end-to-end median ~38 s on Phase 2 smoke test vs the laptop's ~5 min baseline (~8× improvement). 14b on A10G runs at ~50-65 tok/s; prompt eval at ~1350 tok/s; cached model load ~177 ms. Test suite stays 252/252 green — no behavioural regressions from the host change.</p>
+      <p>Lagging: the 4-axis rubric sample on the firewall page was drawn during the 7B-on-laptop era. Re-run against the 14B-on-A10G runner is pending against US-5.7 corpus work; expectation is cause-named and prose-shape both lift, with actionable held steady by the confidence-clamp design (S3-HF-01).</p>
+      <p>Supersedes the 2026-05-19 "cloud GPU dropped on cost grounds" decision in <a href="sprint-history.html#sprint-4-removed">sprint-history.html</a> — that decision was correct under the 24/7 frame; this one rebuilds the frame.</p>
+    </div>
+  </div>
+</div>
+
+<h2 id="d25">D25 · GPU runner access lockdown — Tailscale-only + IP-allowlisted API Gateway</h2>
+<div class="decision">
+  <div class="decision-meta">
+    <span class="tag tag-fixed">✅ Shipped 2026-05-21</span>
+    <span class="date">2026-05-21</span>
+  </div>
+  <h3 class="problem-title">Putting the LLM runner on a public cloud instance changes the attack surface from "laptop behind residential NAT" to "AWS EC2 with a public IP". The naive shape — webhook directly to the instance, SSH from anywhere, dashboard on a public port — would be one mis-configured security group away from a compromised inference endpoint.</h3>
+
+  <div class="section-block">
+    <span class="block-label">Problem</span>
+    <div class="block-body">
+      <p>Three exposures had to be closed before the migration could be called production-pattern: (1) the Grafana webhook needs a public-Internet path because Grafana lives in us-east-1 and cannot route into the us-west-2 instance's private subnet without VPC peering; (2) the operator dashboard at <code>:8090</code> needs to be reachable from the controller; (3) SSH for operator-driven debugging — historically port 22 on a public IP, which is the default cloud-malware vector.</p>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <span class="block-label">Reasoning</span>
+    <div class="block-body">
+      <p>Different shapes for different consumers:</p>
+      <ul>
+        <li><strong>Operator paths (dashboard, SSH).</strong> Route via Tailscale. The instance joins the tailnet on boot; the operator's laptop already on the tailnet reaches <code>http://observability-gpu-uswest2:8090</code> via MagicDNS. No public port required.</li>
+        <li><strong>Grafana webhook path.</strong> Cleaner shape than putting Tailscale on the monitoring VM: a public-but-tightly-scoped API Gateway endpoint (<code>l5anj15qi0.execute-api.us-west-2.amazonaws.com</code>), which a Lambda router gates with an IP allowlist scoped to the monitoring VM's egress IP. Only Grafana can hit the webhook even though the URL is public.</li>
+        <li><strong>SSH.</strong> Disabled on the public interface entirely. Operator SSH goes through Tailscale SSH (<code>ssh ubuntu@observability-gpu-uswest2</code>) using tailnet identity; SSM Session Manager is the break-glass path.</li>
+      </ul>
+      <p>Defense in depth: even if the IP allowlist is misconfigured, the Lambda's fail-closed check (empty list = deny all) rejects the request before reaching the instance; even if the Lambda fails, the instance security group blocks port 8090 from anything but the VPC CIDR; even if both fail, SSH is unreachable from outside the tailnet.</p>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <span class="block-label">Solution</span>
+    <div class="block-body">
+      <p>Shipped 2026-05-21 alongside D24:</p>
+      <ul>
+        <li>Tailscale on the instance via cloud-init userdata; MagicDNS hostname <code>observability-gpu-uswest2</code> resolves from any tailnet member.</li>
+        <li>Lambda router enforces source-IP allowlist before any AWS API work — fail-closed: empty list rejects all. Live allowlist: <code>52.202.21.192</code> (Grafana) + <code>102.97.79.206</code> (Lina home, for manual webhook tests).</li>
+        <li>Security group on the instance: inbound 8090 only from the VPC CIDR (Lambda reaches via private IP); inbound 22 closed entirely (0.0.0.0/0 rule deleted); Tailscale UDP 41641 stays open as required for WireGuard NAT traversal.</li>
+        <li>Public SSH key removed from <code>~/.ssh/authorized_keys</code> on the instance; only Tailscale SSH identity + SSM access remain.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <span class="block-label">Evaluation</span>
+    <div class="block-body">
+      <p>Attack-surface check: SSH from outside the tailnet times out (port 22 not reachable). The API Gateway URL returns 403 from any IP not on the allowlist, 202 from the monitoring VM. Tailnet SSH and dashboard access work as expected.</p>
+      <p>Composes with D24 (migration) — the access shape was a hard precondition, not an afterthought. Composes with the MCP-only invariant (hallucination firewall) — every LLM-adjacent data path still goes through an MCP bridge; the migration changed the host but not the data-flow architecture.</p>
     </div>
   </div>
 </div>
