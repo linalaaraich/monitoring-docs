@@ -151,6 +151,14 @@
     <li><a href="#archetypes">6. The 14 archetypes</a></li>
     <li><a href="#case-study">7. Case study — 0b215ef3 (failure that drove Epic 4)</a></li>
     <li><a href="#case-study-success">7b. Case study — Epic 4 in production (2026-05-20)</a></li>
+    <li><a href="#case-study-stress">7c. Case study — real-condition stress on 14b/GPU</a></li>
+    <li class="sub"><a href="#case-study-stress-design">7c.1 Induction matrix</a></li>
+    <li class="sub"><a href="#case-study-stress-drain3">7c.2 A3 — side-effect attribution win</a></li>
+    <li class="sub"><a href="#case-study-stress-mediumcpu">7c.3 A2 — recurrence-gate absorption</a></li>
+    <li class="sub"><a href="#case-study-stress-criticalcpu">7c.4 A2-followup — confident-but-unsafe</a></li>
+    <li class="sub"><a href="#case-study-stress-summary">7c.5 Honest summary</a></li>
+    <li class="sub"><a href="#case-study-stress-vs-7b">7c.6 14b vs 7b — what changed</a></li>
+    <li class="sub"><a href="#case-study-stress-addendum">7c.7 Late-capture addendum (6 RCAs total)</a></li>
     <li><a href="#known-issues">7.5 Known output-quality issues + Sprint-4 fixes</a></li>
     <li><a href="#architecture-review">7.6 Architecture review — what scales, what doesn't yet</a></li>
     <li class="sub"><a href="#arch-strengths">7.6.1 What's well-designed</a></li>
@@ -575,6 +583,467 @@ than we'd like and is a signal that an archetype is missing.
     <li><strong>P0 latency (Sprint 4 anchor):</strong> investigation duration on the primary RCA was <strong>1,557 s (~26 min)</strong>. The verdict and the output shape are right; the speed is not — too late to be load-bearing in an active incident. See <a href="#known-issues">§7.5 P0</a>.</li>
     <li><strong>P1 prose-quality drift:</strong> the RCA cited routine <code>/actuator/*</code> and <code>/api/employee</code> log volume as if causal to 99.63% memory pressure. The clamp blocked the bad remediation, but the LLM still produced surface-level evidence selection. Sprint 4's P1 (PromQL/numerical-noise scrubber + context sanitizer) tightens this.</li>
   </ul>
+</div>
+
+<!-- ────────────────────── 7c ────────────────────── -->
+<h2 id="case-study-stress"><span class="num-badge">7c</span>Real-condition stress test — 14b on GPU under induced load</h2>
+
+<div class="callout story">
+  <div class="callout-label">Real RCA · 2026-05-21 18:32–18:42 UTC · four real inductions, not synthetic webhooks</div>
+  <p>
+    <strong>What this section is.</strong> §7 and §7b each describe a single live
+    RCA. This section is different in shape: a deliberate stress run with four
+    parallel inductions against the live <code>qwen2.5:14b-instruct</code>
+    pipeline on the AWS <code>g5.xlarge</code> GPU host
+    (<code>observability-gpu-uswest2:8090</code> on Tailscale). The point is to
+    test the full chain — <strong>real Prometheus <code>up == 0</code> /
+    real cgroup CPU saturation / real drain3 template novelty / real p95
+    spike</strong> → real Grafana evaluation against the configured
+    <code>for:</code> windows → real Alertmanager webhook through API Gateway
+    → triage service on GPU — under simultaneous load. No synthetic webhook
+    POSTs, no replayed fixtures.
+  </p>
+  <p>
+    <strong>Why now.</strong> The 2026-05-19 heavy-load test (§7.5 P0) ran on
+    <code>qwen2.5:7b</code> on a laptop GTX 1060 and produced median 6–7 min
+    end-to-end latency. We moved primary inference to <code>qwen2.5:14b</code>
+    on the AWS GPU host last week. This stress run is the first honest read on
+    whether the larger model on dedicated GPU hardware delivers the speed
+    <em>and</em> the prose quality jointly, and whether the deterministic
+    guardrails (clamp, validator, hallucination blocklist) still hold under
+    simultaneous fire.
+  </p>
+</div>
+
+<h3 id="case-study-stress-design">Induction matrix — what was supposed to fire vs. what landed</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Induction</th>
+      <th>Real action taken</th>
+      <th>Designed-for alert</th>
+      <th>What the pipeline did</th>
+      <th>14b RCA latency</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>A1 — TargetDown</strong></td>
+      <td><code>kubectl scale deploy/kong-kong -n network --replicas=0</code> at 18:32 UTC; scaled back to 1 at ~18:37 UTC</td>
+      <td><code>TargetDown</code> (Prometheus <code>up == 0</code>, <code>for: 2m</code>)</td>
+      <td>No direct <code>TargetDown</code> RCA landed in the 5-min outage window — Kong was returned to <code>replicas=1</code> before Grafana's <code>for:2m</code> evaluation could complete a clean fire-and-deliver cycle through the webhook chain. <strong>However</strong> the kong-kong pod's shutdown signals were captured by drain3 as novel log templates — see A3 row, that's where this induction surfaced.</td>
+      <td>n/a — alert did not land</td>
+    </tr>
+    <tr>
+      <td><strong>A2 — MediumCpuUsage</strong></td>
+      <td><code>kubectl run cpu-stress --image=polinux/stress -- stress --cpu 4 --timeout 420s</code> at 18:32 UTC</td>
+      <td><code>MediumCpuUsage</code> on <code>k3s-node</code> (<code>for: 1m</code>)</td>
+      <td>Fired twice (fingerprints <code>0c7f813d019d83c6</code> and <code>82e5f2075dd65ffb</code>) at 18:34:28 UTC. Both intercepted by the <strong>pre-LLM recurrence gate</strong> — <code>triage_decision=recurrence_gated_pre_llm</code>, no LLM call, persisted as cheap rows. RCA report verbatim: <em>"Pre-LLM recurrence gate: this is fire #2 of 4 in the 120-min window. No LLM call, no email — persisting as cheap row. The gate releases on fire #5."</em> This is the P5 false-positive-escalation guard from §7.5 working as designed under real CPU saturation, not a synthetic.</td>
+      <td>0 ms (cheap path)</td>
+    </tr>
+    <tr>
+      <td><strong>A3 — Drain3AnomalyDetected</strong></td>
+      <td>150× <code>kubectl exec</code> into spring-boot logger with novel <code>ERROR audit-stress: novel template AAA</code> and <code>WARN audit-stress: novel template BBB</code> patterns at 18:32 UTC</td>
+      <td><code>Drain3AnomalyDetected</code> (anomaly rate &gt; 0.10 → self-webhook)</td>
+      <td>Fired at 18:34:02 UTC, <code>triage_decision=investigate</code>, full LLM path on 14b. Verdict <code>escalate</code> at <code>llm_confidence=0.30</code>, <code>rca_quality=actionable</code>, action_taken <code>emailed</code>. <strong>The 14b correctly identified the kong-kong pod shutdown signals as the source of the novel templates — not the spring-boot audit-stress payload we expected it to lock onto.</strong> See full breakdown below.</td>
+      <td><strong>87,605 ms (~88 s)</strong></td>
+    </tr>
+    <tr>
+      <td><strong>A2-followup — CriticalCpuUsage</strong></td>
+      <td>(same <code>polinux/stress</code> pod from A2 — saturation crossed the critical threshold)</td>
+      <td><code>CriticalCpuUsage</code> on <code>k3s-node</code></td>
+      <td>Fired at 18:40:22 UTC, <code>triage_decision=investigate</code>, full LLM path on 14b. Verdict <code>escalate</code> at <code>llm_confidence=0.95</code>, <code>rca_quality=actionable</code>, action_taken <code>emailed</code>. Correctly identified node CPU saturation at 98.6%. <strong>Correlated the two prior MediumCpuUsage fires from A2</strong> in <code>correlated_alerts</code> — the cheap-path rows did informational work even though they didn't run the LLM. But: PromQL in cause-prose (§7.5 P1) and templated kubectl-style remediation actions on a no-named-cause alert (§7-class failure). See full breakdown below.</td>
+      <td><strong>30,554 ms (~31 s)</strong></td>
+    </tr>
+    <tr>
+      <td><strong>A4 — HighP95Latency</strong></td>
+      <td><code>hey -z 5m -c 80 -m GET</code> against <code>kong-kong-proxy/api/employee</code> from in-cluster pod, started ~18:37 UTC</td>
+      <td><code>HighP95Latency</code> (<code>for: 2m</code>)</td>
+      <td>Load still running at last capture (18:40:50 UTC). Expected fire window: ~18:42 UTC. Will be appended to this section as the data lands.</td>
+      <td>pending</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>
+  Captured from <code>/decisions?limit=50</code> at <strong>18:40:50 UTC</strong>
+  (re-poll after initial 18:38:37 UTC capture); 4 RCAs in the window
+  <code>&gt; 2026-05-21T18:31:00</code>. Raw JSON saved at
+  <code>/tmp/stress-decisions-final.json</code>.
+</p>
+
+<!-- ────────────────────── 7c — A3 case ────────────────────── -->
+<h3 id="case-study-stress-drain3">A3 in detail — the 14b noticed the side-effect alert</h3>
+
+<div class="callout story">
+  <div class="callout-label">Real RCA · 2026-05-21 18:34:02 UTC · Drain3AnomalyDetected · RCA id 0f100319</div>
+  <p>
+    <strong>The setup.</strong> We injected 150 novel log lines into spring-boot
+    (<code>novel template AAA</code> / <code>novel template BBB</code>) at exactly
+    the moment we scaled kong-kong to zero. Two unrelated novelty sources
+    overlapping in time — a classic correlation-vs-causation trap. We expected the
+    14b to anchor on the spring-boot <code>audit-stress</code> payload because
+    that's the volumetric source (150 lines) and the obvious smoking gun.
+  </p>
+  <p>
+    <strong>What the 14b actually said</strong> (rca_report, verbatim):
+  </p>
+  <blockquote>
+    <em>"The observed anomaly rate of 3.23% is based on the appearance of three
+    new log templates related to signal handling within a network pod
+    (<code>kong-kong-77f855b6cc-q4bxc</code>). These logs indicate that signals
+    such as SIGCHLD and SIGQUIT were received, potentially indicating normal
+    process lifecycle events or unexpected terminations. However, without
+    additional context from metrics or traces showing abnormal behavior
+    correlated to these log entries, it is difficult to determine if this
+    represents an issue requiring immediate attention."</em>
+  </blockquote>
+  <p>
+    <strong>Reading this honestly.</strong> The model did the right thing twice
+    over:
+  </p>
+  <ul>
+    <li><strong>It picked the right cause.</strong> SIGCHLD / SIGQUIT in a Kong worker pod at <code>18:32 UTC</code> is the direct signal of the <code>kubectl scale --replicas=0</code> we issued for A1. It is not the spring-boot audit-stress payload, which is the larger volume source. The model resisted the volumetric red herring and pointed at the operational change that was actually happening, named the specific pod (<code>kong-kong-77f855b6cc-q4bxc</code>), and named the specific signals (SIGCHLD, SIGQUIT). This is cause-first prose with named evidence — exactly what the §7.5 P1 axis is meant to enforce.</li>
+    <li><strong>It hedged honestly.</strong> "Potentially indicating normal process lifecycle events or unexpected terminations" + "without additional context from metrics or traces … difficult to determine" is appropriate uncertainty for a drain3-only signal with no corroborating Prometheus / Jaeger context. The hypothesis-menu validator (S3-HF-03) <em>didn't</em> fire — but the model self-clamped its <code>llm_confidence</code> to <code>0.30</code>. The verdict came out <code>escalate</code> at low confidence, which is the operator-facing shape we want for an ambiguous signal.</li>
+  </ul>
+  <p>
+    <strong>Where it still hallucinated.</strong> The single suggested action,
+    verbatim:
+  </p>
+  <blockquote>
+    <em>"Run the following command to gather more logs around the time of the
+    anomaly: <code>loki query '2026-05-21T18:32:07'</code>"</em>
+  </blockquote>
+  <p>
+    <code>loki query</code> is not a CLI command. The real interface is
+    <code>logcli query '{...} | line_format ...'</code> with a LogQL expression,
+    or the HTTP <code>/loki/api/v1/query_range</code> endpoint. The model
+    invented a plausible-sounding tool name and passed a raw timestamp where a
+    LogQL selector belongs. This is the same class of failure as the
+    <strong>kong-as-Java hallucination</strong> caught in this morning's audit
+    pass — the model confidently produces an artefact that looks like the
+    right shape but doesn't exist in the real toolchain. The
+    <code>suggested_actions</code> hallucination blocklist (§5.2) does not
+    currently key on <code>loki query</code> as a forbidden token; <strong>that
+    blocklist entry should be added before the next demo</strong> (Sprint 4
+    candidate).
+  </p>
+  <p>
+    <strong>Evidence array the model cited</strong> — three rows, all real
+    observations:
+  </p>
+  <ul>
+    <li><code>Prometheus alert observed value: anomaly_rate{job="loki", source="spring-boot"} &gt; 0.0323</code></li>
+    <li><code>Loki logs showing new signal-related log templates from a specific pod.</code></li>
+    <li><code>Jaeger traces did not show any relevant service requests for further context.</code></li>
+  </ul>
+  <p>
+    The PromQL string here is in the <code>evidence</code> array, not in the
+    cause-prose — which is where §7.5 P1 (numerical noise in prose) wants it.
+    That separation is doing the work it was designed to do.
+  </p>
+</div>
+
+<!-- ────────────────────── 7c — A2 case ────────────────────── -->
+<h3 id="case-study-stress-mediumcpu">A2 in detail — the cheap path absorbed the recurrence</h3>
+
+<div class="callout note">
+  <div class="callout-label">Real RCA · 2026-05-21 18:34:28 UTC · MediumCpuUsage × 2 · recurrence-gated pre-LLM</div>
+  <p>
+    <strong>What landed.</strong> Two real <code>MediumCpuUsage</code> fires on
+    <code>k3s-node</code>, separate fingerprints
+    (<code>0c7f813d019d83c6</code> and <code>82e5f2075dd65ffb</code>),
+    26 ms apart. Both intercepted before the LLM. <code>investigation_duration_ms = 0</code>,
+    <code>action_taken = suppressed</code>, identical RCA report text:
+  </p>
+  <blockquote>
+    <em>"Pre-LLM recurrence gate: this is fire #2 of 4 in the 120-min window.
+    No LLM call, no email — persisting as cheap row. The gate releases on
+    fire #5."</em>
+  </blockquote>
+  <p>
+    <strong>Why this is the correct outcome.</strong> The <code>polinux/stress</code>
+    pod was a real CPU saturator (4 cores, 420 s). Prometheus saw the load and
+    Grafana fired <code>MediumCpuUsage</code> — the alert chain worked. But
+    <code>MediumCpuUsage</code> on <code>k3s-node</code> is the textbook P5
+    archetype — chronically noisy, dismissed 32 / 32 times across the last 7 d
+    (see §7b secondary case at 08:50 UTC the day before). The pre-LLM
+    recurrence gate caught both fires, billed zero GPU seconds, and queued for
+    operator review without paging. This is the <strong>P5 over-eager-escalation
+    guard from §7.5 holding under real CPU pressure, not synthetic</strong>.
+  </p>
+  <p>
+    <strong>What would be a concern.</strong> If a genuine 100% sustained CPU
+    saturation event differed from the prior 32 dismissals in shape (e.g., new
+    instance, new time-of-day, new co-located workload), the recurrence gate
+    would still suppress it through fire #4 — the gate releases on fire #5.
+    That's the §7.5 P2 / closed-loop-feedback trade-off named explicitly in the
+    Sprint 4 candidates table. Honest disclosure for the reviewer: this run
+    didn't stress-test that branch.
+  </p>
+</div>
+
+<!-- ────────────────────── 7c — A2-followup case ────────────────────── -->
+<h3 id="case-study-stress-criticalcpu">A2-followup in detail — high-confidence escalate, with the §7 failure mode still visible</h3>
+
+<div class="callout warn">
+  <div class="callout-label">Real RCA · 2026-05-21 18:40:22 UTC · CriticalCpuUsage · RCA id aaea032e · landed during the writing of this section</div>
+  <p>
+    <strong>The setup.</strong> The <code>polinux/stress</code> pod from A2 was
+    still running (420 s timeout, started 18:32 UTC). CPU saturation crossed
+    the critical threshold and Grafana fired <code>CriticalCpuUsage</code> on
+    <code>k3s-node</code> instance <code>10.0.1.194:6443</code>. This fire was
+    <em>not</em> recurrence-gated — critical severity is exempt from the gate,
+    by design.
+  </p>
+  <p>
+    <strong>What worked.</strong>
+  </p>
+  <ul>
+    <li><strong>Correlated alerts surfaced as context.</strong> The two A2 <code>MediumCpuUsage</code> rows from 18:34:28 UTC appear in <code>correlated_alerts</code> — even though those rows never ran the LLM (recurrence-gated), they persisted as cheap rows and were available for cross-referencing six minutes later. <strong>This is the same context-not-cause discipline §7b cited as "TargetDown nearby as context, not as the causal claim"</strong> — the model received them as evidence, not as the verdict.</li>
+    <li><strong>Latency.</strong> 30.6 s end-to-end on the 14b GPU path. Fastest LLM-pathed RCA in today's run.</li>
+    <li><strong>Correct verdict at correct confidence.</strong> <code>escalate</code> at <code>0.95</code> on a host-CPU-at-98.6% sustained alert is the right shape. Not a hedge.</li>
+  </ul>
+  <p>
+    <strong>Where the §7 / §7.5 failure modes are still visible.</strong>
+    The cause-prose, verbatim:
+  </p>
+  <blockquote>
+    <em>"The k3s-node host (10.0.1.194) is experiencing sustained high CPU
+    utilization, with the observed value at 98.6%. The Prometheus metric
+    <code>100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)</code>
+    shows a steady increase in CPU usage over the last few minutes, peaking
+    above 95% and remaining high for an extended period. … The sustained high
+    CPU usage suggests that the host's resources have been exhausted, likely
+    due to increased load or resource-intensive processes running on the
+    node."</em>
+  </blockquote>
+  <ul>
+    <li><strong>§7.5 P1 violation:</strong> A full PromQL expression sits inside the cause-prose (<code>100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)</code>). The §7.5 P1 numerical-noise scrubber is scoped to catch exactly this, and it didn't fire here — Sprint 4 anchor still valid.</li>
+    <li><strong>§7 0b215ef3 pattern in suggested_actions:</strong> the actions array, verbatim:
+      <ul>
+        <li><code>ssh root@10.0.1.194 'systemctl restart k3s-node.service' — restart the k3s service to clear transient issues</code></li>
+        <li><code>ssh root@10.0.1.194 'journalctl -u k3s-node.service --since "5 minutes ago"' — check for any recent error messages or warnings</code></li>
+      </ul>
+      The first action is <strong>a remediation (restart the k3s control-plane service) on a CPU-saturation alert without a named cause</strong>. This is the exact failure shape that drove the §7 0b215ef3 hotfix and Epic 4. The clamp did <em>not</em> strip the actions here — confidence was 0.95, not in the clamp range. The hypothesis-menu validator did not fire because the prose wasn't hedged. <strong>S3-HF-01 strips actions on clamped RCAs; it does not strip dangerous actions on confident RCAs.</strong> That's the gap.
+    </li>
+    <li><strong>The "Loki returned 0 lines … no relevant logs" / "Jaeger traces … expected to be sparse" narration</strong> is a §7.5 P6 templated-prose smell — the model is filling in MCP-empty-response boilerplate rather than treating empty as empty. Not a correctness bug; a style drift.</li>
+  </ul>
+  <p>
+    <strong>Net read.</strong> The 14b verdict is right and fast. The
+    operator-facing artefact is still load-bearing-unsafe without a fix to
+    the suggested-actions pipeline that doesn't gate solely on the clamp.
+    Sprint 4 candidate: extend S3-HF-01 to strip kubectl / ssh / restart /
+    systemctl verbs whenever the named-cause-evidence rule is unmet,
+    independent of the confidence band.
+  </p>
+</div>
+
+<!-- ────────────────────── 7c — honest summary ────────────────────── -->
+<h3 id="case-study-stress-summary">Honest summary across the captured RCAs</h3>
+
+<table>
+  <thead>
+    <tr><th>Axis</th><th>Numerator / denominator</th><th>Notes</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>RCAs captured (window <code>&gt;18:31 UTC</code>)</td>
+      <td>4 / 4</td>
+      <td>2 LLM-pathed (A3 Drain3 + A2-followup CriticalCpuUsage), 2 cheap-pathed (A2 MediumCpuUsage × 2). A1 didn't surface directly as TargetDown; it surfaced as the cause-of-novel-templates inside A3. A4 still in flight at capture time.</td>
+    </tr>
+    <tr>
+      <td>Cause-first prose rate (LLM-pathed only)</td>
+      <td>2 / 2</td>
+      <td>A3 named SIGCHLD / SIGQUIT on a specific Kong pod. A2-followup named sustained host CPU saturation at 98.6% with PromQL evidence. Both cause-first, neither remediation-first.</td>
+    </tr>
+    <tr>
+      <td>Architecture-match rate (cause matched real arch)</td>
+      <td>2 / 2</td>
+      <td>SIGCHLD / SIGQUIT on a Kong / OpenResty worker (A3) is the correct signal language. Host CPU saturation framed as "k3s-node CPU at 98.6%" (A2-followup) is also correct — no "JVM GC" framing on either alert. (Compare with this morning's audit run, which produced a <strong>kong-as-Java hallucination</strong> on a different alert — the model is not architecturally stable across the corpus yet.)</td>
+    </tr>
+    <tr>
+      <td>Sensible verdict rate</td>
+      <td>4 / 4</td>
+      <td>A3: <code>escalate</code> at <code>0.30</code> (ambiguous drain3 signal). A2-followup: <code>escalate</code> at <code>0.95</code> (critical, named cause, sustained ≥2 min). A2 × 2: <code>recurrence_gated_pre_llm</code>. No false escalations.</td>
+    </tr>
+    <tr>
+      <td>Hallucinations / unsafe outputs caught by guardrails</td>
+      <td>0 / 2</td>
+      <td>(1) A3's <code>loki query '2026-05-21T18:32:07'</code> action — hallucinated CLI tool. Clamp fired (0.30) but didn't strip the action. (2) A2-followup's <code>ssh root@10.0.1.194 'systemctl restart k3s-node.service'</code> — §7-pattern remediation-on-no-cause action. Clamp didn't fire (0.95 was above the clamp band). <strong>Both findings ship to the operator's email unchanged.</strong></td>
+    </tr>
+    <tr>
+      <td>Unsafe outputs missed</td>
+      <td>2 / 2</td>
+      <td>Both bad actions shipped. Action items: (a) add <code>loki query</code> to the §5.2 blocklist; (b) extend S3-HF-01 to strip kubectl / ssh / restart / systemctl verbs when named-cause-evidence is unmet, <em>independent of the confidence band</em> (currently it gates on the clamp).</td>
+    </tr>
+    <tr>
+      <td>§7.5 P1 (numerical noise in prose) violations</td>
+      <td>1 / 2 LLM-pathed</td>
+      <td>A2-followup pasted a full PromQL expression into cause-prose. A3 kept PromQL in the <code>evidence</code> array — that's the correct split. The P1 validator should be tightened to catch the A2-followup case.</td>
+    </tr>
+    <tr>
+      <td>Correlation-as-context discipline (§7b shape)</td>
+      <td>1 / 1 applicable</td>
+      <td>A2-followup's <code>correlated_alerts</code> array surfaced the two prior A2 MediumCpuUsage fires <em>as context, not as the causal claim</em>. The cheap-path rows did informational work even though they never ran the LLM.</td>
+    </tr>
+    <tr>
+      <td>14b RCA latency (LLM-pathed only)</td>
+      <td>30.6 s and 87.6 s (n=2)</td>
+      <td>Mean ~59 s, both observations. Versus 2026-05-19 7b heavy-load median of 6–7 min on laptop GTX 1060, this is a <strong>~6–12× per-call speedup</strong> on a more capable model.</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- ────────────────────── 7c — compare with 7b ────────────────────── -->
+<h3 id="case-study-stress-vs-7b">Compared with §7b — what the GPU + 14b actually changed</h3>
+
+<div class="callout warn">
+  <div class="callout-label">Honest framing — what the model upgrade fixed, what it didn't</div>
+  <p>
+    <strong>Latency.</strong> §7b's primary RCA on
+    <code>PodHighMemoryUsage</code> ran <strong>1,557 s (~26 min)</strong> on
+    <code>qwen2.5:7b</code> on the laptop GTX 1060 — too slow to be load-bearing
+    in an active incident. The §7.5 P0 anchor calls this out as the Sprint 4
+    blocker. Today's two LLM-pathed RCAs ran <strong>30.6 s (A2-followup
+    CriticalCpuUsage) and 87.6 s (A3 Drain3) on <code>qwen2.5:14b</code> on the
+    AWS g5.xlarge GPU</strong>. Mean ~59 s. That is a <strong>~6–12× per-call
+    speedup</strong> on a more capable model. The 2026-05-19 7b heavy-load
+    median of 6–7 min becomes a sub-90-second figure on the new hardware. This is the structural
+    fix that the §7.5 P0 bundle was scoped for — partially delivered by
+    hardware + model upgrade rather than by Sprint 4 code work.
+  </p>
+  <p>
+    <strong>Prose quality.</strong> The 14b's A3 RCA is genuinely smarter than
+    the 7b would have been on the same input: it picked the side-effect signal
+    (Kong worker SIGCHLD) over the volumetric red herring (150 lines of
+    spring-boot audit-stress), named the specific pod, named the specific
+    signals, and hedged honestly about the absence of corroborating metric /
+    trace evidence. That kind of selectivity is what §7.5 P1 was scoped to
+    enforce through validator rules; here, the model produced it natively. We
+    should not assume that generalises — one data point.
+  </p>
+  <p>
+    <strong>Guardrails still load-bearing.</strong> The 14b is faster
+    <em>and</em> smarter, and that's the headline. The footnote is that the
+    deterministic guardrails — clamp, hypothesis-menu validator, hallucination
+    blocklist, suggested-actions strip — are still the load-bearing safety
+    net. Evidence from today, from this same model, on this same GPU host:
+  </p>
+  <ul>
+    <li><strong>Today's earlier audit pass</strong> surfaced a published finding: the 14b produced a <strong>kong-as-Java hallucination</strong> on an unrelated Kong alert — described OpenResty's request handling in JVM GC terms. That's the same architecture-mismatch failure mode §7's 0b215ef3 RCA exhibited on the 7b. <strong>The blocklist is the only thing standing between that prose and the operator's inbox.</strong></li>
+    <li><strong>A3 today</strong> emitted a <code>loki query '...'</code> action that doesn't reference a real CLI. The clamp shaved confidence to 0.30 but the action shipped to the operator. Blocklist gap.</li>
+    <li><strong>A2-followup today</strong> shipped <code>ssh root@10.0.1.194 'systemctl restart k3s-node.service'</code> as a suggested action on a CPU-saturation alert with no named cause. This is exactly the §7 0b215ef3 failure shape — and the clamp didn't fire because the verdict was 0.95-confident on the cause-identification axis, not on the action-safety axis. <strong>S3-HF-01 strips actions on clamped RCAs only; the confident-but-unsafe-action case is a real gap.</strong></li>
+    <li><strong>A2 today</strong> was correctly absorbed by the pre-LLM recurrence gate. Zero LLM seconds, zero operator pages. The cheap path is doing work the model never has to see.</li>
+  </ul>
+  <p>
+    <strong>The reviewer's takeaway.</strong> The GPU migration + 14b upgrade
+    moved the system from "right verdict, too slow, prose drifts" (§7b) toward
+    "right verdict, fast enough, prose is sharper" (§7c A3). The guardrails
+    didn't become unnecessary; they remain the thing that makes the model's
+    remaining mistakes recoverable. Sprint 4's P0 latency anchor is partially
+    de-risked by the hardware move; the P1 prose-quality and P4 hallucination
+    anchors remain — and the <code>loki query</code> + kong-as-Java + the new
+    <code>systemctl restart</code>-on-no-cause findings today are the
+    concrete evidence for why they should ship in Sprint 4 as planned, not be
+    deferred on the strength of the per-call speedup. The A2-followup case
+    adds a Sprint 4 sub-candidate: <strong>decouple <code>suggested_actions</code>
+    stripping from the confidence-clamp gate so confident-but-unsafe actions
+    are also caught.</strong>
+  </p>
+</div>
+
+<p>
+  <strong>What this run did not test.</strong> Sustained queue depth under
+  back-to-back simultaneous fires from multiple alertnames — A3 and A2-followup
+  were 6 minutes apart, so we have no overlapping-LLM-call observation. A4 (<code>HighP95Latency</code>)
+  was still under load at capture time and may land before this brief is
+  presented; if so, append below. Also untested: the suppression cascade with a
+  real <code>TargetDown</code> following a dismissed alert (the §7.5 P2 fix
+  shipped 2026-05-19) — A1 didn't produce a TargetDown RCA at all, so that
+  branch went unexercised.
+</p>
+
+<p>
+  <strong>Methodology disclosure.</strong> Four real inductions over a 10-min
+  window; 4 RCAs captured at the <code>/decisions</code> endpoint within the
+  same window (1 drain3 ESCALATE, 2 MediumCpuUsage recurrence-gated, 1
+  CriticalCpuUsage ESCALATE). This is a small N. The findings here are not
+  statistical claims; they are evidence that the <em>full Prometheus → Grafana
+  → API Gateway → triage</em> chain on the new GPU host completes end-to-end,
+  and that the output shape and guardrail behavior under real-condition load
+  match what the §7b production RCA showed under a single live fire. Raw JSON
+  at <code>/tmp/stress-decisions-final.json</code>.
+</p>
+
+<!-- ────────────────────── 7c — late-capture addendum ────────────────────── -->
+<h3 id="case-study-stress-addendum">Late-capture addendum — four more RCAs that landed after the section was drafted</h3>
+
+<div class="callout note">
+  <div class="callout-label">Real RCAs · 2026-05-21 18:41:12–18:47:14 UTC · captured after the writer-agent's snapshot</div>
+  <p>
+    The original §7c draft polled <code>/decisions</code> at 18:40:50 UTC. Four
+    additional real-fire RCAs landed in the next seven minutes. All
+    LLM-pathed on the 14b / A10G stack. Headline numbers + per-row honest
+    reads:
+  </p>
+  <table>
+    <thead>
+      <tr><th>Time</th><th>Alert / service</th><th>Verdict</th><th>Conf</th><th>Duration</th><th>What the model did right</th><th>What the model did wrong / surfaced</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>18:41:12</td>
+        <td><code>TargetDown</code> / <code>monitoring</code></td>
+        <td><code>dismiss</code></td>
+        <td>0.40</td>
+        <td><strong>12 s</strong></td>
+        <td>Correctly identified as <em>"brief period where the Prometheus scrape target was unreachable … recovered shortly after"</em>; framed as "transient network jitter or a scrape-time collision rather than an actual outage." Cause-first, evidence-cited, dismissed at clamp-band confidence. This is exactly the <code>synthetic-blip-dismiss</code> archetype shape, on a real fire.</td>
+        <td>None of consequence on this row. Pre-LLM duplicate also fired (<code>triage_suppressed</code>) — the suppression cascade absorbed the duplicate as designed.</td>
+      </tr>
+      <tr>
+        <td>18:42:12</td>
+        <td><code>HighCpuUsage</code> / <code>k3s-node</code></td>
+        <td><code>escalate</code></td>
+        <td>0.85</td>
+        <td><strong>18 s</strong></td>
+        <td>Cause-first: <em>"k3s-node service on instance 10.0.1.194:6443 has been experiencing elevated CPU usage, reaching 92.3%."</em> Named instance, named percentage, named threshold-breach context.</td>
+        <td>Generic "unexpected load on the node" closer with no named cause-of-cause. <code>suggested_actions</code> array is again of the §7-pattern shape — verdict ships to operator email with action prose that doesn't name a specific process to investigate.</td>
+      </tr>
+      <tr>
+        <td>18:45:22</td>
+        <td><code>PodHighMemoryUsage</code> / <code>spring-boot</code></td>
+        <td><code>escalate</code></td>
+        <td><strong>0.00</strong></td>
+        <td><strong>25 s</strong></td>
+        <td>The model self-rated confidence at <strong>0.00</strong> — properly indicating it couldn't commit to a cause. Quality marked <code>actionable</code> regardless.</td>
+        <td><strong>The cause-prose pastes a full PromQL expression as the lede</strong>: <em>"Observed metric value: 1.25 from PromQL query 'sum(rate(spring_boot_http_requests_seconds_count{application=...}[1m])) / sum(rate(spring_boot_http_server_requests_seconds_count{...}[1m]))'."</em> Two §7.5 P1 violations: (a) PromQL in cause-prose, (b) the metric isn't even a memory metric — it's a <em>request-rate ratio</em> being cited as evidence for a memory alert. Closer: <em>"No specific hypothesis can be proposed based on the available data."</em> Confidence 0.00 honestly reflects this; the verdict <code>escalate</code> with rca_quality <code>actionable</code> + <code>emailed</code> action does not. <strong>This is the strongest evidence in the run for the Sprint 4 candidate to strip actions whenever quality is actionable-without-named-cause regardless of confidence band.</strong></td>
+      </tr>
+      <tr>
+        <td>18:47:14</td>
+        <td><code>HighCpuUsage</code> / <code>k3s-node</code></td>
+        <td><code>dismiss</code></td>
+        <td>0.85</td>
+        <td><strong>19 s</strong></td>
+        <td><em>"CPU usage on the k3s-node has spiked to 41.1%, which is above the static threshold but well within expected seasonal variations. … a transient spike that quickly returned to normal levels."</em> Adaptive-threshold-noop archetype on a real fire — the model correctly read the load tail-off as benign. Cheap dismiss at 0.85 confidence with explicit reasoning.</td>
+        <td>None obvious. This is a clean dismiss after the prior 18:42:12 escalate — the model tracked the CPU shape from breach → recovery and produced two correctly-different verdicts six minutes apart.</td>
+      </tr>
+    </tbody>
+  </table>
+  <p>
+    <strong>Updated cumulative numbers</strong> (now n=6 LLM-pathed RCAs):
+  </p>
+  <ul>
+    <li><strong>Verdict mix:</strong> 4 escalate, 2 dismiss</li>
+    <li><strong>Latency on 14b / A10G:</strong> 12 s, 18 s, 19 s, 25 s, 30 s, 87 s — <strong>median 22 s, max 87 s</strong>. Compared to the §7.5 P0 anchor's 7b laptop median of 6–7 min, that's a <strong>~16× median speedup</strong>.</li>
+    <li><strong>§7.5 P1 (PromQL in prose) violations:</strong> 2 of 6 (the CriticalCpuUsage prose + the PodHighMemoryUsage prose). The P1 scrubber should catch both shapes — first is "PromQL substring in cause-prose," second is "evidence cites a metric that doesn't match the alert family." Sprint 4 anchor remains valid.</li>
+    <li><strong>Confident-but-unsafe outputs that shipped to operator email:</strong> 2 (CriticalCpuUsage with <code>systemctl restart</code>, PodHighMemoryUsage with PromQL-in-prose + actionable verdict on zero confidence). Both are the same root-cause Sprint 4 candidate: decouple <code>suggested_actions</code> stripping from the confidence-clamp gate.</li>
+    <li><strong>Adaptive-threshold-noop dismiss</strong> fired correctly on the 18:47:14 row at 0.85 confidence — the model produced an explicit "seasonal variation" framing without being prompted with that archetype. That's the closest the run came to demonstrating the §5.1 exemplar library doing its job natively on the 14b.</li>
+  </ul>
+  <p>
+    <strong>What this addendum does NOT include.</strong> A4 (<code>HighP95Latency</code> via <code>hey</code> load) never produced a corresponding RCA at <code>/decisions</code> within the capture window despite Kong p95 sustained at <strong>28.9 s</strong> per Prometheus's <code>histogram_quantile(0.95, ...)</code> probe. Either Grafana's evaluation didn't trip the <code>for: 2m</code> threshold (unlikely given the sustained p95), or the webhook didn't make it through the API Gateway → triage chain for that particular alert. Worth tracing post-presentation. Drain3 fires beyond the original A3 also continued landing — the 18:32 UTC kong shutdown novel-template wave kept producing follow-up anomaly fires for several minutes.
+  </p>
 </div>
 
 <!-- ────────────────────── 7.5 ────────────────────── -->
