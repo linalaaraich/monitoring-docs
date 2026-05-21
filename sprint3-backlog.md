@@ -4,6 +4,8 @@
 > **Sprint 3 start:** TBD (after Sprint 2 closes 2026-04-23)
 > **Status:** Living document — add items here as they're surfaced during Sprint 2 work.
 >
+> **Historical note (added 2026-05-21, audit I-3):** references to `llama3.2:3b` below are pre-Sprint-3 comparison baselines from the CPU-fallback feasibility analysis. The production model is `qwen2.5:7b-instruct` on Ollama; no CPU fallback is configured.
+>
 > This file is the **durable home** for Sprint 3 follow-ups. It is tracked in git (repo `linalaaraich/monitoring-docs`) so the backlog survives any individual machine being torn down.
 
 ---
