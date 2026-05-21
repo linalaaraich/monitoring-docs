@@ -303,7 +303,7 @@
     <li><strong>Exemplar library</strong> (<a href="decisions-log.html#d17" style="color:#e88aa0">D17</a>) — <code>app/exemplars/library.yaml</code> with 14 canonical RCA archetypes (11 original + 3 added 2026-04-28 audit cycle); <code>_build_prompt</code> picks the best match per alert (alertname × service × deployment_type × signal × severity scoring) and pre-injects it before the LLM call so the model sees a quality target on attempt 1. Bounded-agency layer also gains <code>rca_history.list_exemplars</code> + <code>get_exemplar</code> tools for retry-time access.</li>
   </ul>
   <p style="margin:0;color:#8890a0;font-size:12.5px;">
-    <strong>Pipeline shape now (compact):</strong> webhook → fingerprint dedup (10 min window) → context fan-out (Prometheus/Loki/Jaeger MCPs in parallel) → Drain3 annotate → exemplar pre-injection → LLM (qwen2.5:7b, temp=0, structured outputs, prompt-cache stable prefix) → response validator (banned phrases + vague-action + investigation-only + arch-mismatch) → optional bounded-agency retry (one MCP call from a 6-tool whitelist) → template fallback if actions empty → persist → email if ESCALATE. End-to-end budget 2400 s; single-LLM-call budget 1800 s. <strong>Real-load latency (2026-05-19 heavy-load test):</strong> median 6–7 min, worst 23 min on the laptop GPU; the 60–95 s figure cited in earlier drafts was a pre-Epic-4 estimate from a quieter load shape. Sprint 4's P0 anchor bundle targets median 90 s — see <a href="solution-brief.html#known-issues">solution-brief §7.5</a>.
+    <strong>Pipeline shape now (compact):</strong> webhook → fingerprint dedup (10 min window) → context fan-out (Prometheus/Loki/Jaeger MCPs in parallel) → Drain3 annotate → exemplar pre-injection → LLM (qwen2.5:14b primary / 7b fallback, temp=0, structured outputs, prompt-cache stable prefix) → response validator (banned phrases + vague-action + investigation-only + arch-mismatch) → optional bounded-agency retry (one MCP call from a 6-tool whitelist) → template fallback if actions empty → persist → email if ESCALATE. End-to-end budget 2400 s; single-LLM-call budget 1800 s. <strong>Real-load latency (Phase 2 GPU-migration smoke test, 2026-05-21):</strong> ~38 s end-to-end on the new AWS A10G runner with qwen2.5:14b (was median 6–7 min, worst 23 min on the laptop GTX 1060 + 7b during the 2026-05-19 heavy-load test). See <a href="decisions-log.html#d24">D24</a>.
   </p>
 </div>
 
@@ -313,8 +313,8 @@
     The diagrams below are the original Sprint-2 intent. The <strong>live</strong> layout has diverged in two important ways that matter for any operator touching this system:
   </p>
   <ul style="margin:0 0 10px 20px;color:#c0c5d0;line-height:1.7;">
-    <li><strong>AI stack (Ollama + 5 MCP servers + triage) is on Lina's laptop</strong>, not a cloud GPU. The laptop's GTX 1060 + qwen2.5:7b delivered end-to-end RCA in ~25 s warm / 68 s cold and has held that steady state for 25+ days through the Sprint-3 investigation window. The G+VT vCPU quota landed 2026-04-27 in <code>us-west-2</code> only (limit 4 vCPU = exactly one <code>g5.xlarge</code> with an A10G + 24 GB VRAM), but the cloud-GPU stand-up was <strong>dropped on 2026-05-19 on cost grounds</strong> — a g5.xlarge runs ~$720/month on-demand, an order of magnitude more than the laptop runner with no quality regression to justify it. The <code>qwen2.5:14b</code> / <code>32b-q4</code> upgrade path is parked indefinitely; revisited only if 7b output quality materially degrades or a subsidised GPU appears. The laptop runs WSL2 + Docker Desktop; the AI stack compose file lives at <code>~/cires-ai/docker-compose.yml</code>, with the <code>.env</code> ansible-managed by <code>roles/triage_laptop</code> (single-command CD from the controller).</li>
-    <li><strong>Tailscale is the control + data plane between cloud, k3s, and laptop.</strong> Monitoring VM (EC2) → triage webhook at <code>adolin-wsl</code> (laptop), triage → Loki at <code>observability-rca-monitoring</code> (EC2), controller → ansible to all three managed nodes. Every hop is over WireGuard, keyed on MagicDNS short hostnames that survive EIP drift. As of 2026-04-28 the tailnet has 5 nodes — k3s joined that day. Public SSH on k3s is closed; <code>monitoring-vm</code> SSH is scoped to the operator's <code>/32</code>; tailnet is the always-available fallback. Full setup in the <a href="tailscale-guide.html" style="color:#6bcf7f">Tailscale guide</a>.</li>
+    <li><strong>AI stack (Ollama + 5 MCP servers + triage) on a dedicated AWS GPU host in us-west-2 since 2026-05-21.</strong> EC2 <code>g5.xlarge</code> instance <code>i-03aec662b1a47ad8f</code> with an A10G GPU (24 GB VRAM), Tailscale hostname <code>observability-gpu-uswest2</code>, public EIP <code>52.27.21.89</code>. <code>qwen2.5:14b-instruct</code> as primary model with <code>qwen2.5:7b-instruct</code> as fallback. Phase 2 smoke test: ~38 s end-to-end (prior 7b/laptop baseline was median ~5 min). Ollama runs as a host systemd service (not in the compose stack); the 6 bridge containers reach it via <code>host.docker.internal:11434</code>. Compose dir on the instance: <code>/opt/triage/</code>. Cost defenses: Lambda autoshutoff (20-min idle stop) + CloudWatch billing alarm at $50/mo. The laptop GTX 1060 + 7b runner is retained as rollback fallback until at least one full daily-audit cycle clears. See <a href="decisions-log.html#d24">D24</a>.</li>
+    <li><strong>Tailscale is the control + data plane spanning us-east-1 + us-west-2.</strong> Grafana on <code>observability-rca-monitoring</code> POSTs webhooks to the us-west-2 API Gateway <code>https://l5anj15qi0.execute-api.us-west-2.amazonaws.com/webhook/grafana</code> (Lambda router with IP allowlist), which forwards to the triage container on the GPU host's private IP. Triage's MCP bridges reach back to Prometheus / Loki / Jaeger at <code>observability-rca-monitoring</code> in us-east-1 via Tailscale MagicDNS — no VPC peering, no public internet. As of 2026-05-21 the tailnet has 6 nodes. Public SSH on k3s + the GPU host is closed; <code>monitoring-vm</code> SSH is scoped to the operator's <code>/32</code>; tailnet is the always-available fallback. Full setup in the <a href="tailscale-guide.html" style="color:#6bcf7f">Tailscale guide</a>.</li>
   </ul>
   <p style="margin:0;color:#8890a0;font-size:12.5px;">
     <strong>Measured latencies:</strong> Prometheus/Loki/Jaeger MCPs 150–280 ms · Ollama inference 25 s warm / 68 s cold · 3-pillar context gather 500–900 ms · Grafana webhook → triage receipt ~60 s (Grafana unified-alerting <code>group_interval</code>; no Alertmanager in the stack).
@@ -329,7 +329,8 @@
       <tr style="border-top:1px solid var(--border)"><td style="padding:8px 12px"><code>claude-controller</code></td><td style="padding:8px 12px;color:var(--muted)">cloud shell</td><td style="padding:8px 12px">ansible control, orchestration</td><td style="padding:8px 12px;color:var(--muted)">tailnet only</td></tr>
       <tr style="border-top:1px solid var(--border)"><td style="padding:8px 12px"><code>observability-rca-monitoring</code></td><td style="padding:8px 12px;color:var(--muted)">EC2 (EIP 52.202.21.192)</td><td style="padding:8px 12px">Prometheus · Loki · Jaeger · Grafana (unified alerting, no Alertmanager) · OTel</td><td style="padding:8px 12px;color:var(--muted)">tailnet + public</td></tr>
       <tr style="border-top:1px solid var(--border)"><td style="padding:8px 12px"><code>observability-rca-k3s</code></td><td style="padding:8px 12px;color:var(--muted)">EC2 (EIP 52.5.239.234, tailnet 100.104.90.72)</td><td style="padding:8px 12px">k3s cluster: Spring Boot · MySQL · Kong</td><td style="padding:8px 12px;color:var(--muted)">tailnet (joined 2026-04-28) + public Kong NodePort :30080 only — public SSH closed</td></tr>
-      <tr style="border-top:1px solid var(--border)"><td style="padding:8px 12px"><code>adolin-wsl</code></td><td style="padding:8px 12px;color:var(--muted)">Lina's laptop (WSL2)</td><td style="padding:8px 12px">Triage service · Ollama · 5 MCP servers · ansible-driven CD via <code>roles/triage_laptop</code></td><td style="padding:8px 12px;color:var(--muted)">tailnet only</td></tr>
+      <tr style="border-top:1px solid var(--border)"><td style="padding:8px 12px"><code>observability-gpu-uswest2</code></td><td style="padding:8px 12px;color:var(--muted)">AWS us-west-2 g5.xlarge · A10G 24 GB · EIP 52.27.21.89 · tailnet 100.65.77.50</td><td style="padding:8px 12px">Triage service · Ollama (host systemd) · 5 MCP bridges via <code>triage-stack.service</code> · qwen2.5:14b primary / 7b fallback</td><td style="padding:8px 12px;color:var(--muted)">tailnet + API Gateway (Lambda IP-allowlisted)</td></tr>
+      <tr style="border-top:1px solid var(--border)"><td style="padding:8px 12px"><code>adolin-wsl</code></td><td style="padding:8px 12px;color:var(--muted)">Lina's laptop (WSL2)</td><td style="padding:8px 12px">Rollback fallback for the AI triage stack (no longer primary since 2026-05-21)</td><td style="padding:8px 12px;color:var(--muted)">tailnet only</td></tr>
     </tbody>
   </table>
   <p style="margin:10px 0 0;color:var(--muted);font-size:12px;line-height:1.6;">
@@ -551,7 +552,7 @@
     <div class="vm-box vm-ai vm-full">
       <div class="vm-header">
         <span>AI / LLM host <span class="gpu-badge">GPU</span></span>
-        <span class="ip">Laptop · GTX 1060 6 GB &nbsp;|&nbsp; cloud-GPU upgrade dropped 2026-05-19 (cost)</span>
+        <span class="ip">AWS us-west-2 g5.xlarge · A10G 24 GB VRAM · 100.65.77.50 (laptop GTX 1060 fallback)</span>
       </div>
       <div class="vm-body">
         <div class="svc pillar-ai">
@@ -1024,7 +1025,7 @@ const archData = {
       {
         "name": "AI / LLM host (laptop)",
         "host_type": "Lina's laptop · WSL2 + Docker · over Tailscale",
-        "specs": "GTX 1060 6 GB VRAM · qwen2.5:7b (current and indefinite); cloud-GPU upgrade to g5.xlarge / qwen2.5:14b dropped 2026-05-19 on cost grounds — see sprint-history.html §sprint-4-removed",
+        "specs": "AWS g5.xlarge in us-west-2 · A10G 24 GB VRAM · qwen2.5:14b-instruct primary, 7b fallback. Migrated 2026-05-21 (D24); laptop GTX 1060 + 7b retained as rollback fallback.",
         "role": "ai-rca",
         "services": [
           {
@@ -1268,7 +1269,7 @@ const archData = {
       },
       "layer_3_llm": {
         "technology": "Ollama (self-hosted) :11434",
-        "gpu": "NVIDIA GTX 1060 6 GB VRAM (laptop, current and indefinite — cloud-GPU upgrade dropped 2026-05-19 on cost grounds)",
+        "gpu": "NVIDIA A10G 24 GB VRAM (AWS g5.xlarge in us-west-2, since 2026-05-21 — see decisions-log D24)",
         "mcp_bridges": [
           {"name": "Prometheus MCP", "port": 8091, "purpose": "Query metrics, check rates, get history"},
           {"name": "Loki MCP", "port": 8092, "purpose": "Search logs, filter by service, log volume"},
