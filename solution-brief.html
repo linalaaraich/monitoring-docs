@@ -1278,7 +1278,13 @@ than we'd like and is a signal that an archetype is missing.
 
 <div class="callout warn">
   <div class="callout-label">Honest framing for an SRE reviewer</div>
-  <p>The system is structurally sound — verdicts are right more often than wrong, the safety mechanisms fire as designed. But the <em>output prose</em> is not yet trustworthy for an unsupervised dev workflow. Three deep problems compound: <strong>(1) latency</strong> (median 6 min, worst 23 min), <strong>(2) PromQL/numerical noise leaking into prose</strong>, <strong>(3) suppression cascade</strong> over-eagerly silencing real follow-up fires. These are the Sprint 4 anchors.</p>
+  <p>The system is structurally sound — verdicts are right more often than wrong, the safety mechanisms fire as designed. But the <em>output prose</em> is not yet trustworthy for an unsupervised dev workflow. Three deep problems compound: <strong>(1) latency</strong> (median 6 min, worst 23 min — addressed by the 2026-05-21 GPU migration; see P0 row below), <strong>(2) PromQL/numerical noise leaking into prose</strong>, <strong>(3) suppression cascade</strong> over-eagerly silencing real follow-up fires. These are the Sprint 4 anchors.</p>
+</div>
+
+<div class="callout note">
+  <div class="callout-label">2026-05-21 critical audit — re-confirms the P0–P11 plan with fresh decision-ID evidence</div>
+  <p>A second-pass 8-criterion audit ran 2026-05-21 against the persisted <code>/decisions</code> corpus (271 rows; 12 cases sampled across the 6 dominant alert families). Headline: <strong>3/12 GOOD, 2/12 OK, 7/12 BAD</strong>. The six recurring failure modes (F1–F6) map 1:1 to existing P-tags below — <strong>no new stories needed</strong>. The table is annotated with the audit-confirmed decision IDs in the Evidence column. The audit also identifies <strong>Epic 2 (operator feedback loop) as the cross-cutting amplifier for P8 + P11</strong>: today these are point-in-time fixes; Epic 2 makes them continuous. Full audit text lives in the FYP report at <em>Evaluation → Critical RCA output audit — 12 representative cases</em>.</p>
+  <p>End-of-Sprint-4 re-audit acceptance bars: <strong>C4 no-noise prose 33 % → ≥ 80 %</strong> (P1), <strong>C6 non-templated diagnostic steps 17 % → ≥ 60 %</strong> (P3), <strong>C7 <code>rca_quality</code> tag accuracy 33 % → ≥ 70 %</strong> (P11 + Epic 2). If those three move, the "structural foundation sound / output-quality binding" framing is empirically validated.</p>
 </div>
 
 <table>

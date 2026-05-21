@@ -400,6 +400,28 @@
   <p>Sprint 4 now spans <strong>four</strong> themed epics: EPIC9 (Latency + suppression), EPIC10 (RCA prose honesty), EPIC11 (Correlation + retrieval + carry), and the newly added <strong>EPIC12 (Predictive observability)</strong>. EPIC12 picks the cheap subset of a 6-item predictive roadmap drafted 2026-05-20 EOD: items 26–29 below (detective-signals UI tab + P-3 capacity-runway dashboard + P-5 saturation-band baselines + P-2 cascade predictor). The heavier ML lift — P-1 (Prophet/Holt-Winters forecasting), P-4 (pre-deploy canary diff, blocked on Epic 3 Drain3 lifecycle), P-6 (trace-shape predictor) — is explicitly deferred to Sprint 5+. Total new SP under EPIC12: 9 (1+2+3+3). Carve-out chosen because items 26-27 give the supervisor-demo unlock ("forecast" surface visible in Grafana) without any new ML infrastructure, and items 28-29 enhance existing stories (US-5.1 entity baselines, US-5.2 incident correlator) rather than standing alone.</p>
 </div>
 
+<div class="callout warn">
+  <div class="callout-label">2026-05-21 critical RCA audit — Sprint 4 plan validated; Epic 2 elevated from carry-forward to anchor</div>
+  <p>A critical 8-criterion audit ran 2026-05-21 against the persisted <code>/decisions</code> corpus (271 rows). Twelve representative RCAs across the six dominant alert families were scored. <strong>Headline: 3/12 GOOD, 2/12 OK, 7/12 BAD.</strong> The two weakest dimensions: <strong>C6 diagnostic-step non-templated</strong> (17 % pass) and <strong>C4 no-noise prose</strong> (33 % pass). Full audit lives in the FYP report at <em>Evaluation → Critical RCA output audit — 12 representative cases</em>.</p>
+  <p>Six failure modes (F1–F6) map 1:1 to existing Sprint 4 stories — <strong>no new stories needed</strong>. What the audit changes is <em>sequencing</em> and <em>framing</em>:</p>
+  <ul>
+    <li><strong>F1 placeholders leak through verbatim</strong> (<code>1a95f6a6</code> confidence 0.92, <code>0c76258b</code> confidence 0.82) → <strong>item #11 / S4-PR-06 (P6)</strong>. High-confidence failures are the most dangerous shape because the output looks authoritative.</li>
+    <li><strong>F2 PromQL / numerical noise in prose</strong> (<code>a9393ef6</code>, <code>0b215ef3</code>, <code>79119df0</code>, <code>d763a9c9</code>) → <strong>item #3 / S4-PR-01 (P1)</strong>.</li>
+    <li><strong>F3 <code>rca_quality=actionable</code> over-applied</strong> (7/12 mis-tagged) → <strong>item #8 / S4-PR-04 (P11)</strong> for the point fix + <strong>item #9 / S4-PR-05 (P8)</strong> for corpus reclassify. <em>Long-term continuous fix:</em> Epic 2 feedback loop.</li>
+    <li><strong>F4 diagnostic-step boilerplate</strong> (8/10 templated across distinct alert families) → <strong>item #4 / S4-PR-02 (P3)</strong>. Lowest pass-rate dimension.</li>
+    <li><strong>F5 wrong-archetype actions</strong> (<code>0b215ef3</code> kubectl OOM on a latency alert; <code>d763a9c9</code> memory for a hallucinated-metric alert) → <strong>item #9 / S4-PR-05 (P8)</strong> + <strong>item #20 / S4-CR-10 (playbooks)</strong>.</li>
+    <li><strong>F6 no-action escalations</strong> (<code>79119df0</code>, <code>be7019bf</code>, <code>8891233d</code>) → <strong>item #6 / S4-LAT-03 (P5)</strong> + <strong>item #25 / S4-HF-01 (bounded-agency widening)</strong>. The 2026-05-20 <code>8891233d</code> case is exactly what produced S4-HF-01 — the audit confirms it wasn't a one-off.</li>
+  </ul>
+  <p><strong>Epic 2 (operator feedback loop) reframed from "Sprint-3 spillover carry" to "cross-cutting amplifier".</strong> Today P8 and P11 are point-in-time fixes; Epic 2 is the continuous-fix mechanism that prevents the same corpus rot from recurring. Operator-dismiss of an "actionable" RCA = ground-truth signal for the classifier; consistent action-override on a particular archetype = signal for the curated library. <strong>S3-FB-01 (rating schema + 4 MCP tools) should ship AHEAD of curated-RAG retrieval (item #13 / US-3.4)</strong> — the schema unlocks the operator-signal pipeline that amplifies P8 + P11.</p>
+  <p><strong>Acceptance bars for the end-of-Sprint-4 re-audit</strong> (same 8-criterion rubric, fresh sample):</p>
+  <ul>
+    <li>C4 no-noise prose: 33 % → <strong>≥ 80 %</strong> (P1 scrubber + <code>translate_value()</code> helper)</li>
+    <li>C6 non-templated diagnostic steps: 17 % → <strong>≥ 60 %</strong> (P3 deterministic generator)</li>
+    <li>C7 <code>rca_quality</code> tag accuracy: 33 % → <strong>≥ 70 %</strong> (P11 tighter classifier + Epic 2 schema giving ground-truth labels)</li>
+  </ul>
+  <p>If those three move, the "structural foundation sound / output-quality binding" framing is empirically validated. If they don't, the next iteration needs to look one layer deeper (model swap, prompt-assembly rewrite).</p>
+</div>
+
 <h3>Sprint 4 candidates — ranked priority list (RCA findings P0–P11 integrated + existing carry-forward + predictive layer)</h3>
 
 <table>
