@@ -159,6 +159,7 @@
     <li class="sub"><a href="#case-study-stress-summary">7c.5 Honest summary</a></li>
     <li class="sub"><a href="#case-study-stress-vs-7b">7c.6 14b vs 7b — what changed</a></li>
     <li class="sub"><a href="#case-study-stress-addendum">7c.7 Late-capture addendum (6 RCAs total)</a></li>
+    <li><a href="#dashboard-audit">7d. Critical audit — operator-facing dashboard (last 4 h)</a></li>
     <li><a href="#known-issues">7.5 Known output-quality issues + Sprint-4 fixes</a></li>
     <li><a href="#architecture-review">7.6 Architecture review — what scales, what doesn't yet</a></li>
     <li class="sub"><a href="#arch-strengths">7.6.1 What's well-designed</a></li>
@@ -193,12 +194,12 @@
 <ol>
   <li><strong>Hallucination firewall.</strong> Every data source the LLM ever sees flows through an MCP bridge — no direct DB reads, no in-process module imports of evidence, no ad-hoc HTTP calls. The invariant is enforced by a CI lint (<code>scripts/check_mcp_invariant.py</code>), not just convention. If the LLM tries to invent a metric or a service that doesn't exist, the MCP call returns empty and the validator catches the unsupported claim downstream. See <a href="#quality">§5</a> and <a href="hallucination-firewall.html">hallucination-firewall.html</a>.</li>
   <li><strong>Five reinforcing output-quality defenses.</strong> Exemplar retrieval, alert-keyed hallucination blocklist, surface-only LEDE + hypothesis-menu validators, confidence clamp, bounded-agency single retry. Each catches a different failure mode; together they make LLM mistakes recoverable rather than load-bearing.</li>
-  <li><strong>Operational track record, not promises.</strong> The triage container has run on <code>adolin-wsl</code> for 28 days since Sprint 3 kickoff (2026-04-23). 252 / 252 triage tests pass, the MCP-invariant lint is clean, and the 2026-05-19 heavy-load test produced 95 production-shape RCAs with a documented quality grade per RCA. Five of the twelve issues that test surfaced are already shipped or scheduled into Sprint 4.</li>
+  <li><strong>Operational track record, not promises.</strong> The triage container ran on <code>adolin-wsl</code> (laptop GTX 1060) for 28 days from Sprint 3 kickoff (2026-04-23); on 2026-05-21 it was promoted to a dedicated AWS <code>g5.xlarge</code> in us-west-2 (A10G GPU, instance <code>i-03aec662b1a47ad8f</code>, Tailscale name <code>observability-gpu-uswest2</code>) with the laptop kept as rollback fallback. 252 / 252 triage tests pass, the MCP-invariant lint is clean, and the 2026-05-19 heavy-load test produced 95 production-shape RCAs with a documented quality grade per RCA. Five of the twelve issues that test surfaced are already shipped.</li>
 </ol>
 
-<p><strong>What we deliberately didn't build.</strong> The system prefers <strong>determinism and auditability over raw model capability</strong>. No agentic multi-step planning loop (one bounded retry max). No vector DB (the exemplar library is a curated YAML, deliberately frozen until operator feedback can curate retrieval well). No microservice mesh (one pipeline, one process, deterministic ordering). No native tool-calling (structured JSON output schemas instead, until we move off the laptop to a larger model). Every quality mechanism exists to make the LLM's mistakes recoverable. If you'd weight that trade-off differently, <a href="#asks">§8</a> is the conversation we want to have.</p>
+<p><strong>What we deliberately didn't build.</strong> The system prefers <strong>determinism and auditability over raw model capability</strong>. No agentic multi-step planning loop (one bounded retry max). No vector DB (the exemplar library is a curated YAML, deliberately frozen until operator feedback can curate retrieval well). No microservice mesh (one pipeline, one process, deterministic ordering). No native tool-calling (structured JSON output schemas instead, until we stabilise on the new larger-model runner). Every quality mechanism exists to make the LLM's mistakes recoverable. If you'd weight that trade-off differently, <a href="#asks">§8</a> is the conversation we want to have.</p>
 
-<p><strong>End-to-end latency under the heavy-load test.</strong> Median 6–7 min, worst 23 min on current laptop-GPU hardware; cheap-path short-circuits (dedup, recurrence gate, suppression replay) complete in milliseconds. Sprint 4's P0 anchor bundle targets median 90 s after per-stage instrumentation + serial Ollama concurrency + a hard 180 s timeout — see <a href="#known-issues">§7.5</a> for the full P0–P11 list.</p>
+<p><strong>End-to-end latency.</strong> Real-load median ~38 s on the new AWS A10G runner with <code>qwen2.5:14b-instruct</code> (Phase 2 smoke test, 2026-05-21; per-token ~50-65 tok/s, prompt eval ~1350 tok/s, cached model load ~177 ms). Prior 7b/laptop baseline was median ~5 min, worst 23 min on the heavy-load test (2026-05-19) — the migration is the structural fix that supersedes most of the Sprint 4 P0 latency bundle. Cheap-path short-circuits (dedup, recurrence gate, suppression replay) still complete in milliseconds. See <a href="#known-issues">§7.5</a> for the residual P-list.</p>
 
 <!-- ────────────────────── 2 ────────────────────── -->
 <h2 id="what"><span class="num-badge">2</span>What we built (and what we deliberately didn't)</h2>
@@ -1046,6 +1047,472 @@ than we'd like and is a signal that an archetype is missing.
   </p>
 </div>
 
+<!-- ────────────────────── 7d ────────────────────── -->
+<h2 id="dashboard-audit"><span class="num-badge">7d</span>Critical audit — what the operator actually sees on /dashboard (last 4 h)</h2>
+
+<div class="callout story">
+  <div class="callout-label">Operator-facing reality check · 2026-05-21 14:55 → 18:55 UTC · 16 decisions, 8 LLM-pathed</div>
+  <p>
+    <strong>What this section is.</strong> Lina asked three concrete questions
+    that the supervisor will ask too: <em>(1) why am I notified when there
+    isn't really a problem, (2) why do I get conflicting RCAs sometimes,
+    (3) why do I get duplicates.</em> §7, §7b and §7c showcased individual
+    RCAs in isolation. This section grades every operator-facing decision in
+    the last 4 h against ground truth — what I (the operator) actually did to
+    the system — and surfaces the failure modes by name. No paper-over.
+  </p>
+  <p>
+    <strong>Why this matters for the production greenlight.</strong> The
+    selection-bias risk in §7/§7b/§7c is that we only show RCAs we
+    pre-vetted. The honest read is: across <strong>16 decisions in 4 h, 8
+    reached the LLM, 8 were cheap-pathed</strong>. The cheap path absorbed
+    every textbook P5 recurrence (4× MediumCpuUsage, 2× TargetDown
+    re-fires, 1× see_previous_rca). The LLM path produced <strong>5 correct
+    escalations, 1 correct dismiss, and 2 mis-shaped operator-facing
+    rows</strong> that we name below.
+  </p>
+</div>
+
+<h3 id="dashboard-audit-table">Headline table — all 8 LLM-pathed rows graded against ground truth</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>UTC</th>
+      <th>Alert / service</th>
+      <th>Verdict (conf)</th>
+      <th>What I actually did to cause it</th>
+      <th>Notification correct?</th>
+      <th>Key issue</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>16:32:53</td>
+      <td><code>Drain3AnomalyDetected</code> / drain3</td>
+      <td>escalate (0.00)</td>
+      <td>Nothing — pre-window real bingbot 404 noise on spring-boot, drain3 self-fired.</td>
+      <td><strong>No.</strong> The trigger was routine 404s from a search-engine crawler against <code>/view</code>. Not a real problem.</td>
+      <td>P5 false-positive escalation. Confidence is 0.00 and quality is <code>needs_review</code> — the model knew it had nothing, but the verdict was still <code>escalate</code> and an email went out.</td>
+    </tr>
+    <tr>
+      <td>18:23:20</td>
+      <td><code>Drain3AnomalyDetected</code> / spring-boot</td>
+      <td>escalate (0.40)</td>
+      <td>Likely earlier audit-live synthetic — no induction by me at 18:23.</td>
+      <td><strong>No.</strong> Cause-prose itself says "does not significantly deviate from its baseline" and "Logs show mostly known patterns and a few synthetic novelty templates that do not indicate real issues."</td>
+      <td><strong>Self-contradicting verdict.</strong> Prose says benign, verdict says escalate. Confidence 0.40 didn't gate the email. P1 prose-vs-verdict consistency check missing.</td>
+    </tr>
+    <tr>
+      <td>18:34:02</td>
+      <td><code>Drain3AnomalyDetected</code> / drain3</td>
+      <td>escalate (0.30)</td>
+      <td><code>kubectl scale deploy/kong-kong --replicas=0</code> at 18:32:35 — Kong worker emitted SIGCHLD/SIGQUIT, drain3 picked it up.</td>
+      <td><strong>Yes, with caveat.</strong> Lifecycle signal from an operator-initiated scale-down is technically a real log novelty event; escalating it to a human is borderline-justified given drain3 has no metric to corroborate.</td>
+      <td>Correctly named pod (<code>kong-kong-77f855b6cc-q4bxc</code>), correctly named signals. Hallucinated <code>loki query</code> CLI in suggested action. See §7c A3 for full breakdown.</td>
+    </tr>
+    <tr>
+      <td>18:40:22</td>
+      <td><code>CriticalCpuUsage</code> / k3s-node</td>
+      <td>escalate (0.95)</td>
+      <td><code>kubectl run cpu-stress --image=polinux/stress -- stress --cpu 4 --timeout 420s</code> at 18:32:40 — 4 cores at 100% for 7 min.</td>
+      <td><strong>Yes.</strong> Real CPU saturation at 98.6%, sustained &gt;2 min. Operator notification justified.</td>
+      <td>Verdict and confidence are right. <strong>But the suggested action is <code>systemctl restart k3s-node.service</code></strong> on a node CPU alert with no named culprit process — would have brought down the cluster. P3-class unsafe action that the validator did not block.</td>
+    </tr>
+    <tr>
+      <td>18:41:12</td>
+      <td><code>TargetDown</code> / monitoring</td>
+      <td>dismiss (0.40)</td>
+      <td>Nothing — transient scrape miss against <code>10.0.1.194:6443</code> (kube-apiserver) likely caused by the 98% CPU saturation from cpu-stress.</td>
+      <td><strong>Yes (dismiss was correct as an operator decision)</strong> — target self-recovered. But the cause-prose missed the actual cause.</td>
+      <td>RCA called it "transient network jitter or a scrape-time collision". <strong>The real cause is the CPU saturation in the correlated CriticalCpuUsage row 50 s earlier</strong> — the apiserver was starving on the same node. Correlated alert was visible to the model; it didn't connect them.</td>
+    </tr>
+    <tr>
+      <td>18:42:12</td>
+      <td><code>HighCpuUsage</code> / k3s-node</td>
+      <td>escalate (0.85)</td>
+      <td>Same cpu-stress pod from 18:32:40, now also overlapping with hey-load 80c HTTP fan-out at 18:37:40.</td>
+      <td><strong>Yes.</strong> 92.3% sustained CPU, real load. Escalation correct.</td>
+      <td><strong>Duplicate of the CriticalCpuUsage RCA 2 min earlier</strong> — same fingerprint family, same node, same root cause. Should have been collapsed (<code>see_previous_rca</code>) instead of paying for a second LLM call. Cause-prose says "unexpected load" without naming cpu-stress.</td>
+    </tr>
+    <tr>
+      <td>18:45:22</td>
+      <td><code>PodHighMemoryUsage</code> / spring-boot</td>
+      <td>escalate (0.00)</td>
+      <td>Nothing touched spring-boot memory directly. The <code>mem-stress</code> pod at 18:37:35 is a separate pod in <code>default</code> ns. The <code>hey-load</code> driving 80 concurrent GETs may have driven up spring-boot heap but no induction targeted it.</td>
+      <td><strong>Mixed.</strong> Memory was genuinely at 97.5% — this IS a real problem in shape. But the operator got escalated at <code>confidence 0.00</code> with PromQL that computes <code>requests/server_requests = 1.25</code> as if that were the memory metric.</td>
+      <td><strong>Two serious failure modes.</strong> (a) The cited PromQL in evidence is a <em>ratio of HTTP request rates</em>, not a memory query — wrong metric family entirely. (b) Suggested action is <code>kubectl rollout restart deploy/spring-boot</code> with no named cause — exactly the §7b P1 anti-pattern. (c) Confidence 0.00 should have gated the email.</td>
+    </tr>
+    <tr>
+      <td>18:47:14</td>
+      <td><code>HighCpuUsage</code> / k3s-node</td>
+      <td>dismiss (0.85)</td>
+      <td>cpu-stress ended ~18:39:40; hey-load ended ~18:42:40. By 18:47 the node was recovering — observed CPU 41.1%.</td>
+      <td><strong>Yes.</strong> Transient post-recovery spike, correct to dismiss.</td>
+      <td><strong>Direct conflict with the 18:42 escalate verdict on the same fingerprint</strong> (<code>c4e3f62ba279e5c0</code>) 5 min earlier. Same alert, same service, same fingerprint, opposite verdicts. This is exactly Lina's conflicting-RCA question. Suggested action proposes <code>ansible-playbook</code> changes to alert rules — operationally reasonable, but unrelated to this fire.</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>
+  Raw data: <code>/tmp/last4h.json</code> (16 rows in the 4 h window),
+  <code>/tmp/all-decisions.json</code> (200 rows historical). Pulled from
+  <code>/decisions?limit=200</code> at <strong>18:53 UTC</strong>.
+</p>
+
+<!-- ────────────────────── 7d — deep dive: false-positive escalation ────────────────────── -->
+<h3 id="dashboard-audit-falsepos">Deep dive 1 — the bingbot 404 escalation (Lina's question 1)</h3>
+
+<div class="callout warn">
+  <div class="callout-label">Failure mode · 2026-05-21 16:32:53 UTC · Drain3AnomalyDetected · drain3 · RCA id c4561c89</div>
+  <p>
+    <strong>What landed in the operator's inbox.</strong> An email titled
+    <em>Drain3 anomaly detected on service drain3</em>, action_taken
+    <code>emailed</code>, llm_verdict <code>escalate</code>,
+    llm_confidence <code>0.00</code>, rca_quality <code>needs_review</code>.
+  </p>
+  <p>
+    <strong>What the prose actually said</strong> (rca_report, verbatim):
+  </p>
+  <blockquote>
+    <em>"The alert triggered due to a low anomaly rate (3.19%) with three
+    lines flagged as anomalous in the logs. The anomalies are related to
+    HTTP GET requests returning status code 404 and involve bingbot activity,
+    but there isn't enough context or metric data to determine if this is an
+    actual issue or normal behavior."</em>
+  </blockquote>
+  <p>
+    <strong>What was actually happening.</strong> Bingbot was crawling
+    <code>/view</code> on spring-boot and getting 404s. That's the cause —
+    a search-engine crawler hitting a path that doesn't exist. It is not a
+    production problem. It does not require an email. The 14b model already
+    knew this — the cause-prose self-describes the input as "low anomaly
+    rate", "three lines", "bingbot activity", and explicitly hedges that
+    "there isn't enough context … to determine if this is an actual issue
+    or normal behavior."
+  </p>
+  <p>
+    <strong>So why did the operator get emailed.</strong> The verdict path
+    defaults <code>Drain3AnomalyDetected</code> to <code>escalate</code>
+    unless the model produces an affirmative <code>dismiss</code>. The
+    model produced uncertainty ("not enough context"), which is treated
+    as escalate-with-low-confidence. The confidence value (<code>0.00</code>)
+    did not gate the email. The single suggested action is a deadpan
+    <em>"Shelved — no correlation found, no remediation issued. Awaiting
+    recurrence."</em> — the model itself describes its own work as shelved,
+    yet the email went out anyway.
+  </p>
+  <p>
+    <strong>This is the answer to Lina's question 1</strong>: the operator
+    gets notified when there isn't a problem because the verdict policy
+    treats uncertain-drain3-anomaly as escalate. The fix is mechanical, not
+    LLM-quality-bound: when <code>llm_confidence &lt; 0.30</code> AND
+    <code>rca_quality = needs_review</code> AND no correlated alerts within
+    ±5 min, the verdict should be downgraded to <code>dismiss</code> or
+    queued without an email. Sprint 4 P5-bis candidate.
+  </p>
+</div>
+
+<!-- ────────────────────── 7d — deep dive: conflicting verdicts ────────────────────── -->
+<h3 id="dashboard-audit-conflict">Deep dive 2 — the HighCpuUsage verdict flip (Lina's question 2)</h3>
+
+<div class="callout warn">
+  <div class="callout-label">Failure mode · 2026-05-21 18:42:12 → 18:47:14 UTC · HighCpuUsage / k3s-node · fingerprint c4e3f62ba279e5c0</div>
+  <p>
+    <strong>Two RCAs, same fingerprint, opposite verdicts, 5 min apart.</strong>
+  </p>
+  <p>
+    <strong>18:42:12 — verdict escalate, confidence 0.85, rca_report:</strong>
+  </p>
+  <blockquote>
+    <em>"The k3s-node service on instance 10.0.1.194:6443 has been
+    experiencing elevated CPU usage, reaching 92.3%. The observed value is
+    above the threshold of 85% for over 5 minutes. … This suggests that
+    there may be unexpected load on the node."</em>
+  </blockquote>
+  <p>
+    <strong>18:47:14 — verdict dismiss, confidence 0.85, rca_report:</strong>
+  </p>
+  <blockquote>
+    <em>"The CPU usage on the k3s-node (10.0.1.194:6443) has spiked to
+    41.1%, which is above the static threshold but well within expected
+    seasonal variations. The metric values show a transient spike that
+    quickly returned to normal levels … This pattern suggests a known
+    traffic fluctuation rather than an actual degradation."</em>
+  </blockquote>
+  <p>
+    <strong>Is this actually a conflict.</strong> Both RCAs are looking at
+    the same alert fingerprint, but at different moments along the cpu-stress
+    decay curve. At 18:42 CPU was at 92% with hey-load still running. By
+    18:47 cpu-stress had ended (~18:39:40) and hey-load had ended
+    (~18:42:40); the node was at 41% recovering. Both verdicts are
+    individually defensible. <strong>But the operator sees two adjacent
+    rows with the same alert name, same service, same fingerprint, and
+    opposite calls.</strong>
+  </p>
+  <p>
+    <strong>The real problem.</strong> Neither RCA names the operational
+    cause (cpu-stress pod from default namespace, hey-load synthetic
+    traffic). The first says "unexpected load" — generic. The second says
+    "seasonal variation" — wrong, this was synthetic stress, not
+    seasonality. <strong>Without a named cause in the first RCA, the
+    second RCA can't tell that the cause has cleared</strong> — it has to
+    re-derive intent from the metric value alone, which is why it lands on
+    "seasonal".
+  </p>
+  <p>
+    <strong>This is the answer to Lina's question 2</strong>: RCAs conflict
+    because the model is reasoning from instantaneous metric values rather
+    than from named-cause continuity across the alert lifecycle. The fix
+    is the §7.5 P1 axis (cause-prose must name a culprit), extended with a
+    cross-row coherence check: when a re-fire of the same fingerprint flips
+    verdict, the new RCA must explicitly reference and reconcile the prior
+    one. Sprint 4 candidate, new axis.
+  </p>
+</div>
+
+<!-- ────────────────────── 7d — deep dive: wrong-metric evidence + unsafe action ────────────────────── -->
+<h3 id="dashboard-audit-wrongmetric">Deep dive 3 — wrong-metric evidence and unsafe actions (the two worst LLM outputs)</h3>
+
+<div class="callout warn">
+  <div class="callout-label">Failure mode A · 2026-05-21 18:45:22 UTC · PodHighMemoryUsage / spring-boot · RCA id 4aa43e6f</div>
+  <p>
+    Real <code>PodHighMemoryUsage</code> at 97.49% (spring-boot heap under
+    hey-load HTTP fan-out). Verdict <code>escalate</code> at
+    <code>confidence 0.00</code>. Email sent.
+    <strong>The cited evidence</strong> (verbatim):
+  </p>
+  <blockquote>
+    <em>"<code>sum(rate(spring_boot_http_requests_seconds_count{...}[1m])) / sum(rate(spring_boot_http_server_requests_seconds_count{...}[1m])) = 1.25</code>"</em>
+  </blockquote>
+  <p>
+    The alert's actual rule is
+    <code>(container_memory_working_set_bytes / container_spec_memory_limit_bytes) * 100</code>
+    — a memory query. The cited evidence is a <em>ratio of two HTTP
+    request-rate counters</em>, value 1.25, which is neither the memory
+    value (97.5%) nor evidence for the memory hypothesis. <strong>The
+    model produced PromQL that looks plausible for spring-boot but is the
+    wrong metric family for the firing alert.</strong> The suggested
+    action: <em>"<code>kubectl rollout restart deploy/spring-boot</code>
+    — universal first-line remedy for k8s services"</em> — the §7b P1
+    anti-pattern verbatim. The clamp didn't fire because severity is
+    <code>info</code> and the clamp currently runs warning+. The verdict
+    was correct (real problem); the email body was misshapen.
+  </p>
+</div>
+
+<div class="callout warn">
+  <div class="callout-label">Failure mode B · 2026-05-21 18:40:22 UTC · CriticalCpuUsage / k3s-node · RCA id aaea032e</div>
+  <p>
+    Real 98.6% sustained CPU; verdict <code>escalate</code> at
+    <code>confidence 0.95</code> — correct call on a real problem. But the
+    suggested action (verbatim):
+  </p>
+  <blockquote>
+    <em>"<code>ssh root@10.0.1.194 'systemctl restart k3s-node.service'</code>
+    — restart the k3s service to clear transient issues"</em>
+  </blockquote>
+  <p>
+    Restarting k3s on the only k3s node would bring down every pod —
+    spring-boot, kong-kong, prometheus, loki, drain3, the triage service
+    itself. The actual cause was a <code>polinux/stress</code> pod in
+    <code>default</code> ns, which the prose does not name. The safe
+    remediation is <code>kubectl delete pod cpu-stress -n default</code>.
+    The §5.3 clamp keys on "rollout restart" / "universal first-line
+    remedy" — it does not currently key on <code>systemctl restart</code>.
+    <strong>Sprint 4: extend blocklist to include
+    <code>systemctl restart k3s</code>, <code>kubectl delete node</code>,
+    <code>shutdown</code>, <code>reboot</code>; run clamp at all
+    severities.</strong>
+  </p>
+</div>
+
+<!-- ────────────────────── 7d — conflict & duplicate matrix ────────────────────── -->
+<h3 id="dashboard-audit-matrix">Conflict and duplicate matrix (Lina's question 3)</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Pattern</th>
+      <th>(Alert, service)</th>
+      <th>Fingerprint</th>
+      <th>Rows in window</th>
+      <th>Verdicts</th>
+      <th>Sensible or spurious</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Duplicate fingerprint, same verdict</td>
+      <td>Drain3AnomalyDetected / drain3</td>
+      <td><code>drain3-drain3</code></td>
+      <td>2 (16:32, 18:34)</td>
+      <td>escalate × 2</td>
+      <td><strong>Spurious.</strong> 2 h apart, but they're triggered by completely different log sources (bingbot 404s vs Kong SIGCHLD). Same fingerprint because drain3-self-firing uses a static fingerprint. <strong>The fingerprinting collapses unrelated events</strong> — this is a drain3 webhook configuration issue, not LLM quality.</td>
+    </tr>
+    <tr>
+      <td>Duplicate fingerprint, flipped verdict</td>
+      <td>HighCpuUsage / k3s-node</td>
+      <td><code>c4e3f62ba279e5c0</code></td>
+      <td>2 (18:42, 18:47)</td>
+      <td>escalate, dismiss</td>
+      <td><strong>Sensible per-row, confusing to the operator.</strong> Different moments along the cpu-stress decay curve. The dedupe gate let it through because the verdicts differed. See Deep dive 2 above for the cross-row coherence fix.</td>
+    </tr>
+    <tr>
+      <td>Re-fire suppressed via see_previous_rca</td>
+      <td>CriticalCpuUsage / k3s-node</td>
+      <td><code>348e2504154187df</code></td>
+      <td>2 (18:40 LLM, 18:44 cheap)</td>
+      <td>escalate, (no LLM)</td>
+      <td><strong>Working as designed.</strong> Cheap-path correctly recognized the re-fire and pointed at the prior RCA. This is the dedupe gate doing its job.</td>
+    </tr>
+    <tr>
+      <td>Re-fire suppressed (MediumCpu)</td>
+      <td>MediumCpuUsage / k3s-node</td>
+      <td><code>0c7f813d019d83c6</code>, <code>82e5f2075dd65ffb</code></td>
+      <td>4 (2× at 17:34, 2× at 18:34)</td>
+      <td>(all cheap-pathed)</td>
+      <td><strong>Working as designed.</strong> Pre-LLM recurrence gate from §7c. Two pairs of double-fires, all 4 absorbed without LLM cost.</td>
+    </tr>
+    <tr>
+      <td>Re-fire suppressed (TargetDown)</td>
+      <td>TargetDown / monitoring</td>
+      <td><code>593aa9a672c66a34</code>, <code>12931ab085203e2b</code></td>
+      <td>4 (2× at 18:41, 2× at 18:50)</td>
+      <td>dismiss, then all cheap</td>
+      <td><strong>Working as designed.</strong> First fire got LLM dismiss; three subsequent re-fires within 10 min were correctly suppressed. The dedupe gate held.</td>
+    </tr>
+    <tr>
+      <td>Cross-fingerprint duplicate (logical)</td>
+      <td>HighCpu + CriticalCpu / k3s-node</td>
+      <td>(different fingerprints, same root cause)</td>
+      <td>2 LLM calls (18:40, 18:42)</td>
+      <td>escalate, escalate</td>
+      <td><strong>Spurious — paid for two LLM calls on the same root cause.</strong> CriticalCpu (98.6%) and HighCpu (92.3%) on the same node 2 min apart are the same incident at different threshold crossings. The dedupe gate keys on fingerprint, not on (service, time-bucket, cause-family). Sprint 4 candidate: logical-dedupe across alert-family on same service within N min.</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- ────────────────────── 7d — honest summary ────────────────────── -->
+<h3 id="dashboard-audit-summary">Honest summary — the brutal numbers</h3>
+
+<div class="callout note">
+  <div class="callout-label">Numerical readout · 16 decisions, 8 LLM-pathed, 4 h window</div>
+  <table>
+    <thead>
+      <tr>
+        <th>Metric</th>
+        <th>Value</th>
+        <th>Interpretation</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Total / cheap-pathed / LLM-pathed</td>
+        <td>16 / 8 / 8</td>
+        <td>Pre-LLM recurrence gate + see_previous_rca absorbed 50% of the load. GPU spend halved.</td>
+      </tr>
+      <tr>
+        <td>Operator emails sent (action_taken=emailed)</td>
+        <td>6</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td>Correct emails (real problem, justified page)</td>
+        <td>4 of 6 (67%)</td>
+        <td>CriticalCpu 18:40, HighCpu 18:42, PodHighMem 18:45, Drain3 Kong-signals 18:34.</td>
+      </tr>
+      <tr>
+        <td>False-positive emails (no real problem)</td>
+        <td>2 of 6 (33%)</td>
+        <td>Drain3 bingbot 16:32 (conf 0.00), Drain3 spring-boot 18:23 (conf 0.40, self-contradicting prose). <strong>This is Lina's question 1.</strong></td>
+      </tr>
+      <tr>
+        <td>Correct dismisses (suppressed, was benign)</td>
+        <td>2 of 2 (100%)</td>
+        <td>TargetDown 18:41, HighCpu recovery 18:47. Both correct calls.</td>
+      </tr>
+      <tr>
+        <td>Verdict conflicts (same fingerprint, different verdict)</td>
+        <td>1 pair</td>
+        <td>HighCpuUsage / k3s-node flipped escalate→dismiss in 5 min. <strong>Lina's question 2.</strong></td>
+      </tr>
+      <tr>
+        <td>Spurious duplicates (same fingerprint, unrelated cause)</td>
+        <td>1 pair</td>
+        <td>Drain3-drain3 fingerprint bucketed bingbot 404s and Kong shutdown signals together. <strong>Lina's question 3.</strong></td>
+      </tr>
+      <tr>
+        <td>Cross-alert-family duplicates (paid 2× for one incident)</td>
+        <td>1 pair</td>
+        <td>HighCpu+CriticalCpu on k3s-node, same root cause, 2 LLM calls.</td>
+      </tr>
+      <tr>
+        <td>Unsafe suggested actions (would worsen incident)</td>
+        <td>2 of 8 LLM rows</td>
+        <td><code>systemctl restart k3s-node.service</code> on CriticalCpu, <code>kubectl rollout restart deploy/spring-boot</code> with no named cause on PodHighMem.</td>
+      </tr>
+      <tr>
+        <td>Wrong-metric-family evidence (cited PromQL doesn't match alert)</td>
+        <td>1 of 8 LLM rows</td>
+        <td>PodHighMemoryUsage cited HTTP request-rate ratio instead of memory utilization.</td>
+      </tr>
+      <tr>
+        <td>RCAs that named the actual operational cause</td>
+        <td>1 of 8 (Drain3 Kong-signals at 18:34)</td>
+        <td>The other 7 either named generic causes ("unexpected load", "seasonal variation", "transient jitter") or hedged without a named culprit. <strong>This is the §7.5 P1 axis showing up at scale.</strong></td>
+      </tr>
+      <tr>
+        <td>Investigation duration p50 / max (LLM-pathed)</td>
+        <td>p50 ~28 s, max 87.6 s</td>
+        <td>14b on GPU is delivering acceptable latency. Speed is no longer the dominant issue; <strong>verdict-policy and prose-quality are</strong>.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="callout warn">
+  <div class="callout-label">Sprint 4 candidates surfaced by this audit (in priority order)</div>
+  <ol>
+    <li><strong>Verdict-policy gate on low-confidence drain3.</strong> When <code>llm_confidence &lt; 0.30</code> AND no correlated alert within ±5 min AND <code>rca_quality ∈ {needs_review, data_starved}</code>, downgrade verdict from escalate to queue-without-email. Closes the bingbot-style false-positive (Lina's Q1). Mechanical fix, ~1 SP.</li>
+    <li><strong>Prose-vs-verdict consistency check.</strong> If the cause-prose contains phrases like "does not significantly deviate", "not enough context", "normal behavior" — verdict must not be <code>escalate</code>. Static text classifier, ~2 SP.</li>
+    <li><strong>Cross-row verdict-flip reconciliation.</strong> When a re-fire of the same fingerprint produces a flipped verdict, the new RCA must reference the prior RCA id and explicitly reconcile. Closes Lina's Q2. ~3 SP.</li>
+    <li><strong>Logical dedupe across alert-family.</strong> Within N min on the same service, treat (HighCpu, CriticalCpu) as a single incident regardless of fingerprint. Closes the "paid 2× for one incident" duplicate (Lina's Q3). ~3 SP.</li>
+    <li><strong>Unsafe-action blocklist extension.</strong> Add <code>systemctl restart k3s</code>, <code>kubectl delete node</code>, <code>shutdown</code>, <code>reboot</code> to §5.3 clamp keyword set. Run clamp at all severities, not just warning+. ~1 SP.</li>
+    <li><strong>Evidence PromQL family-match check.</strong> If alert is in family memory/cpu/latency, the evidence PromQL must contain a metric from the matching family. Reject HTTP-rate evidence on a memory alert. ~2 SP.</li>
+    <li><strong>Drain3 fingerprint disaggregation.</strong> Drain3-self-fires currently share fingerprint <code>drain3-{service}</code>. Add a content-hash suffix so bingbot 404s and Kong SIGCHLDs land on different fingerprints. ~1 SP.</li>
+  </ol>
+</div>
+
+<div class="callout story">
+  <div class="callout-label">The honest read for the production greenlight conversation</div>
+  <p>
+    <strong>What is genuinely working.</strong> The dedupe gate, the
+    recurrence gate, the see_previous_rca path, the 14b-on-GPU latency
+    (median ~28 s), and the Kong-SIGCHLD identification at 18:34 where the
+    model resisted the volumetric red herring and named the operational
+    change.
+  </p>
+  <p>
+    <strong>What is genuinely not.</strong> Verdict policy on
+    low-confidence drain3 (Q1). Cross-row coherence on verdict flips (Q2).
+    Cross-alert-family dedupe (Q3). And the §7.5 P1 axis — cause-prose
+    that names a culprit — is showing 1-of-8 hit rate on this window.
+    That is the dominant Sprint 4 axis, with the 7 candidates above as
+    the concrete work items.
+  </p>
+  <p>
+    <strong>Production-readiness call.</strong> The gaps above are
+    mechanical fixes (~13 SP of Sprint 4 work). None require a model swap
+    or re-architecture. The 14b-on-GPU substrate is delivering the
+    latency and partial prose quality needed; the deterministic
+    guardrails around it need the Sprint 4 pass. <strong>Recommend
+    conditional greenlight: pilot on one operator queue with the Sprint 4
+    fixes shipped, gate broader rollout on a re-audit of the same shape
+    against a fresh 4 h window.</strong>
+  </p>
+</div>
+
 <!-- ────────────────────── 7.5 ────────────────────── -->
 <h2 id="known-issues">Known output-quality issues + Sprint-4 fixes</h2>
 
@@ -1059,7 +1526,7 @@ than we'd like and is a signal that an archetype is missing.
 <table>
   <thead><tr><th>P-tag</th><th>Problem</th><th>Evidence</th><th>Proposed fix</th><th>Effort</th></tr></thead>
   <tbody>
-    <tr><td><strong>P0</strong></td><td>Pipeline latency unworkable for dev workflow</td><td>Median 6-7 min, worst 23 min (<code>PodHighMemoryUsage</code> 2026-04-29). Queue blowup observed under sustained load. <strong>Reproduced 2026-05-20 08:42–08:57 UTC</strong> during audit-live run #3 — <code>/decisions</code> endpoint went unresponsive while Ollama processed the queued <code>MediumCpuUsage</code>; <code>/health</code> stayed up. Direct field evidence that this is the right Sprint 4 anchor.</td><td>Bundle: per-stage instrumentation + hard 180s timeout + Ollama serial concurrency + MCP native tool-calling rewrite. GPU migration was on the table but dropped on cost.</td><td>~5 h + 5 SP</td></tr>
+    <tr><td><strong>P0</strong></td><td>Pipeline latency unworkable for dev workflow</td><td><strong>Structurally addressed 2026-05-21.</strong> Was median 6-7 min, worst 23 min on the 7b/laptop runner; the 2026-05-20 reproduction during audit-live run #3 (<code>/decisions</code> hung under queue pressure) was the direct evidence that drove the migration. New runner on AWS <code>g5.xlarge</code> + <code>qwen2.5:14b-instruct</code>: Phase 2 smoke test ~38 s end-to-end (see <a href="decisions-log.html#d24">D24</a>).</td><td>Migration shipped (D24). The original software bundle (per-stage instrumentation + hard 180s timeout + Ollama serial concurrency + MCP native tool-calling rewrite) now ships as defensive margin rather than gating work.</td><td>Shipped</td></tr>
     <tr><td><strong>P1</strong></td><td>PromQL / floats / Z-score equations leak into cause-prose</td><td>RCAs literally contain <code>"Z-score: (6.72-6.3)/0.65 = +0.6σ"</code>, <code>"histogram_quantile(0.95) = 8203.846153846154 ms"</code>, <code>"sum by(le)(rate(...))"</code></td><td>New validator rule rejects telemetry-in-prose. <code>translate_value(value, unit)</code> helper pre-renders metric values. Strip <code># TYPE</code> / <code># HELP</code> / <code>...truncated...</code> from context before LLM sees it.</td><td>~4 h</td></tr>
     <tr><td><strong>P2 ✓</strong></td><td>Suppression cascade silences real follow-up fires — <strong>SHIPPED 2026-05-19</strong></td><td>2026-05-19 evidence (now closed): one synthetic dismiss → 4 real <code>MediumCpuUsage</code> suppressed; one real dismiss → 3 real <code>TargetDown</code> suppressed.</td><td><strong>Shipped</strong> in <code>monitoring-triage-service@b96bbde</code> + <code>monitoring-project@54b18df</code>: synthetic-fingerprint filter excluding <code>audit-live-*</code> + tightened 30 → 10 min lookback + recurrence-gate widened to TargetDown / HighP95Latency / HighKongP95Latency. <strong>Acceptance gate closed 2026-05-20 09:00 UTC</strong> — 6/6 post-fix audit-live decisions across 3 runs landed <code>triage_decision=investigate</code>, zero <code>triage_suppressed</code>.</td><td>1.5 h actual</td></tr>
     <tr><td><strong>P3</strong></td><td>Diagnostic steps are boilerplate, not incident-specific</td><td>Two TargetDown RCAs (<code>111ded21</code> + <code>a4555bdd</code>) have word-for-word identical 4-step diagnostic blocks.</td><td>Move diagnostic-steps generation out of the LLM into <code>app/diagnostic_steps_for_alert(alert, ctx)</code>. Templates from concrete evidence (trace_id, service, window).</td><td>~6 h</td></tr>
@@ -1083,7 +1550,7 @@ than we'd like and is a signal that an archetype is missing.
 
 <div class="callout warn">
   <div class="callout-label">One-line verdict</div>
-  <p>Sound bones, single-host fragility. The architecture is above-average for a single-engineer prototype — invariants enforced by CI rather than docs, layered safety nets, external instrumentation — but it has not been load-tested, fault-tested, or multi-tenancy-tested in any serious way. The laptop-GPU inference path is the dominant scalability ceiling, and we already see it strain under three concurrent alerts.</p>
+  <p>Sound bones, single-host fragility — but the prior laptop-GPU ceiling was lifted 2026-05-21 (GPU migration to AWS <code>g5.xlarge</code> / A10G in us-west-2; see <a href="decisions-log.html#d24">D24</a>). The new ceiling is concurrent-alert serialisation under a single Ollama on one A10G — that's the next architectural question. The architecture is still above-average for a single-engineer prototype (CI-enforced invariants, layered safety nets, external instrumentation), but it has not yet been load-tested against the new hardware in any serious way.</p>
 </div>
 
 <h3 id="arch-strengths">7.6.1 What's well-designed</h3>
@@ -1104,12 +1571,12 @@ than we'd like and is a signal that an archetype is missing.
 <table>
   <thead><tr><th>Stress point</th><th>Evidence (today, not theory)</th><th>Status</th></tr></thead>
   <tbody>
-    <tr><td><strong>Single-LLM bottleneck</strong></td><td>Laptop GTX 1060 + qwen2.5:7b serialises badly. 2026-05-20 08:42–08:57 UTC: <code>/decisions</code> went unresponsive while Ollama processed a queued <code>MediumCpuUsage</code>; <code>/health</code> stayed up. 12:00 UTC cron run hit the same condition. Median RCA 6–7 min, worst 23 min.</td><td>P0-bundle attacks symptoms (~5 h). Structural fix — GPU-on-AWS (g5.xlarge) + queue dispatcher + qwen2.5:14b — was scoped at 3–5 days and dropped 2026-05-19 on cost grounds (~$300–720/month). Deferred decision, not closed.</td></tr>
+    <tr><td><strong>Single-LLM bottleneck</strong></td><td>Was the dominant strain on the 7b/laptop runner. 2026-05-20 reproductions: <code>/decisions</code> went unresponsive while Ollama processed a queued <code>MediumCpuUsage</code>. Median RCA 6–7 min, worst 23 min. The new <code>g5.xlarge</code>/A10G/14b runner pulled real-load median to ~38 s (Phase 2 smoke test).</td><td><strong>Structurally addressed 2026-05-21</strong> (D24): GPU migration shipped + qwen2.5:14b primary. Lambda autoshutoff bounds cost (20-min idle stop, ~$100/mo realistic). Concurrent-alert serialisation under one Ollama on one A10G is the new (smaller) ceiling — to be validated under load.</td></tr>
     <tr><td><strong>No incident correlator</strong></td><td>4 × <code>MediumCpuUsage</code> in 5 min, 4 × <code>TargetDown</code> in 15 min — treated as 8 independent incidents. Real outages produce <em>clusters</em>; the cluster <em>is</em> the signal. The system throws it away.</td><td>Sprint 4 P10 (US-5.2 incident correlator), 1–2 days.</td></tr>
     <tr><td><strong>Prompt-assembly layer is too thin</strong></td><td>Raw PromQL strings (<code>histogram_quantile(0.95) = 8203.846153846154 ms</code>) and unconverted floats land in operator-facing prose. The layer between MCP results and LLM input does not pre-render values, scrub noise, or strip <code># TYPE</code> / <code># HELP</code> lines.</td><td>Sprint 4 P1, ~4 h. Architectural shape issue, not a bug.</td></tr>
     <tr><td><strong>Diagnostic-step generation is in the wrong layer</strong></td><td>Two different <code>TargetDown</code> fires (<code>111ded21</code>, <code>a4555bdd</code>) produced word-for-word identical 4-step diagnostic blocks. The LLM is templating, not synthesising — wrong tool for the job.</td><td>Sprint 4 P3, ~6 h. Move generation out of the LLM into <code>app/diagnostic_steps_for_alert(alert, ctx)</code>: a deterministic templater fed from concrete evidence.</td></tr>
     <tr><td><strong>New-application onboarding is bolt-on</strong></td><td>The car-rental side-deployment (2026-05-19) required: Kong route config edit, alert-rule regex widening (<code>namespace=~"app|rental"</code>), <code>service_deployment_type</code> map edits, OTel patcher script — 3 repos touched. No abstraction layer; onboarding a third application will look identical.</td><td>Not on Sprint 4. The abstraction-boundary question is open — see <a href="#arch-multitenancy">§7.6.4</a>.</td></tr>
-    <tr><td><strong>No HA on inference path</strong></td><td>Laptop offline = no triage. Tailscale link drop or laptop reboot = blind. RDS is durable; the inference path is not.</td><td>Partially mitigated by raw-alert fallback on 180s timeout (Sprint 4 P9 sub-task). Not a full HA story — there is no warm standby.</td></tr>
+    <tr><td><strong>No HA on inference path</strong></td><td>The new GPU host offline = no triage. The Lambda autoshutoff is a feature, but a cold-start from "stopped" adds ~90 s before the first webhook is processed; SQS buffers webhooks during that window. The laptop is retained as rollback fallback until at least one full daily-audit cycle clears.</td><td>Partially mitigated by SQS cold-start buffering + raw-alert fallback on 180s timeout. Not a full HA story — there is no warm standby on the inference host itself.</td></tr>
   </tbody>
 </table>
 
@@ -1120,10 +1587,10 @@ than we'd like and is a signal that an archetype is missing.
 <ul>
   <li><strong>(a)</strong> a second comparably-loaded application on the same inference host — Ollama serialises and one application's storm starves the other's triage;</li>
   <li><strong>(b)</strong> a sustained alert storm above ~3 concurrent fires — directly reproduced today, the symptom is <code>/decisions</code> unresponsiveness while one inference is in flight;</li>
-  <li><strong>(c)</strong> loss of the inference host with no warm failover — current MTTR is "Lina powers her laptop back on."</li>
+  <li><strong>(c)</strong> loss of the inference host with no warm failover — MTTR is now bounded by Lambda cold-start (~90 s) on the autoshutoff path, plus laptop GTX 1060 retained as a rollback fallback during the cutover window.</li>
 </ul>
 
-<p>The P0-bundle buys breathing room — target median <code>~90 s</code> with a hard <code>180 s</code> timeout and serial Ollama concurrency — but does not lift the structural ceiling. The structural fix (GPU-on-AWS + queue-based dispatcher + per-application isolation) was scoped 3–5 days and dropped on cost grounds, with no observed quality regression in 25+ days of laptop steady-state. <strong>This is a deferred decision, not a closed one</strong> — the AWS G+VT quota in us-west-2 (4 vCPU, approved 2026-04-27) is held open precisely for re-evaluation if 7b output quality regresses or load patterns change.</p>
+<p><strong>2026-05-21 update.</strong> The original P0 bundle is now defensive margin rather than gating: the GPU migration to AWS <code>g5.xlarge</code> + <code>qwen2.5:14b-instruct</code> on A10G in us-west-2 pulled real-load latency to ~38 s end-to-end (Phase 2 smoke test, 2026-05-21; see <a href="decisions-log.html#d24">D24</a>). The 2026-05-19 cost-grounds drop was rebuilt around Lambda autoshutoff (20-min idle stop) + a $50/mo CloudWatch billing alarm — the cost gate that closed the door before is now closed itself. Access shape co-shipped (Tailscale-only dashboard + IP-allowlisted API Gateway webhook entry + public SSH disabled — see <a href="decisions-log.html#d25">D25</a>).</p>
 
 <div class="callout note">
   <div class="callout-label">Where we'd value your steer</div>
@@ -1390,17 +1857,21 @@ Then open the page at <a href="#pitch">§1</a>.
     <li><strong>252 / 252 triage tests passing.</strong> Plus the MCP-invariant
     CI lint clean. Plus the chaos-corpus regression gate at 5 / 5.</li>
     <li><strong>28 days of steady-state operation</strong> on the laptop GPU
-    since Sprint 3 kickoff (2026-04-23). No restarts, no data loss.</li>
+    (2026-04-23 → 2026-05-20); promoted to AWS <code>g5.xlarge</code> in
+    us-west-2 (A10G GPU) on 2026-05-21 with the laptop kept as rollback
+    fallback. No restarts, no data loss across the migration.</li>
     <li><strong>95 production-shape RCAs from the 2026-05-19 heavy-load test.</strong>
-    Each one quality-graded; 12 issues surfaced; 5 already shipped or
-    scheduled into Sprint 4.</li>
-    <li><strong>Honest latency.</strong> Median 6–7 minutes, worst 23
-    minutes on the laptop GPU under heavy load. Sprint 4's P0 bundle targets
-    median 90 seconds — that's the next two weeks of work.</li>
+    Each one quality-graded; 12 issues surfaced; 5 already shipped.</li>
+    <li><strong>Honest latency.</strong> Was median ~5 min, worst 23 min on the
+    7b/laptop GTX 1060. Phase 2 smoke test on the new A10G + qwen2.5:14b runner
+    (2026-05-21): ~38 s end-to-end (~8× speedup; 14b at ~50-65 tok/s, prompt
+    eval ~1350 tok/s). Sprint 4's P0 software bundle now ships as defensive
+    margin rather than gating work.</li>
   </ul>
   <p>
   Land this: <em>"I'm not asking you to take my word that the architecture is
-  sound — I'm asking you to look at 27 days of receipts."</em>
+  sound — I'm asking you to look at 28 days of receipts, plus today's migration
+  that fixed the latency story."</em>
   </p>
 </div>
 
