@@ -151,7 +151,7 @@
       <div class="mech-no">Mechanism 1 · Stage 5</div>
       <h4>Exemplar library</h4>
       <p>Fourteen hand-authored RCA archetypes injected as a <code>## Reference exemplar</code> section <em>before</em> the evidence pack. The model gets a structural target tailored to this alert before it sees the data.</p>
-      <div class="mech-foot">Decision <a href="decisions-log.html#d17">D17</a> · 14 archetypes · pre-LLM</div>
+      <div class="mech-foot">Decision D17 · 14 archetypes · pre-LLM</div>
     </a>
 
     <a class="mech" href="solution-brief.html#hallucination">
@@ -165,7 +165,7 @@
       <div class="mech-no">Mechanism 3 · Stage 6b</div>
       <h4>Surface-only LEDE validator</h4>
       <p><code>_SURFACE_ONLY_LEDE_PATTERNS</code> regex set: catches PromQL ledes, "based on observed/repeated/context" openers, "The &lt;X&gt; alert for" leads, alertname-first form, and "Looking at the metrics".</p>
-      <div class="mech-foot">Decision <a href="decisions-log.html#d19">D19</a> · 4 rounds of widening</div>
+      <div class="mech-foot">Decision D19 · 4 rounds of widening</div>
     </a>
 
     <a class="mech" href="solution-brief.html#validator">
@@ -186,7 +186,7 @@
       <div class="mech-no">Mechanism 6 · Stage 6c</div>
       <h4>Bounded-agency retry</h4>
       <p>Exactly <em>one</em> additional MCP call from a 6-tool whitelist (Prom instant, Loki range, Jaeger get-traces, RCA history, deploy events, <code>get_trace</code>). Pydantic schema + retry feedback string constrain the second call; re-prompt; revalidate; keep first-pass if retry still bad.</p>
-      <div class="mech-foot">Decision <a href="decisions-log.html#d15">D15</a> · "one MCP call, not a chain"</div>
+      <div class="mech-foot">Decision D15 · "one MCP call, not a chain"</div>
     </a>
 
   </div>
