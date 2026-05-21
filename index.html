@@ -131,7 +131,6 @@
   <a href="prepare.html" class="navlink" style="color:var(--accent-purple); border-color:rgba(176,126,232,.4); background:rgba(176,126,232,.08);">🎤 Prepare (S2)</a>
   <a href="build-guide.html" class="navlink navlink-arch">📖 Build Guide (S1)</a>
   <a href="sprint2-guide.html" class="navlink navlink-sprint">🛠️ Sprint 2 Guide</a>
-  <a href="sprint2-backlog.html" class="navlink navlink-sprint">🚀 Sprint 2 Backlog</a>
   <a href="sprint2-extension-guide.html" class="navlink" style="color:var(--accent-orange);">📋 Sprint 2 Extension</a>
   <a href="sprint2-epic5-ueba.html" class="navlink" style="color:var(--accent-yellow); border-color:rgba(224,208,96,.4); background:rgba(224,208,96,.08);">🧬 Epic 5 — UEBA</a>
   <a href="kubernetes-guide.html" class="navlink navlink-k8s">☸️ Kubernetes Guide</a>
@@ -265,7 +264,7 @@
       <div class="card-icon" style="background:rgba(176,126,232,.12);">🎤</div>
       <div class="card-header-text">
         <h2>Prepare — Sprint 2 Presentation Notes</h2>
-        <p>Frozen prep doc from the 2026-04-23 Sprint 2 close-out presentation. Big-picture-to-small: architecture, decisions, Terraform + Ansible + k3s + Helm + MCP + triage, evolution path, retro, Q&amp;A. Kept as a snapshot of what we shipped at Sprint 2 close; current state lives in <a href="the-bigger-picture.md">the bigger picture</a> and <a href="sprint-history.html">sprint history</a>.</p>
+        <p>Frozen prep doc from the 2026-04-23 Sprint 2 close-out presentation. Big-picture-to-small: architecture, decisions, Terraform + Ansible + k3s + Helm + MCP + triage, evolution path, retro, Q&amp;A. Kept as a snapshot of what we shipped at Sprint 2 close; for current state see the Sprint History page.</p>
       </div>
     </div>
     <div class="card-footer">
@@ -337,7 +336,7 @@
       <div class="card-icon">🧠</div>
       <div class="card-header-text">
         <h2>Triage Service — Reference</h2>
-        <p>Deep dive on the AI RCA service: the 10-stage pipeline (exemplar injection, response validator, hallucination blocklist, surface-only + hypothesis-menu validators, confidence clamp with <code>diagnostic_steps</code> fallback, bounded-agency retry, action-template fallback), HTTP API (<code>/webhook/grafana</code>, <code>/decisions</code>, <code>/dashboard</code>, <code>/feedback/*</code>), data model, 252-test suite, Prometheus metrics, dedup + suppression. Real-load median ~5 min, worst ~26 min on laptop GTX 1060 + <code>qwen2.5:7b</code>; Sprint 4 P0 anchor bundle targets 90 s median. See also <a href="hallucination-firewall.html">hallucination firewall</a>.</p>
+        <p>Deep dive on the AI RCA service: the 10-stage pipeline (exemplar injection, response validator, hallucination blocklist, surface-only + hypothesis-menu validators, confidence clamp with <code>diagnostic_steps</code> fallback, bounded-agency retry, action-template fallback), HTTP API (<code>/webhook/grafana</code>, <code>/decisions</code>, <code>/dashboard</code>, <code>/feedback/*</code>), data model, 252-test suite, Prometheus metrics, dedup + suppression. Real-load median ~5 min, worst ~26 min on laptop GTX 1060 + <code>qwen2.5:7b</code>; Sprint 4 P0 anchor bundle targets 90 s median. Pairs with the Hallucination Firewall page.</p>
       </div>
     </div>
     <div class="card-footer">
@@ -363,24 +362,6 @@
         <span class="tag tag-cyan">GitHub Actions</span>
         <span class="tag tag-cyan">GHCR</span>
         <span class="tag tag-green">DevEx</span>
-      </div>
-      <div class="card-arrow">→</div>
-    </div>
-  </a>
-
-  <a href="sprint2-backlog.html" class="card card-sprint">
-    <div class="card-header">
-      <div class="card-icon">🚀</div>
-      <div class="card-header-text">
-        <h2>Sprint 2 Backlog</h2>
-        <p>20 user stories across 2 epics: AWS environment and AI RCA system with Drain3 anomaly detection (MVP). 86 story points; <strong>closed 2026-04-23</strong> with the deadline moved twice from the original Apr 9 (rescope captured in <a href="decisions-log.html">decisions log</a>).</p>
-      </div>
-    </div>
-    <div class="card-footer">
-      <div class="card-tags">
-        <span class="tag tag-cyan">AWS</span>
-        <span class="tag tag-purple">AI RCA</span>
-        <span class="tag tag-green">Sprint 2 · closed</span>
       </div>
       <div class="card-arrow">→</div>
     </div>
@@ -548,12 +529,12 @@
     </div>
   </a>
 
-  <a href="https://github.com/linalaaraich/monitoring-triage-service/blob/main/docs/happy-path-scenarios.md" class="card" style="border-color:rgba(120,200,180,.35);">
+  <a href="https://github.com/linalaaraich/monitoring-triage-service/blob/main/docs/happy-path-scenarios.md" target="_blank" rel="noopener" class="card" style="border-color:rgba(120,200,180,.35);">
     <div class="card-header">
       <div class="card-icon" style="background:rgba(120,200,180,.1);">📚</div>
       <div class="card-header-text">
-        <h2>Happy-path scenarios — exemplar library</h2>
-        <p>Fourteen curated "perfect cycle" RCA archetypes — OOM-loop, upstream-latency attribution, service-self p95 saturation, critical resource saturation, otel-collector degradation, synthetic-blip dismiss, cascade incidents (disk-Loki), Drain3 novelty post-deploy, bounded-agency retry, adaptive-threshold no-op, closed-loop feedback override, CrashLoopBackOff, network/firewall attribution, TLS pre-failure expiry. Pre-injected into every LLM prompt as a structural reference (<a href="decisions-log.html#d17">D17</a>). Source-of-truth: <code>app/exemplars/library.yaml</code>.</p>
+        <h2>Happy-path scenarios — exemplar library <span style="font-size:13px; color:var(--muted); font-weight:500;">↗ GitHub</span></h2>
+        <p>Fourteen curated "perfect cycle" RCA archetypes — OOM-loop, upstream-latency attribution, service-self p95 saturation, critical resource saturation, otel-collector degradation, synthetic-blip dismiss, cascade incidents (disk-Loki), Drain3 novelty post-deploy, bounded-agency retry, adaptive-threshold no-op, closed-loop feedback override, CrashLoopBackOff, network/firewall attribution, TLS pre-failure expiry. Pre-injected into every LLM prompt as a structural reference (decisions log D17). Source-of-truth: <code>app/exemplars/library.yaml</code> in the triage-service repo.</p>
       </div>
     </div>
     <div class="card-footer">
@@ -562,7 +543,7 @@
         <span class="tag tag-purple">14 archetypes</span>
         <span class="tag tag-green">2026-04-27</span>
       </div>
-      <div class="card-arrow">→</div>
+      <div class="card-arrow">↗</div>
     </div>
   </a>
 
