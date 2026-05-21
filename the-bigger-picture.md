@@ -27,6 +27,8 @@
 
 **Framing intact:** still a PoC on a local test bed asking for CIRES production greenlight. The AWS estate is the PoC's runner, not CIRES production.
 
+**Live dashboard-output audit (2026-05-21 14:55-18:55 UTC).** Immediately before the supervisor presentation a 4-hour audit of the operator-facing dashboard output surfaced 5 new Sprint 4 candidates, tagged DA-1..DA-5: shelved-in-disguise email gate (DA-1), unsafe-action stripping independent of clamp band (DA-2), cross-row verdict-coherence check (DA-3), drain3 fingerprint content-hashing (DA-4), and alertname-family dedupe equivalence (DA-5). **DA-1 was shipped same-day at 19:13 UTC** via `monitoring-triage-service@1cbb220` (12 new tests, suite 274/274, GHCR built, deployed to `observability-gpu-uswest2`). DA-2..DA-5 are folded into the Sprint 4 plan — see [`dashboard-audit-2026-05-21.html`](dashboard-audit-2026-05-21.html) for the full audit and [`sprint-history.html`](sprint-history.html) for the integrated ranked list.
+
 ---
 
 ## 2026-05-19 — Sprint 3 resumes after the prototyping + doc-refresh window
