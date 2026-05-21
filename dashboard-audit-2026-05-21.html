@@ -150,6 +150,27 @@
 </aside>
 <section class="content">
 
+<div style="border-left:3px solid var(--accent-green); background:rgba(107,207,127,.06); padding:14px 18px; margin:0 0 24px; border-radius:0 8px 8px 0;">
+  <div style="font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--accent-green); margin-bottom:6px;">⚡ Status update · 2026-05-21 19:13 UTC</div>
+  <p style="margin:0;">
+    <strong>Q1 fix (the false-positive email gate) — SHIPPED.</strong>
+    Predicate <code>_is_shelved_in_disguise</code> added to
+    <code>app/pipeline.py</code> on
+    <a href="https://github.com/linalaaraich/monitoring-triage-service/commit/1cbb220" style="color:var(--accent-green);"><code>monitoring-triage-service@1cbb220</code></a>,
+    12 new tests (suite <strong>274/274</strong>), GHCR built, container
+    redeployed on <code>observability-gpu-uswest2</code>. Health check
+    at 19:14 UTC: <code>uptime_seconds: 55.6</code> — fresh restart
+    confirmed. Any future RCA matching the bingbot-404 shape (escalate
+    at confidence &lt; 0.40, OR quality in
+    <code>needs_review/data_starved</code>, OR all-"Shelved" actions)
+    now lands with <code>action_taken=shelved</code> on the dashboard —
+    row preserved, no email. The remaining Sprint 4 candidates
+    (verdict-conflict cross-row coherence, drain3 fingerprint collisions,
+    cross-alert-family dedupe, unsafe-action stripping independent of
+    clamp) are still open.
+  </p>
+</div>
+
 <h2 id="window">1. Window + window-level numbers</h2>
 <p>
   Window: <strong>2026-05-21T14:55:00Z → 18:55:00Z</strong> (4 hours).

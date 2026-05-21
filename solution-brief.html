@@ -1123,12 +1123,22 @@ than we'd like and is a signal that an archetype is missing.
     unconditionally.
   </p>
   <p>
-    <strong>Fix (Sprint 4 P0 candidate, ~15 min):</strong> add a
-    "shelved-in-disguise" gate that flips <code>action_taken</code> to
-    <code>"shelved"</code> (dashboard row preserved, no email) when the
-    LLM picked escalate but confidence &lt; 0.40, quality is needs_review,
-    or every suggested action is a "Shelved …" marker. Full diff in the
-    detail page.
+    <strong>Fix — SHIPPED 2026-05-21 19:13 UTC.</strong> Predicate
+    <code>_is_shelved_in_disguise(decision, quality)</code> added to
+    <code>app/pipeline.py</code>; <code>action_taken</code> is now a
+    3-way <code>"shelved" | "emailed" | "suppressed"</code> and the
+    email gate at the old line ~764 now reads
+    <code>if decision.decision == Decision.ESCALATE and not is_shelved_in_disguise:</code>.
+    Triggers: confidence &lt; 0.40, OR quality in
+    <code>(needs_review, data_starved)</code>, OR every suggested
+    action contains the "Shelved" marker. Commit
+    <code><a href="https://github.com/linalaaraich/monitoring-triage-service/commit/1cbb220" style="color:var(--accent-green)">monitoring-triage-service@1cbb220</a></code>,
+    12 new tests (274/274 passing), GHCR build green, container
+    redeployed on <code>observability-gpu-uswest2</code> at 19:13 UTC.
+    The 18:54 and 18:55 <code>PodHighMemoryUsage</code> rows you can
+    see at the top of <code>/dashboard</code> are the bug-shape
+    captured immediately <em>before</em> the deploy — the next RCA of
+    that shape will be <code>action_taken=shelved</code> and no email.
   </p>
 </div>
 
