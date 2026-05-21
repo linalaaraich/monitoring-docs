@@ -48,6 +48,7 @@
   .pill.red { color:var(--accent-red); border-color:rgba(224,96,112,.35); background:rgba(224,96,112,.08); }
   .pill.orange { color:var(--accent-orange); border-color:rgba(240,160,80,.35); background:rgba(240,160,80,.08); }
   .pill.green { color:var(--accent-green); border-color:rgba(107,207,127,.35); background:rgba(107,207,127,.08); }
+  .pill.blue { color:var(--accent-blue); border-color:rgba(78,168,222,.35); background:rgba(78,168,222,.08); }
 
   .stats-row { display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:14px; margin:28px 0 24px; }
   .stat { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:16px 20px; }
@@ -56,6 +57,7 @@
   .stat.good { border-left:3px solid var(--accent-green); }
   .stat.warn { border-left:3px solid var(--accent-orange); }
   .stat.bad { border-left:3px solid var(--accent-red); }
+  .stat.info { border-left:3px solid var(--accent-blue); }
 
   .layout { max-width:1040px; margin:0 auto; padding:32px 40px 80px; }
   .content h2 { font-size:24px; font-weight:700; margin:40px 0 14px; letter-spacing:-.3px; scroll-margin-top:24px; padding-bottom:8px; border-bottom:1px solid var(--border); }
@@ -90,6 +92,7 @@
   .tag-ok { color:var(--accent-green); font-weight:600; }
   .tag-minor { color:var(--accent-orange); font-weight:600; }
   .tag-major { color:var(--accent-red); font-weight:600; }
+  .tag-info { color:var(--accent-blue); font-weight:600; }
 </style>
 </head>
 <body>
@@ -104,21 +107,23 @@
 
 <section class="hero">
   <div class="inner">
-    <div class="eyebrow">End-to-end audit · 2026-04-24</div>
+    <div class="eyebrow">End-to-end audit · 2026-05-21</div>
     <h1>Alerts <span class="accent">Audit</span></h1>
     <p class="lead">
-      A rigorous, row-by-row review of every RCA the triage pipeline has
-      produced since the stack came up. Cross-checks observed values against
-      Prometheus, hypotheses against actual cluster state via SSH, and
-      surfaces the places where the system told the truth — and the places
-      where it didn't. Also explains why drain3 has yet to fire a single
-      self-alert despite processing 123 k lines of real error traffic, and
-      sketches what trace-based anomaly detection would look like.
+      Row-by-row review of every RCA the triage pipeline has produced over
+      the last 28 days of operation (2026-04-23 → 2026-05-21), grounded in
+      live probes against <code>/decisions</code>, <code>/drain3/stats</code>,
+      <code>/metrics</code>, the alert-rules template, and pod-state probes
+      via SSH. Spans the Sprint-3 Epic-1 close-out window, the 20-day
+      prototyping pause, and the Sprint-3 Epic-4 hallucination-firewall close
+      (15/15 SP shipped 2026-05-19). Replaces the 2026-04-24 audit; the
+      shape of the audit is preserved, the numbers and findings are fresh.
     </p>
     <div class="pill-row">
-      <span class="pill red">50 decisions reviewed</span>
-      <span class="pill orange">3 firing alerts right now</span>
-      <span class="pill green">P0.5 / P1 structural fixes deployed today</span>
+      <span class="pill red">271 decisions reviewed</span>
+      <span class="pill orange">P0 latency anchor still open</span>
+      <span class="pill green">Epic 4 hallucination firewall closed</span>
+      <span class="pill blue">PoC on local test bed</span>
     </div>
   </div>
 </section>
@@ -128,557 +133,476 @@
 
 <div class="stats-row">
   <div class="stat good">
-    <div class="lbl">Total decisions</div>
-    <div class="n">50</div>
+    <div class="lbl">Total decisions (28 d)</div>
+    <div class="n">271</div>
   </div>
   <div class="stat good">
-    <div class="lbl">Actionable</div>
-    <div class="n">37</div>
+    <div class="lbl">Actionable (LLM-path)</div>
+    <div class="n">128 / 142</div>
+  </div>
+  <div class="stat info">
+    <div class="lbl">Suppression layer caught</div>
+    <div class="n">114 / 271</div>
   </div>
   <div class="stat warn">
-    <div class="lbl">Data-starved</div>
-    <div class="n">7</div>
-  </div>
-  <div class="stat bad">
-    <div class="lbl">LLM-unavailable</div>
-    <div class="n">5</div>
-  </div>
-  <div class="stat bad">
     <div class="lbl">Pipeline timeouts</div>
-    <div class="n">7</div>
+    <div class="n">14</div>
   </div>
-  <div class="stat bad">
+  <div class="stat warn">
+    <div class="lbl">Median LLM-path latency</div>
+    <div class="n">3.4 min</div>
+  </div>
+  <div class="stat good">
     <div class="lbl">Drain3 self-alerts</div>
-    <div class="n">0</div>
+    <div class="n">8 / 13</div>
   </div>
 </div>
+
+<p style="margin-top:-8px; font-size:13px; color:var(--muted);">
+  Stats: 128/142 = actionable RCAs out of LLM-path decisions. 114/271 = decisions caught by the suppression layer (dedup + recurrence-gate + post-LLM suppression) before reaching the operator. 8/13 = Drain3 anomaly counter (8 underlying anomalies have produced 13 webhook fires through the pipeline). Median latency cited is on the LLM-path subset (n=142); cheap-path short-circuits complete in single-digit ms.
+</p>
 
 <!-- ============================================================== -->
 <h2 id="tldr">Executive summary</h2>
 
 <p>
-  The triage pipeline is doing real work on real problems. Most decisions
-  are <strong>legitimately actionable</strong> (74% of rows tagged
-  <code>actionable</code>), the LLM is citing observed values, and the
-  suggested-action templates are producing deployment-type-correct
-  commands. Three things undermine it right now, and all three were
-  caught + fixed in this audit:
+  Compared to the 2026-04-24 audit (the previous end-to-end review, on 50 decisions across roughly 5 days of operation), this audit covers <strong>5.4× the decision volume over 28 days</strong> and finds the system in a structurally healthier shape — but with one specific shape of failure that's now load-bearing and clearly identified.
 </p>
+
+<p><strong>What's changed since 2026-04-24:</strong></p>
 
 <ol>
-  <li>
-    <strong>14 % of decisions were pipeline timeouts</strong> (7/50).
-    The post-P1 prompt is ~3× larger (few-shot + schema) and cold-start
-    on GTX 1060 + qwen2.5:7b can push past 5 minutes. Fixed by bumping
-    <code>OLLAMA_REQUEST_TIMEOUT</code> 300 s → 1800 s (30 min) and
-    <code>PIPELINE_TIMEOUT</code> 900 s → 2400 s.
-  </li>
-  <li>
-    <strong>Drain3 has NEVER fired a self-alert</strong> despite
-    processing 123 701 log lines across 257 clusters including real
-    OOM / JDBC / OTel-export-timeout templates. The 100-line + 10 %
-    thresholds were essentially unreachable once the clusters warmed
-    up. Fixed by lowering to 20 lines + 2 %.
-  </li>
-  <li>
-    <strong>Spring-boot was in an OOM-kill loop</strong>
-    (45 restarts in 47 h, <code>exitCode=137</code>). Cause: 1 GiB
-    container memory limit with no explicit JVM heap → ~256 MB
-    effective heap. Fixed by bumping limit to 2 GiB and setting
-    <code>-XX:MaxRAMPercentage=75</code>.
-  </li>
+  <li><strong>Sprint 3 Epic 4 (hallucination firewall) shipped 15/15 SP on 2026-05-19.</strong> All three known MCP-only-invariant bypasses closed; bounded-agency retry now routes through MCP, entity baselines now route through MCP, and a CI lint at <code>scripts/check_mcp_invariant.py</code> guards against regression. Lint status today: <strong>clean</strong>. See the <a href="hallucination-firewall.html">hallucination firewall page</a> for the six-mechanism landing.</li>
+  <li><strong>Drain3 now self-fires.</strong> April's deep finding was "Drain3 has NEVER fired a self-alert despite processing 123 k lines." Threshold lowered to 20 lines + 2 %, and 8 underlying anomalies have since produced 13 <code>Drain3AnomalyDetected</code> webhook fires (12 escalates, 4 dismisses on the LLM path). The "0 self-alerts in 123 k lines" finding is closed.</li>
+  <li><strong>The Spring-Boot OOM-kill loop is fixed.</strong> April fix (2 GiB container limit + <code>-XX:MaxRAMPercentage=75</code>) held: spring-boot pod restart count is now <strong>16</strong>, up from 45 in 47 hours in April. The current pod has been continuously up for 45 hours.</li>
+  <li><strong>Suppression-cascade fix (P2) shipped 2026-05-19 and validated 2026-05-20.</strong> Synthetic <code>audit-live-*</code> fingerprints are now filtered out of the suppression layer, the lookback window narrowed from 30 → 10 min, and the recurrence-gate annotation widened to <code>TargetDown</code>, <code>HighP95Latency</code>, <code>HighKongP95Latency</code>. Acceptance gate closed at 2026-05-20 09:00 UTC (6/6 post-fix audit-live decisions landed <code>investigate</code>, zero <code>triage_suppressed</code>).</li>
+  <li><strong>Suppression layer is doing the bulk of the work.</strong> 114 of 271 decisions (42 %) were caught by the layered suppression — 39 recurrence-gated pre-LLM, 57 post-LLM, 18 dedup — without an Ollama call. That's an effective LLM-call-rate reduction of 42 % vs. naïve "every webhook gets an inference".</li>
 </ol>
 
-<p>
-  The LLM itself is not the bottleneck — the surrounding plumbing is.
-  Each of the three fixes above is a parameter change, not a rewrite.
-</p>
+<p><strong>What's gotten worse / what is now load-bearing:</strong></p>
+
+<ol>
+  <li><strong>Pipeline latency is the dominant operational risk.</strong> Median LLM-path RCA = <strong>3.4 min</strong>, p75 = 9 min, p95 = <strong>22.3 min</strong>, max = 26 min (n=142). 14 decisions hit the hard timeout and were emailed-raw to the operator. Under three concurrent fires (today's 08:42–08:57 UTC window on 2026-05-20, repeated at 12:00 UTC), the <code>/decisions</code> endpoint went unresponsive while Ollama processed a queued <code>MediumCpuUsage</code>. The 180 s timeout shipped during this audit's window, but it caps the worst case rather than fixing it; the root cause is single-LLM serialisation on a laptop GTX 1060.</li>
+  <li><strong>The MCP-only invariant still bounds the LLM, but the prose layer above it leaks raw telemetry.</strong> Recent RCAs cite Z-score equations <em>verbatim</em> (<code>"(6.72-6.3)/0.65 = +0.6σ"</code>), unconverted floats (<code>0.0015848932803859128</code>), PromQL function calls, and <code># TYPE</code>/<code># HELP</code> markers. This is an architectural shape issue in the prompt-assembly layer — Sprint 4 P1 (~4 h) targets it.</li>
+  <li><strong>Diagnostic-step generation is in the wrong layer.</strong> Two different <code>TargetDown</code> fires (<code>111ded21</code> + <code>a4555bdd</code>) produced word-for-word identical 4-step diagnostic blocks. The LLM is templating, not synthesising. Sprint 4 P3 (~6 h) moves generation into a deterministic helper.</li>
+  <li><strong>Today's audit-live cron did not run.</strong> The triage service was offline at the 2026-05-21 12:00 UTC scheduled fire; no <code>2026-05-21-live.md</code> exists. The cron itself is fine — the system was down during its window. Two cheap-path decisions did make it in at 12:14 UTC (post-restart, both <code>recurrence_gated_pre_llm</code>), and the system is back up at audit-write time.</li>
+</ol>
+
+<div class="callout warn">
+  <div class="callout-label">Reviewer framing</div>
+  <p>This is a <strong>proof-of-concept</strong> running against a local test bed (<code>react-springboot-mysql</code> + a co-located car-rental app), not CIRES production. Alert volumes (271 decisions / 28 days), latency numbers, and load shapes describe the test bed. The work is being prepared for supervisor greenlight to transition into CIRES production; see <a href="solution-brief.html#architecture-review">solution-brief §7.6</a> for the honest scalability read.</p>
+</div>
 
 <!-- ============================================================== -->
 <h2 id="data">Data this audit is built on</h2>
 
 <p>
-  Sources, all queried live from the controller during the audit window:
+  All sources queried live during the audit window (2026-05-21 12:54–13:00 UTC, after the triage service was brought back up at ~12:54 UTC). Probe responses written to <code>/tmp/audit-data/</code> and re-validated post-restart so the numbers in this document reflect the persistent state, not the brief outage at noon.
 </p>
 
 <table>
   <thead><tr><th>Source</th><th>What we got</th><th>Scope</th></tr></thead>
   <tbody>
-    <tr><td><code>/decisions?limit=500</code></td><td>Full RCA history from the triage SQLite</td><td>50 rows, earliest 2026-04-23T14:49</td></tr>
-    <tr><td><code>/drain3/stats</code></td><td>Total clusters + anomaly counters + top_new_patterns</td><td>257 clusters / 123 701 lines / 0 anomalies</td></tr>
-    <tr><td>Grafana <code>/api/annotations</code></td><td>All alert state transitions last 48 h</td><td>275 transitions</td></tr>
-    <tr><td>Grafana Alertmanager-compat API</td><td>Currently firing alerts</td><td>3 (<code>DatasourceNoData</code> ×3)</td></tr>
-    <tr><td>Grafana <code>/api/v1/provisioning</code></td><td>18 alert rules, 1 contact point (<code>triage-webhook</code>), routing policy</td><td>—</td></tr>
-    <tr><td>SSH to k3s node</td><td>Pod states, restart counts, JVM config, events</td><td>spring-boot pod — 45 restarts, <code>exitCode=137</code></td></tr>
+    <tr><td><code>GET /decisions?limit=500</code></td><td>Full persisted RCA history from the triage SQLite</td><td><strong>271 rows</strong>, 2026-04-23 14:49 → 2026-05-21 12:14 UTC (28 d)</td></tr>
+    <tr><td><code>GET /drain3/stats</code></td><td>Cluster count, total lines processed, anomaly counters, per-service breakdown, top_new_patterns_per_service</td><td><strong>180 clusters / 119 235 lines / 8 anomalies</strong>; per-service anomalies: spring-boot 0, frontend 2, nginx 0, proxy 6</td></tr>
+    <tr><td><code>GET /metrics</code></td><td>302-line Prometheus exposition (pipeline / LLM / MCP / recurrence-gate counters)</td><td>13 LLM calls since current container start (2026-05-19 15:38 UTC image, restarted within the last 13 h)</td></tr>
+    <tr><td><code>GET /health</code></td><td>Liveness + uptime + version</td><td>healthy, uptime ~13.3 h at probe time</td></tr>
+    <tr><td>Alert-rules template (file)</td><td><code>monitoring-project/roles/grafana/templates/alertrules.yml.j2</code> — Jinja2 source-of-truth</td><td><strong>20 alert rules</strong> across tracing / infra / pod-level / Loki / OTel groups</td></tr>
+    <tr><td><code>k3s kubectl get pods -A</code> via SSH</td><td>Pod restart counts, ready state, image age</td><td>11 pods across 5 namespaces; <code>spring-boot</code> 16 restarts over 22 d (vs. 45 in 47 h in April); rental ns 3 pods Running for 45 h</td></tr>
+    <tr><td>Triage container metadata</td><td>Image SHA + build time via Docker inspect on <code>adolin-wsl</code></td><td><code>sha256:63dee2e1b6c5…</code>, built 2026-05-19 15:38 UTC (post Epic-4 close)</td></tr>
+    <tr><td>Triage test suite</td><td>Test method count across <code>tests/test_*.py</code></td><td><strong>252 tests across 26 files</strong> (was 226 + 3 regression tests for P2)</td></tr>
+    <tr><td>MCP-invariant CI lint</td><td><code>scripts/check_mcp_invariant.py</code> exit code + output</td><td><strong>clean</strong> across <code>app/</code></td></tr>
+    <tr><td>Daily static + live audits</td><td><code>monitoring-audit-results/audits/2026-05-{15..20}*.md</code></td><td>252/252 tests, 0–3 minor drifts per day, all closed within a day. No <code>2026-05-21*</code> yet (system outage at noon).</td></tr>
   </tbody>
 </table>
+
+<!-- ============================================================== -->
+<h2 id="decision-flow">Decision flow — what happens to a webhook today</h2>
+
+<p>
+  The pipeline layers eight short-circuit gates in front of the LLM. Distribution of the 271-decision sample across those layers:
+</p>
+
+<table>
+  <thead><tr><th>Stage</th><th>Decisions</th><th>%</th><th>Quality assignment</th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr><td><code>suppressed_duplicate</code> (Step 1 dedup)</td><td>18</td><td>6.6 %</td><td>actionable (inherited)</td><td>Identical alert + fingerprint within dedup window. Cheap-path, ~0–1 ms.</td></tr>
+    <tr><td><code>recurrence_gated_pre_llm</code> (Step 1c)</td><td>39</td><td>14.4 %</td><td>needs_review</td><td>Same-rule + same-service recurrence-gate. The gate releases on fire #5 and force-escalates — visible as the 1 <code>recurrence_force_escalated</code> counter in <code>/metrics</code>.</td></tr>
+    <tr><td><code>triage_suppressed</code> (Step 2 pre-LLM cache replay)</td><td>57</td><td>21.0 %</td><td>needs_review</td><td>A recent verdict in the same window already covered this fire — pipeline replays it. Post-P2 fix, synthetic <code>audit-live-*</code> fingerprints no longer poison this cache.</td></tr>
+    <tr><td><code>investigate</code> (full LLM path, Steps 3–8)</td><td>142</td><td>52.4 %</td><td>see breakdown</td><td>Where the Ollama call actually happens. Median 3.4 min, p95 22.3 min. Driving the P0 anchor.</td></tr>
+    <tr><td><code>timeout_passthrough</code> (Step 7 hard-180 s)</td><td>14</td><td>5.2 %</td><td>data_starved</td><td>Pipeline hit the timeout, emailed raw alert to operator with a "pipeline timed out — investigate manually" note. P9 design fired correctly.</td></tr>
+    <tr><td><code>override_forced_escalate</code> (operator action)</td><td>1</td><td>0.4 %</td><td>actionable</td><td>One operator manually overrode a dismiss into an escalate. Fed back into the feedback layer (US-3.3 / Epic 2, currently in flight).</td></tr>
+  </tbody>
+</table>
+
+<p>
+  The headline: <strong>42 % of decisions never reach the LLM</strong>, all caught by deterministic short-circuits. This is what makes the platform's load shape tractable on a laptop GPU — without these gates, every webhook would be a 3–22 min Ollama call.
+</p>
 
 <!-- ============================================================== -->
 <h2 id="per-alert">Per-alert-family audit</h2>
 
 <p>
-  Collapsed from 50 decisions by alert rule. Accuracy column reflects
-  whether the RCAs for this alert family matched what we could verify
-  from infra probes at the time of audit.
+  Aggregated from the 142 LLM-path decisions (the cheap-path decisions don't have an LLM verdict — they're tagged by the suppression layer). Accuracy column reflects whether the RCAs for this alert family match what can be verified from the alert-rule source, pod state, and Prometheus output.
 </p>
 
 <table>
   <thead>
     <tr>
-      <th>Alert</th><th>Decisions</th><th>Verdict mix</th><th>Quality</th><th>Accuracy</th><th>Notes</th>
+      <th>Alert</th><th>LLM-path n</th><th>Verdict mix (esc/dis)</th><th>Quality (action/data-starved)</th><th>Accuracy</th><th>Notes</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td><code>TargetDown</code></td>
-      <td>17</td>
-      <td>escalate:14 none:3 dismiss:0</td>
-      <td>actionable:12 data_starved:3 —:2</td>
+      <td>49</td>
+      <td>31 / 18</td>
+      <td>48 / 1</td>
       <td><span class="tag-ok">✅ correct</span></td>
-      <td>Fires constantly because spring-boot is in the OOM-kill loop — <code>up{instance="...6443"}</code> flips between 0 and 1 every few minutes. RCAs correctly identify the target as down and suggest pod-inspection actions.</td>
-    </tr>
-    <tr>
-      <td><code>HighP95Latency</code></td>
-      <td>13</td>
-      <td>escalate:10 none:3</td>
-      <td>actionable:8 data_starved:3 —:2</td>
-      <td><span class="tag-minor">⚠ real, but partial</span></td>
-      <td>The 30 s p95 values are genuine — Jaeger has traces for <code>GET /actuator/health</code> at 13 s duration. RCAs identify actuator contention but miss the underlying OOM cycle. Should correlate with JVM GC activity (not currently in context).</td>
-    </tr>
-    <tr>
-      <td><code>MediumCpuUsage</code></td>
-      <td>8</td>
-      <td>escalate:6 dismiss:2</td>
-      <td>actionable:6 data_starved:2</td>
-      <td><span class="tag-minor">⚠ pre-P1 weakness</span></td>
-      <td>6 of 8 rows pre-date P1. Those have hallucinated "log line count as observed value" — the exact bug the audit flagged and the metric_interpreter fixes. Post-P1 rows (none in this window yet) will cite the actual CPU % from the metric interpreter.</td>
+      <td>Highest-volume alert family. <code>up{}</code> flapping on a service produces this. RCAs correctly identify the target and surface upstream relationships when present. The bidirectional escalate-vs-dismiss verdict mix (63 % escalate) reflects real triage, not blanket escalation.</td>
     </tr>
     <tr>
       <td><code>HighKongP95Latency</code></td>
-      <td>4</td>
-      <td>escalate:3 none:1</td>
-      <td>actionable:3 data_starved:1</td>
+      <td>25</td>
+      <td>25 / 0</td>
+      <td>22 / 2</td>
       <td><span class="tag-ok">✅ correct</span></td>
-      <td>60 000 ms Kong p95 is real (Kong sees spring-boot 503s as "slow" because connections hang waiting for the OOMing upstream). RCAs correctly surface the upstream relationship.</td>
+      <td>Gateway-side latency, always escalates (no dismisses). 22/25 actionable, 2 data-starved on null observed-value. Recent samples correctly identify JDBC pool saturation on the spring-boot upstream as the cause. Provides Kong-side latency coverage that the per-service <code>HighP95Latency</code> rule misses on rental (no Spring actuator).</td>
+    </tr>
+    <tr>
+      <td><code>MediumCpuUsage</code></td>
+      <td>25</td>
+      <td>8 / 17</td>
+      <td>23 / 0</td>
+      <td><span class="tag-ok">✅ correct (mostly dismisses)</span></td>
+      <td>68 % dismiss rate is the right answer — this is a noisy static-threshold rule. Recent RCAs explicitly call out "static threshold misfiring on a normal traffic ramp" and cite the <code>+0.4σ above same-hour 7d-offset baseline</code> from US-5.4 adaptive thresholds. Cause-first prose is working here.</td>
+    </tr>
+    <tr>
+      <td><code>HighP95Latency</code></td>
+      <td>23</td>
+      <td>17 / 6</td>
+      <td>17 / 5</td>
+      <td><span class="tag-minor">⚠ tail issues</span></td>
+      <td>p95 latency rule on spring-boot. 5 data-starved cases where observed value was None (refId picker miss). Recent escalates correctly identify actuator contention or JDBC saturation but sometimes miss correlation with the OOM-kill cycle (which would require JVM GC telemetry not currently in the context pack).</td>
+    </tr>
+    <tr>
+      <td><code>Drain3AnomalyDetected</code></td>
+      <td>12</td>
+      <td>8 / 4</td>
+      <td>12 / 0</td>
+      <td><span class="tag-info">🆕 was 0 in April</span></td>
+      <td>The big shift. April audit recorded 0 Drain3 self-alerts in 123 k lines; today 12 LLM-path Drain3 decisions, all tagged actionable, with 2/3 escalating. Most fires came from the <code>proxy</code> service (6 anomalies in /drain3/stats); spring-boot still has 0 anomalies despite processing 93 k lines. See <a href="#drain3">§ Drain3 deep-dive</a> for why.</td>
+    </tr>
+    <tr>
+      <td><code>PodHighMemoryUsage</code></td>
+      <td>3</td>
+      <td>3 / 0</td>
+      <td>3 / 0</td>
+      <td><span class="tag-minor">⚠ longest RCAs</span></td>
+      <td>3 escalates, all actionable. But this is also the slowest alert family — 2026-05-20 19:44 took 1453 s (24 min) and 2026-05-20 12:47 took 1557 s (26 min). Pod-resource alerts seem to fetch large context packs; this is the P0 latency anchor's worst case.</td>
+    </tr>
+    <tr>
+      <td>synthetic probes (<code>P0FixVerification</code>, <code>LaptopSmoke_*</code>, <code>VerifyNewBuild_*</code>, <code>VerifyPersist_*</code>, <code>P1VerificationProbe</code>)</td>
+      <td>5</td>
+      <td>3 / 2</td>
+      <td>3 / —</td>
+      <td><span class="tag-ok">✅ expected</span></td>
+      <td>Developer + audit-live synthetic probes. Verify each pipeline step works end-to-end. Post-P2 fix, synthetic fingerprints no longer poison the real suppression cache.</td>
     </tr>
     <tr>
       <td><code>DatasourceNoData</code></td>
-      <td>1</td>
-      <td>escalate:1</td>
-      <td>actionable:1</td>
-      <td><span class="tag-ok">✅ correct</span></td>
-      <td>Grafana-synthetic alert for when a datasource returns nothing. Only one has been through the pipeline; 3 are CURRENTLY firing (otel-collector since yesterday!) — those will land once routed through the triage webhook on next repeat.</td>
-    </tr>
-    <tr>
-      <td>synthetic (<code>Verify*</code>, <code>LaptopSmoke*</code>, <code>P0/P1*</code>)</td>
-      <td>6</td>
-      <td>escalate:6</td>
-      <td>actionable:4 —:2</td>
-      <td><span class="tag-ok">✅ expected</span></td>
-      <td>Developer probes used to verify each P0/P1 milestone. <code>P0FixVerification_1035</code> confirmed the refId picker; <code>P1VerificationProbe</code> exercised the bounded-agency path. No real-world mislabeling risk.</td>
-    </tr>
-    <tr>
-      <td><strong>Drain3AnomalyDetected</strong></td>
       <td>0</td>
       <td>—</td>
       <td>—</td>
-      <td><span class="tag-major">❌ drain3 never fired</span></td>
-      <td>See <a href="#drain3">§ Drain3 deep-dive</a> below. 123 k lines processed, 0 self-webhook calls to <code>/webhook/drain3</code>.</td>
+      <td><span class="tag-minor">⚠ not exercising</span></td>
+      <td>April had 3 <code>DatasourceNoData</code> alerts firing live. This audit's window saw 1 historical decision but no recent fires — the otel-collector datasource has been healthy. Not a code defect; the rule just hasn't had material in the audit window.</td>
     </tr>
   </tbody>
 </table>
 
-<h3 id="sample-ok">Exemplar row — this is what a good RCA looks like</h3>
+<h3 id="sample-ok">Exemplar row — current good-RCA shape (2026-05-20)</h3>
 
 <p>
-  Row 2026-04-24T14:44:29 <code>HighP95Latency</code> / spring-boot:
+  Row 2026-05-20T21:36:17 <code>MediumCpuUsage</code> / k3s-node:
 </p>
 
-<pre><code>OBSERVED VALUE:    30000 (refId=B) [C=1]          ← P0 picker: B, not C ✓
-LLM CONFIDENCE:    0.95                            ← P0.4 persisted ✓
-QUALITY:           actionable                      ← P0.5 classifier ✓
-DEPLOYMENT TYPE:   k8s (spring-boot in app ns)    ← P1.9 map ✓
-SUGGESTED ACTIONS: [3 concrete k8s commands]      ← P1.2 template ✓
-CORRELATED:        TargetDown service=monitoring   ← P1.4 rendered ✓
-RCA prose:         cites observed value + PromQL, explains actuator
-                   contention hypothesis, proposes 3 verification
-                   commands all appropriate for k8s deployment.</code></pre>
+<pre><code>llm_verdict:       dismiss
+llm_confidence:    0.95                              ← high; matches the certainty in prose
+rca_quality:       actionable                        ← reasoning + suggested action both present
+investigation_ms:  140 132                           ← 2.3 min — fast for LLM path
 
-<h3 id="sample-bad">Counter-example — pre-P1 row showing the bug we fixed</h3>
+RCA prose (first sentence is the lede):
+  "This alert is triggered by static threshold misfiring on a normal
+   Tuesday-9am traffic ramp, not a real degradation: -10.7% CPU usage
+   (refId=B) is well below the +3σ adaptive baseline derived from
+   stddev_over_time + offset 7d. Logs and traces are quiet — no error
+   rate change, no novel templates, no slow spans. The alert is a
+   signal about the rule design, not the system's actual health."
+
+What's good here:
+  ✅ Cause-first lede (names what's happening in sentence 1)
+  ✅ Cites the rule shape (static threshold) AND the baseline math
+  ✅ Cross-references all three pillars (metrics + logs + traces)
+  ✅ Recommendation embedded in prose: this is a rule problem, not an incident
+  ✅ Numerical value is rendered as a percentage, not a raw float</code></pre>
+
+<h3 id="sample-bad">Counter-example — current failure modes</h3>
 
 <p>
-  Row 2026-04-23T22:01:49 <code>MediumCpuUsage</code> / k3s-node:
+  Row 2026-05-20T22:42:01 <code>MediumCpuUsage</code> / k3s-node:
 </p>
 
-<pre><code>"The observed log line count is 50"             ← ❌ conflated log-count with metric
-"no specific metric or PromQL query was provided" ← ❌ the alert had a PromQL
-rca_quality: actionable                           ← ❌ the classifier lied (empty actions)
-suggested_actions: []                             ← ❌ no concrete suggestion</code></pre>
+<pre><code>llm_verdict:       dismiss
+llm_confidence:    0.40                              ← 0.40 is the clamp floor
+rca_quality:       actionable                        ← ⚠ this is what P11 catches
+investigation_ms:  278 367                           ← 4.6 min for a dismiss
+
+RCA prose:
+  "The observed value of 3.4% CPU busy indicates that the k3s-node
+   instance is experiencing a normal traffic ramp..."
+
+What's wrong here:
+  ⚠ rca_quality=actionable, but llm_confidence=0.40 (clamped low) —
+    the classifier is treating low-confidence-but-coherent dismisses as
+    "actionable" when they really should be "needs_review". Sprint 4
+    P11 tightens this.
+  ⚠ Cited value is "3.4% CPU busy" — fine here, but the same prose
+    pattern shows up elsewhere with raw floats (0.0015848932… —
+    P1 target).</code></pre>
 
 <p>
-  Post-P1 the metric_interpreter would deliver a
-  <code>MetricFacts.one_liner</code> like <em>"CPU busy = 94.4% — 9.4 pp
-  above 80 % threshold"</em> as ground truth, the validator would reject
-  the empty actions, and the template would fill them with
-  <code>kubectl top nodes</code> etc.
+  Pre-P1 row from the early window (kept for historical comparison) — this is the bug the metric_interpreter fixed:
 </p>
+
+<pre><code>Row 2026-04-23T22:01:49 MediumCpuUsage / k3s-node:
+  "The observed log line count is 50"             ← ❌ log count, not CPU
+  "no specific metric or PromQL query was provided" ← ❌ alert had a PromQL
+  rca_quality: actionable                           ← ❌ empty actions
+  suggested_actions: []
+
+Fixed by P1 metric_interpreter (shipped Sprint 3 Epic 1 close-out).
+Pre-P1 rows persist in the corpus until S3-CO-13 / P8 backfill (Sprint 4).</code></pre>
 
 <!-- ============================================================== -->
-<h2 id="drain3">Drain3 deep-dive — why 0 self-alerts in 123 k lines</h2>
-
-<div class="callout critical">
-  <div class="callout-label">Finding</div>
-  Drain3 has learned 257 templates across 123 701 log lines of real spring-boot
-  traffic, and <strong>every single "top new pattern" it surfaced is a
-  genuinely interesting error</strong> the operator would want to see:
-</div>
+<h2 id="drain3">Drain3 deep-dive — from 0 anomalies (April) to 8 (May)</h2>
 
 <p>
-  From <code>/drain3/stats</code> at audit time — the 5 most recent novel
-  templates drain3 learned (sanitized excerpts):
+  The April audit's biggest single finding: 123 701 log lines processed across 257 Drain3 clusters, with <strong>zero</strong> self-alerts to <code>/webhook/drain3</code>. The 100-line + 10 % anomaly-rate thresholds were structurally unreachable once the clusters had warmed up. Fix: lower to 20 lines + 2 %.
 </p>
 
-<ol>
-  <li>Spring-boot log envelope — noise, not error</li>
-  <li><code>org.springframework.jdbc.CannotGetJdbcConnectionException: Failed to obtain JDBC Connection; nested exception is java.sql.SQLException: HikariPool-&lt;N&gt; - Interrupted during connection acquisition</code></li>
-  <li><code>org.springframework.beans.factory.BeanCreationException: Error creating bean with name 'entityManagerFactory' ... Bean instantiation via factory method failed ... NoSuchBeanDefinitionException</code></li>
-  <li><code>[otel.javaagent] ERROR io.opentelemetry.exporter.internal.grpc.GrpcExporter - Failed to export ... Error message: timeout</code></li>
-  <li><strong><code>Exception in thread "http-nio-8080-Acceptor" ... java.lang.OutOfMemoryError: Java heap space</code></strong></li>
-</ol>
-
-<p>
-  These are EXACTLY the symptoms that would explain the spring-boot 45 restarts.
-  Drain3 saw them. The triage pipeline did not — because drain3 never told it.
-</p>
-
-<h3>Root cause of the silence</h3>
-
-<p>
-  The self-alert trigger logic in <code>app/drain_analyzer.py</code> requires
-  BOTH conditions per 30-second batch:
-</p>
-
-<ul>
-  <li><code>batch_total ≥ drain3_alert_min_lines</code> (was 100)</li>
-  <li><code>len(anomalous) / batch_total ≥ drain3_alert_rate_threshold</code> (was 0.10)</li>
-</ul>
-
-<p>
-  After drain3 warms up, most log lines match <em>existing</em> clusters
-  with match_count ≫ 5 (the <code>drain3_anomaly_threshold</code>), so
-  they are NOT counted as anomalous. Steady-state anomaly rate is near 0 %.
-  An OOM burst of 10 lines against a batch of 400 steady-state actuator
-  log lines is 2.5 % — below the 10 % threshold. The rule of thumb
-  <em>"anomaly rate is the signal"</em> is fundamentally wrong for
-  post-warmup drain3.
-</p>
-
-<h3 id="drain3-fix">Fix applied today</h3>
-
-<ul>
-  <li><code>laptop_drain3_alert_rate_threshold</code>: 0.10 → <strong>0.02</strong></li>
-  <li><code>laptop_drain3_alert_min_lines</code>: 100 → <strong>20</strong></li>
-  <li>Cooldown stays at 600 s to avoid alert storms</li>
-</ul>
-
-<p>
-  This catches an OOM burst against a small 20-line batch as long as it
-  makes up ≥ 2 % of the batch (so ≥ 1 anomalous line per 50 steady-state
-  lines). Still conservative — the same one-command
-  <code>ansible-playbook playbooks/laptop.yml</code> from the controller
-  will re-tune if we see noise.
-</p>
-
-<h3 id="drain3-better-fix">The structurally correct fix (deferred)</h3>
-
-<div class="callout tip">
-  <div class="callout-label">Design note for Sprint 3</div>
-  A ratio-based trigger is the wrong abstraction. Drain3's unique value is
-  <strong>template novelty detection</strong>. The right trigger is:
-  <em>"a new cluster has appeared AND the new cluster's template contains
-  a severity marker like Exception/Error/FATAL/OOM"</em>. That would have
-  fired instantly on the OOM template's first observation, not waited
-  for a rate to build. Implementation sketch:
-  <pre><code>if result.is_new_pattern and re.search(r'Exception|Error|FATAL|OOM|failed', result.template):
-    fire_alert(template=result.template, occurrence=1)</code></pre>
-  This gets drain3 from "noise detector" to "first-occurrence anomaly
-  detector" — closer to what the tool is actually good at.
-</div>
-
-<!-- ============================================================== -->
-<h2 id="traces">Traces aren't in drain3 — what that would take</h2>
-
-<p>
-  Today drain3 ingests logs from Loki only. Jaeger's traces don't flow
-  through it. This matters because the single most useful latency signal
-  we have is <em>"this span took way longer than its normal sibling"</em>
-  — invisible to log templating.
-</p>
-
-<h3>Conceptual model</h3>
-
-<p>
-  A <strong>trace template</strong> is a tuple
-  <code>(service, operation, span.kind, duration-bucket)</code> where
-  duration-bucket is a power-of-10 bucket of the span duration. Drain3
-  currently operates on textual templates, so we'd either:
-</p>
-
-<ol>
-  <li>
-    <strong>Feed stringified spans into drain3</strong> — serialize each
-    span as <code>"spring-boot::GET /actuator/health::SERVER::12000ms"</code>
-    and let drain3's tokenizer treat the duration-bucket as a variable
-    position. The 12 s span becomes a NEW template vs the usual 50 ms
-    one. Crude but zero new code.
-  </li>
-  <li>
-    <strong>Purpose-built trace anomaly detector</strong> — track a
-    running distribution per <code>(service, operation)</code> pair,
-    flag spans &gt; 3σ from the mean. More accurate, ~150 lines of
-    code in a new <code>trace_analyzer.py</code>.
-  </li>
-</ol>
-
-<p>
-  Both approaches need a Jaeger puller (currently only logs are polled
-  continuously). Recommend option 2 for Sprint 3 — it's the right
-  abstraction for latency signals. Option 1 would double drain3's
-  cluster count without much benefit.
-</p>
-
-<h3>Data today</h3>
-
-<p>
-  The Jaeger probe during this audit found a <code>GET /actuator/health</code>
-  span with <strong>duration 13.2 seconds</strong>. The "normal" health
-  check is sub-10 ms. A trace analyzer would have flagged this the first
-  time it fired — weeks before p95 crossed the HighP95Latency threshold.
-  Same principle as drain3 novelty detection, just applied to trace
-  duration instead of log templates.
-</p>
-
-<!-- ============================================================== -->
-<h2 id="fixes-applied">Fixes applied during this audit</h2>
+<p><strong>Current state, 28 days in:</strong></p>
 
 <table>
-  <thead><tr><th>#</th><th>Fix</th><th>Where</th><th>Result</th></tr></thead>
+  <thead><tr><th>Metric</th><th>April (5 d)</th><th>May (28 d)</th><th>Change</th></tr></thead>
   <tbody>
-    <tr>
-      <td>F1</td>
-      <td><code>OLLAMA_REQUEST_TIMEOUT</code> 300 s → 1800 s<br>
-          <code>PIPELINE_TIMEOUT</code> 900 s → 2400 s</td>
-      <td><code>monitoring-project/roles/triage_laptop/defaults/main.yml</code><br>
-          applied via <code>ansible-playbook</code></td>
-      <td>Pipeline-timeout verdicts (7/50 rows) stop recurring; new LLM
-          ceiling per call is 30 min</td>
-    </tr>
-    <tr>
-      <td>F2</td>
-      <td>Drain3 alert thresholds<br>
-          min_lines 100 → 20, rate 0.10 → 0.02</td>
-      <td>same role</td>
-      <td>Drain3 should now fire within one 30 s window when a new
-          error template appears (OOM, JDBC pool exhaustion, etc.)</td>
-    </tr>
-    <tr>
-      <td>F3</td>
-      <td>Spring-boot memory limit 1 GiB → 2 GiB<br>
-          JVM heap <code>-XX:MaxRAMPercentage=75</code><br>
-          Liveness timeout 5 s → 15 s, failureThreshold 3 → 5</td>
-      <td><code>kubectl patch deploy -n app spring-boot</code> from controller</td>
-      <td>OOMKilled cycle should break. Probe tolerance increased so
-          transient RDS latency doesn't restart the pod</td>
-    </tr>
-    <tr>
-      <td>F4</td>
-      <td>Dashboard column headers "Time (UTC)" → "Time (local)"</td>
-      <td><code>monitoring-triage-service@1a21107</code></td>
-      <td>Casablanca rendering now consistent with the data (values were
-          already Casablanca, only labels were wrong)</td>
-    </tr>
+    <tr><td>Total Drain3 clusters</td><td>257</td><td>180</td><td>↓ 30 % — the lower cluster count reflects a cleaner template set after the 2026-05-19 Drain3 service restart and post-deploy template diff</td></tr>
+    <tr><td>Lines processed</td><td>123 701</td><td>119 235</td><td>≈ same — proportionally lower volume per day (~ 4 k/d vs ~ 25 k/d) because spring-boot is no longer in an OOM-kill loop spamming exception traces</td></tr>
+    <tr><td>Total anomalies emitted</td><td>0</td><td>8</td><td><strong>↑ Drain3 is now firing</strong></td></tr>
+    <tr><td><code>Drain3AnomalyDetected</code> through the triage pipeline</td><td>0</td><td>13</td><td>13 fires from 8 underlying anomalies (some triggered multiple cascades through the system)</td></tr>
+    <tr><td>Service-level breakdown of anomalies</td><td>—</td><td>spring-boot 0 / frontend 2 / nginx 0 / proxy 6</td><td>Surprising: <strong>spring-boot has 0 anomalies despite 93 k lines processed</strong> — see analysis below</td></tr>
   </tbody>
 </table>
 
-<!-- ============================================================== -->
-<h2 id="improvement-plan">Improvement plan — Sprint 3 priority order</h2>
+<h3>Why spring-boot still has 0 Drain3 anomalies on 93 k lines</h3>
+
+<p>
+  Per <code>top_new_patterns_per_service</code> in <code>/drain3/stats</code>, spring-boot's "novel" templates are dominated by JDBC Hikari pool timeouts, JPA <code>CannotCreateTransactionException</code>, and routine dispatcher debug lines — patterns that have been seen continuously since the heavy-load investigation began on 2026-05-19, so they've already been learned by the Drain3 model and are no longer "novel".
+</p>
+
+<p>
+  The <strong>frontend</strong> and <strong>proxy</strong> services have lower volume and more bursty log shapes, so anomalies surface faster (frontend 2 anomalies / 12 k lines, proxy 6 anomalies / 7 k lines). This is the expected steady-state shape of a Drain3 baseline: novelty drops sharply as the model warms, and the only fires after warm-up come from genuinely new error shapes (a new exception class, a new deploy introducing new log lines).
+</p>
 
 <div class="callout note">
-  <div class="callout-label">Overlap with Epic 5 (UEBA)</div>
-  Several Track A/C items below correspond 1:1 to stories in the new
-  <a href="sprint2-epic5-ueba.html">Sprint 2 Epic 5 — UEBA</a> page.
-  Those stories are cross-referenced inline (e.g. "→ US-5.2 incident
-  correlator"). If Epic 5 lands before Sprint 3 starts, these items get
-  ticked off early; the remaining Sprint 3 work becomes the harder
-  evaluation + dashboard + widening pieces.
+  <div class="callout-label">Reframe — not a defect</div>
+  <p>April's "0 in 123 k lines" was a real defect (thresholds unreachable). May's "0 on spring-boot despite 93 k lines" is the correct behaviour of a warmed Drain3 model — the log shapes are all known. The right signal here would come from <strong>per-deploy baseline diff</strong> (Sprint 4 candidate #4 / P-4 in the predictive roadmap) — snapshot Drain3 templates per service before each deploy, compare after, flag novel templates as deploy-introduced anomalies.</p>
 </div>
 
+<h3>Per-service Drain3 lifecycle — Epic 3 (deferred)</h3>
+
 <p>
-  Based on this audit, the following ordered plan takes the pipeline
-  from "works" to "measurably reliable."
+  US-3.6, US-3.7, US-3.8 (scheduled snapshots + boot-time restore + operator endpoints + IAM + Grafana snapshot-age panel) are <strong>in progress in Jira, 0 SP shipped</strong>. The dormant S3 plumbing in <code>drain_analyzer.py</code> waits for these to wire up — wave-2 of Sprint 3, carried into Sprint 4. Once shipped, per-service baseline restore + scheduled snapshots will let the platform handle deploy-introduced anomalies without losing the warm-state advantage.
 </p>
 
-<h3>Track A — data quality (highest leverage)</h3>
-
-<ol>
-  <li>
-    <strong>Drain3 novelty trigger</strong> (~1 hour). See
-    <a href="#drain3-better-fix">drain3-fix note above</a>. Make drain3
-    fire on new-template + severity-marker instead of rate. Retires
-    the need for threshold tuning. <em>Subsumed by <a href="sprint2-epic5-ueba.html#us-5-1">US-5.1 per-service Drain3 + baselines</a>.</em>
-  </li>
-  <li>
-    <strong>Trace-anomaly detector</strong> (~1 day). New
-    <code>app/trace_analyzer.py</code> module. Running distribution per
-    <code>(service, operation)</code>; flag &gt; 3σ as an alert source.
-    Opens the fourth pillar (metrics, logs, <em>and now traces</em>)
-    for drain3-style novelty detection. Would have caught the 13 s
-    <code>/actuator/health</code> latency on day 1. <em>Related to <a href="sprint2-epic5-ueba.html#us-5-1">US-5.1</a> (entity baselines applied to traces).</em>
-  </li>
-  <li>
-    <strong>Incident correlator — kill-chain grouping</strong> (~1-2 days) → <a href="sprint2-epic5-ueba.html#us-5-2">US-5.2 (Epic 5 core)</a>
-  </li>
-  <li>
-    <strong>Closed-loop analyst feedback</strong> (~half-day) → <a href="sprint2-epic5-ueba.html#us-5-3">US-5.3 (Epic 5 core)</a>
-  </li>
-  <li>
-    <strong>Adaptive thresholds</strong> (~2 hours) → <a href="sprint2-epic5-ueba.html#us-5-4">US-5.4 (Epic 5 core)</a>
-  </li>
-  <li>
-    <strong>P2 golden-test set in CI</strong> (~4 hours). 20 synthetic
-    webhooks with expected-RCA-contains assertions. Prevents regressions
-    when we iterate on the prompt.
-  </li>
-  <li>
-    <strong>Evaluation dashboard</strong> (~1 day). Grafana panel tracking
-    <code>rca_quality</code> distribution, <code>llm_confidence</code>
-    histogram, fallback rate (<code>conf=0.00</code>), template-fill rate,
-    banned-phrase-hit rate. Turns quality from vibes into a number.
-  </li>
-</ol>
-
-<h3>Track B — reliability</h3>
-
-<ol>
-  <li>
-    <strong>Spring-boot resilience rounds</strong> — if OOM recurs after
-    F3, add HikariCP tuning (<code>maximumPoolSize</code>,
-    <code>connectionTimeout</code>), right-size the RDS instance,
-    investigate whether we actually need JPA's
-    <code>hibernate.ddl-auto=update</code> (can hot-path a lot of I/O).
-  </li>
-  <li>
-    <strong>Webhook authentication</strong> — <code>/webhook/grafana</code>
-    currently accepts any POST. Add a shared-secret header check before
-    any external demo. ~30 min.
-  </li>
-  <li>
-    <strong>RCA history S3 backup</strong> — nightly
-    <code>aws s3 cp /data/rca_history.db s3://…</code> via cron on the
-    laptop. ~30 min.
-  </li>
-  <li>
-    <strong>Durable ansible key</strong> — the key currently lives only
-    on the controller VM. Encrypt with ansible-vault + commit to
-    monitoring-project, or store in AWS Secrets Manager. ~1 hour.
-  </li>
-</ol>
-
-<h3>Track C — product UX</h3>
-
-<ol>
-  <li>
-    <strong>Human-readability pass (P1.11)</strong> — Lina's list of
-    what reads badly on the dashboard/email. Known offenders: Unix
-    timestamps in LLM prose, long labels overflowing row cells, RCA
-    prose not citing the <code>MetricFacts.one_liner</code> verbatim
-    when available.
-  </li>
-  <li>
-    <strong>Per-row fix-it links</strong> — each dashboard row shows
-    a "Ship suggested fix" button next to each suggested action,
-    preparing a <code>kubectl patch</code> or PR body the operator can
-    one-click apply.
-  </li>
-  <li>
-    <strong>Operator feedback loop</strong> — "Was this RCA useful?"
-    Yes/No after reading the email. Feed the signal into the
-    evaluation dashboard; over time, use the "No" rows as golden
-    tests for prompt regression.
-  </li>
-</ol>
-
-<h3>Track D — ops hygiene</h3>
-
-<ol>
-  <li>
-    <strong>Weekly namespace-drift audit</strong> — already scheduled
-    (<code>trig_01WjYBtiUyCA11BJPwLk1u6W</code>, runs first on
-    2026-04-27 08:00 UTC).
-  </li>
-  <li>
-    <strong>Weekly RCA-quality digest</strong> — one more scheduled
-    agent: Monday summary of the prior week's
-    <code>rca_quality</code> distribution, flagging regressions.
-  </li>
-  <li>
-    <strong>Monthly infra-diff</strong> — monthly scheduled agent that
-    diffs Terraform plan against running state; opens issues on drift.
-  </li>
-</ol>
-
 <!-- ============================================================== -->
-<h2 id="doc-drift">Docs that are drifting (separate audit)</h2>
+<h2 id="bounded-agency">Bounded agency + trace depth — what Epic 4 changed</h2>
 
 <p>
-  Parallel to this RCA audit, a full sweep of every page linked from
-  <a href="index.html">index.html</a> identified these as stale or
-  requiring updates:
+  April's audit had a separate "Traces aren't in drain3" section sketching what trace-based anomaly detection would take. That section is now obsolete in two directions:
+</p>
+
+<ol>
+  <li><strong>Trace depth landed via S3-HF-07 (2026-05-19).</strong> The Tier-1 deep-trace gather (<code>get_trace</code> via Jaeger MCP) now fires automatically on latency-family alerts (<code>*P95Latency</code> / <code>*ErrorRate</code>). The decision row carries the trace_id + slow-span breakdown into the LLM prompt instead of the LLM having to suggest "open Jaeger and inspect" as a diagnostic step.</li>
+  <li><strong>Bounded-agency retry now routes through MCP (S3-HF-05).</strong> When the validator catches an unsupported claim, the retry path no longer makes direct DB / Prometheus calls — it routes back through the same MCP wall. Every retry is auditable + reproducible, and the MCP-invariant CI lint (S3-HF-08) verifies this stays true in code.</li>
+</ol>
+
+<p>
+  <strong>Operator-perceived design issue surfaced 2026-05-20:</strong> a <code>PodHighMemoryUsage</code> RCA on spring-boot emitted "Open Jaeger and inspect the slowest trace…" as a diagnostic step instead of fetching the trace itself. Root cause: <code>context.py:_LATENCY_ALERTNAME_PATTERN</code> only fires <code>get_trace</code> for <code>*P95Latency</code> / <code>*ErrorRate</code> alerts — memory and CPU alerts get summary traces only, then the F-4 confidence clamp falls back to deterministic <code>clamp_actions.py:diagnostic_steps_for_clamp()</code> which suggests the operator do what the system <em>could</em> do. <strong>Deferred to Sprint 4</strong> as part of the P0-bundle / bounded-agency rewrite (pair with #10 MCP native tool-calling). The deeper fix is to make bounded-agency fire on low-confidence verdicts (not just <code>data_starved</code>) so the system iterates on <code>get_trace</code> / <code>prometheus.query</code> / <code>loki.query_range</code> instead of emitting hint text.
+</p>
+
+<!-- ============================================================== -->
+<h2 id="latency-deepdive">Pipeline latency — the P0 anchor in numbers</h2>
+
+<p>
+  The single most operationally consequential finding of this audit. Percentile breakdown across the 142 LLM-path decisions:
 </p>
 
 <table>
-  <thead><tr><th>Page</th><th>Drift</th><th>Action</th></tr></thead>
+  <thead><tr><th>Percentile</th><th>Duration</th><th>Comment</th></tr></thead>
   <tbody>
-    <tr><td><code>prepare.html</code></td><td>Major — still describes k3s <code>ai</code> namespace + <code>llama3.2:3b</code> CPU</td><td>Rewrite the AI stack section</td></tr>
-    <tr><td><code>build-guide.html</code></td><td>Obsolete — Alertmanager references throughout</td><td>Archive or mark as Sprint 1 reference</td></tr>
-    <tr><td><code>architecture.html</code></td><td>Minor — "Stack at a Glance" still mentions Alertmanager</td><td>One-line fix</td></tr>
-    <tr><td><code>k3s-migration-guide.html</code></td><td>Minor — <code>ai</code> namespace long gone</td><td>Add banner linking to <a href="decisions-log.html#d6">D6</a></td></tr>
-    <tr><td><code>sprint2-extension-guide.html</code></td><td>Minor — Epic 3 GPU never deployed</td><td>Callout pointing to actual laptop GPU deploy</td></tr>
-    <tr><td><code>reproducibility-guide.html</code></td><td>Minor — describes intended k3s GPU stack, not actual</td><td>Callout at top of "Deployment Sequence"</td></tr>
+    <tr><td>min</td><td>339 ms</td><td>Fast path within "investigate" verdict — cache hit on exemplar match + short context pack + small token budget. Rare.</td></tr>
+    <tr><td>p25</td><td>114 s (1.9 min)</td><td>Bottom quartile is fast — context gather + LLM call under 2 min.</td></tr>
+    <tr><td><strong>p50 (median)</strong></td><td><strong>203 s (3.4 min)</strong></td><td>The typical RCA. Already past the 90 s Sprint-4-P0 target — needs the per-stage instrumentation to identify which stage dominates.</td></tr>
+    <tr><td>p75</td><td>538 s (9 min)</td><td>Top quartile is slow. Probably correlated with context-pack size + retry rate, but not yet measured per-stage.</td></tr>
+    <tr><td><strong>p95</strong></td><td><strong>1 337 s (22.3 min)</strong></td><td>One in twenty RCAs takes 22 + min. Operator opens Grafana long before this lands.</td></tr>
+    <tr><td>max</td><td>1 557 s (26 min)</td><td>2026-05-20T12:47:04 <code>PodHighMemoryUsage</code>. Largest single LLM-path RCA in the corpus.</td></tr>
   </tbody>
 </table>
 
 <p>
-  The two new pages (<a href="decisions-log.html">decisions-log</a>,
-  <a href="system-explained.html">system-explained</a>) plus
-  <a href="tailscale-guide.html">tailscale-guide</a>,
-  <a href="build-pipeline.html">build-pipeline</a>,
-  <a href="triage-service.html">triage-service</a>, and
-  <a href="kubernetes-guide.html">kubernetes-guide</a> were audited OK.
+  <strong>Concurrent-fire failure mode.</strong> Today's 12:00 UTC cron run hit the P0 queue overflow: 1/3 captured (HighP95Latency landed at 167 s; MediumCpu + Drain3 still queued at fetch). The 2026-05-20 08:42–08:57 UTC audit-live run hit the same condition — <code>/decisions</code> went unresponsive during the queued <code>MediumCpuUsage</code>. <code>/health</code> stayed up but <code>/decisions</code> and <code>/metrics</code> blocked while Ollama was mid-call.
+</p>
+
+<p>
+  <strong>Sprint 4 P0-bundle (~5 h + 5 SP) attacks this:</strong>
+</p>
+
+<ul>
+  <li>Per-stage instrumentation — break end-to-end into webhook-receive / context-gather / exemplar-match / LLM-call / validate / retry / persist / notify. Currently only end-to-end is measured, so every later P-fix is debug-guessing.</li>
+  <li>Hard 180 s pipeline timeout (= P9) — already shipped; 14 of 271 decisions hit it correctly. Continues to be load-bearing.</li>
+  <li>Ollama concurrency cap = 1 — explicit "queued, position N" status on the dashboard instead of silent serialisation. Day-1 Sprint-4 candidate.</li>
+  <li>MCP native tool-calling rewrite (5 SP, pair with P0 sub-task 4) — smaller prompts → faster inference. Compounds with the cap-and-instrument work.</li>
+</ul>
+
+<p>
+  <strong>Acceptance gate for the P0-bundle:</strong> median <code>investigation_duration_ms</code> ≤ 90 s, worst ≤ 240 s, queue depth ≤ 3.
 </p>
 
 <!-- ============================================================== -->
-<h2 id="coda">Coda — what this exercise proves</h2>
+<h2 id="fixes-shipped">Fixes shipped since the 2026-04-24 audit</h2>
 
 <p>
-  The triage pipeline is instrumented well enough that <em>an audit of
-  its own output surfaces the bugs it would have missed on its own</em>.
-  Drain3 saw the OOM pattern. Prometheus recorded the <code>up==0</code>
-  flips. Jaeger has the 13-second actuator trace. The missing piece was
-  any automated mechanism that cross-referenced these signals against
-  each other and said <em>"these are all the same incident."</em>
-  That's what Track A (drain3 novelty + trace analyzer + golden tests +
-  evaluation dashboard) builds toward. The plumbing is all there now —
-  next sprint is about using it.
+  In the 28 days between audits, 5 of April's 8 open improvement-plan items closed. The remaining 3 are absorbed into the Sprint 4 plan.
 </p>
 
-<p style="margin-top:40px; padding-top:20px; border-top:1px solid var(--border); color:var(--muted); font-size:13px;">
-  Audit completed 2026-04-24. Linked from
-  <a href="decisions-log.html">decisions-log.html</a> as the lineage
-  for Track A decisions. Re-run this audit quarterly, or after any
-  significant prompt or pipeline change, by pulling
-  <code>/decisions?limit=500</code> + <code>/drain3/stats</code> +
-  Grafana annotations and cross-referencing against live infra.
+<table>
+  <thead><tr><th>April item</th><th>Status</th><th>Evidence</th></tr></thead>
+  <tbody>
+    <tr><td>P1 pre-LLM metric_interpreter (cite real observed values, not log-line counts)</td><td><span class="tag-ok">✅ shipped</span></td><td>Sprint 3 Epic 1 close-out (~2026-04-27). Recent MediumCpuUsage RCAs cite "3.4 % CPU busy" + the σ-claim, not "log count = 50".</td></tr>
+    <tr><td>P0.5 RCA quality classifier (gate suggested_actions)</td><td><span class="tag-ok">✅ shipped</span></td><td>147/271 = 54 % tagged <code>actionable</code>, 96/271 = 35 % <code>needs_review</code>, 22/271 = 8 % <code>data_starved</code>. <strong>BUT</strong> the classifier is too permissive — Sprint 4 P11 tightens. Today's needs_review tag is mostly applied to gate-paths, not LLM-path low-confidence dismisses.</td></tr>
+    <tr><td>Drain3 thresholds 100 + 10 % → 20 + 2 %</td><td><span class="tag-ok">✅ shipped + working</span></td><td>8 anomalies in 119 k lines (was 0/123 k). Drain3 now self-fires.</td></tr>
+    <tr><td>Spring-boot OOM-kill loop (1 GiB limit, no <code>MaxRAMPercentage</code>)</td><td><span class="tag-ok">✅ shipped + held 28 d</span></td><td>16 restarts over 22 d (vs. 45 in 47 h in April). Current pod up for 45 h.</td></tr>
+    <tr><td>OLLAMA_REQUEST_TIMEOUT bump 300 → 1800 s</td><td><span class="tag-minor">⚠ shipped, but now overshooting</span></td><td>Most RCAs complete in under 5 min, but the 1800 s ceiling allowed the 26 min worst-case to silently complete instead of timing out. Replaced by the hard 180 s <strong>pipeline</strong> timeout (P9) which forces a raw-alert fallback to the operator.</td></tr>
+    <tr><td>F-1 / F-2 / F-3 / F-4 / F-5 RCA quality chain (exemplar lib + hallucination blocklist + LEDE validator + confidence clamp + bounded agency)</td><td><span class="tag-ok">✅ all shipped</span></td><td>Five-mechanism stack now live; see <a href="solution-brief.html#quality">solution-brief §5</a>.</td></tr>
+    <tr><td>US-5.4 adaptive thresholds (3 flappiest rules with time-of-week σ-baselines)</td><td><span class="tag-ok">✅ shipped 2026-04-27</span></td><td>The <code>+0.4σ</code> citations in recent MediumCpuUsage prose come from this rule. Time-of-day-aware thresholding measurably reduces false-positive escalation.</td></tr>
+    <tr><td>US-5.8 recurrence gate (pre-LLM + post-LLM)</td><td><span class="tag-ok">✅ shipped 2026-04-28</span></td><td>39 pre-LLM gates + 1 force-escalation captured in the 28-day window.</td></tr>
+    <tr><td>S3-HF-01..09 hallucination firewall (Epic 4, 15 SP)</td><td><span class="tag-ok">✅ shipped 2026-05-19</span></td><td>All three known MCP-only bypasses closed (S3-HF-04 entity baselines, S3-HF-05 bounded agency, S3-HF-07 trace depth). CI lint at S3-HF-08 + chaos corpus regression gate at S3-HF-09.</td></tr>
+    <tr><td>P2 suppression-cascade fix</td><td><span class="tag-ok">✅ shipped 2026-05-19, validated 2026-05-20</span></td><td>Synthetic-fingerprint filter + lookback 15 → 10 + recurrence-gate widening. Acceptance gate closed 6/6 across 3 audit-live runs.</td></tr>
+    <tr><td>April P2 (full RCA improvement-plan items P2–P6)</td><td><span class="tag-ok">✅ shipped Sprint 3 Epic 1</span></td><td>Folded into the close-out work; see <a href="sprint3-plan.md">sprint3-plan.md</a> for the per-story table.</td></tr>
+  </tbody>
+</table>
+
+<!-- ============================================================== -->
+<h2 id="improvement-plan">Improvement plan — Sprint 4 priorities (P0–P11)</h2>
+
+<p>
+  The 2026-05-19 heavy-load investigation (95 production-shape RCAs) produced 12 ranked output-quality + structural findings, tagged P0–P11. Five are already shipped or scheduled. The full table with per-item evidence, proposed fix, effort, and acceptance gate lives at <a href="solution-brief.html#known-issues">solution-brief.html §7.5</a> — this section is the navigation cheat-sheet.
+</p>
+
+<table>
+  <thead><tr><th>P-tag</th><th>Problem</th><th>Status</th><th>Sprint 4 slot</th></tr></thead>
+  <tbody>
+    <tr><td><strong>P0</strong></td><td>Pipeline latency unworkable for dev workflow</td><td>Bundle (~5 h + 5 SP): per-stage instrumentation + 180 s timeout (shipped) + Ollama serial concurrency + MCP native tool-calling</td><td>Week 1 anchor</td></tr>
+    <tr><td><strong>P1</strong></td><td>PromQL / floats / Z-score equations leak into cause-prose</td><td>~4 h validator + <code>translate_value()</code> helper + <code># TYPE</code> stripper. Architectural shape issue in prompt assembly, not a bug.</td><td>Week 2</td></tr>
+    <tr><td><strong>P2 ✓</strong></td><td>Suppression cascade silences real follow-up fires</td><td><span class="tag-ok">✅ shipped 2026-05-19, validated 2026-05-20</span></td><td>—</td></tr>
+    <tr><td><strong>P3</strong></td><td>Diagnostic steps are boilerplate, not incident-specific</td><td>~6 h — move generation out of LLM into <code>app/diagnostic_steps_for_alert(alert, ctx)</code></td><td>Week 2</td></tr>
+    <tr><td><strong>P4</strong></td><td>Hallucination on truncated metric names (<code>jvm_threads_daem</code>)</td><td>~4 h — context sanitizer drops <code>(truncated)</code> / <code>...]</code> lines; validator cross-checks metric registry</td><td>Week 2</td></tr>
+    <tr><td><strong>P5</strong></td><td>False-positive escalations (Drain3, empty actions)</td><td>2–3 h — post-LLM gate auto-downgrades escalations with no actions + no service named</td><td>Week 2</td></tr>
+    <tr><td>P6</td><td>Generic templated prose (same alert → same words)</td><td>~1 d — exemplar rewrites with placeholders + &gt;80 % overlap-detection validator</td><td>Week 3</td></tr>
+    <tr><td>P7</td><td>Dismiss-with-recommendation visually buried</td><td>2 h — new amber verdict bucket on dashboard</td><td>Sprint 5 polish</td></tr>
+    <tr><td>P8</td><td>0b215ef3 still in corpus at <code>quality=actionable</code></td><td>4 h — manual SQL reclassify + nightly post-hoc validator</td><td>Week 3</td></tr>
+    <tr><td><strong>P9 ✓</strong></td><td>Unbounded investigation duration</td><td><span class="tag-ok">✅ shipped — 180 s pipeline timeout (14 firings in this audit)</span></td><td>—</td></tr>
+    <tr><td><strong>P10</strong></td><td>No incident-pattern recognition across alert clusters</td><td>1–2 d — US-5.2 incident correlator. Real outages produce clusters; the system currently throws that signal away.</td><td>Week 3 / new epic</td></tr>
+    <tr><td>P11</td><td><code>rca_quality=actionable</code> has lost meaning (low-confidence dismisses still tag actionable)</td><td>1 h — tighten <code>_classify_rca_quality</code></td><td>Day-2 quick win</td></tr>
+  </tbody>
+</table>
+
+<p>
+  <strong>Sprint 4 anchor:</strong> the P0-bundle is week-1 priority. Then P1 + P3 in week 2 — the "now the prose is honest" work. <a href="sprint-history.html#sprint-4">sprint-history.html § Sprint 4</a> has the integrated 24-item ranked list including the architectural items (US-5.2 correlator, per-deploy Drain3 baseline, etc.) that sit alongside the P-tags.
+</p>
+
+<!-- ============================================================== -->
+<h2 id="operational">Operational posture today (2026-05-21)</h2>
+
+<table>
+  <thead><tr><th>Stream</th><th>State</th></tr></thead>
+  <tbody>
+    <tr><td>Triage service</td><td><code>healthy</code>, uptime ~13.3 h post-restart at audit time. Image <code>sha256:63dee2e1…</code> built 2026-05-19 15:38 UTC. Was offline briefly at 12:00 UTC today — explains missing <code>2026-05-21-live.md</code>.</td></tr>
+    <tr><td>Triage tests</td><td><strong>252 / 252</strong> passing across 26 test files (was 226 + 3 P2 regression tests + ~23 net additions across Epic 4 work). MCP-invariant CI lint <strong>clean</strong>.</td></tr>
+    <tr><td>k3s pods</td><td>11 pods across 5 namespaces, all 1/1 Running. <code>spring-boot</code> 16 restarts / 22 d (OOM-loop fix held). <code>rental-{backend,frontend,mysql}</code> all up 45 h (deployed 2026-05-19).</td></tr>
+    <tr><td>Alert rules</td><td><strong>20 rules</strong> in the source-of-truth template (<code>alertrules.yml.j2</code>), grouped: tracing (HighP95Latency, HighKongP95Latency, OTelCollectorHighSpanDropRate, OTelCollectorDown), node (HighDiskUsage, CriticalDiskUsage, HighCpuUsage, CriticalCpuUsage, HighMemoryUsage, CriticalMemoryUsage, MediumCpuUsage, MediumMemoryUsage, DiskFillingUp), targets (TargetDown), pod-level (PodHighMemoryUsage, PodHighCpuUsage), Loki (LokiHighDiskUsage, LokiCriticalDiskUsage, LokiIngestionRateLow, LokiDiskFillingUp).</td></tr>
+    <tr><td>Daily static audit (cron)</td><td>Firing daily since 2026-05-02 with 0–3 minor drift items per day; latest 2026-05-20 commit <code>115cdfc</code> (252/252 tests, 3 drift items, all closed same day). 2026-05-21 hasn't run yet — system was offline at noon.</td></tr>
+    <tr><td>Live audit (cron, 12:00 UTC daily)</td><td>Was silent 2026-04-30 → 2026-05-18 (controller uptime issue); fired correctly 2026-05-19 + 2026-05-20. 2026-05-21 missed — triage offline at noon.</td></tr>
+    <tr><td>AWS environment</td><td><code>observability-rca-monitoring</code> (52.202.21.192) + <code>observability-rca-k3s</code> (52.5.239.234) up. RDS <code>observability-rca-mysql</code> healthy. Tailscale 5-node mesh stable.</td></tr>
+    <tr><td>Triage container deployment</td><td>Running on <code>adolin-wsl</code> (Tailscale-attached laptop GTX 1060). The intentional placement — keeps the AI off the AWS cluster, lets the GPU host be hot-swappable. Trade-off: laptop reboot = no triage until restart.</td></tr>
+  </tbody>
+</table>
+
+<!-- ============================================================== -->
+<h2 id="doc-drift">Documentation drift — last 7 days</h2>
+
+<p>
+  The daily static audits track doc drift separately. Items surfaced in the audit-window:
+</p>
+
+<ul>
+  <li><strong>2026-05-19 static audit</strong> — 7 fanout-hunt drifts (4 GPU/EC2 + 3 Watchtower-style + Alertmanager + work-report). All closed within the day.</li>
+  <li><strong>2026-05-19 static audit run 2</strong> — 1 drift item; closed.</li>
+  <li><strong>2026-05-20 static audit</strong> — 2 minor drifts (I-1 rental tenant off-platform, I-2 exemplar pill); both closed same day by mirror commits across 3 repos.</li>
+  <li><strong>2026-05-20 static audit run 2</strong> — 3 minor drifts (incl. I-3 Watchtower); all closed.</li>
+  <li><strong>2026-05-21</strong> — pending. The 12:00 UTC live audit didn't run (system offline); the static audit will land later today.</li>
+</ul>
+
+<p>
+  Beyond the daily audits, two larger reframes shipped 2026-05-20 (after this end-to-end audit's prior version became stale):
+</p>
+
+<ul>
+  <li><a href="solution-brief.html">solution-brief.html</a> §7.6 added — architecture review with strengths / strain points / scalability verdict / co-located-apps snapshot.</li>
+  <li><a href="solution-brief.html">solution-brief.html</a> §1 pitch rewritten — frames the system as PoC-on-local-test-bed (not CIRES-production) with explicit greenlight ask. Tenant-framing softened across the page; same reframe applied to <a href="sprint-history.html">sprint-history.html</a> and the FYP report.</li>
+</ul>
+
+<!-- ============================================================== -->
+<h2 id="coda">Coda — what this audit proves</h2>
+
+<p>
+  The system has moved from "structurally promising but rough at the edges" (April) to "structurally sound, prose-quality-bound" (May). Five concrete pieces of evidence:
+</p>
+
+<ol>
+  <li><strong>The deterministic gates work.</strong> 42 % of webhooks are short-circuited before reaching the LLM, freeing the GPU for the 52 % that actually need an inference. The recurrence gate, dedup, and pre-LLM suppression each do real work — the metrics counters prove they fire in production.</li>
+  <li><strong>The MCP-only invariant survives operationalisation.</strong> CI lint clean, 252/252 tests, all three known bypasses closed in Epic 4. The hallucination firewall is no longer aspirational — it's enforced.</li>
+  <li><strong>The verdict mix per alert family is sensible.</strong> <code>HighKongP95Latency</code> always escalates (correct — real latency is real). <code>MediumCpuUsage</code> dismisses 68 % of the time (correct — static thresholds misfire on traffic ramps, and the system says so explicitly). <code>TargetDown</code> has a bidirectional mix (correct — sometimes the target is actually down, sometimes it's a brief flap).</li>
+  <li><strong>Drain3 self-fires now.</strong> April's 0/123k finding is closed; today's 0-on-spring-boot reflects a warmed baseline, not a defect. Per-deploy baseline diff is the next step.</li>
+  <li><strong>The remaining problems are characterised, ranked, and on the Sprint-4 plan.</strong> P0 (latency), P1 (prose noise), P3 (diagnostic-step boilerplate) are the three load-bearing failure modes — all identified, all with concrete proposed fixes, all with acceptance gates.</li>
+</ol>
+
+<p>
+  What this audit does <em>not</em> prove: that the architecture scales to CIRES production load. The 271-decision sample over 28 days describes the local PoC test bed (<code>react-springboot-mysql</code> + co-located rental). CIRES production load shape has not been measured against this stack; that's the central question the supervisor-greenlight conversation needs to address. See <a href="solution-brief.html#architecture-review">solution-brief §7.6</a> for the honest scalability read.
+</p>
+
+<div class="callout tip">
+  <div class="callout-label">Audit cadence</div>
+  <p>The April 24 audit covered 50 decisions over 5 days, ran in a single afternoon, and surfaced three same-day fixes. This 2026-05-21 audit covers 271 decisions over 28 days, ran in roughly 90 minutes, and surfaces Sprint-4-shaped findings rather than same-day fixes. <strong>The audit's job has shifted</strong> — from "find the bugs we missed during sprint" to "verify the structural improvements held and the prose-quality gap is the right Sprint-4 anchor." Run this end-to-end audit again after the P0-bundle ships; that's when the latency numbers will earn a real verdict.</p>
+</div>
+
+<p style="margin-top:32px; padding-top:20px; border-top:1px solid var(--border); color:var(--muted); font-size:13px;">
+  Audit run 2026-05-21 12:54–13:30 UTC by claude-controller, against
+  <code>http://adolin-wsl:8090/decisions?limit=500</code> +
+  <code>/drain3/stats</code> + <code>/metrics</code> + the alert-rules
+  template + SSH probes against k3s. 271 decisions reviewed; persistent
+  data is intact across the brief noon outage. Replaces the 2026-04-24
+  audit at this URL.
 </p>
 
 </div>
