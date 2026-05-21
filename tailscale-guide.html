@@ -116,23 +116,28 @@
 
 <h2>Why Tailscale</h2>
 <p>
-  The CIRES platform has four moving pieces that need to reach each other:
+  The CIRES platform has six moving pieces that need to reach each other:
   the cloud controller (where this documentation and the ansible control
-  node live), the monitoring VM on EC2, the k3s node on EC2, and Lina's
-  laptop running the AI stack. Three of those are on AWS EC2 with
-  elastic IPs that can drift; one is on a residential WSL2 box with a
-  dynamic home-router IP. Coordinating them via public IPs + security
-  groups is brittle — every re-provision is a hand-editing exercise.
+  node live), the monitoring VM on us-east-1 EC2, the k3s node on us-east-1
+  EC2, the new <strong>us-west-2 GPU host</strong> running the AI stack
+  (added 2026-05-21), and Lina's laptop (now rollback fallback only). Four
+  are on AWS EC2 with elastic IPs that can drift; one is on a residential
+  WSL2 box with a dynamic home-router IP. Coordinating them via public IPs
+  + security groups is brittle — every re-provision is a hand-editing
+  exercise. The tailnet also bridges across AWS regions (us-east-1 ↔
+  us-west-2) without VPC peering or NAT gateways.
 </p>
 <p>
   Tailscale fixes this by putting every node on a single WireGuard mesh
   (the <strong>tailnet</strong>) with stable <code>100.x.y.z</code>
-  addresses and MagicDNS hostnames. The monitoring VM reaches Lina's
-  laptop at <code>adolin-wsl</code> regardless of what IP her ISP hands
-  out that morning. Ansible runs against <code>observability-rca-monitoring</code>
-  regardless of whether AWS re-assigns the EIP. And none of this crosses
-  the public internet — traffic goes peer-to-peer when possible,
-  encrypted, with a NAT-traversal relay fallback.
+  addresses and MagicDNS hostnames. The monitoring VM reaches the GPU host
+  at <code>observability-gpu-uswest2</code> regardless of EIP churn after
+  autoshutoff/restart cycles. Ansible runs against
+  <code>observability-rca-monitoring</code> regardless of whether AWS
+  re-assigns the EIP. The us-west-2 GPU host's MCP bridges reach back to
+  Prometheus/Loki/Jaeger in us-east-1 over the same tailnet. And none of
+  this crosses the public internet — traffic goes peer-to-peer when
+  possible, encrypted, with a NAT-traversal relay fallback.
 </p>
 <div class="callout tip">
   <div class="callout-label">Free tier</div>
@@ -144,7 +149,7 @@
   </p>
 </div>
 
-<h2>The CIRES tailnet as of 2026-04-28</h2>
+<h2>The CIRES tailnet as of 2026-05-21</h2>
 
 <table>
   <thead>
@@ -158,16 +163,22 @@
       <td>Orchestration; ansible control node; this documentation source</td>
     </tr>
     <tr>
-      <td>Monitoring VM</td>
+      <td>Monitoring VM (us-east-1)</td>
       <td><code>observability-rca-monitoring</code></td>
       <td>100.74.21.104</td>
-      <td>Prometheus, Loki, Jaeger, Grafana, OTel Collector <em>(Alertmanager removed Sprint 1, D6 2026-04-24; alerting now via Grafana unified-alerting &rarr; triage-service webhook)</em></td>
+      <td>Prometheus, Loki, Jaeger, Grafana, OTel Collector <em>(Alertmanager removed Sprint 1, D6 2026-04-24; alerting now via Grafana unified-alerting &rarr; API Gateway in us-west-2)</em></td>
     </tr>
     <tr>
-      <td>k3s VM</td>
+      <td>k3s VM (us-east-1)</td>
       <td><code>observability-rca-k3s</code></td>
       <td>100.104.90.72</td>
-      <td>Spring Boot + MySQL + Kong in k3s pods (monitored app). <strong>Joined tailnet 2026-04-28</strong> via the existing <code>roles/tailscale</code> ansible role with <code>-e tailscale_hostname=observability-rca-k3s</code>. Public SSH (port 22) closed in the SG at the same time; reach via <code>ssh deploy@observability-rca-k3s</code>.</td>
+      <td>Spring Boot + MySQL + Kong in k3s pods (monitored app). <strong>Joined tailnet 2026-04-28</strong> via the existing <code>roles/tailscale</code> ansible role. Public SSH (port 22) closed in the SG at the same time; reach via <code>ssh deploy@observability-rca-k3s</code>.</td>
+    </tr>
+    <tr>
+      <td><strong>GPU host (us-west-2)</strong></td>
+      <td><code>observability-gpu-uswest2</code></td>
+      <td>100.65.77.50</td>
+      <td><strong>Primary AI runner since 2026-05-21.</strong> EC2 <code>g5.xlarge</code> (A10G 24 GB VRAM), instance <code>i-03aec662b1a47ad8f</code>, EIP <code>52.27.21.89</code>. Hosts <code>ai-triage-service:8090</code>, 5 MCP containers on 8091-8095, Ollama as a host systemd service (not in compose; bridge containers reach it via <code>host.docker.internal:11434</code>), plus <code>drain-queue.service</code>, <code>triage-stack.service</code>, and <code>retention-cleanup.timer</code>. Webhook ingress is via API Gateway → Lambda → SQS, not direct. Public SSH closed (Tailscale SSH + SSM only). See <a href="decisions-log.html#d24">D24</a>.</td>
     </tr>
     <tr>
       <td>Laptop (Windows host)</td>
@@ -176,10 +187,10 @@
       <td>Docker Desktop host for WSL2</td>
     </tr>
     <tr>
-      <td>Laptop (WSL2 / AI stack)</td>
+      <td>Laptop (WSL2 / rollback fallback)</td>
       <td><code>adolin-wsl</code></td>
       <td>100.117.118.70</td>
-      <td>Triage service, Ollama, 5 MCP servers</td>
+      <td>Rollback fallback for the AI triage stack (no longer primary AI runner since 2026-05-21 migration to AWS us-west-2). Stays warm until at least one full daily-audit cycle clears on the new host.</td>
     </tr>
   </tbody>
 </table>

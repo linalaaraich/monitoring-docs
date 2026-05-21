@@ -160,7 +160,7 @@ Ollama model pull            (≈5-15 min depending on model size)
       ▼
 integration-k8s.yml          (end-to-end smoke test — load-test → alert → triage → email)</code></pre>
 
-<div class="warn"><strong>Rough cost:</strong> in us-east-1 the demo stack runs ~$2-3/day if left on 24×7 (t3.large monitoring + t3.xlarge k3s + db.t3.micro RDS). <s>+ g4dn.xlarge GPU</s> <em>(not deployed &mdash; Ollama runs on the laptop GTX 1060; the us-west-2 g5.xlarge migration was dropped 2026-05-19 on cost grounds)</em>. Stop the EC2s when not demoing; RDS storage still bills but is small.</div>
+<div class="warn"><strong>Rough cost:</strong> in us-east-1 the demo stack runs ~$2-3/day if left on 24×7 (t3.large monitoring + t3.xlarge k3s + db.t3.micro RDS). <strong>+ us-west-2 g5.xlarge ~$1.00/hr while on</strong> (Ollama on A10G running <code>qwen2.5:14b-instruct</code>, 7b fallback). The Lambda autoshutoff stops the instance after 20 min idle, so practical bill with real traffic is ~$3-5/day. EIP retained between stops; plus ~$21/mo for the three VPC endpoints (always-on cost floor for the Lambda gateway design). See <a href="decisions-log.html#d24">D24</a> for the 2026-05-21 migration rationale. Stop the us-east-1 EC2s when not demoing; RDS storage still bills but is small.</div>
 </div>
 
 <!-- ============== PREREQUISITES ============== -->

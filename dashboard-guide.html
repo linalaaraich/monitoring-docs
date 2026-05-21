@@ -305,9 +305,10 @@
 <h3 id="col-duration">4.8 Duration</h3>
 <p>
   End-to-end pipeline duration, from webhook arrival to row persistence. Includes
-  MCP context-gathering (~1–5s) + LLM inference (typically 10–80s on the laptop GPU)
-  + validator + persistence. Dashboard format scales: under 1s shows ms, 1–60s shows
-  decimal s, over 60s shows "N min M s".
+  MCP context-gathering (~1–5s) + LLM inference (typically 3–15 s on the us-west-2
+  A10G running <code>qwen2.5:14b</code>; was 10–80 s on the laptop GTX 1060 +
+  <code>qwen2.5:7b</code>) + validator + persistence. Dashboard format scales:
+  under 1s shows ms, 1–60s shows decimal s, over 60s shows "N min M s".
 </p>
 
 <h2 id="detail-panel">5. The detail panel</h2>
@@ -529,9 +530,14 @@
   <p>
     Verdict: <strong>timeout</strong>. Action: <strong>Notified (no LLM)</strong>.
     The pipeline exceeded its budget. No RCA, no suggested actions — the raw alert
-    was forwarded. Investigate Ollama health if you see a cluster of these
-    (<code>docker logs ai-ollama</code> on the laptop). Most common cause: GPU
-    memory contention or Ollama-loading-a-cold-model latency.
+    was forwarded. Investigate Ollama health if you see a cluster of these. On the
+    us-west-2 GPU host, Ollama is a systemd service (not in compose) — check with
+    <code>sudo journalctl -u ollama -f</code> over Tailscale SSH (or SSM as
+    break-glass). Most common cause: GPU memory contention, Ollama-loading-a-cold-
+    model latency, or the autoshutoff Lambda just brought the instance back from
+    "stopped" (~90 s cold-start where SQS buffers webhooks — a single
+    post-idle spike of "timeout" rows is normal). On the laptop fallback the
+    Ollama container is reachable as <code>docker logs ai-ollama</code>.
   </p>
 </div>
 

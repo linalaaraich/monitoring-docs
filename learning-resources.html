@@ -184,8 +184,9 @@
     <ul>
       <li><code>provisioning-monitoring-infra/</code> — the entire AWS estate.</li>
       <li><code>terraform.tfvars</code> — the operator-editable knobs (<code>allowed_ssh_cidrs</code>, instance types, AMI pin).</li>
-      <li><strong>Managed resources:</strong> <code>observability-rca-monitoring</code> (<code>t3.large</code>), <code>observability-rca-k3s</code> (<code>t3.xlarge</code>), <code>observability-rca-mysql</code> (RDS), the Loki S3 bucket, the Terraform state bucket.</li>
-      <li><strong>Account:</strong> <code>735115318342</code>, region <code>us-east-1</code>.</li>
+      <li><strong>Managed resources (us-east-1):</strong> <code>observability-rca-monitoring</code> (<code>t3.large</code>), <code>observability-rca-k3s</code> (<code>t3.xlarge</code>), <code>observability-rca-mysql</code> (RDS), the Loki S3 bucket, the Terraform state bucket.</li>
+      <li><strong>Managed resources (us-west-2, added 2026-05-21):</strong> <code>observability-rca-gpu</code> (<code>g5.xlarge</code>, A10G 24 GB VRAM), Lambda router + idle-checker, API Gateway HTTP API, SQS cold-start queue, DynamoDB gateway-state table, EventBridge cron, VPC endpoints. See <a href="decisions-log.html#d24">D24</a>.</li>
+      <li><strong>Account:</strong> <code>735115318342</code>, <strong>regions:</strong> <code>us-east-1</code> + <code>us-west-2</code>.</li>
     </ul>
     <h4>Day-to-day commands</h4>
     <ul>
@@ -254,7 +255,7 @@
     <li><strong>Ansible</strong> takes those hosts (via Tailscale MagicDNS) and brings the monitoring VM up to spec — Prometheus, Loki, Jaeger, Grafana, OTel Collector, alert rules.</li>
     <li><strong>Ansible</strong> (different playbook) bootstraps <strong>k3s</strong> on the k3s EC2 instance.</li>
     <li><strong>Helm</strong> deploys the <strong>Kubernetes</strong> workload (Spring Boot, MySQL, React, Kong, rental-*) onto the k3s cluster.</li>
-    <li>The AI triage layer runs separately on a Tailscale-attached laptop GPU and reads from this stack via MCP servers — see <a href="architecture.html">Architecture</a>.</li>
+    <li>The AI triage layer runs separately on a Tailscale-attached us-west-2 <code>g5.xlarge</code> GPU host (A10G 24 GB VRAM, since 2026-05-21 — see <a href="decisions-log.html#d24">D24</a>) and reads from this stack via MCP servers — see <a href="architecture.html">Architecture</a>.</li>
   </ol>
 
   <p>The exact end-to-end sequence with commands is in the <a href="reproducibility-guide.html">Reproducibility Guide</a>. The mapping from each tool to the repo that owns it is in the <a href="repository-map.html">Repository Map</a>.</p>

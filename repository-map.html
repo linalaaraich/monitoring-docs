@@ -153,7 +153,7 @@
         </div>
       </div>
       <p class="repo-desc">The Terraform state for the entire AWS estate. VPC, subnets, security groups, EC2 instances, RDS, S3 buckets, EIPs, IAM. Pinned Ubuntu AMI to remove silent drift. SG rules parameterised so <code>terraform.tfvars</code> is the only file an operator edits during day-to-day work.</p>
-      <p class="repo-detail"><strong>Managed resources:</strong> <code>observability-rca-monitoring</code> (<code>t3.large</code>), <code>observability-rca-k3s</code> (<code>t3.xlarge</code>), <code>observability-rca-mysql</code> (RDS), Loki S3 bucket, Terraform state bucket. <strong>Account:</strong> <code>735115318342</code>, region <code>us-east-1</code>.</p>
+      <p class="repo-detail"><strong>Managed resources (us-east-1):</strong> <code>observability-rca-monitoring</code> (<code>t3.large</code>), <code>observability-rca-k3s</code> (<code>t3.xlarge</code>), <code>observability-rca-mysql</code> (RDS), Loki S3 bucket, Terraform state bucket. <strong>Managed resources (us-west-2, added 2026-05-21):</strong> <code>observability-rca-gpu</code> (<code>g5.xlarge</code>, A10G 24 GB, instance <code>i-03aec662b1a47ad8f</code>, EIP <code>52.27.21.89</code>), Lambda <code>triage-gateway-router</code> + <code>triage-idle-checker</code>, API Gateway HTTP API, SQS <code>triage-cold-start-queue</code>, DynamoDB <code>triage-gateway-state</code>, EventBridge cron, VPC interface endpoints (EC2, SQS) + DynamoDB gateway endpoint. <strong>Account:</strong> <code>735115318342</code>, <strong>regions:</strong> <code>us-east-1</code> + <code>us-west-2</code>. Sub-tree at <code>us-west-2/</code> holds the GPU + serverless gateway stack.</p>
     </div>
 
     <div class="repo">
@@ -245,7 +245,7 @@ done</code></pre>
   </ul>
 
   <p style="margin-top:32px; padding-top:18px; border-top:1px solid var(--border); font-size:13px; color:var(--muted);">
-    Page compiled 2026-05-19. Counts and image tags are point-in-time;
+    Page compiled 2026-05-21. Counts and image tags are point-in-time;
     <code>monitoring-audit-results</code> visibility is private by
     design (decision <a href="decisions-log.html#d22">D22</a>-adjacent —
     see also the audit-results scope note).
