@@ -185,13 +185,17 @@ models, Ollama, qwen2.5, Ansible, Terraform, k3s.
 
 CIRES Technologies is the digital factory of Tanger Med, the principal
 port complex of northern Morocco.  The Digital Factory Observability
-Service is responsible for the operational health of the internal
+Service is responsible for the operational health of an internal
 service catalogue that supports port logistics, customer integrations,
-and back-office workflows.  At the start of this project, the service
-catalogue ran on a small fleet of on-premises virtual machines hosting
-a representative web stack (a Spring Boot back-end, a Kong API gateway,
-a MySQL data store, a React-based front-end); a parallel migration to
-AWS was already on the medium-term roadmap.
+and back-office workflows.  To prototype an improved observability
+posture without disturbing production systems, the project's work was
+deliberately scoped against a \emph{representative web stack} (a
+Spring Boot back-end, a Kong API gateway, a MySQL data store, a
+React-based front-end) deployed on a small fleet of on-premises
+virtual machines --- a scaled-down environment for prototyping the
+architecture before any transition into CIRES production; a parallel
+migration of the prototype to AWS was already on the medium-term
+roadmap.
 
 Internal monitoring at the start of the project was limited to ad-hoc
 log inspection and a small number of metric-threshold rules.
@@ -538,10 +542,9 @@ parallel tracks ran for the duration of this sprint:
 \end{enumerate}
 
 A third stream, conducted in parallel, was a guided read-through of
-Google's \emph{SRE Book} and \emph{SRE Workbook} with explicit
-translation into Tanger Med's context: a small team without a formal
-on-call rotation, a mixed-deployment service catalogue, and operational
-visibility concentrated in a small number of senior engineers.
+Google's \emph{SRE Book} and \emph{SRE Workbook}, with explicit
+translation of the SRE vocabulary into the project's operational
+context.
 
 \section{Findings from interviews}
 
