@@ -2124,18 +2124,34 @@ them.
 </table>
 
 <!-- 13.2 -->
-<h3 id="be-shipped">13.2 What's already shipped (Phase 1)</h3>
+<h3 id="be-shipped">13.2 What's already shipped (Phase 1 + 2.1)</h3>
 
 <div class="callout note">
-  <div class="callout-label">Currently live on observability-gpu-uswest2</div>
+  <div class="callout-label">Currently live on observability-gpu-uswest2 — updated 2026-05-22 evening</div>
   <ul>
-    <li><strong>GET <code>/dashboard/v2</code></strong> — renders the design's <code>&lt;Dashboard&gt;</code> component (with sidebar) against real <code>/decisions</code> data. ~100 KB HTML, ~15 ms server time, ~3 s first-paint (Babel-in-browser).</li>
+    <li><strong>GET <code>/dashboard/v2</code></strong> — renders the design's <code>&lt;Dashboard&gt;</code> component (with sidebar) against real <code>/decisions</code> data. Accepts <code>?page=N&amp;size=N</code>. ~43 KB HTML once paginated, ~15 ms server time, ~3 s first-paint (Babel-in-browser).</li>
+    <li><strong>GET <code>/dashboard/v2/alert/{short_id}</code></strong> ✨ <em>shipped 2026-05-22</em> — the detail-page click-through. Resolves the 8-char short_id back to the full UUID, pulls fingerprint history for the timeline (HistorySection) + related alerts in ±10 min window on the same service for the RelatedSidebar. Renders the design's <code>&lt;DetailPage&gt;</code> component end-to-end.</li>
     <li><strong>GET <code>/static/design/*</code></strong> — StaticFiles mount serving atoms.jsx / sidebar.jsx / dashboard.jsx / detail.jsx / email.jsx / feedback.jsx / tokens.css.</li>
-    <li><strong><code>_v2_transform_row(r, fingerprint_history, drain3_stats, now_utc)</code></strong> — maps a single RCARecord into the CIRES_ALERT shape. Populates: short-ID (8 chars) + full UUID; Tangier-time formatted timestamps; rel-time and active-for durations; env (heuristic: stg for rental ns, prod elsewhere); namespace + service-type from internal mapping tables; cause-first reason from first sentence of <code>rca_report</code>; suggested_actions parsed from stored JSON; tags derived from quality + decision; real fire-count via fingerprint aggregation; history timeline of prior fires; drain3 stats for Drain3AnomalyDetected rows.</li>
-    <li><strong>Fingerprint pre-aggregation</strong> — the route pulls a 200-row slab from <code>/decisions</code> once, builds a per-fingerprint history map, then transforms only the page rows. No extra DB hits.</li>
+    <li><strong><code>_v2_transform_row(r, fingerprint_history, drain3_stats, now_utc)</code></strong> — maps a single RCARecord into the CIRES_ALERT shape. Populates: short-ID (8 chars) + full UUID; Tangier-time formatted timestamps; real rel-time and active-for durations; env (heuristic: stg for rental ns, prod elsewhere); namespace + service-type from internal mapping tables; cause-first reason from first sentence of <code>rca_report</code>; suggested_actions parsed from stored JSON; tags derived from quality + decision; real fire-count via fingerprint aggregation; history timeline of prior fires; drain3 stats for Drain3AnomalyDetected rows.</li>
+    <li><strong>Pagination</strong> — server-side total count + offset; design's <code>&lt;Pagination&gt;</code> component reads <code>window.CIRES_PAGINATION</code>; Prev/Next + page numbers navigate via URL.</li>
+    <li><strong>Real TopBar stats</strong> — process uptime, openAlerts (distinct fingerprints emailed in 24h), emailed24h, shelved24h, median LLM latency, cheap_path_since_midnight. All injected as <code>window.CIRES_DASHBOARD_STATS</code> and computed from the same 200-row slab — no new DB queries.</li>
+    <li><strong>Real sidebar badges</strong> — <code>triage = openAlerts</code>, <code>incidents = distinct fingerprints in window</code>, <code>anomalies = drain3 total_anomalies</code>. Injected as <code>window.CIRES_SIDEBAR_BADGES</code>.</li>
+    <li><strong>Filter dropdowns</strong> — Environment / Namespace / Verdict multi-select (client-side; URL persistence is a follow-up). Search input filters rows by alertPlain/component/namespace/reason/id.</li>
+    <li><strong>Tangier-time live clock</strong> in the top bar — seeded from <code>window.CIRES_NOW_LOCAL</code>, ticks 1×/sec in-browser.</li>
     <li><strong>SHELVED verdict</strong> derived from <code>action_taken=shelved</code> (the DA-1 fix from 2026-05-21).</li>
+    <li><strong>Light/dark theme toggle</strong> in the top bar (came with the design; state persists via localStorage).</li>
   </ul>
 </div>
+
+<p>
+  <strong>Commits across today's v2 ship (monitoring-triage-service):</strong>
+  <code>7f2bb0e</code> initial route + StaticFiles mount →
+  <code>5b46c4c</code> naive-datetime fix →
+  <code>dcf4728</code> transformer enrichment →
+  <code>9cde6fa</code> sidebar + feed-width iteration →
+  <code>38c1c3e</code> pagination + filters + real stats →
+  <code>9b61e74</code> detail page route.
+</p>
 
 <p>
   What's <em>not</em> filled in yet by Phase 1: <code>env</code> currently uses a
@@ -2162,18 +2178,18 @@ them.
   <tbody>
     <tr>
       <td><strong>GET <code>/dashboard/v2/alert/{short_id}</code></strong></td>
-      <td>Renders the <code>&lt;DetailPage&gt;</code> component for one alert. Inputs: the full CIRES_ALERT shape (already produced by <code>_v2_transform_row</code>) + related alerts in ±10 min window + full unsanitized RCA + LLM reasoning steps + cited evidence with grafana/loki/jaeger deeplinks.</td>
-      <td>~4 h</td>
+      <td><strong>✅ SHIPPED 2026-05-22</strong> (commit <code>9b61e74</code>). Renders the <code>&lt;DetailPage&gt;</code> component for one alert. Resolves the 8-char short_id back to the full UUID by scanning the most recent 500 rows.</td>
+      <td>done</td>
     </tr>
     <tr>
       <td>Resolve short-ID → full UUID</td>
-      <td>The dashboard truncates to 8 chars. Detail route needs to look up the full ID. Either change <code>get_decision_by_id</code> to accept a prefix or maintain a short-ID index.</td>
-      <td>~30 min</td>
+      <td><strong>✅ SHIPPED</strong> via prefix-scan over 500 most-recent rows. Phase 4 will add a proper short-ID index if the scan latency starts to matter (currently ~10 ms).</td>
+      <td>done</td>
     </tr>
     <tr>
       <td><strong>Related-alerts query</strong></td>
-      <td>"Alerts that fired within ±10 min on the same namespace or with overlapping correlated_alerts." New method on <code>rca_store</code>: <code>get_related(decision_id, window_minutes=10)</code>.</td>
-      <td>~2 h</td>
+      <td><strong>✅ SHIPPED</strong> — the detail route computes related alerts in a ±10 min window on the same service inline, no new <code>rca_store</code> method needed. A dedicated <code>get_related()</code> can replace the inline version if the related-alert UX expands.</td>
+      <td>done</td>
     </tr>
     <tr>
       <td><strong>Drain3 templates endpoint</strong></td>
