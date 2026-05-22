@@ -1914,8 +1914,30 @@ Bigger pieces that need design or new data sources. Track as
       <td>Platform KPIs surface</td>
       <td>He asked for them. New Grafana dashboard for the triage platform itself: emails-per-day, false-positive rate (driven by override feedback once SF-7 ships), MTTR-after-page, archetype coverage %, GPU utilization, Lambda autoshutoff hits. ~3 days. Pairs with the existing EPIC12 capacity-runway candidate (#27 in sprint-history).</td>
     </tr>
+    <tr>
+      <td><strong>SF-13</strong></td>
+      <td><strong>Microservice application test bed (keystone — required for SF-11)</strong></td>
+      <td>Deploy a multi-service microservice application on k3s with the shape the supervisor described in §12.5: <strong>5+ services, each with front / back / db, some with bespoke layers (camera-stream, sensor-ingest, payment, inventory).</strong> Distinct namespaces per application. Without this, the dev-deletes-a-letter scenario cannot be validated end-to-end — the current test bed has only <code>react-springboot-mysql</code> + the <code>car-rental</code> co-located app, which doesn't expose the multi-application attribution challenge. Candidates: Google Cloud's <a href="https://github.com/GoogleCloudPlatform/microservices-demo">microservices-demo</a> (10 services), Weaveworks sock-shop (8 services), or a Lina-authored stack mirroring the actual CIRES service shape if the supervisor can describe it. <strong>Pairs with SF-9 (k8s data source) + SF-10 (app-layer monitoring) + SF-11 (deploy correlation) — the four together unblock the canonical test case</strong>. ~3-5 days for the deployment + observability wiring; the helm-chart-mirror pattern from the rental tenant work yesterday (<code>monitoring-project@423b9ca</code>) is the precedent.</td>
+    </tr>
   </tbody>
 </table>
+
+<div class="callout note" style="margin-top:14px;">
+  <div class="callout-label">Sequencing — SF-13 is the test-bed prerequisite for SF-9 → SF-10 → SF-11</div>
+  <p>
+    SF-13 (microservice app deployment) gives the system a real multi-application
+    failure surface to reason against. SF-9 (k8s/Rancher MCP) gives it deploy-event
+    context. SF-10 (app-layer monitoring) gives it visibility into the new
+    services' code-level errors. SF-11 (deploy-time bug detection) ties the three
+    together so that <em>"dev deleted a letter in deploy.yaml → app starts
+    failing at startup"</em> becomes a real, repeatable integration test.
+    <strong>Schedule them in this order:</strong> SF-13 first (the bed), then
+    SF-9 + SF-10 in parallel (the new data sources), then SF-11 (the correlation
+    logic that uses them). SF-12 (KPI surface) can run independently. SF-8
+    (Claude Design redesign) gates SF-1..SF-3 visual layer but doesn't block the
+    functional work below.
+  </p>
+</div>
 
 <!-- ────────────────────── 12.5 ────────────────────── -->
 <h3 id="sf-canonical">12.5 The canonical test case — dev-deletes-a-letter</h3>
@@ -1956,10 +1978,16 @@ Bigger pieces that need design or new data sources. Track as
   <p>
     <strong>None of this is far away.</strong> Drain3 already catches the
     novel templates (proven in §7c.2). The exemplars cover the
-    crashloop-bad-config archetype. The missing pieces are the
-    deploy-event correlation (SF-11 mechanics) and the kubernetes data
-    source (SF-9 plumbing) — both Sprint 5. Lina should treat this scenario
-    as the integration test for SF-9 + SF-11 + SF-10 landing together.
+    crashloop-bad-config archetype. The missing pieces are: a real
+    multi-application test bed (<strong>SF-13</strong> — the supervisor's
+    "5 services in k8s each related to different apps" shape doesn't
+    exist on the test cluster yet; current bed has only
+    <code>react-springboot-mysql</code> + <code>car-rental</code>),
+    the kubernetes data source (<strong>SF-9</strong> plumbing), the
+    deploy-event correlation (<strong>SF-11</strong> mechanics), and the
+    app-layer monitoring expansion (<strong>SF-10</strong>) so the new
+    services emit the right framework-level signal. <strong>All four
+    together are the integration test for this scenario.</strong>
   </p>
 </div>
 
@@ -1967,10 +1995,10 @@ Bigger pieces that need design or new data sources. Track as
 <h3 id="sf-process">12.6 Process changes</h3>
 
 <ul>
-  <li><strong>Design-first workflow for UX.</strong> Lina drafts the dashboard / detail page / email mockups in <strong>Claude Design</strong> (available on her Max plan). Runs by Ali (the devops engineer) for a sanity check on column naming, visual hierarchy, "what would actually be useful." Then implements. Treats Figma as the alternative if Claude Design proves too constrained; default is Claude Design.</li>
-  <li><strong>Supervisor cadence — "treat me as a friend, ask whenever."</strong> No formal weekly review or written deliverable. Lina pings him in Slack / WhatsApp when a specific question needs his judgment (archetype gap, operator-UX call, "is this verdict the right shape"). Cadence is opportunistic, not scheduled.</li>
-  <li><strong>Lina owns the design.</strong> No external designer. Claude Design + Ali review + iterate.</li>
-  <li><strong>Functional vs visual split.</strong> P0 fixes (§12.2) ship before any Claude Design mockup exists — they're behavior, not aesthetics. Sprint 4 SF-1..SF-7 functional changes (data model, detail page wiring, brevity rules, email format) ship in parallel with the Claude Design draft. Final re-skin in Sprint 5 SF-8 once Ali approves the mockup.</li>
+  <li><strong>Design-first workflow for UX, supervisor-approval-gated.</strong> Lina drafts the full dashboard / detail page / email mockups in <strong>Claude Design</strong> (available on her Max plan). The completed design goes <em>directly to the supervisor for approval</em> — not Ali first. Once approved, implementation begins. This locks the visual spec before any code touches the dashboard, so the Sprint 4 functional work (SF-1..SF-7) gets re-skinned exactly once instead of iterating against an unstable mockup. Treats Figma as the fallback only if Claude Design hits a constraint Lina can't work around.</li>
+  <li><strong>Supervisor cadence — "treat me as a friend, ask whenever."</strong> No formal weekly review or written deliverable. Lina pings him in Slack / WhatsApp when a specific question needs his judgment (archetype gap, operator-UX call, design-mockup approval, "is this verdict the right shape"). Cadence is opportunistic, not scheduled.</li>
+  <li><strong>Lina owns the design end-to-end.</strong> No external designer. No Ali pre-review. Lina drafts in Claude Design → supervisor approves → implementation.</li>
+  <li><strong>Functional vs visual split.</strong> P0 fixes (§12.2) ship <em>before</em> any Claude Design mockup exists — they're behavior, not aesthetics, and the supervisor can't even start testing without them. Sprint 4 SF-1..SF-7 functional changes (data model, detail page wiring, brevity rules, email format, same-alert collapsing, feedback page) ship in parallel with the design pass — the data shape they introduce is independent of the visual layer. Final re-skin happens in Sprint 5 SF-8 once the design is approved.</li>
 </ul>
 
 <!-- ────────────────────── 12.7 ────────────────────── -->
@@ -1986,7 +2014,8 @@ the work below them can start cleanly:
   <li><strong>Namespace field — k8s pod namespace vs logical service-grouping?</strong> He used "namespace" interchangeably with "the specific instance." For SF-1 we need to decide if the dashboard column is the literal k8s namespace (e.g. <code>app</code> / <code>rental</code> / <code>network</code>) or a higher-level "which application stack" grouping. Probably the former; confirm.</li>
   <li><strong>Service-type taxonomy — fixed enum or free-text?</strong> "Infra / backend / frontend / db / camera / sensor / …" — does CIRES have a closed taxonomy he wants enforced, or do new types get added freely as new applications onboard? Affects whether SF-1 ships with a dropdown or a tag input.</li>
   <li><strong>Rate of his testing.</strong> He's chill — but does he have a rough sense of when he'll start touching it? Affects whether the P0 ships tonight or end-of-week, and whether Sprint 4 SF-1..SF-7 ships in priority order or all-at-once.</li>
-  <li><strong>Claude Design vs Figma.</strong> Confirmed Claude Design as the default — but if Lina hits a constraint (collaboration with Ali, version control, design-token export for the actual HTML), Figma is the fallback. Decision can come during the first mockup pass.</li>
+  <li><strong>Microservice test-bed choice (SF-13).</strong> Three candidates: Google Cloud microservices-demo (10 services, Go/Python/Node), Weaveworks sock-shop (8 services, mostly Java/Go), or a Lina-authored stack mirroring the actual CIRES production shape. Worth asking the supervisor which one looks closest to what CIRES actually runs — that conversation also surfaces the real service-type taxonomy for SF-1.</li>
+  <li><strong>Claude Design vs Figma.</strong> Confirmed Claude Design as the default; Figma is the fallback only if Claude Design hits a hard constraint during the mockup pass. Decision can come during the first draft.</li>
 </ul>
 
 <p>
