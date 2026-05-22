@@ -175,6 +175,14 @@
     <li class="sub"><a href="#pp-anchors">11.3 Two anchor moments</a></li>
     <li class="sub"><a href="#pp-ask">11.4 Landing the ask</a></li>
     <li class="sub"><a href="#pp-closer">11.5 Closer — the greenlight</a></li>
+    <li><a href="#supervisor-feedback">12. Supervisor feedback — post-presentation</a></li>
+    <li class="sub"><a href="#sf-doctrine">12.1 The operator-cognitive-load doctrine</a></li>
+    <li class="sub"><a href="#sf-p0">12.2 P0 — ship before he starts testing</a></li>
+    <li class="sub"><a href="#sf-sprint4">12.3 Sprint 4 — must land for testing to matter</a></li>
+    <li class="sub"><a href="#sf-sprint5">12.4 Sprint 5 — design + infra work</a></li>
+    <li class="sub"><a href="#sf-canonical">12.5 The canonical test case — dev-deletes-a-letter</a></li>
+    <li class="sub"><a href="#sf-process">12.6 Process changes</a></li>
+    <li class="sub"><a href="#sf-next">12.7 Open items / next conversation</a></li>
   </ol>
 </aside>
 
@@ -1733,8 +1741,262 @@ re-opens the conversation.
   </p>
 </div>
 
+<!-- ────────────────────── 12 ────────────────────── -->
+<h2 id="supervisor-feedback"><span class="num-badge">12</span>Supervisor feedback — post-presentation (2026-05-22)</h2>
+
+<div class="callout story">
+  <div class="callout-label">Outcome · 2026-05-21 evening presentation · supervisor wants to personally test the system</div>
+  <p>
+    The presentation went well enough that the supervisor said he'd
+    <strong>personally use the platform</strong> in his day-to-day operator
+    work — the strongest possible signal short of a formal greenlight. He
+    explicitly invited "treat me as a friend, ask whenever you want, I'll be
+    there" — meaning no hard release deadline, but the feedback below
+    represents the gap between "interesting prototype" and "tool I'll
+    actually use." Until those gaps close, the production-greenlight ask
+    from §1 remains pending.
+  </p>
+  <p>
+    This section captures the meeting notes verbatim-adjacent, then organizes
+    them into <strong>P0 (ship before he starts touching it) / Sprint 4 (must
+    land for his testing to produce meaningful signal) / Sprint 5 (design +
+    infra work)</strong> buckets. <strong>The unifying principle through
+    every UX ask is the operator-cognitive-load doctrine</strong> — see
+    §12.1.
+  </p>
+</div>
+
+<!-- ────────────────────── 12.1 ────────────────────── -->
+<h3 id="sf-doctrine">12.1 The operator-cognitive-load doctrine</h3>
+
+<div class="callout note">
+  <div class="callout-label">Design principle — adopt at the top of every UX decision</div>
+  <p>
+    The supervisor's exact framing: <em>"the engineer who is the end user
+    needs to be at the forefront of our UX. He is most probably tired and
+    doesn't have the time nor the bandwidth to read a lot of useless info.
+    We have to give him poignant info and give him the name of things so he
+    can fix / investigate immediately instead of getting decision fatigue.
+    It should be very simple and intuitive to read."</em>
+  </p>
+  <p>
+    Operationalized as five rules — every dashboard column, every email
+    line, every detail-page section gets evaluated against these:
+  </p>
+  <ol>
+    <li><strong>Names not metrics.</strong> Show the <em>name of the thing</em> the operator has to look at — the namespace, the service, the component. Hide PromQL, raw IPs, metric values from the primary view.</li>
+    <li><strong>Brief not verbose.</strong> Reason is <em>just the reason</em>, not five sentences of how. Suggested action is few words, executable. Cut everything else.</li>
+    <li><strong>One row not duplicates.</strong> Same alert on same <code>(env, namespace, service, component)</code> = one row that updates over time. Not N separate rows. History shown inline.</li>
+    <li><strong>Click-through not wall-of-text.</strong> Full reasoning + evidence + history lives on a detail page reachable by clicking the alert. The dashboard view is poignant + actionable.</li>
+    <li><strong>Sustained not spikes.</strong> A momentary spike isn't important. Sustained over hours / days is what's worrying. The system needs to differentiate at the verdict level.</li>
+  </ol>
+</div>
+
+<!-- ────────────────────── 12.2 ────────────────────── -->
+<h3 id="sf-p0">12.2 P0 — ship before he starts testing (~1 day)</h3>
+
+<p>
+Hard usability blockers — he literally cannot navigate the platform until
+these land. None of them require design review; ship as direct code
+changes in <code>app/main.py</code> (the dashboard HTML + JS).
+</p>
+
+<table>
+  <thead><tr><th>Fix</th><th>What's broken today</th><th>What lands</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Refresh-while-filter doesn't crash</td>
+      <td>"When I am using the filter, the refresh crashes my stuff."</td>
+      <td>Debounce the filter-bound refresh, preserve filter state across refreshes, replace full-page reload with a fetch-and-replace into the table tbody. Same engineering Lina did for the search blob (commit <code>8a3930f</code>) but for the refresh path.</td>
+    </tr>
+    <tr>
+      <td>Pagination + cap rows at 20/page</td>
+      <td>Current dashboard dumps everything in <code>/decisions</code>, can be hundreds of rows. Supervisor cannot scroll past the noise.</td>
+      <td><code>?limit=20&amp;offset=N</code> query params + page-numbered nav at the bottom. Default to most-recent 20.</td>
+    </tr>
+    <tr>
+      <td>Truncate IDs to 8 chars in dashboard</td>
+      <td>Current UUIDs are 36 chars and dominate the row width.</td>
+      <td>Display first 8 chars of the UUID + ellipsis. Full UUID stays on the detail page and as a click-to-copy tooltip.</td>
+    </tr>
+    <tr>
+      <td>Column-bound filter + sort</td>
+      <td>Current filter is the freetext search Lina shipped today (<code>8a3930f</code>). Works but doesn't let him filter by, e.g., "show me only PodHighMemoryUsage on the spring-boot namespace."</td>
+      <td>Per-column dropdowns: env / namespace / service-type / verdict / time-range. Click a column header to sort.</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- ────────────────────── 12.3 ────────────────────── -->
+<h3 id="sf-sprint4">12.3 Sprint 4 — must land for his testing to produce meaningful signal</h3>
+
+<p>
+The functional shape of the operator experience. ~2 weeks of work. Track
+in Sprint 4 with new IDs <strong>SF-1..SF-7</strong> (Supervisor-Feedback);
+add to <code>monitoring-docs/sprint-history.html#sprint-4</code> in the
+ranked list.
+</p>
+
+<table>
+  <thead><tr><th>ID</th><th>Item</th><th>What lands</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>SF-1</strong></td>
+      <td>Dashboard collapsed view — show the 4 fields he named</td>
+      <td><strong>Environment</strong> (dev / int / uat / stg / preprod / prod) · <strong>Namespace</strong> (the specific instance — for k8s, this is the actual pod namespace, the differentiator he called out) · <strong>Service-type</strong> (infra / backend / frontend / db / camera / sensor / …) · <strong>Component / sub-component</strong>. Hide PromQL, IP, raw metric values from this view.</td>
+    </tr>
+    <tr>
+      <td><strong>SF-2</strong></td>
+      <td>Dashboard expanded view — brief mode</td>
+      <td>Reason = the reason, one sentence. Suggested action = few words, executable. Keep only the <em>relevant</em> tags. Drop everything else from the expanded row. The phrase "word salad" came up repeatedly — this is the test.</td>
+    </tr>
+    <tr>
+      <td><strong>SF-3</strong></td>
+      <td>Detail page (new) — click-through from each alert</td>
+      <td>History of similar alerts (same namespace + service + component) · Anomalies · Evidence cited · LLM reasoning steps · Full PromQL with a <strong>prefilled Grafana link</strong> (already-templated query, one click takes him there) · IP + port · everything that was cut from the dashboard view. Same brevity discipline applies inside — actionable, named, no word salad.</td>
+    </tr>
+    <tr>
+      <td><strong>SF-4</strong></td>
+      <td>Same-alert collapsing into incident entity (the big architectural one)</td>
+      <td>If an alert fires for the same <code>(env, namespace, service, component)</code>, it becomes <strong>one updated row</strong>, not multiple. History shown inline as "fire #N, fire #N-1 …" with verdicts and timestamps. The detail page becomes the full chronology. Current <code>suppressed_duplicate</code> / <code>see_previous_rca:pending</code> path is the kindergarten version of this; needs an "incident" entity layer above <code>/decisions</code>. <strong>Pairs with DA-5</strong> (alertname-family dedupe) and <strong>DA-3</strong> (cross-row verdict coherence) — those become the underlying mechanics.</td>
+    </tr>
+    <tr>
+      <td><strong>SF-5</strong></td>
+      <td>Sustained-spike-vs-spike at the verdict level</td>
+      <td>New alert classification + verdict modifier. A 2-min spike on CPU = <em>noise, low-priority shelf</em>. A 6-hour sustained CPU saturation = <em>real, page</em>. Encoded via "duration above threshold" feature in the LLM prompt context + a new <code>quality=transient_spike</code> classification that ties to <code>action_taken=shelved</code>. Pairs with DA-1 — both rely on the same "this looks important but isn't" pattern.</td>
+    </tr>
+    <tr>
+      <td><strong>SF-6</strong></td>
+      <td>Email overhaul</td>
+      <td>Same brevity rules as expanded-view dashboard (SF-2). Subject line names the namespace + service + verdict in &lt;60 chars. Body: 3 sections — <em>What</em> (one sentence) · <em>Why</em> (one sentence + cause name) · <em>Where to look</em> (links to dashboard detail page, prefilled Grafana, Loki, Jaeger, the rate.html feedback page). No PromQL in the body; that's a link.</td>
+    </tr>
+    <tr>
+      <td><strong>SF-7</strong></td>
+      <td>Feedback / evaluation page — reprioritize from Sprint 4 carry to <em>must-ship</em></td>
+      <td>Already on the Sprint 4 carry (Epic 2 — SCRUM-149/150/151, the <code>rate.html</code> UI + feedback schema + 4 MCP tools). Move to top of Sprint 4 priority: he wants to give feedback as he uses it, and the loop tightens the system the same week he's testing.</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- ────────────────────── 12.4 ────────────────────── -->
+<h3 id="sf-sprint5">12.4 Sprint 5 — design + infra work (3–6 weeks)</h3>
+
+<p>
+Bigger pieces that need design or new data sources. Track as
+<strong>SF-8..SF-12</strong>.
+</p>
+
+<table>
+  <thead><tr><th>ID</th><th>Item</th><th>What lands</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>SF-8</strong></td>
+      <td>Full UX redesign in Claude Design</td>
+      <td>Lina drafts the dashboard + detail page + email mockups in Claude Design (since Max plan is active), runs them by Ali (the devops engineer) for a sanity check, then we implement the visual layer. <strong>Critical question (open):</strong> do we pause SF-1..SF-3 functional code changes until the Claude Design draft lands, or ship functional first and re-skin later? See §12.7.</td>
+    </tr>
+    <tr>
+      <td><strong>SF-9</strong></td>
+      <td>Kubernetes / Rancher as a 6th MCP data source</td>
+      <td>New <code>k8s_mcp</code> server exposing pod metadata, deployment events, namespace ownership, container restarts, recent rollout history. Unblocks SF-10 + SF-11. Roughly mirrors the existing 5 MCPs but proxies to the k3s API + Rancher API. ~1 week.</td>
+    </tr>
+    <tr>
+      <td><strong>SF-10</strong></td>
+      <td>App-layer monitoring expansion</td>
+      <td>Drain3 is the only thing catching code-level / config-level issues today. Add APM-style instrumentation at the application layer (not just OTel JVM auto-instrumentation): framework-level error patterns, slow-query detection, exception-class frequency. Pairs with the existing P-list items P3 + P4. ~1-2 weeks.</td>
+    </tr>
+    <tr>
+      <td><strong>SF-11</strong></td>
+      <td>Deploy-time bug detection — the dev-deletes-a-letter scenario</td>
+      <td>The canonical use case from §12.5 below. Pieces: deploy-event correlation (depends on SF-9 k8s data source) + Drain3 post-deploy template diff (already on the original P-list as P-4 / Sprint 4 candidate #5 in <code>sprint-history.html</code>) + RCA flow that explicitly names the recent deploy as the trigger when a new failure mode appears within N minutes of a rollout. End-to-end integration test for the whole architecture.</td>
+    </tr>
+    <tr>
+      <td><strong>SF-12</strong></td>
+      <td>Platform KPIs surface</td>
+      <td>He asked for them. New Grafana dashboard for the triage platform itself: emails-per-day, false-positive rate (driven by override feedback once SF-7 ships), MTTR-after-page, archetype coverage %, GPU utilization, Lambda autoshutoff hits. ~3 days. Pairs with the existing EPIC12 capacity-runway candidate (#27 in sprint-history).</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- ────────────────────── 12.5 ────────────────────── -->
+<h3 id="sf-canonical">12.5 The canonical test case — dev-deletes-a-letter</h3>
+
+<div class="callout story">
+  <div class="callout-label">The end-to-end use case the architecture should be designed against</div>
+  <p>
+    The supervisor walked through a concrete scenario that's now the
+    benchmark for whether the platform actually works in CIRES production
+    conditions. <strong>Verbatim:</strong>
+  </p>
+  <blockquote>
+    <em>"If we have 5 services in Kubernetes pods, each one has a name,
+    each one related to a different app the company does, all of them
+    have the classic front / back / db and let's say some have other stuff
+    — for example one is related to cameras, one is related to smoke
+    sensors and whatnot. So if a problem happens in one solution, an
+    example of such a problem is the CI/CD configuration file: a dev by
+    accident deleted a letter from the name of a DB, so he's calling
+    something that doesn't exist. The script runs and he goes home thinking
+    everything is all good because such problems won't show for him in the
+    pipeline platform. First how is he gonna be notified of this? And
+    second is our system gonna be able to know exactly where the problem
+    is at? Like which service and starting when, and maybe why? Like it
+    should see through logs and whatnot that a new deploy was pushed.
+    So it should deduce that there is a problem with the name written in
+    the file of the new deployment and it should notify the engineer."</em>
+  </blockquote>
+  <p>
+    <strong>What the platform must do to pass this test:</strong>
+  </p>
+  <ol>
+    <li><strong>Notice the failure.</strong> The DB-name typo means the app fails at startup or at first connection-pool init. Loki sees the error logs from the misconfigured service ("Connection refused: pool exhausted for datasource <em>typo'd-name</em>" or "Unknown database <em>typo'd-name</em>"). Drain3 sees these as a novel template cluster on that specific service → self-fires.</li>
+    <li><strong>Attribute to the right service.</strong> The Drain3 RCA must name the service (which app) and the namespace, not just "a database error happened." The existing exemplar library has <code>upstream-latency-attribution</code> and <code>crashloop-bad-config</code> archetypes; the latter is the right pattern but needs the deploy-event correlation to make it concrete.</li>
+    <li><strong>Correlate with the deploy event.</strong> SF-9 (k8s data source) + SF-11 (deploy-event correlation): when a new failure shape appears within N minutes of a Helm release / kubectl apply, the LLM gets the deploy diff as context. RCA names the deploy as the trigger: <em>"new deploy <code>&lt;sha&gt;</code> introduced a config referencing nonexistent DB <code>&lt;typo'd-name&gt;</code>; service <code>&lt;svc&gt;</code>; deploy at <code>&lt;timestamp&gt;</code>; pre-deploy was healthy; suggested rollback: <code>kubectl rollout undo deploy/&lt;svc&gt;</code> or fix the config and re-deploy."</em></li>
+    <li><strong>Notify the engineer who pushed the deploy.</strong> Email body includes the deploy author (from git commit metadata via k8s data source labels) so it gets to the right person, not a generic on-call.</li>
+  </ol>
+  <p>
+    <strong>None of this is far away.</strong> Drain3 already catches the
+    novel templates (proven in §7c.2). The exemplars cover the
+    crashloop-bad-config archetype. The missing pieces are the
+    deploy-event correlation (SF-11 mechanics) and the kubernetes data
+    source (SF-9 plumbing) — both Sprint 5. Lina should treat this scenario
+    as the integration test for SF-9 + SF-11 + SF-10 landing together.
+  </p>
+</div>
+
+<!-- ────────────────────── 12.6 ────────────────────── -->
+<h3 id="sf-process">12.6 Process changes</h3>
+
+<ul>
+  <li><strong>Design-first workflow for UX.</strong> Lina drafts the dashboard / detail page / email mockups in <strong>Claude Design</strong> (available on her Max plan). Runs by Ali (the devops engineer) for a sanity check on column naming, visual hierarchy, "what would actually be useful." Then implements. Treats Figma as the alternative if Claude Design proves too constrained; default is Claude Design.</li>
+  <li><strong>Supervisor cadence — "treat me as a friend, ask whenever."</strong> No formal weekly review or written deliverable. Lina pings him in Slack / WhatsApp when a specific question needs his judgment (archetype gap, operator-UX call, "is this verdict the right shape"). Cadence is opportunistic, not scheduled.</li>
+  <li><strong>Lina owns the design.</strong> No external designer. Claude Design + Ali review + iterate.</li>
+  <li><strong>Functional vs visual split.</strong> P0 fixes (§12.2) ship before any Claude Design mockup exists — they're behavior, not aesthetics. Sprint 4 SF-1..SF-7 functional changes (data model, detail page wiring, brevity rules, email format) ship in parallel with the Claude Design draft. Final re-skin in Sprint 5 SF-8 once Ali approves the mockup.</li>
+</ul>
+
+<!-- ────────────────────── 12.7 ────────────────────── -->
+<h3 id="sf-next">12.7 Open items / next-conversation questions</h3>
+
+<p>
+Items that need Lina's judgment or a quick Slack to the supervisor before
+the work below them can start cleanly:
+</p>
+
+<ul>
+  <li><strong>Environment field — what are CIRES's real environment names?</strong> The supervisor said "dev / int / uat / stg / preprod / prod" — is that the literal CIRES taxonomy, or his shorthand? SF-1 needs the exact strings.</li>
+  <li><strong>Namespace field — k8s pod namespace vs logical service-grouping?</strong> He used "namespace" interchangeably with "the specific instance." For SF-1 we need to decide if the dashboard column is the literal k8s namespace (e.g. <code>app</code> / <code>rental</code> / <code>network</code>) or a higher-level "which application stack" grouping. Probably the former; confirm.</li>
+  <li><strong>Service-type taxonomy — fixed enum or free-text?</strong> "Infra / backend / frontend / db / camera / sensor / …" — does CIRES have a closed taxonomy he wants enforced, or do new types get added freely as new applications onboard? Affects whether SF-1 ships with a dropdown or a tag input.</li>
+  <li><strong>Rate of his testing.</strong> He's chill — but does he have a rough sense of when he'll start touching it? Affects whether the P0 ships tonight or end-of-week, and whether Sprint 4 SF-1..SF-7 ships in priority order or all-at-once.</li>
+  <li><strong>Claude Design vs Figma.</strong> Confirmed Claude Design as the default — but if Lina hits a constraint (collaboration with Ali, version control, design-token export for the actual HTML), Figma is the fallback. Decision can come during the first mockup pass.</li>
+</ul>
+
+<p>
+Once the first two are answered, SF-1 can ship Day 1 of Sprint 4. The
+rest are deeper rabbit-holes that can be triaged as the work surfaces
+them.
+</p>
+
 <p style="margin-top:40px; padding-top:20px; border-top:1px solid var(--border); font-size:13px; color:var(--muted);">
-Brief drafted 2026-05-19; presentation playbook added 2026-05-21.
+Brief drafted 2026-05-19; presentation playbook added 2026-05-21; supervisor feedback captured 2026-05-22.
 Maintainer: Lina Laaraich. If anything here reads inconsistently with the
 live system, the live system is authoritative — flag it and we'll update.
 </p>
