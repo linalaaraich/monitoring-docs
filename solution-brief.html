@@ -184,6 +184,13 @@
     <li class="sub"><a href="#sf-process">12.6 Process changes</a></li>
     <li class="sub"><a href="#sf-next">12.7 Open items / next conversation</a></li>
     <li class="sub"><a href="#sf-design-prompt">12.8 Claude Design prompt — copy-paste-ready</a></li>
+    <li><a href="#backend-enrichment">13. Backend enrichment plan — supporting the v2 UX</a></li>
+    <li class="sub"><a href="#be-shape">13.1 What the new UX actually needs from the backend</a></li>
+    <li class="sub"><a href="#be-shipped">13.2 What's already shipped (Phase 1)</a></li>
+    <li class="sub"><a href="#be-phase2">13.3 Phase 2 — detail page + incident entity</a></li>
+    <li class="sub"><a href="#be-phase3">13.4 Phase 3 — sidebar nav surfaces (8 new routes)</a></li>
+    <li class="sub"><a href="#be-phase4">13.5 Phase 4 — production hardening</a></li>
+    <li class="sub"><a href="#be-deps">13.6 Dependencies + ship order</a></li>
   </ol>
 </aside>
 
@@ -2053,8 +2060,236 @@ them.
   Sprint 4 functional layer.
 </p>
 
+<!-- ────────────────────── 13 ────────────────────── -->
+<h2 id="backend-enrichment"><span class="num-badge">13</span>Backend enrichment plan — supporting the v2 UX (2026-05-22)</h2>
+
+<div class="callout story">
+  <div class="callout-label">Why this exists · 2026-05-22 evening · v2 UX is live at /dashboard/v2 but only the triage-feed surface has real backend</div>
+  <p>
+    The Claude Design v2 bundle (now live on the GPU triage at
+    <code>/dashboard/v2</code>) introduces nine surfaces: the triage feed
+    + sidebar navigation to Incidents, Anomalies, Stats, Services, KPI ·
+    Evaluation, Alerts (configuration), Drain3 engine, Integrations. Phase
+    1 (commits <code>7f2bb0e</code> → <code>5b46c4c</code> → <code>9cde6fa</code>)
+    shipped only the triage-feed surface against the existing
+    <code>/decisions</code> endpoint. The other eight sidebar items currently
+    route nowhere. This section is the durable plan for enriching the backend
+    to support each one — what data each surface needs, what new endpoints to
+    add, what existing data to aggregate, and what's brand new.
+  </p>
+  <p>
+    <strong>Constraints we hold to throughout:</strong> MCP-only data access
+    invariant (every LLM-facing data source goes through an MCP bridge);
+    real-induction tests only (no synthetic webhook POSTs); operator-cognitive-load
+    doctrine (§12.1 — names not metrics, brief not verbose, one row not
+    duplicates, click-through not wall-of-text, sustained not spikes).
+  </p>
+</div>
+
+<!-- 13.1 -->
+<h3 id="be-shape">13.1 What the new UX actually needs from the backend</h3>
+
+<p>
+  The v2 design's data contract, per the React components we shipped to
+  <code>/static/design/</code>, requires roughly four classes of data the
+  backend must provide:
+</p>
+
+<table>
+  <thead>
+    <tr><th>Class</th><th>Shape</th><th>Backend status</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Live alert feed</td>
+      <td>Rows from <code>/decisions</code> transformed into the <code>CIRES_ALERT</code> shape — see <code>_v2_transform_row</code> in <code>app/main.py</code>. 24 fields per row including <code>fireCount</code>, <code>history[]</code>, <code>drain3</code>, <code>evidence[]</code>.</td>
+      <td>✅ shipped Phase 1</td>
+    </tr>
+    <tr>
+      <td>Per-alert detail (incident view)</td>
+      <td>Full RCA prose, every fire of the fingerprint as a timeline, related alerts in ±10 min window, drain3 matched template + related templates, raw data for the click-to-expand panel.</td>
+      <td>⚠ partial — data exists in <code>/decisions</code> but no detail route yet</td>
+    </tr>
+    <tr>
+      <td>Aggregations + KPIs</td>
+      <td>Verdict mix over time, false-positive rate (from operator feedback), median LLM latency, archetype coverage, alert frequency per service, "absorbed N alerts since midnight" counter, sustained-vs-spike ratio.</td>
+      <td>❌ not yet — needs new <code>/api/dashboard/stats</code> endpoint</td>
+    </tr>
+    <tr>
+      <td>Operator-controlled state</td>
+      <td>Feedback ratings, per-alert "mute this alert" preferences, archetype tagging, whitelist of alerts that should never page, drain3 template approval/rejection, integration credentials.</td>
+      <td>❌ mostly not yet — <code>/feedback/override</code> + <code>/feedback/confirm</code> exist but don't cover the rate-this-alert flow from the design</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- 13.2 -->
+<h3 id="be-shipped">13.2 What's already shipped (Phase 1)</h3>
+
+<div class="callout note">
+  <div class="callout-label">Currently live on observability-gpu-uswest2</div>
+  <ul>
+    <li><strong>GET <code>/dashboard/v2</code></strong> — renders the design's <code>&lt;Dashboard&gt;</code> component (with sidebar) against real <code>/decisions</code> data. ~100 KB HTML, ~15 ms server time, ~3 s first-paint (Babel-in-browser).</li>
+    <li><strong>GET <code>/static/design/*</code></strong> — StaticFiles mount serving atoms.jsx / sidebar.jsx / dashboard.jsx / detail.jsx / email.jsx / feedback.jsx / tokens.css.</li>
+    <li><strong><code>_v2_transform_row(r, fingerprint_history, drain3_stats, now_utc)</code></strong> — maps a single RCARecord into the CIRES_ALERT shape. Populates: short-ID (8 chars) + full UUID; Tangier-time formatted timestamps; rel-time and active-for durations; env (heuristic: stg for rental ns, prod elsewhere); namespace + service-type from internal mapping tables; cause-first reason from first sentence of <code>rca_report</code>; suggested_actions parsed from stored JSON; tags derived from quality + decision; real fire-count via fingerprint aggregation; history timeline of prior fires; drain3 stats for Drain3AnomalyDetected rows.</li>
+    <li><strong>Fingerprint pre-aggregation</strong> — the route pulls a 200-row slab from <code>/decisions</code> once, builds a per-fingerprint history map, then transforms only the page rows. No extra DB hits.</li>
+    <li><strong>SHELVED verdict</strong> derived from <code>action_taken=shelved</code> (the DA-1 fix from 2026-05-21).</li>
+  </ul>
+</div>
+
+<p>
+  What's <em>not</em> filled in yet by Phase 1: <code>env</code> currently uses a
+  hardcoded rule (stg for rental, prod elsewhere); <code>relTime</code> is
+  computed but not "minutes ago" specifically; <code>boldSubject</code> is
+  the affected_service field but the design wants it embedded in the reason
+  text as a yellow-mono inline highlight; <code>history</code> always shows
+  fingerprint matches but doesn't include verdict-change deltas.
+</p>
+
+<!-- 13.3 -->
+<h3 id="be-phase2">13.3 Phase 2 — detail page + incident entity (~1 week)</h3>
+
+<p>
+  The single highest-leverage Phase 2 item: ship the alert-detail click-through.
+  The v2 dashboard's rows currently expand inline only — the design's full
+  <code>&lt;DetailPage&gt;</code> component (with incident-history timeline,
+  drain3 card, evidence sources, related alerts, raw-data panel) is not yet
+  reachable.
+</p>
+
+<table>
+  <thead><tr><th>Backend</th><th>Why</th><th>Effort</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>GET <code>/dashboard/v2/alert/{short_id}</code></strong></td>
+      <td>Renders the <code>&lt;DetailPage&gt;</code> component for one alert. Inputs: the full CIRES_ALERT shape (already produced by <code>_v2_transform_row</code>) + related alerts in ±10 min window + full unsanitized RCA + LLM reasoning steps + cited evidence with grafana/loki/jaeger deeplinks.</td>
+      <td>~4 h</td>
+    </tr>
+    <tr>
+      <td>Resolve short-ID → full UUID</td>
+      <td>The dashboard truncates to 8 chars. Detail route needs to look up the full ID. Either change <code>get_decision_by_id</code> to accept a prefix or maintain a short-ID index.</td>
+      <td>~30 min</td>
+    </tr>
+    <tr>
+      <td><strong>Related-alerts query</strong></td>
+      <td>"Alerts that fired within ±10 min on the same namespace or with overlapping correlated_alerts." New method on <code>rca_store</code>: <code>get_related(decision_id, window_minutes=10)</code>.</td>
+      <td>~2 h</td>
+    </tr>
+    <tr>
+      <td><strong>Drain3 templates endpoint</strong></td>
+      <td>For the design's matched-template card on Drain3AnomalyDetected detail pages. New route <code>GET /drain3/templates/{template_id}</code> returning template pattern + sample lines + rate sparkline data + related-templates list. Drain3 already tracks these internally.</td>
+      <td>~3 h</td>
+    </tr>
+    <tr>
+      <td><strong>Incident entity model (the big one)</strong></td>
+      <td>Today each fire = separate row in <code>rca_history</code>. The design treats same-fingerprint fires as ONE incident with N events. Two implementation paths: <strong>(a) view-layer aggregation</strong> — query rca_history at render time, group by fingerprint, no schema change. <strong>(b) incidents table</strong> — new table <code>incidents(id, fingerprint, first_seen, last_seen, fire_count, current_verdict, current_severity)</code> + a foreign key from <code>rca_history.incident_id</code>. Option (b) makes the Incidents sidebar route trivial and powers SF-4 (DA-3 cross-row coherence). Pick (b) for Sprint 4 — it's a clean schema migration via Alembic.</td>
+      <td>~1 week (schema migration + backfill + dashboard cutover)</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- 13.4 -->
+<h3 id="be-phase3">13.4 Phase 3 — sidebar nav surfaces (eight new routes)</h3>
+
+<p>
+  Each sidebar item the design ships needs a backend route. Triage feed is
+  done; here's what the other eight need:
+</p>
+
+<table>
+  <thead><tr><th>Sidebar item</th><th>Backend shape</th><th>Effort</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>Incidents</strong> — open incident timeline</td>
+      <td>Route <code>GET /dashboard/v2/incidents</code>. Builds on the incident-entity table from Phase 2. Query: <code>SELECT * FROM incidents WHERE current_verdict != 'DISMISSED' ORDER BY last_seen DESC</code>. Same row shape as triage feed, but grouped one-per-fingerprint, with fire-count + duration prominent.</td>
+      <td>~3 h (after Phase 2)</td>
+    </tr>
+    <tr>
+      <td><strong>Anomalies</strong> — drain3 + entity-baseline novelty</td>
+      <td>Route <code>GET /dashboard/v2/anomalies</code>. Surface: drain3 novel templates from the last N hours (already in <code>_drain.get_stats()</code>), entity-baseline σ-claims from <code>entity_baselines.py</code>, recurrence-gate fires from <code>recurrence_gate.py</code>, adaptive-threshold "widened but not fired" ratio. Aggregates four existing detective signals into one surface. <strong>This is the §C predictive-roadmap item #26 from the 2026-05-20 EOD handoff.</strong></td>
+      <td>~1 d (mostly UI; backend signals already exist)</td>
+    </tr>
+    <tr>
+      <td><strong>Stats</strong> — alert frequency + problematic reasons</td>
+      <td>Route <code>GET /api/dashboard/stats?window=24h&amp;group_by=alert_name|service|verdict</code>. Aggregates over <code>rca_history</code>: top-10 noisiest alerts, top-5 most-escalated services, verdict mix per alert family, false-positive rate (driven by operator overrides once SF-7 ships). Returns JSON for the design's chart components.</td>
+      <td>~2 d</td>
+    </tr>
+    <tr>
+      <td><strong>Services</strong> — per-service alert dashboard</td>
+      <td>Route <code>GET /dashboard/v2/services/{svc}</code>. Per-service view: all alerts in last N hours, top archetypes hit, current health status, recent deploy events (Sprint 5 SF-9 dependency). Requires the k8s/Rancher MCP for live pod info.</td>
+      <td>~1 wk (depends on SF-9 — k8s data source)</td>
+    </tr>
+    <tr>
+      <td><strong>KPI · Evaluation</strong> — platform health KPIs</td>
+      <td>Route <code>GET /dashboard/v2/kpi</code>. Surface: emails-per-day, false-positive rate, MTTR-after-page, archetype coverage %, GPU utilization, Lambda autoshutoff hits, RCA quality grade distribution. <strong>This is SF-12 from §12.4.</strong> Most numbers come from <code>/metrics</code> + feedback table; one new aggregation query.</td>
+      <td>~3 d</td>
+    </tr>
+    <tr>
+      <td><strong>Alerts (configuration)</strong> — who gets paged for what</td>
+      <td>Routes <code>GET/POST /api/alerts/subscriptions</code>. New table <code>alert_subscriptions(user, alert_pattern, channel, paused_until, mute_reason)</code>. Operator can mark "stop emailing me for MediumCpuUsage on k3s-node" — feeds back into the email gate at <code>pipeline.py:764</code>. This composes naturally with the DA-1 shelved-in-disguise gate; same enforcement point.</td>
+      <td>~1 wk (UI + schema + email-gate wiring)</td>
+    </tr>
+    <tr>
+      <td><strong>Drain3 engine</strong> — control surface</td>
+      <td>Route <code>GET/POST /api/drain3/config</code>. Tunable knobs: <code>drain3_alert_rate_threshold</code>, <code>drain3_alert_min_lines</code>, <code>drain3_alert_cooldown_seconds</code> (all in <code>app/config.py</code> today). Plus template approval/rejection — mark a learned template as "expected, don't fire" or "always fire when this matches." Persist to a <code>drain3_template_overrides</code> table.</td>
+      <td>~3 d</td>
+    </tr>
+    <tr>
+      <td><strong>Integrations</strong> — external endpoints</td>
+      <td>Routes <code>GET/POST /api/integrations</code>. Manages: SMTP credentials, Grafana API key, Slack webhook URL, future PagerDuty/OpsGenie. Today all of these live in environment variables; this surface moves them to a managed config table with rotation history.</td>
+      <td>~3 d (with secret-handling care)</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- 13.5 -->
+<h3 id="be-phase4">13.5 Phase 4 — production hardening (mostly Sprint 5)</h3>
+
+<ul>
+  <li><strong>Server-side filter + sort + pagination</strong> on <code>/decisions</code> — the dashboard's column dropdowns currently filter client-side. For larger row counts this needs proper query-param filtering. Adds parameters <code>?env=&amp;namespace=&amp;service_type=&amp;verdict=&amp;page=&amp;size=</code>.</li>
+  <li><strong>Real-time updates (SSE)</strong> — currently 30 s polling. New endpoint <code>GET /api/decisions/stream</code> using Server-Sent Events; design's auto-refresh becomes push-driven.</li>
+  <li><strong>Operator identity</strong> — feedback rows currently have no <code>rater</code> field tied to a real user. Add session cookies + a tiny users table for the Tailscale-authenticated operators.</li>
+  <li><strong>Email template overhaul</strong> — port the design's <code>EmailDesktop</code> / <code>EmailMobile</code> JSX into the server-side email-rendering path in <code>notifier.py</code>. Same data contract as detail page.</li>
+  <li><strong>Pre-compile React (drop Babel-in-browser)</strong> — the v2 dashboard's first paint is ~3 s due to Babel parsing 6 jsx files at runtime. Esbuild pre-compile saves ~2.5 s. Sprint 5 polish.</li>
+  <li><strong>k8s / Rancher MCP (SF-9)</strong> — the 6th MCP that gives the LLM deploy-event correlation, pod metadata, namespace ownership. Prerequisite for the dev-deletes-a-letter scenario (§12.5). New service in <code>monitoring-mcp-servers</code>.</li>
+</ul>
+
+<!-- 13.6 -->
+<h3 id="be-deps">13.6 Dependencies + ship order (recommended)</h3>
+
+<div class="callout note">
+  <div class="callout-label">If we ship strictly in dependency order — ~6 weeks total</div>
+  <ol>
+    <li><strong>Phase 2.1 — detail page route + short-ID lookup</strong> (~1 day) — Highest visible-progress per hour. Click any v2 row → see the full incident view.</li>
+    <li><strong>Phase 2.2 — incident entity table + backfill</strong> (~1 week) — Schema migration; enables proper same-fingerprint collapsing across views.</li>
+    <li><strong>Phase 3.A — Anomalies + Stats + KPI</strong> (~1 week parallel) — Three pure-read aggregation routes; signals already exist; no new schema.</li>
+    <li><strong>Phase 3.B — Incidents page</strong> (~3 days) — Builds on the incident table from Phase 2.2.</li>
+    <li><strong>Phase 3.C — Alerts config + Drain3 engine + Integrations</strong> (~1.5 weeks parallel) — Three managed-state surfaces; new schema + UI for each. Wire Alerts config into the email gate.</li>
+    <li><strong>Phase 4 — Filter/sort/pagination + SSE + email template + Rancher MCP</strong> (~2 weeks) — Production polish.</li>
+  </ol>
+</div>
+
+<p>
+  <strong>Tight coupling worth flagging:</strong>
+</p>
+<ul>
+  <li><em>Incidents page</em> can't exist before the incident entity table — Phase 3.B depends on Phase 2.2.</li>
+  <li><em>Services page</em> can't be useful before the Rancher MCP (SF-9) lands — defer Services to Phase 4 unless we accept "Services" = "alerts grouped by affected_service" without pod metadata.</li>
+  <li><em>Alerts config</em> is the natural home for the SF-1 environment taxonomy decision (dev/int/uat/stg/preprod/prod) — that taxonomy gets locked when the subscriptions schema gets written.</li>
+  <li><em>Drain3 engine</em> is a Sprint 4 carry (S3-DR-01..03 from §12 Sprint 4 plan); its control surface naturally lives in this sidebar item.</li>
+</ul>
+
+<p>
+  <strong>What I'd recommend doing first when you're ready for backend work</strong>
+  (i.e. after the supervisor's v2 feedback lands tomorrow):
+  <strong>Phase 2.1 (detail page route) → Phase 3.A.KPI (since the supervisor
+  asked for KPIs specifically) → Phase 2.2 (incident table).</strong> That order
+  gives him three click-through surfaces inside ~2 weeks, with the incident
+  entity backfill happening after he's verified the design shape.
+</p>
+
 <p style="margin-top:40px; padding-top:20px; border-top:1px solid var(--border); font-size:13px; color:var(--muted);">
-Brief drafted 2026-05-19; presentation playbook added 2026-05-21; supervisor feedback captured 2026-05-22; Claude Design prompt added 2026-05-22.
+Brief drafted 2026-05-19; presentation playbook added 2026-05-21; supervisor feedback captured 2026-05-22; Claude Design prompt added 2026-05-22; backend enrichment plan added 2026-05-22.
 Maintainer: Lina Laaraich. If anything here reads inconsistently with the
 live system, the live system is authoritative — flag it and we'll update.
 </p>
