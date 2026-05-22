@@ -191,6 +191,12 @@
     <li class="sub"><a href="#be-phase3">13.4 Phase 3 — sidebar nav surfaces (8 new routes)</a></li>
     <li class="sub"><a href="#be-phase4">13.5 Phase 4 — production hardening</a></li>
     <li class="sub"><a href="#be-deps">13.6 Dependencies + ship order</a></li>
+    <li><a href="#sprint4-ops">14. Sprint 4 — operational shipping plan</a></li>
+    <li class="sub"><a href="#s4-goal">14.1 The one goal</a></li>
+    <li class="sub"><a href="#s4-week1">14.2 Week 1 — daily ships</a></li>
+    <li class="sub"><a href="#s4-week2">14.3 Week 2 — daily ships</a></li>
+    <li class="sub"><a href="#s4-dod">14.4 Definition of done</a></li>
+    <li class="sub"><a href="#s4-out">14.5 Explicitly NOT in Sprint 4</a></li>
   </ol>
 </aside>
 
@@ -2304,8 +2310,191 @@ them.
   entity backfill happening after he's verified the design shape.
 </p>
 
+<!-- ────────────────────── 14 ────────────────────── -->
+<h2 id="sprint4-ops"><span class="num-badge">14</span>Sprint 4 — operational shipping plan (2026-05-23 → 2026-06-03)</h2>
+
+<!-- 14.1 -->
+<h3 id="s4-goal">14.1 The one goal</h3>
+
+<div class="callout story">
+  <div class="callout-label">Done = supervisor uses /dashboard/v2 + the email + the feedback loop for a full day without friction</div>
+  <p>
+    Sprint 4's single operational test: <strong>can the supervisor open his
+    email at 09:00, click through to the dashboard, find what's actually
+    wrong, optionally rate the alert, and walk away with the system smarter
+    than when he started — without ever sending us a Slack saying "this is
+    confusing"?</strong> If yes, Sprint 4 ships. Every item below is in
+    service of that loop. Anything not in service of it is deferred to
+    Sprint 5 — see §14.5.
+  </p>
+  <p>
+    All shipping references point to <code>monitoring-triage-service/app/</code>
+    unless noted. Acceptance check per row is one observable thing on the
+    live platform — not a description. Days are working-day estimates for
+    one engineer; concurrent agent work compresses some items.
+  </p>
+</div>
+
+<!-- 14.2 -->
+<h3 id="s4-week1">14.2 Week 1 — daily ships (Mon 2026-05-25 → Fri 2026-05-29)</h3>
+
+<table>
+  <thead><tr><th>Day</th><th>Ship</th><th>Files</th><th>Acceptance check</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>Mon</strong></td>
+      <td><strong>SF-6 · Email overhaul</strong><br/>Render the design's <code>EmailDesktop</code> markup as the actual escalation email body. Subject format: <code>[ENV] [NAMESPACE] [VERDICT] &lt;plain alert&gt;</code>. Body: WHAT + WHY + ACTION blocks + four buttons (dashboard / Grafana / Loki / rate).</td>
+      <td><code>notifier.py</code> — render an HTML template that mirrors <code>app/static/design/email.jsx</code>'s shape. Subject is composed in <code>send_escalation()</code>.</td>
+      <td>Fire one real alert (any of the §"NEW POLICY" induction patterns). Open the resulting email in inbox. Subject is &lt;60 chars and reads in operator-language. Body has the four buttons.</td>
+    </tr>
+    <tr>
+      <td><strong>Tue</strong></td>
+      <td><strong>SF-7 · Feedback page wired</strong><br/>The rate-this-alert page accessible from the email + dashboard detail page. Schema migration: extend the existing <code>feedback</code> table with <code>rating</code>, <code>tags</code> (text), <code>actual_root_cause</code>, <code>notes</code>, <code>rater</code> columns. POST endpoint <code>/feedback/rate/{decision_id}</code>.</td>
+      <td><code>main.py</code> new route + Pydantic model. <code>rca_store.py</code> add <code>save_feedback()</code> method. Schema migration via Alembic or inline <code>ALTER TABLE</code>. <code>static/design/feedback.jsx</code> wired to POST on submit.</td>
+      <td>Click "Rate alert" in the dashboard. Fill the form. Submit. See "Thanks, this is wired into the suppression cache" confirmation. Refresh — see the feedback row in <code>/decisions</code> response with the new fields.</td>
+    </tr>
+    <tr>
+      <td><strong>Wed</strong></td>
+      <td><strong>SF-4 dashboard-side · Same-alert collapsing</strong><br/>One row per <code>(alert_fingerprint, env, namespace)</code> on the feed. Multiple fires of the same fingerprint render as a single row with <code>fireCount=N</code> + the latest timestamp. Detail-page incident-history timeline already shows all fires; this is dashboard-only aggregation. No schema change (incident entity table is Sprint 5 work, §13.3 Phase 2.2).</td>
+      <td><code>main.py</code> <code>dashboard_v2()</code> — group transformed alerts by fingerprint before paginating; keep latest, sum fireCount.</td>
+      <td>Force two fires of the same alert (e.g. <code>kubectl run cpu-stress … --timeout 60s</code> twice). Wait for both to be ingested. /dashboard/v2 shows ONE row with fireCount=2, not two rows.</td>
+    </tr>
+    <tr>
+      <td><strong>Thu</strong></td>
+      <td><strong>DA-5 · Alertname-family dedupe</strong> + <strong>DA-4 · Drain3 fingerprint content-hashing</strong><br/>DA-5: add <code>ALERT_FAMILIES</code> map in <code>dedup.py</code> so <code>{High,Critical,Medium}CpuUsage</code> on the same instance dedup as one family. DA-4: change drain3 self-fire fingerprint from <code>drain3-{service}</code> to <code>drain3-{service}-{hash(top-3-novel-templates)}</code>.</td>
+      <td><code>dedup.py</code>, <code>drain_analyzer.py</code>. Tests in <code>tests/test_dedup_families.py</code> + <code>tests/test_drain3_content_hash.py</code>.</td>
+      <td>Induce CriticalCpu + HighCpu on the same node within 1 min. Only one row appears on /dashboard/v2. Inject two different drain3 anomaly batches in same hour with different templates — see two distinct fingerprints, not one collapse.</td>
+    </tr>
+    <tr>
+      <td><strong>Fri</strong></td>
+      <td><strong>DA-2 · Unsafe-action stripping (clamp-independent)</strong><br/>Extend <code>clamp_actions.py</code> to strip <code>kubectl rollout/scale/set</code> / <code>ssh … 'systemctl restart'</code> / generic "restart X" actions whenever <code>quality=actionable AND no named cause in rca_report</code>, regardless of confidence band. Catches today's <code>systemctl restart k3s-node.service</code> finding from §7c.4.</td>
+      <td><code>clamp_actions.py</code> new predicate <code>_action_unsafe_without_named_cause()</code>. Tests covering: confident + no-cause → strip; confident + named-cause → keep; data-starved → already shelved.</td>
+      <td>Inject the §7c.4 stress pattern (cpu-stress + high-confidence CriticalCpu fire). The resulting RCA's emailed actions array MUST NOT contain <code>systemctl restart</code> language unless the rca_report names a specific cause-of-cause.</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- 14.3 -->
+<h3 id="s4-week2">14.3 Week 2 — daily ships (Mon 2026-06-01 → Tue 2026-06-03 + buffer)</h3>
+
+<table>
+  <thead><tr><th>Day</th><th>Ship</th><th>Files</th><th>Acceptance check</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>Mon</strong></td>
+      <td><strong>Phase 3.A.KPI · /dashboard/v2/kpi route</strong><br/>The "KPI · Evaluation" sidebar item now opens a real page. Aggregates from <code>/metrics</code> + <code>/decisions</code> + the feedback table from Tuesday: emails-per-day · false-positive rate (override / emailed) · median LLM latency · cheap-path absorption % · archetype coverage % · GPU utilization.</td>
+      <td><code>main.py</code> new <code>/dashboard/v2/kpi</code> route + <code>kpi.jsx</code> in <code>static/design/</code> (one new component using existing <code>&lt;Stat&gt;</code> atoms).</td>
+      <td>Open /dashboard/v2 → click KPI in the sidebar → land on a populated page (not 404). Numbers update on refresh.</td>
+    </tr>
+    <tr>
+      <td><strong>Tue</strong></td>
+      <td><strong>DA-3 · Cross-row verdict coherence</strong><br/>When a new RCA reuses a fingerprint that fired within the last N minutes, prepend the previous RCA's named cause to the LLM call as context. Block silent verdict flips on the same fingerprint without an explicit "changed my mind because …" or "condition resolved" framing.</td>
+      <td><code>pipeline.py</code> insert a context-builder hook before the LLM call. <code>tests/test_pipeline_cross_row_coherence.py</code> 4-6 cases.</td>
+      <td>Induce a high-CPU fire (escalate). Wait until cpu-stress ends. The follow-up "CPU recovered" fire on the SAME fingerprint must either reuse the named cause OR include "condition resolved" in the rca_report.</td>
+    </tr>
+    <tr>
+      <td><strong>Wed</strong></td>
+      <td><strong>Filter persistence + range filter</strong><br/>Serialize dashboard filter Sets into URL query params (<code>?env=prod,stg&amp;ns=app&amp;verdict=ESCALATE</code>). Rehydrate filters from URL on page load. Wire the "Range" filter chip to <code>?since=1h|24h|7d|30d</code> passed to backend as <code>since_days</code>.</td>
+      <td><code>dashboard.jsx</code> reads <code>window.location.search</code> on mount, calls <code>navigate(url)</code> on each filter toggle. <code>main.py</code> dashboard_v2 accepts the new query params.</td>
+      <td>Apply 2 filters + range=24h. Refresh page. Filters survive. URL is shareable.</td>
+    </tr>
+    <tr>
+      <td><strong>Thu</strong></td>
+      <td><strong>Buffer day</strong> — supervisor v2 feedback round + bug-fix swept items from the week.</td>
+      <td>—</td>
+      <td>At least one new patch lands from the supervisor's feedback that he asked for in person.</td>
+    </tr>
+    <tr>
+      <td><strong>Fri</strong></td>
+      <td><strong>SF-5 · Sustained-vs-spike verdict modifier</strong> (if buffer allows; else Sprint 5)<br/>Add a "duration above threshold" feature to the LLM prompt context. New <code>quality=transient_spike</code> classification ties to <code>action_taken=shelved</code>. A 2-min CPU blip doesn't page; a 6-hour sustained saturation does.</td>
+      <td><code>pipeline.py</code> context builder + <code>response_validator.py</code> new quality bucket.</td>
+      <td>Induce a 90s CPU spike (auto-resolves). RCA classifies as transient_spike + action_taken=shelved. Compare with a sustained 10-min stress → still escalates.</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- 14.4 -->
+<h3 id="s4-dod">14.4 Definition of done for Sprint 4</h3>
+
+<p>
+  All five items below must be observable on the live platform by Tue
+  2026-06-03 close:
+</p>
+<ol>
+  <li><strong>Operator emails are operator-readable.</strong> Sample 3 escalation emails from the week. All three render the new SF-6 layout. Subject &lt;60 chars. Body has 4 working links.</li>
+  <li><strong>One row per incident on the dashboard.</strong> No fingerprint appears twice on the feed. Detail page shows the full fire history.</li>
+  <li><strong>Operator-feedback writes to disk.</strong> Submit at least 3 feedback ratings during the sprint. Find all 3 in the feedback table.</li>
+  <li><strong>No more <code>systemctl restart k3s-node.service</code> in any operator email.</strong> Grep the past week of escalation emails. Zero hits on the §7c.4 failure pattern.</li>
+  <li><strong>KPI page works.</strong> Click "KPI · Evaluation" in the sidebar. Land on a page with at least 6 real numbers, all current.</li>
+</ol>
+
+<p>
+  <strong>Stretch goal (don't fail the sprint if it slips):</strong> SF-5
+  sustained-vs-spike modifier. The harder one to write tests for; lower
+  daily-use impact than the other five.
+</p>
+
+<!-- 14.5 -->
+<h3 id="s4-out">14.5 Explicitly NOT in Sprint 4 — deferred to Sprint 5 with reason</h3>
+
+<table>
+  <thead><tr><th>Item</th><th>Why deferred</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>SF-13 microservice test bed</strong></td>
+      <td>3-5 days of deployment work + waits on supervisor's choice of stack (microservices-demo vs sock-shop vs CIRES-shape). Not on the daily-use loop. <strong>Schedule for the first week of Sprint 5</strong>; it's the prerequisite for SF-9/10/11.</td>
+    </tr>
+    <tr>
+      <td><strong>SF-9 k8s/Rancher MCP</strong></td>
+      <td>Depends on SF-13. New MCP server in <code>monitoring-mcp-servers</code>. Multi-week.</td>
+    </tr>
+    <tr>
+      <td><strong>SF-10 app-layer monitoring expansion</strong></td>
+      <td>Depends on SF-13. APM-style instrumentation is a separate workstream.</td>
+    </tr>
+    <tr>
+      <td><strong>SF-11 deploy-time bug detection</strong></td>
+      <td>Depends on SF-9 + SF-10. The dev-deletes-a-letter scenario (§12.5) is Sprint 5's keystone, not Sprint 4's.</td>
+    </tr>
+    <tr>
+      <td><strong>Incident entity table (Phase 2.2 in §13)</strong></td>
+      <td>1-week schema migration + backfill. SF-4 dashboard-side aggregation (Wed of Week 1) covers the daily-use need without the migration. Table comes when Sprint 5 needs it for the Incidents sidebar route.</td>
+    </tr>
+    <tr>
+      <td><strong>Phase 3.A.Anomalies + Phase 3.A.Stats sidebar routes</strong></td>
+      <td>~1 day each. Drops if Week 2 buffer collapses. KPI is the supervisor-priority one; Anomalies + Stats reuse the same aggregation patterns and ship in Sprint 5 Week 1.</td>
+    </tr>
+    <tr>
+      <td><strong>Phase 3.C Alerts-config / Drain3-engine / Integrations sidebar routes</strong></td>
+      <td>Managed-state schemas; ~1.5 weeks each. Sprint 5/6 work.</td>
+    </tr>
+    <tr>
+      <td><strong>Phase 4 production hardening (SSE, server-side filter, real-time updates, React pre-compile)</strong></td>
+      <td>Polish. The 30s polling via auto-refresh script tag is sufficient for one operator on a Tailscale-only network.</td>
+    </tr>
+    <tr>
+      <td><strong>Auto-refresh</strong></td>
+      <td>30-min add when needed — drops into Week 2 buffer if there's time. Otherwise operator hits browser refresh.</td>
+    </tr>
+    <tr>
+      <td><strong>Full-UUID copy from dashboard</strong></td>
+      <td>30-min add — same as above.</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>
+  <strong>How to use this section.</strong> Each Sprint 4 morning, open
+  this page, pick the day's row, ship its <em>file changes</em> column,
+  verify the <em>acceptance check</em> column on the live platform, mark
+  done. If the row slips, drop the stretch goal first, then push the
+  preceding incomplete row into Friday. Don't pull from §14.5 unless the
+  current scope ships ahead of schedule — every item in §14.5 has a stated
+  reason for being out.
+</p>
+
 <p style="margin-top:40px; padding-top:20px; border-top:1px solid var(--border); font-size:13px; color:var(--muted);">
-Brief drafted 2026-05-19; presentation playbook added 2026-05-21; supervisor feedback captured 2026-05-22; Claude Design prompt added 2026-05-22; backend enrichment plan added 2026-05-22.
+Brief drafted 2026-05-19; presentation playbook added 2026-05-21; supervisor feedback captured 2026-05-22; Claude Design prompt added 2026-05-22; backend enrichment plan added 2026-05-22; Sprint 4 operational plan added 2026-05-22.
 Maintainer: Lina Laaraich. If anything here reads inconsistently with the
 live system, the live system is authoritative — flag it and we'll update.
 </p>
