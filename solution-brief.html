@@ -2136,12 +2136,16 @@ DASHBOARD TABLE — collapsed view (default):
 The table has EXACTLY these columns, in this order. Hide everything else
 from the collapsed view.
 
-  | Time | Env | Namespace | Service-type | Component | Alert | Verdict | Severity | ID |
+  | Time | Environment | Namespace | Service-type | Component | Alert | Verdict | Severity | ID |
+
+Use the FULL WORD "Environment" as the column header — not "Env" — per
+the operator's explicit preference (legibility &gt; brevity for column
+labels themselves; brevity applies to the VALUES, not the header text).
 
 Column details:
   - Time: relative time ("3 min ago", "1 h ago"), tooltip shows full
     timestamp (UTC). Sortable, default sort = newest first.
-  - Env: small colored pill — dev / int / uat / stg / preprod / prod.
+  - Environment: small colored pill — dev / int / uat / stg / preprod / prod.
     Color-coded: prod = red, preprod/stg = amber, uat/int = blue,
     dev = gray.
   - Namespace: monospace short string, the literal k8s namespace
