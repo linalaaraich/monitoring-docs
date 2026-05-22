@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Design Prompt — for the UX mockup pass — CIRES Observability — CIRES Observability Platform</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --bg-soft: #13151e;
+    --card: #1a1d27;
+    --card-alt: #1e2230;
+    --border: #2a2d3a;
+    --border-hi: #3a3f52;
+    --text: #e4e6ee;
+    --text-soft: #c0c5d0;
+    --muted: #8890a0;
+    --accent-blue: #4ea8de;
+    --accent-green: #6bcf7f;
+    --accent-orange: #f0a050;
+    --accent-purple: #b07ee8;
+    --accent-red: #e06070;
+    --accent-cyan: #40d0d0;
+    --accent-yellow: #e0d060;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { font-family:'Inter','Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); line-height:1.65; font-size:15px; -webkit-font-smoothing:antialiased; }
+  code, pre, .mono { font-family:'JetBrains Mono','Fira Code',ui-monospace,monospace; font-size:0.88em; }
+
+  .topnav { display:flex; align-items:center; gap:12px; padding:14px 40px; background:var(--bg-soft); border-bottom:1px solid var(--border); flex-wrap:wrap; }
+  .topnav span.nav-label { color:var(--muted); font-size:13px; font-weight:600; margin-right:4px; }
+  .navlink { display:inline-flex; align-items:center; gap:6px; padding:7px 14px; border-radius:8px; font-size:13px; font-weight:600; text-decoration:none; border:1px solid; transition:background .2s, transform .15s; }
+  .navlink:hover { transform:translateY(-1px); }
+  .navlink-home { color:var(--text); border-color:var(--border); background:var(--card); }
+  .navlink-log { color:var(--accent-orange); border-color:rgba(240,160,80,.4); background:rgba(240,160,80,.08); }
+  .navlink-sys { color:var(--accent-cyan); border-color:rgba(64,208,208,.4); background:rgba(64,208,208,.08); }
+  .navlink-triage { color:var(--accent-purple); border-color:rgba(176,126,232,.4); background:rgba(176,126,232,.12); }
+
+  .hero { padding:56px 40px 40px; border-bottom:1px solid var(--border); background:linear-gradient(180deg, #13151e 0%, var(--bg) 100%); }
+  .hero .inner { max-width:1040px; margin:0 auto; }
+  .hero .eyebrow { font-size:11px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:var(--accent-red); margin-bottom:12px; }
+  .hero h1 { font-size:36px; font-weight:800; letter-spacing:-.5px; margin-bottom:14px; line-height:1.2; }
+  .hero h1 span.accent { color:var(--accent-red); }
+  .hero p.lead { font-size:16px; color:var(--text-soft); max-width:820px; line-height:1.7; margin-bottom:20px; }
+  .hero .pill-row { display:flex; gap:8px; flex-wrap:wrap; }
+  .pill { font-size:11px; font-weight:600; padding:4px 10px; border-radius:12px; border:1px solid; letter-spacing:.2px; }
+  .pill.red { color:var(--accent-red); border-color:rgba(224,96,112,.35); background:rgba(224,96,112,.08); }
+  .pill.orange { color:var(--accent-orange); border-color:rgba(240,160,80,.35); background:rgba(240,160,80,.08); }
+  .pill.green { color:var(--accent-green); border-color:rgba(107,207,127,.35); background:rgba(107,207,127,.08); }
+  .pill.blue { color:var(--accent-blue); border-color:rgba(78,168,222,.35); background:rgba(78,168,222,.08); }
+
+  .stats-row { display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:14px; margin:28px 0 24px; }
+  .stat { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:16px 20px; }
+  .stat .n { font-size:28px; font-weight:700; color:var(--text); }
+  .stat .lbl { font-size:11px; font-weight:600; letter-spacing:1px; text-transform:uppercase; color:var(--muted); margin-bottom:4px; }
+  .stat.good { border-left:3px solid var(--accent-green); }
+  .stat.warn { border-left:3px solid var(--accent-orange); }
+  .stat.bad { border-left:3px solid var(--accent-red); }
+  .stat.info { border-left:3px solid var(--accent-blue); }
+
+  .layout { max-width:1040px; margin:0 auto; padding:32px 40px 80px; }
+  .content h2 { font-size:24px; font-weight:700; margin:40px 0 14px; letter-spacing:-.3px; scroll-margin-top:24px; padding-bottom:8px; border-bottom:1px solid var(--border); }
+  .content h2:first-child { margin-top:0; }
+  .content h3 { font-size:17px; font-weight:700; margin:24px 0 8px; color:var(--text); }
+  .content h4 { font-size:13px; font-weight:700; margin:14px 0 4px; letter-spacing:1px; text-transform:uppercase; color:var(--muted); }
+  .content p { margin-bottom:14px; color:var(--text-soft); }
+  .content p strong { color:var(--text); font-weight:600; }
+  .content ul, .content ol { margin:8px 0 16px 24px; color:var(--text-soft); }
+  .content li { margin-bottom:6px; }
+  .content code { background:var(--card); border:1px solid var(--border); padding:1px 6px; border-radius:4px; font-size:0.85em; color:var(--accent-cyan); }
+  .content pre { background:var(--card); border:1px solid var(--border); padding:14px 16px; border-radius:8px; margin:12px 0 18px; overflow-x:auto; line-height:1.5; font-size:12.5px; }
+  .content pre code { background:none; border:none; padding:0; color:var(--text); font-size:1em; }
+  .content a { color:var(--accent-blue); text-decoration:none; border-bottom:1px dashed rgba(78,168,222,.35); }
+  .content a:hover { border-bottom-style:solid; }
+
+  .callout { border-left:3px solid; border-radius:0 8px 8px 0; padding:14px 18px; margin:16px 0; background:var(--card); }
+  .callout.note { border-color:var(--accent-blue); }
+  .callout.tip { border-color:var(--accent-green); }
+  .callout.warn { border-color:var(--accent-orange); }
+  .callout.critical { border-color:var(--accent-red); }
+  .callout-label { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; margin-bottom:6px; }
+  .callout.note .callout-label { color:var(--accent-blue); }
+  .callout.tip .callout-label { color:var(--accent-green); }
+  .callout.warn .callout-label { color:var(--accent-orange); }
+  .callout.critical .callout-label { color:var(--accent-red); }
+
+  table { width:100%; border-collapse:collapse; margin:12px 0 20px; font-size:13px; }
+  table th, table td { padding:10px 12px; border-bottom:1px solid var(--border); text-align:left; vertical-align:top; }
+  table th { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--muted); background:var(--card); }
+  table tr:hover td { background:var(--card-alt); }
+  .tag-ok { color:var(--accent-green); font-weight:600; }
+  .tag-minor { color:var(--accent-orange); font-weight:600; }
+  .tag-major { color:var(--accent-red); font-weight:600; }
+  .tag-info { color:var(--accent-blue); font-weight:600; }
+</style>
+</head>
+<body>
+
+<nav class="topnav">
+  <span class="nav-label">CIRES Observability Platform</span>
+  <a href="index.html" class="navlink navlink-home">🏠 Home</a>
+  <a href="decisions-log.html" class="navlink navlink-log">📝 Decisions Log</a>
+  <a href="system-explained.html" class="navlink navlink-sys">🔬 System Explained</a>
+  <a href="triage-service.html" class="navlink navlink-triage">🧠 Triage Service</a>
+</nav>
+
+
+<section class="hero">
+  <div class="inner">
+    <div class="eyebrow">UX Redesign · Claude Design briefing</div>
+    <h1>Claude Design Prompt — <span class="accent">copy, paste, attach screenshots</span></h1>
+    <p class="lead">
+      Self-contained briefing for the Claude Design pass that produces the
+      v2 operator-facing UX (dashboard, alert detail page, escalation
+      email, feedback page). Generated from every piece of context the
+      platform has captured: the
+      <a href="solution-brief.html#sf-doctrine" style="color:var(--accent-green);">operator-cognitive-load doctrine</a>,
+      the
+      <a href="solution-brief.html#supervisor-feedback" style="color:var(--accent-green);">supervisor's post-presentation feedback</a>,
+      the
+      <a href="solution-brief.html#dashboard-audit" style="color:var(--accent-green);">§7d critical audit findings</a>,
+      and the existing CSS palette + typography from this docs site.
+    </p>
+    <p class="lead" style="margin-bottom:0;">
+      <strong>How to use:</strong> open Claude Design on your Max plan, paste the prompt block below verbatim, then in the <em>next</em> message attach screenshots of (1) the current dashboard collapsed view, (2) a row in the expanded state, (3) a current escalation email, (4) any other surface you want redesigned in the same pass. Claude Design retains context within the conversation, so follow-ups stay in the same chat — don't restart.
+    </p>
+    <div class="pill-row" style="margin-top:20px;">
+      <span class="pill green">4 deliverables</span>
+      <span class="pill orange">~200 lines, self-contained</span>
+      <span class="pill blue">Matches existing docs CSS palette</span>
+    </div>
+  </div>
+</section>
+
+<div class="layout">
+<section class="content">
+
+<!-- ────────────────────── 12.8 ────────────────────── -->
+<h3 id="sf-design-prompt">12.8 Claude Design prompt — copy-paste-ready</h3>
+
+<p>
+The brief below is built from <em>every</em> piece of context the platform
+documentation has captured to date — operator-cognitive-load doctrine
+(§12.1), supervisor-named UX requirements (§12.2–§12.6), canonical test
+case (§12.5), §7d audit findings on the existing dashboard, and the
+existing CSS palette + typography from <code>monitoring-docs</code>. Paste
+this entire block into Claude Design and attach the screenshots of the
+current dashboard / detail expand / escalation email as referenced at the
+bottom. The prompt is self-contained — Claude Design needs nothing else.
+</p>
+
+<div class="callout note">
+  <div class="callout-label">Tip — how to use this prompt</div>
+  <p>
+    Open Claude Design (claude.ai with the design artifact mode on the Max
+    plan), paste the prompt below verbatim, then drag in your screenshots
+    in the next message: <strong>1.</strong> current dashboard collapsed
+    view, <strong>2.</strong> a row in the expanded state, <strong>3.</strong>
+    a current escalation email (if you have one in your inbox), <strong>4.</strong>
+    the current Drain3 stats page or any other surface you want redesigned.
+    If the first pass undershoots on detail, ask follow-ups in the same
+    chat — don't restart. Claude Design retains context within the
+    conversation.
+  </p>
+</div>
+
+<pre style="background:var(--card); border:1px solid var(--border); border-radius:8px; padding:18px 22px; overflow-x:auto; line-height:1.55; font-size:12.5px; color:var(--text); white-space:pre-wrap; word-wrap:break-word;">
+You are designing the operator-facing UX for the CIRES Observability Platform — an AI-assisted root-cause-analysis layer on top of a Prometheus / Loki / Jaeger / Drain3 observability stack. The platform runs in production at CIRES Technologies (Tanger Med), serving devops engineers and SREs who triage real production alerts. I need a complete visual mockup of four surfaces:
+
+1. Operator dashboard (the alert/decision list — the main daily-use surface)
+2. Per-alert detail page (the click-through from each dashboard row)
+3. Escalation email template (HTML — what the operator gets in their inbox)
+4. Operator-feedback page (a short rating form for each alert)
+
+I will attach screenshots of the current implementations of (1) and (3) at the end of this message so you can see what we're moving away from.
+
+================================================================
+PART A — WHO THE USER IS, AND THE DESIGN DOCTRINE
+================================================================
+
+The user is a tired SRE / devops engineer at a real company. They open the dashboard during incidents, between meetings, or while context-switching from other work. They are skimming, not reading. They need to identify what's broken, where it is, and what to do, in under 10 seconds per alert. The supervisor who reviewed the v1 platform explicitly said:
+
+  "The engineer who is the end user needs to be at the forefront of our UX.
+   He is most probably tired and doesn't have the time nor the bandwidth
+   to read a lot of useless info. We have to give him poignant info and
+   give him the name of things so he can fix / investigate immediately
+   instead of getting decision fatigue. It should be very simple and
+   intuitive to read."
+
+Operationalize that as five hard design rules — every visual decision must pass them:
+
+  RULE 1: Names not metrics.
+    Show the NAME of the thing the operator has to look at — the
+    namespace, the service, the component. PromQL expressions, raw
+    metric values, and IP addresses are noise on the primary surfaces.
+    They live on the detail page, or behind a "View in Grafana" link.
+
+  RULE 2: Brief not verbose.
+    The "reason" field is one short sentence — the reason, not five
+    sentences of how. The "suggested action" is a few words, an
+    executable command if possible. Anything longer goes on the
+    detail page.
+
+  RULE 3: One row, not duplicates.
+    If the same alert fires for the same (env, namespace, service,
+    component), it is ONE row that updates over time. Not N separate
+    rows. History is shown inline on the detail page as a chronology.
+
+  RULE 4: Click-through, not wall-of-text.
+    The dashboard view is poignant + actionable. Full evidence, full
+    LLM reasoning, related alerts, complete metric breakdowns live on
+    the detail page. Each dashboard row is clickable.
+
+  RULE 5: Sustained, not spikes.
+    A 2-minute CPU spike is noise. A 6-hour sustained CPU saturation is
+    real. The dashboard must visually distinguish "transient" from
+    "sustained" — e.g. a small icon + a color modifier, not a separate
+    column.
+
+================================================================
+PART B — DELIVERABLE 1: OPERATOR DASHBOARD
+================================================================
+
+This is the main surface. Operators land here 50+ times per day during incidents.
+
+Layout: full-width dark theme, table-style alert list, top bar with stack overview, left or top sidebar with filters.
+
+TOP BAR (sticky header):
+  - Platform name: "CIRES Observability — Triage Dashboard"
+  - Live indicator (small green dot + uptime in seconds, refreshes every 10 s)
+  - Quick stats (auto-refreshing every 30 s):
+      • Open alerts (count)
+      • Emailed in last 24 h (count)
+      • Shelved-no-page in last 24 h (count)
+      • Median LLM latency (seconds)
+  - User menu (top right)
+
+FILTER BAR (sticky, below top bar):
+  - Per-column dropdowns: Environment / Namespace / Service-type /
+    Verdict / Time range (last 1h / 24h / 7d / custom)
+  - Free-text search (matches alert name, service, component, RCA prose)
+  - "Clear all filters" button
+
+DASHBOARD TABLE — collapsed view (default):
+
+The table has EXACTLY these columns, in this order. Hide everything else
+from the collapsed view.
+
+  | Time | Environment | Namespace | Service-type | Component | Alert | Verdict | Severity | ID |
+
+Use the FULL WORD "Environment" as the column header — not "Env" — per
+the operator's explicit preference (legibility &gt; brevity for column
+labels themselves; brevity applies to the VALUES, not the header text).
+
+Column details:
+  - Time: relative time ("3 min ago", "1 h ago"), tooltip shows full
+    timestamp (UTC). Sortable, default sort = newest first.
+  - Environment: small colored pill — dev / int / uat / stg / preprod / prod.
+    Color-coded: prod = red, preprod/stg = amber, uat/int = blue,
+    dev = gray.
+  - Namespace: monospace short string, the literal k8s namespace
+    (e.g. "app", "rental", "network", "observability"). Filterable
+    via dropdown.
+  - Service-type: text + small icon. Values: infra, backend, frontend,
+    db, camera, sensor, network, observability. Icon hints what it is
+    at a glance.
+  - Component: monospace short name (e.g. "spring-boot",
+    "kong-kong-proxy", "rental-mysql"). The actual deployment name.
+  - Alert: one-line plain English. NOT the raw alertname.
+    "High p95 latency on Kong gateway" not "HighKongP95Latency".
+  - Verdict: colored pill. ESCALATE = red, DISMISS = gray,
+    SHELVED = amber, PENDING = blue.
+  - Severity: colored pill. critical = red, warning = orange,
+    info = blue.
+  - ID: monospace 8-char short ID (e.g. "8df8a37a"). Click to copy
+    full UUID; click row to expand inline OR navigate to detail page
+    (use whichever feels lighter — both should be designable).
+
+Sustained-vs-spike indicator: small icon to the LEFT of the Time column.
+  - Sustained (alert active &gt; 5 min consistently): a flame icon, amber
+  - Transient spike (alert resolved within 1-2 min): a lightning icon, gray
+  - Recurring (same fingerprint fired 3+ times in 24 h): a repeat-arrow
+    icon, blue
+The icon is a 16x16 pixel marker — no text label needed.
+
+Row interaction:
+  - Hover: subtle background lift + cursor pointer
+  - Click row (anywhere except ID/links): expand inline to show brief
+    detail (described below)
+  - Click ID: copy full UUID to clipboard, show toast "Copied"
+  - Click "View detail" button (appears in expanded state): navigate
+    to detail page (Deliverable 2)
+  - Click Grafana icon (appears in expanded state): open prefilled
+    Grafana with the alert's PromQL
+
+DASHBOARD TABLE — expanded view (inline, when row clicked):
+
+When a row is clicked, it expands DOWN into the same table to show:
+
+  - REASON: one sentence. Plain English. The cause, not the chain of
+    inference. E.g. "JDBC connection pool exhausted on employeeDs"
+    not "Observed metric value 0.95 of pool utilization with PromQL
+    sum(rate(...))".
+  - SUGGESTED ACTION: one to two short executable commands, monospace.
+    E.g. "kubectl rollout restart deploy/spring-boot -n app".
+    If no safe action exists: "Investigate via Grafana &amp; Loki below".
+    If the action was stripped by the safety gate: "Shelved — review
+    on detail page".
+  - TAGS: up to 3 small chips. Only the most relevant. Drop noise like
+    "data_starved", "actionable" unless directly meaningful to the
+    operator.
+  - LINKS BAR:
+      • "View detail →"   (primary, navigates to Deliverable 2)
+      • "Grafana ↗"        (prefilled with the alert PromQL)
+      • "Loki ↗"           (filtered to the affected service)
+      • "Jaeger ↗"         (recent traces for the service)
+      • "Rate this alert"  (opens Deliverable 4 inline or modal)
+
+NEVER show in the dashboard collapsed OR expanded view:
+  - Full UUIDs (only 8-char short form)
+  - Raw IP addresses
+  - PromQL expression text
+  - Metric values like "0.95" or "92.3%" (use phrasing: "near
+    saturation", "above baseline", "transient spike")
+  - LLM confidence number (shown on detail page)
+  - Raw rca_quality classification text
+  - The full RCA prose (only the 1-sentence reason)
+  - Evidence array (lives on detail page)
+  - Diagnostic-steps array (lives on detail page)
+
+PAGINATION:
+  - Maximum 20 alerts per page
+  - Page-numbered nav at the bottom: "← Prev | 1 2 3 ... 47 | Next →"
+  - Show "Showing 1-20 of 287 alerts" above the table
+
+EMPTY STATES:
+  - No alerts ever: large green check + "All clear — no alerts in the
+    last [time-range]. The cheap-path gates absorbed N alerts since
+    midnight. Nothing required your attention."
+  - All filtered out: "No alerts match your filters. [Clear filters]"
+
+REFRESH:
+  - Auto-refresh every 30 s, but ONLY replaces the table body.
+    Filter state must persist across refreshes. (This is a known
+    bug we're fixing now in the v1 — make sure the design implies
+    a refresh-without-page-flicker pattern.)
+
+================================================================
+PART C — DELIVERABLE 2: ALERT DETAIL PAGE
+================================================================
+
+The click-through target from each dashboard row. URL pattern:
+  /dashboard/alert/&lt;short-id&gt;  (e.g. /dashboard/alert/8df8a37a)
+
+The detail page is wider and more breathable than the dashboard, but still
+follows the brevity discipline — each section is short, named, and links
+out for anyone who wants the full LLM trace.
+
+LAYOUT (top to bottom):
+
+  1. HEADER STRIP (sticky):
+     - Back-arrow to dashboard
+     - Short ID (8-char)
+     - Env / Namespace / Service-type / Component pills (same as dashboard)
+     - Alert name (plain English, larger font)
+     - Verdict pill + Severity pill
+     - Time fired + "active for [duration]"
+
+  2. CAUSE (largest, full width, top of body):
+     - ONE paragraph. Named cause, no PromQL, no raw values.
+     - Bold the named subject (the component that's actually broken).
+
+  3. SUGGESTED ACTION:
+     - Same as dashboard expanded view, but here the operator can
+       see longer explanation of why this action.
+     - Includes a "Copy command" button per action.
+
+  4. INCIDENT HISTORY (the same-alert collapsing surface — important):
+     - If this alert fingerprint has fired multiple times: show a
+       vertical timeline of fires, with timestamp + verdict per fire
+       + delta from the last fire ("verdict changed: dismiss → escalate
+       2 hours ago").
+     - If this is fire #1: just "First seen [time]; no prior history".
+     - Visual: small circular markers along a vertical line, with the
+       most recent at the top.
+
+  5. EVIDENCE:
+     - 3-5 bullet points naming the cited evidence (e.g. "Loki: 47
+       lines matching 'pool exhausted' in last 5 min on
+       spring-boot"). No raw PromQL — each evidence bullet has a
+       "View in Grafana/Loki/Jaeger" link.
+
+  6. REASONING STEPS (collapsed by default):
+     - The LLM's chain of inference, if the operator wants it. A
+       "Show reasoning" toggle. When expanded, show as a numbered
+       list of short steps, NOT the full rca_report prose.
+
+  7. RELATED ALERTS (sidebar or below evidence):
+     - Up to 5 alerts that fired within ±10 min of this one OR
+       within ±15 min on the same namespace. Hyperlinked to their
+       detail pages.
+
+  8. DEPLOY CONTEXT (if available):
+     - If a deploy happened within 30 min before this alert, show:
+       "Possibly related deploy: [git-sha] by [author] at [time] —
+       see [git-link]". Future feature; for now design it as a
+       placeholder card with the right shape.
+
+  9. FEEDBACK FOOTER:
+     - "Was this alert useful?" with thumbs-up / thumbs-down +
+       expanded form (Deliverable 4 inline).
+
+  10. RAW DATA (collapsed by default, monospace, technical):
+     - Full UUID, alert fingerprint, full PromQL, raw evidence array,
+       full LLM RCA report text, suggested_actions raw array, IP+port,
+       all timestamps. For when the operator wants to see it all. NOT
+       the default view.
+
+================================================================
+PART D — DELIVERABLE 3: ESCALATION EMAIL TEMPLATE
+================================================================
+
+The supervisor specifically asked for the email to be optimized for
+operator use, "a lot more to the point", with links to everything needed.
+
+SUBJECT LINE (max 60 chars):
+  [&lt;ENV&gt;] [&lt;NAMESPACE&gt;] [&lt;VERDICT&gt;] &lt;short alert summary&gt;
+  Examples:
+    [prod] [app] [ESCALATE] High p95 latency on Kong gateway
+    [stg]  [rental] [ESCALATE] OOM loop on rental-backend
+    [preprod] [observability] [SHELVED] Drain3 anomaly on Loki
+
+HTML EMAIL BODY (dark theme to match dashboard):
+  - Header banner: same env/namespace/service-type/component pills as
+    dashboard. Verdict pill prominent.
+  - Big single sentence: "WHAT" — the alert in operator language.
+  - Below that, three blocks side-by-side or stacked depending on
+    email-client width:
+      • WHY: 1-2 sentence named cause.
+      • SUGGESTED ACTION: monospace command, with "Copy" button.
+      • SEVERITY: pill + sustained/spike icon.
+  - Four buttons in a row at the bottom:
+      [ View on dashboard ]  [ Open Grafana ]  [ Open Loki ]  [ Rate this alert ]
+  - Footer fine-print: short alert ID + timestamp + "Sent by CIRES
+    Observability Triage Platform v0.1.0".
+
+Avoid in the email:
+  - PromQL expression text
+  - Raw IPs
+  - Full UUIDs
+  - The full RCA prose
+  - Multiple action lists (one suggested action; longer list lives
+    on the detail page)
+
+================================================================
+PART E — DELIVERABLE 4: OPERATOR-FEEDBACK PAGE / WIDGET
+================================================================
+
+URL: /dashboard/alert/&lt;short-id&gt;/rate (or inline modal on the
+detail page).
+
+A short form. Designed to be filled in under 30 seconds.
+
+Title: "How was this alert handled?"
+Subtitle: 1 line — "Your feedback teaches the system. Less noise,
+                    sharper escalations next time."
+
+Fields:
+  - "Was this useful?" (radio: Yes / No / Partially)
+  - "Was the verdict right?" (radio: Yes / No / Mixed)
+  - "Was the suggested action right?" (radio: Yes / No / N/A)
+  - "What was the actual cause?" (short text, optional)
+  - "Tags" (multi-select chip group with: noise / real-incident /
+    misattributed / wrong-arch / good-catch / shelved-correctly /
+    needed-faster-page / other)
+  - "Notes" (textarea, optional, 280 chars)
+  - Submit button: "Save feedback"
+
+After submit: a one-line "Thanks — this feedback is wired into the
+suppression cache and the exemplar library" confirmation.
+
+================================================================
+PART F — VISUAL IDENTITY (match existing monitoring-docs theme)
+================================================================
+
+The platform already has a documentation site with a consistent dark
+theme. The dashboard should match. Exact CSS variables:
+
+  --bg:           #0f1117  (page background)
+  --bg-soft:      #13151e  (header/footer)
+  --card:         #1a1d27  (card backgrounds, table rows)
+  --card-alt:     #1e2230  (hover state)
+  --border:       #2a2d3a  (thin borders)
+  --border-hi:    #3a3f52  (active borders)
+  --text:         #e4e6ee  (primary text)
+  --text-soft:    #c0c5d0  (secondary text)
+  --muted:        #8890a0  (labels, captions)
+  --accent-blue:  #4ea8de  (info, navigation)
+  --accent-green: #6bcf7f  (healthy, success)
+  --accent-orange:#f0a050  (warning)
+  --accent-purple:#b07ee8  (AI-related accents)
+  --accent-red:   #e06070  (critical, escalate)
+  --accent-cyan:  #40d0d0  (links, secondary actions)
+  --accent-yellow:#e0d060  (sustained marker)
+
+Typography:
+  - UI text: 'Inter', 'Segoe UI', system-ui, sans-serif
+  - Code / IDs / commands: 'JetBrains Mono', 'Fira Code', ui-monospace
+  - Default size: 15px body, 13px table cells, 11px labels
+
+Components:
+  - Rounded corners: 8-14px on cards, 4-8px on pills
+  - Card-based layout with thin 1px borders
+  - Status dots: 8px diameter with colored shadow glow
+    (e.g. `box-shadow: 0 0 6px rgba(107,207,127,.5)` for green-live)
+  - Pills: 11-12px font, 4-6px vertical / 10-14px horizontal padding,
+    color-coded backgrounds at 8-12% opacity with full-color borders
+    at 35% opacity and text at 100% color.
+
+================================================================
+PART G — WHAT TO PRODUCE
+================================================================
+
+High-fidelity mockups (NOT wireframes) of:
+
+  1. Operator dashboard:
+       - Default view (populated with 6-8 realistic alert rows)
+       - One row expanded inline
+       - Filter dropdowns open (show the dropdown menus)
+       - Empty state (all clear)
+       - Empty state (all filtered out)
+       - Bottom of page showing pagination
+
+  2. Alert detail page:
+       - Default view with all sections visible
+       - Incident history timeline (show a 4-fire history)
+       - Reasoning steps expanded
+       - Raw data section collapsed (just the header)
+
+  3. Escalation email:
+       - Desktop email client width
+       - Mobile email client width (responsive)
+
+  4. Feedback page:
+       - Empty form
+       - Form being filled in
+       - After-submit confirmation
+
+For each surface, include:
+  - Two example alert types (e.g. one HighKongP95Latency on prod app,
+    one PodHighMemoryUsage on stg rental) so the design handles a
+    range of severities and verdicts.
+  - All pill colors visible.
+  - All icon variants (sustained / spike / recurring).
+
+Output format: high-fidelity mockup images / SVG / interactive
+preview — whatever Claude Design's strongest output mode is. I will
+take these to the supervisor for approval before any code is
+written.
+
+================================================================
+PART H — REFERENCE MATERIAL ATTACHED IN THE NEXT MESSAGE
+================================================================
+
+I'll paste in the next message:
+  - Screenshot 1: Current dashboard collapsed view (what we're moving
+    away from — "word salad", full UUIDs, PromQL visible, no
+    sustained indicator)
+  - Screenshot 2: Current dashboard expanded view (a row clicked
+    open, showing too much info)
+  - Screenshot 3: Current escalation email (for comparison)
+  - Optional: Drain3 stats page screenshot or any other surface I
+    want redesigned in the same pass.
+
+If you have any clarifying questions before producing the mockups,
+ask them first. Otherwise, produce the full set.
+</pre>
+
+<p>
+  When the design comes back: paste it as a screenshot or link into the
+  supervisor's Slack with one line — <em>"first draft of the dashboard
+  redesign — anything you'd change before I start building?"</em> No
+  formal cover note needed; this is the friend-cadence from §12.6. Once
+  he says go, the visual spec is locked and the Sprint 5 SF-8 re-skin
+  becomes a straightforward implementation pass against the existing
+  Sprint 4 functional layer.
+</p>
+
+
+<p style="margin-top:40px; padding-top:20px; border-top:1px solid var(--border); font-size:13px; color:var(--muted);">
+Created 2026-05-22. Extracted from <a href="solution-brief.html#supervisor-feedback">solution-brief.html §12 supervisor feedback</a>. Update this page whenever the feedback evolves; the prompt should remain a faithful brief, not drift from the source.
+</p>
+
+</section>
+</div>
+
+</body>
+</html>
