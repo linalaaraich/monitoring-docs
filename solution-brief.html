@@ -2349,16 +2349,16 @@ them.
       <td>Suite 285/285. Real alert next time the audit fires will produce a v2-shape email; manually verifiable by inspecting <code>_build_v2_escalation_body</code> output in a Python REPL or against the test suite's snapshots.</td>
     </tr>
     <tr>
-      <td><strong>Tue</strong></td>
-      <td><strong>SF-7 · Feedback page wired</strong><br/>The rate-this-alert page accessible from the email + dashboard detail page. Schema migration: extend the existing <code>feedback</code> table with <code>rating</code>, <code>tags</code> (text), <code>actual_root_cause</code>, <code>notes</code>, <code>rater</code> columns. POST endpoint <code>/feedback/rate/{decision_id}</code>.</td>
-      <td><code>main.py</code> new route + Pydantic model. <code>rca_store.py</code> add <code>save_feedback()</code> method. Schema migration via Alembic or inline <code>ALTER TABLE</code>. <code>static/design/feedback.jsx</code> wired to POST on submit.</td>
-      <td>Click "Rate alert" in the dashboard. Fill the form. Submit. See "Thanks, this is wired into the suppression cache" confirmation. Refresh — see the feedback row in <code>/decisions</code> response with the new fields.</td>
+      <td><strong>Tue</strong> <span style="color:var(--accent-green);font-weight:700">✅ shipped Sat 2026-05-23 (commit <code><a href="https://github.com/linalaaraich/monitoring-triage-service/commit/10ebd4e" style="color:var(--accent-green)">10ebd4e</a></code>)</span></td>
+      <td><strong>SF-7 · Feedback page wired</strong><br/>Schema migration applied 7 new columns to the <code>feedback</code> table (<code>rating</code>, <code>verdict_was_right</code>, <code>action_was_right</code>, <code>actual_cause</code>, <code>tags</code>, <code>notes</code>, <code>rater</code>). New POST endpoint <code>/feedback/rate/{short_id}</code>. New GET route <code>/dashboard/v2/alert/{short_id}/rate</code> serves the design's FeedbackForm with a real submit handler. Email's "Rate this alert" button + dashboard's expanded-row "Rate alert" button both link here.</td>
+      <td><code>rca_store.py</code> <code>record_v2_feedback()</code> with UPSERT on <code>(decision_id, feedback_type='rate')</code> · <code>main.py</code> new <code>V2FeedbackRequest</code> model + endpoint + page route · <code>static/design/feedback.jsx</code> Save button wired + reads from <code>window.CIRES_ALERT</code> · <code>notifier.py</code> email rate-button URL updated · <code>dashboard.jsx</code> Rate-alert button linked.</td>
+      <td>Suite 285/285. Live smoke: click "Rate alert" on any expanded row → fill the form → submit → see "Thanks" view → refresh, the feedback row is persisted.</td>
     </tr>
     <tr>
-      <td><strong>Wed</strong></td>
-      <td><strong>SF-4 dashboard-side · Same-alert collapsing</strong><br/>One row per <code>(alert_fingerprint, env, namespace)</code> on the feed. Multiple fires of the same fingerprint render as a single row with <code>fireCount=N</code> + the latest timestamp. Detail-page incident-history timeline already shows all fires; this is dashboard-only aggregation. No schema change (incident entity table is Sprint 5 work, §13.3 Phase 2.2).</td>
-      <td><code>main.py</code> <code>dashboard_v2()</code> — group transformed alerts by fingerprint before paginating; keep latest, sum fireCount.</td>
-      <td>Force two fires of the same alert (e.g. <code>kubectl run cpu-stress … --timeout 60s</code> twice). Wait for both to be ingested. /dashboard/v2 shows ONE row with fireCount=2, not two rows.</td>
+      <td><strong>Wed</strong> <span style="color:var(--accent-green);font-weight:700">✅ shipped Sat 2026-05-23 (commit <code><a href="https://github.com/linalaaraich/monitoring-triage-service/commit/7d0adeb" style="color:var(--accent-green)">7d0adeb</a></code>)</span></td>
+      <td><strong>SF-4 dashboard-side · Same-alert collapsing</strong><br/>One row per fingerprint on the feed. <code>fireCount=N</code> + latest timestamp. Detail-page incident-history timeline already shows all fires; this is dashboard-only aggregation. No schema change (incident entity table stays Sprint 5 per §14.5).</td>
+      <td><code>main.py</code> <code>dashboard_v2()</code> — pulls a 500-row slab, groups by fingerprint, keeps the LATEST row per group as representative, sorts DESC by latest-timestamp, paginates the unique-fingerprint list. Rows without fingerprint get a synthetic key so they don't all collapse together.</td>
+      <td>Live result: 288 raw rows in the 15-day window collapsed to <strong>26 unique fingerprints</strong> on the dashboard (1.5 pages of 20 instead of 15 pages). Verified via <code>curl /dashboard/v2 | grep total</code>.</td>
     </tr>
     <tr>
       <td><strong>Thu</strong></td>
