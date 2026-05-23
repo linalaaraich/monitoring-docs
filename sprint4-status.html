@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sprint 4 Status Board — what is done + what is not — CIRES Observability Platform</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --bg-soft: #13151e;
+    --card: #1a1d27;
+    --card-alt: #1e2230;
+    --border: #2a2d3a;
+    --border-hi: #3a3f52;
+    --text: #e4e6ee;
+    --text-soft: #c0c5d0;
+    --muted: #8890a0;
+    --accent-blue: #4ea8de;
+    --accent-green: #6bcf7f;
+    --accent-orange: #f0a050;
+    --accent-purple: #b07ee8;
+    --accent-red: #e06070;
+    --accent-cyan: #40d0d0;
+    --accent-yellow: #e0d060;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { font-family:'Inter','Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); line-height:1.65; font-size:15px; -webkit-font-smoothing:antialiased; }
+  code, pre, .mono { font-family:'JetBrains Mono','Fira Code',ui-monospace,monospace; font-size:0.88em; }
+
+  .topnav { display:flex; align-items:center; gap:12px; padding:14px 40px; background:var(--bg-soft); border-bottom:1px solid var(--border); flex-wrap:wrap; }
+  .topnav span.nav-label { color:var(--muted); font-size:13px; font-weight:600; margin-right:4px; }
+  .navlink { display:inline-flex; align-items:center; gap:6px; padding:7px 14px; border-radius:8px; font-size:13px; font-weight:600; text-decoration:none; border:1px solid; transition:background .2s, transform .15s; }
+  .navlink:hover { transform:translateY(-1px); }
+  .navlink-home { color:var(--text); border-color:var(--border); background:var(--card); }
+  .navlink-log { color:var(--accent-orange); border-color:rgba(240,160,80,.4); background:rgba(240,160,80,.08); }
+  .navlink-sys { color:var(--accent-cyan); border-color:rgba(64,208,208,.4); background:rgba(64,208,208,.08); }
+  .navlink-triage { color:var(--accent-purple); border-color:rgba(176,126,232,.4); background:rgba(176,126,232,.12); }
+
+  .hero { padding:56px 40px 40px; border-bottom:1px solid var(--border); background:linear-gradient(180deg, #13151e 0%, var(--bg) 100%); }
+  .hero .inner { max-width:1040px; margin:0 auto; }
+  .hero .eyebrow { font-size:11px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:var(--accent-red); margin-bottom:12px; }
+  .hero h1 { font-size:36px; font-weight:800; letter-spacing:-.5px; margin-bottom:14px; line-height:1.2; }
+  .hero h1 span.accent { color:var(--accent-red); }
+  .hero p.lead { font-size:16px; color:var(--text-soft); max-width:820px; line-height:1.7; margin-bottom:20px; }
+  .hero .pill-row { display:flex; gap:8px; flex-wrap:wrap; }
+  .pill { font-size:11px; font-weight:600; padding:4px 10px; border-radius:12px; border:1px solid; letter-spacing:.2px; }
+  .pill.red { color:var(--accent-red); border-color:rgba(224,96,112,.35); background:rgba(224,96,112,.08); }
+  .pill.orange { color:var(--accent-orange); border-color:rgba(240,160,80,.35); background:rgba(240,160,80,.08); }
+  .pill.green { color:var(--accent-green); border-color:rgba(107,207,127,.35); background:rgba(107,207,127,.08); }
+  .pill.blue { color:var(--accent-blue); border-color:rgba(78,168,222,.35); background:rgba(78,168,222,.08); }
+
+  .stats-row { display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:14px; margin:28px 0 24px; }
+  .stat { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:16px 20px; }
+  .stat .n { font-size:28px; font-weight:700; color:var(--text); }
+  .stat .lbl { font-size:11px; font-weight:600; letter-spacing:1px; text-transform:uppercase; color:var(--muted); margin-bottom:4px; }
+  .stat.good { border-left:3px solid var(--accent-green); }
+  .stat.warn { border-left:3px solid var(--accent-orange); }
+  .stat.bad { border-left:3px solid var(--accent-red); }
+  .stat.info { border-left:3px solid var(--accent-blue); }
+
+  .layout { max-width:1040px; margin:0 auto; padding:32px 40px 80px; }
+  .content h2 { font-size:24px; font-weight:700; margin:40px 0 14px; letter-spacing:-.3px; scroll-margin-top:24px; padding-bottom:8px; border-bottom:1px solid var(--border); }
+  .content h2:first-child { margin-top:0; }
+  .content h3 { font-size:17px; font-weight:700; margin:24px 0 8px; color:var(--text); }
+  .content h4 { font-size:13px; font-weight:700; margin:14px 0 4px; letter-spacing:1px; text-transform:uppercase; color:var(--muted); }
+  .content p { margin-bottom:14px; color:var(--text-soft); }
+  .content p strong { color:var(--text); font-weight:600; }
+  .content ul, .content ol { margin:8px 0 16px 24px; color:var(--text-soft); }
+  .content li { margin-bottom:6px; }
+  .content code { background:var(--card); border:1px solid var(--border); padding:1px 6px; border-radius:4px; font-size:0.85em; color:var(--accent-cyan); }
+  .content pre { background:var(--card); border:1px solid var(--border); padding:14px 16px; border-radius:8px; margin:12px 0 18px; overflow-x:auto; line-height:1.5; font-size:12.5px; }
+  .content pre code { background:none; border:none; padding:0; color:var(--text); font-size:1em; }
+  .content a { color:var(--accent-blue); text-decoration:none; border-bottom:1px dashed rgba(78,168,222,.35); }
+  .content a:hover { border-bottom-style:solid; }
+
+  .callout { border-left:3px solid; border-radius:0 8px 8px 0; padding:14px 18px; margin:16px 0; background:var(--card); }
+  .callout.note { border-color:var(--accent-blue); }
+  .callout.tip { border-color:var(--accent-green); }
+  .callout.warn { border-color:var(--accent-orange); }
+  .callout.critical { border-color:var(--accent-red); }
+  .callout-label { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; margin-bottom:6px; }
+  .callout.note .callout-label { color:var(--accent-blue); }
+  .callout.tip .callout-label { color:var(--accent-green); }
+  .callout.warn .callout-label { color:var(--accent-orange); }
+  .callout.critical .callout-label { color:var(--accent-red); }
+
+  table { width:100%; border-collapse:collapse; margin:12px 0 20px; font-size:13px; }
+  table th, table td { padding:10px 12px; border-bottom:1px solid var(--border); text-align:left; vertical-align:top; }
+  table th { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--muted); background:var(--card); }
+  table tr:hover td { background:var(--card-alt); }
+  .tag-ok { color:var(--accent-green); font-weight:600; }
+  .tag-minor { color:var(--accent-orange); font-weight:600; }
+  .tag-major { color:var(--accent-red); font-weight:600; }
+  .tag-info { color:var(--accent-blue); font-weight:600; }
+</style>
+</head>
+<body>
+
+<nav class="topnav">
+  <span class="nav-label">CIRES Observability Platform</span>
+  <a href="index.html" class="navlink navlink-home">🏠 Home</a>
+  <a href="decisions-log.html" class="navlink navlink-log">📝 Decisions Log</a>
+  <a href="system-explained.html" class="navlink navlink-sys">🔬 System Explained</a>
+  <a href="triage-service.html" class="navlink navlink-triage">🧠 Triage Service</a>
+</nav>
+
+
+<section class="hero">
+  <div class="inner">
+    <div class="eyebrow">Sprint 4 · 2026-05-20 → 2026-06-03 · live status</div>
+    <h1>Sprint 4 — <span class="accent">what's done, what's not yet</span></h1>
+    <p class="lead">
+      Snapshot of every Sprint 4 story by status: <strong>shipped</strong>
+      (with commit refs + acceptance evidence), <strong>scheduled</strong>
+      in the <a href="solution-brief.html#sprint4-ops" style="color:var(--accent-green);">§14 day-by-day plan</a>,
+      or <strong>backlog</strong> (longer-form Sprint 4 candidates not on the active schedule).
+      The companion long-form ranked list lives in
+      <a href="sprint-history.html#sprint-4" style="color:var(--accent-green);">sprint-history §Sprint 4</a>;
+      the Jira import file is
+      <code>linalaaraich/jira/Sprint4-additions.csv</code>.
+    </p>
+    <p class="lead" style="margin-bottom:0;">
+      <strong>As of Sat 2026-05-23 afternoon:</strong> 6 of the §14
+      day-by-day items shipped (4 from the §14 plan + 2 supporting Phase
+      2 work). 5 still scheduled across the remaining 8 working days of
+      Sprint 4. 24 longer-form backlog candidates carry from the
+      pre-supervisor-feedback ranking — many will roll to Sprint 5 / 6.
+    </p>
+    <div class="pill-row" style="margin-top:20px;">
+      <span class="pill green">6 shipped</span>
+      <span class="pill orange">5 scheduled</span>
+      <span class="pill blue">24 backlog</span>
+      <span class="pill red">tests 285/285</span>
+    </div>
+  </div>
+</section>
+
+<div class="layout">
+<section class="content">
+
+<h2 id="shipped">✅ Shipped — 6 stories (commit refs + acceptance evidence)</h2>
+
+<table>
+  <thead>
+    <tr><th>Jira ID</th><th>Story</th><th>Commit</th><th>Acceptance</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>104</td>
+      <td><strong>S4-LAT-02</strong> · P2 suppression cascade fixes (synthetic-fingerprint filter + lookback 30→10 + recurrence-gate annotation widening)</td>
+      <td><code><a href="https://github.com/linalaaraich/monitoring-triage-service/commit/b96bbde">b96bbde</a></code> + <code><a href="https://github.com/linalaaraich/monitoring-project/commit/54b18df">54b18df</a></code> (2026-05-19)</td>
+      <td>6 / 6 post-fix audit-live decisions across 3 runs landed <code>triage_decision=investigate</code>. Zero <code>triage_suppressed</code>.</td>
+    </tr>
+    <tr>
+      <td>205</td>
+      <td><strong>S4-DA-01</strong> · Shelved-in-disguise email gate (the bingbot-404 false-positive fix surfaced by the 2026-05-21 dashboard-output audit)</td>
+      <td><code><a href="https://github.com/linalaaraich/monitoring-triage-service/commit/1cbb220">1cbb220</a></code> (2026-05-21 19:13 UTC)</td>
+      <td>Live: 3 false-positive operator pages prevented in the 2026-05-21 stress3 run (rows at 22:13 + 22:24 × 2 all <code>action_taken=shelved</code>, zero emails).</td>
+    </tr>
+    <tr>
+      <td>210</td>
+      <td><strong>S4-SF-06</strong> · Email overhaul — design's brief shape (<code>[env] [ns] [VERDICT] alertPlain</code> subject + banner + identity pills + WHAT + Why + ONE action + 4 buttons + footer)</td>
+      <td><code><a href="https://github.com/linalaaraich/monitoring-triage-service/commit/f6d0a1b">f6d0a1b</a></code> (2026-05-23 Sat — pulled forward from §14 Mon)</td>
+      <td>Suite 274 → 285 (+11 new tests). Subject ≤70 chars enforced. 4 buttons + email-safe inline CSS verified per test.</td>
+    </tr>
+    <tr>
+      <td>211</td>
+      <td><strong>S4-SF-07</strong> · Operator feedback page wired end-to-end (rate.html UI + 7-column schema migration + <code>POST /feedback/rate/{short_id}</code>)</td>
+      <td><code><a href="https://github.com/linalaaraich/monitoring-triage-service/commit/10ebd4e">10ebd4e</a></code> (2026-05-23 Sat — pulled forward from §14 Tue)</td>
+      <td>Live smoke: POST returned <code>{ok:true, decision_id, saved:{...}}</code> with all 7 fields persisted.</td>
+    </tr>
+    <tr>
+      <td>212</td>
+      <td><strong>S4-SF-04</strong> · Same-alert collapsing dashboard-side (group by fingerprint, keep latest, paginate the unique list — no schema change yet)</td>
+      <td><code><a href="https://github.com/linalaaraich/monitoring-triage-service/commit/7d0adeb">7d0adeb</a></code> (2026-05-23 Sat — pulled forward from §14 Wed)</td>
+      <td>Live verified: <strong>288 raw rows in 15d window → 26 unique fingerprints</strong> on <code>/dashboard/v2</code> (15 pages of 20 → 1.5 pages).</td>
+    </tr>
+    <tr>
+      <td>214</td>
+      <td><strong>S4-PHASE-2.1</strong> · Detail page route <code>/dashboard/v2/alert/{short_id}</code> (cause / action / incident-history timeline / evidence / drain3 card / reasoning / related-alerts sidebar)</td>
+      <td><code><a href="https://github.com/linalaaraich/monitoring-triage-service/commit/9b61e74">9b61e74</a></code> + <code><a href="https://github.com/linalaaraich/monitoring-triage-service/commit/a904eda">a904eda</a></code> empty-render fix (2026-05-22 Fri)</td>
+      <td>Smoke: real short_id → HTTP 200, full DetailPage renders with reasoning[] + related[] + drain3 + deploy fields populated.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="scheduled">📅 Scheduled — 5 stories on the §14 day-by-day plan</h2>
+
+<p>
+  Each row maps to a specific weekday in
+  <a href="solution-brief.html#sprint4-ops">solution-brief §14</a>. Sized
+  for one engineer; concurrent agent work compresses some items further.
+</p>
+
+<table>
+  <thead>
+    <tr><th>Jira ID</th><th>Story</th><th>§14 slot</th><th>Effort</th><th>Acceptance</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>209</td>
+      <td><strong>S4-DA-05</strong> · Alertname-family dedupe equivalence — <code>ALERT_FAMILIES</code> map so HighCpu + CriticalCpu + MediumCpu on same instance collapse as one family</td>
+      <td>W1 Thu</td>
+      <td>~2 SP, ~4 h</td>
+      <td>Induce CriticalCpu + HighCpu on same node within 1 min → one row on the dashboard, not two.</td>
+    </tr>
+    <tr>
+      <td>208</td>
+      <td><strong>S4-DA-04</strong> · Drain3 fingerprint content-hashing — <code>drain3-{service}-{hash(top-3-novel-templates)}</code> so unrelated drain3 events don't share fp</td>
+      <td>W1 Thu</td>
+      <td>~2 SP, ~3 h</td>
+      <td>Inject two different drain3 anomaly batches in same hour with different templates → see two distinct fingerprints, not one collapse.</td>
+    </tr>
+    <tr>
+      <td>206</td>
+      <td><strong>S4-DA-02</strong> · Unsafe-action stripping (clamp-independent) — strip kubectl/ssh/restart/systemctl when <code>quality=actionable AND no named cause</code>, regardless of confidence</td>
+      <td>W1 Fri</td>
+      <td>~3 SP, ~4 h</td>
+      <td>Induce stress3-pattern CriticalCpu → the resulting RCA's emailed actions MUST NOT contain <code>systemctl restart</code> unless the prose names a specific cause-of-cause.</td>
+    </tr>
+    <tr>
+      <td>215</td>
+      <td><strong>S4-PHASE-3.A.KPI</strong> · <code>/dashboard/v2/kpi</code> platform-health page — emails-per-day / FP rate / median latency / cheap-path % / archetype coverage / GPU util</td>
+      <td>W2 Mon</td>
+      <td>~3 SP, ~3 d</td>
+      <td>Click "KPI · Evaluation" in sidebar → land on populated page (not 404). 6+ real numbers, update on refresh.</td>
+    </tr>
+    <tr>
+      <td>207</td>
+      <td><strong>S4-DA-03</strong> · Cross-row verdict coherence — when fingerprint reused within N min, prepend prior cause to LLM context + require "changed my mind because…" framing</td>
+      <td>W2 Tue</td>
+      <td>~5 SP</td>
+      <td>Recovery fire on same fingerprint reuses cause OR includes "condition resolved" in rca_report.</td>
+    </tr>
+    <tr>
+      <td>—</td>
+      <td><strong>URL filter persistence + range filter wire-up</strong> (no Jira story yet — could fold under 215 or DA-3, or add a separate one before import)</td>
+      <td>W2 Wed</td>
+      <td>~3 SP</td>
+      <td>Apply 2 filters + range=24h → refresh page → filters survive. Shareable URL.</td>
+    </tr>
+    <tr>
+      <td>213</td>
+      <td><strong>S4-SF-05</strong> · Sustained-vs-spike verdict modifier — "duration above threshold" feature + <code>quality=transient_spike</code> classification → <code>action_taken=shelved</code></td>
+      <td>W2 Fri (stretch)</td>
+      <td>~3 SP</td>
+      <td>90s CPU spike → shelved; sustained 10-min stress → escalates.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="backlog">📋 Backlog — 24 longer-form Sprint 4 candidates (pre-supervisor-feedback ranking)</h2>
+
+<p>
+  These are the P-list (P0-P11) + EPIC12 predictive items + CR-side carry
+  from <a href="sprint-history.html#sprint-4">sprint-history §Sprint 4</a>.
+  They're in <code>Sprint4-additions.csv</code> at IDs 103-127 + 200-204
+  but were NOT scheduled into the §14 day-by-day plan. Most will roll to
+  Sprint 5 or Sprint 6 — they're listed here for completeness so nothing
+  silently drops.
+</p>
+
+<table>
+  <thead>
+    <tr><th>Jira ID</th><th>Story</th><th>Theme</th><th>Likely landing</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>103</td><td><strong>S4-LAT-01</strong> · Latency bundle (180s timeout + per-stage instrumentation + Ollama serial)</td><td>EPIC9</td><td>Mooted by 14b/A10G — median latency now ~38 s vs the 6-7 min target; revisit only on regression</td></tr>
+    <tr><td>105</td><td><strong>S4-LAT-03</strong> · Drain3 + empty-actions auto-downgrade</td><td>EPIC9</td><td>Sprint 5 W2 candidate (similar shape to DA-2)</td></tr>
+    <tr><td>106</td><td><strong>S4-LAT-04</strong> · Dashboard <code>dismiss_with_recommendation</code> colour</td><td>EPIC9</td><td>Sprint 5 polish</td></tr>
+    <tr><td>107</td><td><strong>S4-PR-01</strong> · PromQL / numerical-noise scrubber</td><td>EPIC10</td><td>Sprint 5 W1 — known §7.5 P1 gap</td></tr>
+    <tr><td>108</td><td><strong>S4-PR-02</strong> · Deterministic diagnostic-steps generator</td><td>EPIC10</td><td>Sprint 5/6</td></tr>
+    <tr><td>109</td><td><strong>S4-PR-03</strong> · Hallucination on truncated metric names</td><td>EPIC10</td><td>Sprint 5/6</td></tr>
+    <tr><td>110</td><td><strong>S4-PR-04</strong> · Tighter <code>_classify_rca_quality</code></td><td>EPIC10</td><td>Sprint 5 — small, pair with DA-3</td></tr>
+    <tr><td>111</td><td><strong>S4-PR-05</strong> · Corpus reclassification + nightly post-hoc</td><td>EPIC10</td><td>Sprint 6</td></tr>
+    <tr><td>112</td><td><strong>S4-PR-06</strong> · Exemplar prose rewrites + overlap-detection validator</td><td>EPIC10</td><td>Sprint 6</td></tr>
+    <tr><td>113</td><td><strong>S4-CR-01</strong> · US-5.2 Incident correlator (4-alert kill-chain RCA)</td><td>EPIC11</td><td>Sprint 5 — pairs with Phase 2.2 incident table (S5-INC-01)</td></tr>
+    <tr><td>114</td><td><strong>S4-CR-02</strong> · MCP native tool-calling rewrite</td><td>EPIC11</td><td>Sprint 5/6 (depends on GPU host stability)</td></tr>
+    <tr><td>115</td><td><strong>S4-CR-03</strong> · Tier 3 iterative agentic gather</td><td>EPIC11</td><td>Sprint 6+</td></tr>
+    <tr><td>116</td><td><strong>S4-CR-04</strong> · Curated RAG retrieval (BM25)</td><td>EPIC11</td><td>Sprint 6+ — depends on operator-feedback volume from S4-SF-07</td></tr>
+    <tr><td>117</td><td><strong>S4-CR-05</strong> · Weekly curation job</td><td>EPIC11</td><td>Sprint 6+</td></tr>
+    <tr><td>118</td><td><strong>S4-CR-06</strong> · Pod-level alert rule fixes</td><td>EPIC11</td><td>Sprint 5 — known platform-level gap</td></tr>
+    <tr><td>119</td><td><strong>S4-CR-07</strong> · O-9 webhook auth + O-10 nightly RCA-history S3 backup</td><td>EPIC11</td><td>Sprint 5 — Friday-hardening item, overdue</td></tr>
+    <tr><td>120</td><td><strong>S4-CR-08</strong> · Sentence-transformers retriever fallback</td><td>EPIC11</td><td>Sprint 6+ (RAG track)</td></tr>
+    <tr><td>121</td><td><strong>S4-CR-09</strong> · Trace-ID linkage from log anomalies</td><td>EPIC11</td><td>Sprint 6+</td></tr>
+    <tr><td>122</td><td><strong>S4-CR-10</strong> · RCA playbook templates</td><td>EPIC11</td><td>Sprint 6+</td></tr>
+    <tr><td>123</td><td><strong>S4-CR-11</strong> · US-5.7 Labelled corpus + F1 tracking</td><td>EPIC11</td><td>Sprint 6+ (depends on feedback corpus volume)</td></tr>
+    <tr><td>124</td><td><strong>S4-CR-12</strong> · L2/L3 chaos scenarios (O-12)</td><td>EPIC11</td><td>Sprint 5/6 — pairs with SF-13 microservice bed</td></tr>
+    <tr><td>125</td><td><strong>S4-CR-13</strong> · Drain3 self-monitoring loop allowlist</td><td>EPIC11</td><td>Sprint 5 — small mechanical fix</td></tr>
+    <tr><td>126</td><td><strong>S4-CR-14</strong> · Doc debt (CLAUDE.md refresh + stale PNGs)</td><td>EPIC11</td><td>Anytime — small</td></tr>
+    <tr><td>127</td><td><strong>S4-HF-01</strong> · Widen bounded-agency trigger to low-confidence verdicts</td><td>EPIC11</td><td>Sprint 5 — depends on prompt-engineering iteration</td></tr>
+    <tr><td>201-204</td><td><strong>S4-PRED-01..04</strong> · Detective-signals tab + capacity-runway + saturation-band baselines + cascade predictor (EPIC12 predictive observability carve-out from 2026-05-20 roadmap)</td><td>EPIC12</td><td>Sprint 5 — Phase 3.A.Anomalies (S5-INC-04) absorbs PRED-01; PRED-02/03/04 are Sprint 6 candidates</td></tr>
+  </tbody>
+</table>
+
+<h2 id="next-week">🎯 Concrete next-session pick order</h2>
+
+<ol>
+  <li><strong>Sun rest day</strong> if you want it — Sprint 4 starts Mon 2026-05-25 officially.</li>
+  <li><strong>Mon 2026-05-25 (or Sun if pushing)</strong> — DA-5 + DA-4 (both Thu W1 in §14, can bank by shipping early). Both small, ~3 h combined.</li>
+  <li><strong>Tue 2026-05-26</strong> — DA-2 unsafe-action stripping (~4 h). The §7c.4 <code>systemctl restart k3s-node.service</code> fix.</li>
+  <li><strong>Wed 2026-05-26</strong> — Phase 3.A.KPI route (~1 day). Supervisor-asked-for.</li>
+  <li><strong>Thu 2026-05-28</strong> — DA-3 cross-row coherence (~5 SP, ~1 day).</li>
+  <li><strong>Fri 2026-05-29</strong> — URL filter persistence + range filter (~3 SP, ~half-day).</li>
+  <li><strong>Week 2 buffer days</strong> — supervisor feedback round + auto-refresh + full-UUID copy (30-min adds each).</li>
+  <li><strong>Sprint 5 import</strong> after Sprint 4 closes (~2026-06-03).</li>
+</ol>
+
+<p style="margin-top:40px; padding-top:20px; border-top:1px solid var(--border); font-size:13px; color:var(--muted);">
+Created 2026-05-23 (Sat). Source-of-truth for Sprint 4 status. Update this page when a story ships (status + commit ref) or rolls to Sprint 5 (move to S5-additions.csv + remove from §scheduled here). Companion to <a href="solution-brief.html#sprint4-ops">solution-brief §14</a> + <a href="sprint-history.html#sprint-4">sprint-history §Sprint 4</a>.
+</p>
+
+</section>
+</div>
+
+</body>
+</html>
