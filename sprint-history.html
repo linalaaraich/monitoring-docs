@@ -427,6 +427,25 @@
   <p>Sprint 4 now also incorporates 5 candidates surfaced by the live dashboard-output audit done immediately before the supervisor presentation; these are tagged <strong>DA-1..DA-5</strong> in the ranked list. The audit covered the 2026-05-21 14:55-18:55 UTC window of operator-facing dashboard output and surfaced a mix of mechanical correctness gaps (shelved-in-disguise emails being sent, unsafe actions slipping past the clamp on confident verdicts) and dedupe/coherence gaps (verdict flips on the same fingerprint, drain3 fingerprint collision across unrelated content, alertname-family duplicates not collapsed). Full audit lives in <a href="dashboard-audit-2026-05-21.html">dashboard-audit-2026-05-21.html</a>; cross-linked from §7d in <a href="solution-brief.html">solution-brief.html</a>. <strong>DA-1 already shipped 2026-05-21 19:13 UTC</strong> via <code>monitoring-triage-service@1cbb220</code> (12 new tests, suite 274/274, deployed to <code>observability-gpu-uswest2</code>).</p>
 </div>
 
+<div class="callout note">
+  <div class="callout-label">Sprint 4 reframed by supervisor feedback — see §14 in solution-brief for the current daily plan (2026-05-22 EOD)</div>
+  <p>
+    After the 2026-05-21 presentation, Sprint 4 was reframed from "RCA-quality
+    close-out" into an <strong>operator-cognitive-load-driven daily-use
+    plan</strong>. The current shipping order — what's actually being worked
+    Mon-Fri × 2 weeks — lives at
+    <a href="solution-brief.html#sprint4-ops"><strong>solution-brief.html §14 Sprint 4 — operational shipping plan</strong></a>.
+    Items there are tagged <strong>SF-1..SF-13</strong> + the surviving
+    DA-2..DA-5 from this page. The ranked candidates table below remains the
+    <em>long-form backlog</em> — everything the team considered for Sprint 4 in
+    priority — but the <em>current week's shipping schedule</em> is §14, not
+    this list. For supervisor-feedback context + operator-cognitive-load
+    doctrine see <a href="solution-brief.html#supervisor-feedback">solution-brief §12</a>;
+    for the backend roadmap that supports the v2 UX surfaces see
+    <a href="solution-brief.html#backend-enrichment">solution-brief §13</a>.
+  </p>
+</div>
+
 <h3>Sprint 4 candidates — ranked priority list (RCA findings P0–P11 integrated + existing carry-forward + predictive layer + dashboard-audit DA-1..DA-5)</h3>
 
 <table>

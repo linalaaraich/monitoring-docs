@@ -3,10 +3,26 @@
 > **Project:** AI-Powered Observability Platform with Root Cause Analysis
 > **Organization:** CIRES Technologies, Tanger Med (Digital Factory Observability Service)
 > **Author:** Lina Laaraich
-> **Last Updated:** 2026-05-21 (GPU migration to AWS us-west-2 shipped; AI triage stack promoted off laptop)
+> **Last Updated:** 2026-05-22 (supervisor presentation feedback + `/dashboard/v2` live preview shipped end-to-end)
 > **Sprint 2 Deadline:** ~~April 9, 2026~~ ~~April 23, 2026~~ **Sprint 2 closed 2026-04-23; Epic 5 (UEBA-inspired stories) absorbed into Sprint 3**
 > **Jira Project:** SCRUM | **Jira Source:** `github.com/linalaaraich/jira`
 > **Repositories:** 6 (monitoring-project, provisioning-monitoring-infra, monitoring-docs, monitoring-mcp-servers, monitoring-triage-service, jira)
+
+---
+
+## 2026-05-22 — supervisor presentation feedback captured; `/dashboard/v2` live preview shipped end-to-end
+
+**Big day on two fronts: the design pipeline + a working v2 dashboard against real data.**
+
+Morning: Lina presented the platform to the supervisor 2026-05-21 evening; he committed to **personally testing the system** — strongest greenlight signal short of a formal go-ahead. The 2026-05-22 morning capture wrote up his feedback as a durable artifact: `solution-brief.html` §12 (commit `fa73526` → `db8336f` — 8 commits across the day) covers the **operator-cognitive-load doctrine** (names not metrics / brief not verbose / one row not duplicates / click-through not wall-of-text / sustained not spikes), splits the work into P0 / Sprint 4 SF-1..SF-7 / Sprint 5 SF-8..SF-13, names the canonical end-to-end test case (the "dev-deletes-a-letter" CI/CD scenario), and locks the new design-first workflow (Lina drafts in Claude Design on Max → sends *directly* to supervisor for approval — no Ali pre-review). Standalone `design-prompt.html` page added to the landing grid with the full briefing for Claude Design.
+
+Afternoon + evening: shipped `/dashboard/v2` live on the GPU triage. New route in `monitoring-triage-service` (`7f2bb0e` → `a904eda` — 7 commits) renders the Claude Design output against real `/decisions` data via a `_v2_transform_row` mapper. Iterated as feedback came in: sidebar + tightened feed width (`9cde6fa`), pagination + URL nav + real TopBar/sidebar stats + filter dropdowns + search box + Tangier-time live clock (`38c1c3e`), **detail page route `/dashboard/v2/alert/{short_id}`** with incident-history timeline + drain3 card + related-alerts sidebar (`9b61e74` + `a904eda` empty-render fix). Existing `/dashboard` untouched — v2 lives side-by-side.
+
+Sprint 4 reframed from "RCA-quality close-out" to a tight **operational shipping plan** (`solution-brief.html` §14, commit `db8336f`): ten working days, one item per day (SF-6 email overhaul → SF-7 feedback page → SF-4 same-alert collapsing → DA-5+DA-4 dedupe → DA-2 unsafe-action stripping → Phase 3.A.KPI route → DA-3 cross-row coherence → filter persistence → buffer → stretch SF-5 sustained-vs-spike). Single goal: "supervisor uses the dashboard + email + feedback loop for a full day without friction." Definition-of-done is 5 observable checks on the live platform.
+
+Backend enrichment roadmap (§13) maps the v2 sidebar's 9 nav items to backend work; only Triage feed has a real backend today, the other 8 are Sprint 5 work covering Incidents (depends on the not-yet-built incident entity table), Anomalies, Stats, Services, KPI, Alerts config, Drain3 engine control, Integrations.
+
+**Test count:** 274/274 (up from 252 at GPU-migration time; +12 from `monitoring-triage-service@1cbb220` DA-1 shelved-in-disguise + 10 from the 2026-05-21 dashboard-search blob fix).
 
 ---
 

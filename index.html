@@ -148,7 +148,7 @@
       <div class="card-icon" style="background:rgba(107,207,127,.12);">📣</div>
       <div class="card-header-text">
         <h2>Solution Brief — AI-driven RCA, for SRE / DevOps review</h2>
-        <p>15-minute orientation to the triage pipeline for an experienced reviewer. What we built, how we keep it honest (5 reinforcing quality mechanisms), the 14 archetypes with their alert-rule mappings, a real failure case study (0b215ef3), and the four concrete inputs we need from a senior SRE. Doubles as study material for anyone catching up on the system.</p>
+        <p>15-minute orientation to the triage pipeline for an experienced reviewer. What we built, how we keep it honest (5 reinforcing quality mechanisms), the 14 archetypes, real failure + success case studies (§7 0b215ef3, §7b, §7c stress test, §7d dashboard audit), the four concrete inputs we need from an SRE. <strong>Plus §12 supervisor feedback + §13 backend enrichment plan + §14 operational Sprint 4 daily ship schedule</strong>, all dated 2026-05-22 post-presentation.</p>
       </div>
     </div>
     <div class="card-footer">
@@ -174,6 +174,42 @@
         <span class="tag tag-purple">UX v2</span>
         <span class="tag tag-green">4 deliverables</span>
         <span class="tag tag-orange">Pre-supervisor approval</span>
+      </div>
+      <div class="card-arrow">&rarr;</div>
+    </div>
+  </a>
+
+  <a href="http://observability-gpu-uswest2:8090/dashboard/v2" class="card" style="border-color:rgba(64,208,208,.45); background:linear-gradient(180deg, rgba(64,208,208,.06), var(--card));">
+    <div class="card-header">
+      <div class="card-icon" style="background:rgba(64,208,208,.12);">🖥️</div>
+      <div class="card-header-text">
+        <h2>v2 Dashboard — live preview (Tailscale only)</h2>
+        <p>The Claude Design v2 operator UX rendered against real <code>/decisions</code> data on the production GPU triage. Sidebar nav (Triage feed live; the other 8 surfaces are Sprint 5 work), pagination (~15 pages × 20 rows), filters, search, Tangier-time live clock, real TopBar stats + sidebar badges. Click any row → expanded inline brief; click "View full detail" → the full Detail Page with incident-history timeline + drain3 card + related-alerts sidebar. Side-by-side with the existing <code>/dashboard</code>; not yet the production surface.</p>
+      </div>
+    </div>
+    <div class="card-footer">
+      <div class="card-tags">
+        <span class="tag tag-cyan">live preview</span>
+        <span class="tag tag-purple">v2 UX</span>
+        <span class="tag tag-orange">Tailscale only</span>
+      </div>
+      <div class="card-arrow">&rarr;</div>
+    </div>
+  </a>
+
+  <a href="dashboard-audit-2026-05-21.html" class="card" style="border-color:rgba(224,96,112,.45); background:linear-gradient(180deg, rgba(224,96,112,.06), var(--card));">
+    <div class="card-header">
+      <div class="card-icon" style="background:rgba(224,96,112,.12);">🔍</div>
+      <div class="card-header-text">
+        <h2>Dashboard Output Audit — 2026-05-21 (4 h window)</h2>
+        <p>Meticulous row-by-row evaluation of every operator-facing decision on <code>/dashboard</code> from the 14:55–18:55 UTC window. Ground-truth-vs-actual grading using the operator's own action log as the reference (Lina's stress test). 8 LLM-pathed RCAs, 2/6 false-positive emails caught, 1 verdict-flip pair, 2 duplicate-class patterns, 2 unsafe actions shipped. Surfaces the DA-1..DA-5 Sprint 4 candidates with SP estimates. Template for future 4-h audit windows; long-form companion to <a href="solution-brief.html#dashboard-audit" style="color:var(--accent-cyan);">solution-brief §7d</a>.</p>
+      </div>
+    </div>
+    <div class="card-footer">
+      <div class="card-tags">
+        <span class="tag tag-red">audit</span>
+        <span class="tag tag-purple">2026-05-21</span>
+        <span class="tag tag-orange">~13 SP surfaced</span>
       </div>
       <div class="card-arrow">&rarr;</div>
     </div>

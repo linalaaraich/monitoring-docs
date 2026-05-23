@@ -2067,7 +2067,7 @@
   <div class="section-block">
     <span class="block-label">Evaluation</span>
     <div class="block-body">
-      <p>Immediate: end-to-end median ~38 s on Phase 2 smoke test vs the laptop's ~5 min baseline (~8× improvement). 14b on A10G runs at ~50-65 tok/s; prompt eval at ~1350 tok/s; cached model load ~177 ms. Test suite stays 252/252 green — no behavioural regressions from the host change.</p>
+      <p>Immediate: end-to-end median ~38 s on Phase 2 smoke test vs the laptop's ~5 min baseline (~8× improvement). 14b on A10G runs at ~50-65 tok/s; prompt eval at ~1350 tok/s; cached model load ~177 ms. Test suite stays 252/252 green at migration time (now 274/274 after subsequent shipping) — no behavioural regressions from the host change.</p>
       <p>Lagging: the 4-axis rubric sample on the firewall page was drawn during the 7B-on-laptop era. Re-run against the 14B-on-A10G runner is pending against US-5.7 corpus work; expectation is cause-named and prose-shape both lift, with actionable held steady by the confidence-clamp design (S3-HF-01).</p>
       <p>Supersedes the 2026-05-19 "cloud GPU dropped on cost grounds" decision in <a href="sprint-history.html#sprint-4-removed">sprint-history.html</a> — that decision was correct under the 24/7 frame; this one rebuilds the frame.</p>
     </div>
