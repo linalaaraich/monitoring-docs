@@ -2343,10 +2343,10 @@ them.
   <thead><tr><th>Day</th><th>Ship</th><th>Files</th><th>Acceptance check</th></tr></thead>
   <tbody>
     <tr>
-      <td><strong>Mon</strong></td>
-      <td><strong>SF-6 · Email overhaul</strong><br/>Render the design's <code>EmailDesktop</code> markup as the actual escalation email body. Subject format: <code>[ENV] [NAMESPACE] [VERDICT] &lt;plain alert&gt;</code>. Body: WHAT + WHY + ACTION blocks + four buttons (dashboard / Grafana / Loki / rate).</td>
-      <td><code>notifier.py</code> — render an HTML template that mirrors <code>app/static/design/email.jsx</code>'s shape. Subject is composed in <code>send_escalation()</code>.</td>
-      <td>Fire one real alert (any of the §"NEW POLICY" induction patterns). Open the resulting email in inbox. Subject is &lt;60 chars and reads in operator-language. Body has the four buttons.</td>
+      <td><strong>Mon</strong> <span style="color:var(--accent-green);font-weight:700">✅ shipped Sat 2026-05-23 (commit <code><a href="https://github.com/linalaaraich/monitoring-triage-service/commit/f6d0a1b" style="color:var(--accent-green)">f6d0a1b</a></code>)</span></td>
+      <td><strong>SF-6 · Email overhaul</strong><br/>Render the design's <code>EmailDesktop</code> markup as the actual escalation email body. Subject format: <code>[env] [namespace] [VERDICT] &lt;plain alert&gt;</code> (≤70 chars). Body: banner (verdict+severity+active-for) + identity pills (env/ns/service-type/component) + WHAT (alertPlain h1) + Why block + one-line monospace Suggested action + four buttons (dashboard / Grafana / Loki / Rate).</td>
+      <td><code>notifier.py</code> — new <code>_v2_subject()</code> + <code>_build_v2_escalation_body()</code> methods, inline-styled HTML (email clients strip <code>&lt;style&gt;</code>). New <code>app/v2_mappings.py</code> shares the env/namespace/service-type tables between dashboard render and email so they never disagree. New <code>triage_dashboard_url</code> setting in <code>config.py</code> for the "View on dashboard" button. 11 new tests in <code>tests/test_notifier_v2_email.py</code>.</td>
+      <td>Suite 285/285. Real alert next time the audit fires will produce a v2-shape email; manually verifiable by inspecting <code>_build_v2_escalation_body</code> output in a Python REPL or against the test suite's snapshots.</td>
     </tr>
     <tr>
       <td><strong>Tue</strong></td>
