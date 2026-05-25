@@ -2611,9 +2611,9 @@ désormais honnête~\fg{}. Les éléments \#5--\#11 ferment les chemins
 d'escalade faux positifs. Les éléments \#12--\#24 forment la
 deuxième vague.
 
-\section{Livré avant la clôture du jour 1 (huit user stories)}
+\section{Livré avant la clôture du jour 1 (dix user stories)}
 
-Les huit user stories ci-dessous sont livrées sur le dépôt du
+Les dix user stories ci-dessous sont livrées sur le dépôt du
 service de tri avec la suite de tests à \texttt{333/333} au vert et
 le conteneur de tri redéployé sur
 \texttt{observability-gpu-uswest2} à 09h11~UTC le jour~1. Chaque
@@ -2766,9 +2766,32 @@ de repli et le regroupement de bout en bout High$\to$Critical CPU
 avec \texttt{decision\_id} lié. La suite de tests est passée de
 285 à 296.
 
+\subsection{DA-2 --- Retrait des actions non sûres (commit 909e40b)}
+
+Barrière indépendante du bridage~: retire \texttt{kubectl} /
+\texttt{ssh} / \texttt{systemctl} / \texttt{docker restart}
+lorsque \texttt{rca\_quality=actionable} sans mot-clé de cause
+(\emph{slow query}, \emph{gc pause}, \emph{deploy}, etc.) dans la
+prose. Cas motivant \texttt{systemctl restart k3s-node.service}
+(\S\ref{sec:critical-rca-audit}) réécrit en
+\texttt{action\_taken=shelved}~; compteur Prometheus
+\texttt{unsafe\_actions\_stripped\_total} par type d'action.
+Suite 296 $\to$ 313.
+
+\subsection{Phase 3.A.KPI --- Route KPI (commit adbb720)}
+
+Route \texttt{/dashboard/v2/kpi} affichant
+\texttt{triage\_precision} / \texttt{triage\_recall} / taux de
+suppression / latence médiane RCA en cartes Grafana-like (demande
+superviseur, revue 2026-05-22). Fumée \texttt{observability-gpu-uswest2}~:
+1 courriel/jour, 0,0\,\% FP, latence médiane 25\,s, chemin
+économique 65\,\%, six archétypes en 7~j
+menés par \texttt{MediumCpuUsage} (351). Vingt tests~; suite
+313 $\to$ 333.
+
 \subsection{Observation de livraison du jour 1}
 
-Les huit user stories ci-dessus étaient initialement classées sur
+Les dix user stories ci-dessus étaient initialement classées sur
 les deux semaines du plan jour par jour, et ont été achevées le
 jour~1. Ce n'est pas accidentel~: la clôture du sprint~3 a laissé
 les surfaces suite, tableau de bord et notificateur dans un état
@@ -2777,67 +2800,48 @@ haute vélocité, et la migration GPU a libéré assez de marge de
 latence pour que l'opérateur puisse tester les changements en
 secondes plutôt qu'en minutes. Le travail restant en file
 d'attente ci-dessous est donc proportionnellement plus important
-par élément (la cohérence inter-lignes DA-3 et la route
-\texttt{/dashboard/v2/kpi} sont toutes deux à l'échelle de la
+par élément (la cohérence inter-lignes DA-3 est à l'échelle de la
 journée, pas de l'heure).
 
 \section{En file d'attente pour le reste du sprint 4}
 
-Les cinq éléments programmés entre le jour~2 et la clôture du
-sprint sont listés ci-dessous par ordre calendaire. Chacun est
-dimensionné en points d'histoire ou en heures selon le cas~; la
-source de référence du plan de sprint est
+Les trois éléments programmés entre le jour~2 et la clôture du
+sprint sont listés ci-dessous par ordre calendaire~; la source de
+référence du plan de sprint est
 \texttt{monitoring-docs/sprint4-status.html} \S14.
 
 \begin{itemize}
-  \item \textbf{Mardi 2026-05-26 --- DA-2 retrait des actions non
-        sûres ($\sim$3\,SP).} Une barrière indépendante du
-        bridage qui retire les actions \texttt{kubectl} /
-        \texttt{ssh} / \texttt{restart} / \texttt{systemctl}
-        lorsque \texttt{rca\_quality=actionable} \textsc{et}
-        qu'aucune cause nommée n'est présente dans la prose, quelle
-        que soit la confiance LLM. Le cas motivant est la
-        suggestion \texttt{systemctl restart k3s-node.service}
-        consignée dans la ligne d'audit \S7c.4.
-  \item \textbf{Mercredi 2026-05-27 --- Route tableau de bord
-        phase 3.A.KPI ($\sim$3\,SP).} Une nouvelle route
-        \texttt{/dashboard/v2/kpi} faisant émerger les métriques
-        \texttt{triage\_precision} / \texttt{triage\_recall} /
-        taux de suppression / latence moyenne RCA sous forme de
-        cartes de style Grafana au-dessus du tableau d'empreintes
-        uniques. Demandé par le superviseur.
-  \item \textbf{Jeudi 2026-05-28 --- DA-3 cohérence verdict
-        inter-lignes ($\sim$5\,SP).} Lorsque la même empreinte se
-        déclenche dans les $N$~minutes d'une décision antérieure,
-        la \texttt{cause} antérieure est préfixée dans le contexte
+  \item \textbf{DA-3 cohérence verdict inter-lignes
+        ($\sim$5\,SP).} Lorsque la même empreinte se déclenche
+        dans les $N$~minutes d'une décision antérieure, la
+        \texttt{cause} antérieure est préfixée dans le contexte
         LLM avec une règle explicite de cadrage \og~j'ai changé
         d'avis parce que\ldots~\fg{}. Empêche la plateforme
         d'émettre des RCA contradictoires sur des déclenchements
         consécutifs d'un même \emph{flap}.
-  \item \textbf{Vendredi 2026-05-29 --- Persistance des filtres
-        URL + câblage du filtre de plage ($\sim$3\,SP).} Les
-        filtres du tableau de bord (verdict, sévérité, famille
-        d'\emph{alertname}, plage temporelle) sont encodés dans la
-        chaîne de requête URL afin que l'opérateur puisse marquer
-        et partager des vues filtrées, et que le bouton retour
-        restaure le contexte antérieur. Le câblage du filtre de
-        plage achève la couche de schéma du jour~1 laissée à
-        mi-chemin.
-  \item \textbf{Vendredi S2 (étirement) --- SF-5 modificateur de
-        verdict soutenu vs.\ pic ($\sim$3\,SP).} Ajoute une
-        caractéristique \og~durée au-dessus du seuil~\fg{} à la
-        charge utile d'alerte et classifie les franchissements de
-        courte durée comme \texttt{rca\_quality=transient\_spike}
-        avec \texttt{action\_taken=shelved}. Objectif
-        d'étirement --- ne sera livré que si DA-3 atterrit
-        proprement et que le volume de retour d'opérateur issu de
-        SF-7 soutient le réglage du seuil.
+  \item \textbf{Persistance des filtres URL + câblage du filtre
+        de plage ($\sim$3\,SP).} Les filtres du tableau de bord
+        (verdict, sévérité, famille d'\emph{alertname}, plage
+        temporelle) sont encodés dans la chaîne de requête URL
+        afin que l'opérateur puisse marquer et partager des vues
+        filtrées, et que le bouton retour restaure le contexte
+        antérieur. Le câblage du filtre de plage achève la couche
+        de schéma du jour~1 laissée à mi-chemin.
+  \item \textbf{SF-5 modificateur de verdict soutenu vs.\ pic
+        (étirement, $\sim$3\,SP).} Ajoute une caractéristique
+        \og~durée au-dessus du seuil~\fg{} à la charge utile
+        d'alerte et classifie les franchissements de courte durée
+        comme \texttt{rca\_quality=transient\_spike} avec
+        \texttt{action\_taken=shelved}. Objectif d'étirement ---
+        ne sera livré que si DA-3 atterrit proprement et que le
+        volume de retour d'opérateur issu de SF-7 soutient le
+        réglage du seuil.
 \end{itemize}
 
-Les cinq éléments totalisent ensemble environ dix-sept points
-d'histoire sur quatre journées de travail plus un étirement. À la
+Les trois éléments totalisent ensemble environ onze points
+d'histoire sur la fenêtre restante plus un étirement. À la
 clôture du sprint~4 le 2026-06-05, la suite est attendue à
-$\sim$310 tests au vert~; le prochain audit critique RCA (une
+$\sim$350 tests au vert~; le prochain audit critique RCA (une
 répétition à 8 critères de l'audit du 2026-05-21 consigné
 au~\S\ref{sec:critical-rca-audit}) est programmé pour le lundi
 suivant.
@@ -3443,8 +3447,9 @@ pare-feu anti-hallucination ajoutée le 2026-04-29 après
 4 & 2026-05-25 -- 2026-06-05 & \emph{En cours.} Livraison jour~1
 de la migration GPU (D24/D25), refonte du courriel SF-6, page de
 retour d'opérateur SF-7, regroupement tableau de bord SF-4, page
-détail phase~2.1, déduplication DA-4/DA-5~; en file d'attente~:
-DA-2, phase~3.A.KPI, DA-3, filtres URL, SF-5 en étirement. Suite
+détail phase~2.1, déduplication DA-4/DA-5, retrait actions
+non sûres DA-2, route tableau de bord phase~3.A.KPI~; en file
+d'attente~: DA-3, filtres URL, SF-5 en étirement. Suite
 \texttt{333/333} au vert. \\
 5 & 2026-06-06 -- 2026-06-17 & \emph{Planifié.} EPIC13 banc de
 test microservice (SF-13) + scénario canonique~; EPIC14 entité

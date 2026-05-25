@@ -2333,9 +2333,9 @@ deliver the largest perceived-quality improvement.  Items \#3\,+\,\#4
 are the ``the prose is now honest'' work.  Items \#5--\#11 close the
 false-positive escalation paths.  Items \#12--\#24 are wave 2.
 
-\section{Shipped before day~1 close (eight stories)}
+\section{Shipped before day~1 close (ten stories)}
 
-The eight stories below are shipped on the triage service repository
+The ten stories below are shipped on the triage service repository
 with the test suite at \texttt{333/333} green and the triage
 container redeployed on \texttt{observability-gpu-uswest2} at
 09:11~UTC on day~1.  Each entry carries the commit identifier,
@@ -2477,9 +2477,45 @@ fallback behaviour, and end-to-end High$\to$Critical CPU collapse
 with linked \texttt{decision\_id}.  Test suite stepped 285 $\to$
 296.
 
+\subsection{DA-2 --- Unsafe-action stripping (shipped 2026-05-25, commit 909e40b)}
+
+A clamp-independent gate strips \texttt{kubectl} / \texttt{ssh} /
+\texttt{restart} / \texttt{systemctl} / \texttt{reboot} /
+\texttt{docker restart} / \texttt{service-name restart} actions
+when \texttt{rca\_quality=actionable} \textsc{and} no named cause
+keyword (slow query, gc pause, pool exhaustion, deploy, because,
+due-to, \ldots) is present in the prose, regardless of LLM
+confidence.  Partial-strip semantics on mixed action lists keep
+the safe items.  The motivating case is the
+\texttt{systemctl restart k3s-node.service} suggestion recorded
+in the \S\ref{sec:critical-rca-audit} audit row, which DA-2 now
+rewrites to \texttt{action\_taken=shelved} with the unsafe verb
+recorded under a new \texttt{unsafe\_actions\_stripped\_total}
+Prometheus counter labelled by action-kind.  Seventeen new tests
+exercise each verb shape, the cause-keyword recognition, partial
+strips, and the audit-canonical case end-to-end.  Test suite
+stepped 296 $\to$ 313.
+
+\subsection{Phase 3.A.KPI --- KPI dashboard route (shipped 2026-05-25, commit adbb720)}
+
+A new \texttt{/dashboard/v2/kpi} route surfaces the
+\texttt{triage\_precision} / \texttt{triage\_recall} /
+suppression-rate / mean-RCA-latency metrics in Grafana-style cards
+above the unique-fingerprint table.  Supervisor-requested in the
+2026-05-22 design-first review.  Live smoke on
+\texttt{observability-gpu-uswest2} at the close of day~1 records
+emails-per-day at 1 (7d average 8.4), false-positive rate
+0.0\,\% over the one rated decision, median end-to-end latency
+25\,s (p95 42\,s over nineteen runs), cheap-path share 65\,\%
+(37 cheap vs 20 LLM), and six distinct alertname archetypes in the
+last seven days led by \texttt{MediumCpuUsage} at 351 fires.  A
+\texttt{KPI / Evaluation} item is added to the dashboard sidebar.
+Twenty new tests cover the route, the metric arithmetic, and the
+cards' render path.  Test suite stepped 313 $\to$ 333.
+
 \subsection{Day-1 shipping observation}
 
-The eight stories above were originally ranked across two weeks
+The ten stories above were originally ranked across two weeks
 of the day-by-day plan, and finished on day~1.  This is not
 incidental; the post-Sprint-3 close-out left the suite,
 dashboard, and notifier surfaces in a state where small,
@@ -2492,57 +2528,40 @@ route are both day-shaped, not hour-shaped).
 
 \section{Queued for the rest of Sprint 4}
 
-The five items scheduled between day~2 and the sprint close are
-listed below in calendar order.  Each is sized in story points
-or hours as appropriate; the sprint-plan source of record is
+The three items scheduled between day~2 and the sprint close are
+listed below in calendar order.  Each is sized in story points;
+the sprint-plan source of record is
 \texttt{monitoring-docs/sprint4-status.html} \S14.
 
 \begin{itemize}
-  \item \textbf{Tue 2026-05-26 --- DA-2 unsafe-action stripping
-        ($\sim$3\,SP).}  A clamp-independent gate that strips
-        \texttt{kubectl} / \texttt{ssh} / \texttt{restart} /
-        \texttt{systemctl} actions when
-        \texttt{rca\_quality=actionable} \textsc{and} no named
-        cause is present in the prose, regardless of LLM
-        confidence.  The motivating case is the
-        \texttt{systemctl restart k3s-node.service} suggestion
-        recorded in the \S7c.4 audit row.
-  \item \textbf{Wed 2026-05-27 --- Phase 3.A.KPI dashboard
-        route ($\sim$3\,SP).}  A new
-        \texttt{/dashboard/v2/kpi} route surfacing the
-        \texttt{triage\_precision} / \texttt{triage\_recall} /
-        suppression-rate / mean-RCA-latency metrics in
-        Grafana-style cards above the unique-fingerprint table.
-        Supervisor-requested.
-  \item \textbf{Thu 2026-05-28 --- DA-3 cross-row verdict
-        coherence ($\sim$5\,SP).}  When the same fingerprint
-        fires within $N$ minutes of a prior decision, the prior
-        \texttt{cause} is prepended into the LLM context with
-        an explicit ``changed my mind because\ldots'' framing
-        rule.  Prevents the platform from emitting contradictory
-        RCAs across consecutive fires of the same flap.
-  \item \textbf{Fri 2026-05-29 --- URL filter persistence +
-        range filter wire-up ($\sim$3\,SP).}  Dashboard filters
-        (verdict, severity, alertname-family, time range) are
-        encoded in the URL query string so the operator can
-        bookmark and share filtered views, and so the back
-        button restores prior context.  Range filter wire-up
-        completes the day-1 schema layer left at half-mast.
-  \item \textbf{W2 Fri (stretch) --- SF-5 sustained-vs-spike
-        verdict modifier ($\sim$3\,SP).}  Adds a
-        ``duration-above-threshold'' feature to the alert payload
-        and classifies short-duration breaches as
-        \texttt{rca\_quality=transient\_spike} with
+  \item \textbf{DA-3 cross-row verdict coherence ($\sim$5\,SP).}
+        When the same fingerprint fires within $N$ minutes of a
+        prior decision, the prior \texttt{cause} is prepended
+        into the LLM context with an explicit ``changed my mind
+        because\ldots'' framing rule.  Prevents the platform
+        from emitting contradictory RCAs across consecutive
+        fires of the same flap.
+  \item \textbf{URL filter persistence + range filter wire-up
+        ($\sim$3\,SP).}  Dashboard filters (verdict, severity,
+        alertname-family, time range) are encoded in the URL
+        query string so the operator can bookmark and share
+        filtered views, and so the back button restores prior
+        context.  Range filter wire-up completes the day-1
+        schema layer left at half-mast.
+  \item \textbf{SF-5 sustained-vs-spike verdict modifier (stretch,
+        $\sim$3\,SP).}  Adds a ``duration-above-threshold''
+        feature to the alert payload and classifies short-duration
+        breaches as \texttt{rca\_quality=transient\_spike} with
         \texttt{action\_taken=shelved}.  Stretch goal --- ships
-        only if DA-3 lands clean and the operator-feedback
-        volume from SF-7 supports the threshold tuning.
+        only if DA-3 lands clean and the operator-feedback volume
+        from SF-7 supports the threshold tuning.
 \end{itemize}
 
-The five items together total approximately seventeen story
-points across four working days plus a stretch.  At Sprint~4
-close on 2026-06-05 the suite is expected at $\sim$310 tests
-green; the next critical RCA audit (an eight-criterion repeat
-of the 2026-05-21 audit recorded in
+The three items together total approximately eleven story
+points across the remaining sprint window plus a stretch.  At
+Sprint~4 close on 2026-06-05 the suite is expected at
+$\sim$350 tests green; the next critical RCA audit (an
+eight-criterion repeat of the 2026-05-21 audit recorded in
 \S\ref{sec:critical-rca-audit}) is scheduled for the
 following Monday.
 
@@ -3174,8 +3193,9 @@ window 04-30 -- 05-19. \\
 4 & 2026-05-25 -- 2026-06-05 & \emph{In progress.}  Day-1 ship of
 GPU migration (D24/D25), SF-6 email overhaul, SF-7 operator
 feedback page, SF-4 dashboard collapsing, Phase~2.1 detail page,
-DA-4/DA-5 dedupe; queued: DA-2, Phase~3.A.KPI, DA-3, URL filters,
-SF-5 stretch.  Suite \texttt{333/333} green. \\
+DA-4/DA-5 dedupe, DA-2 unsafe-action stripping, Phase~3.A.KPI
+dashboard route; queued: DA-3, URL filters, SF-5 stretch.  Suite
+\texttt{333/333} green. \\
 5 & 2026-06-06 -- 2026-06-17 & \emph{Planned.}  EPIC13 microservice
 test bed (SF-13) + canonical scenario; EPIC14 incident entity and
 Phase~3.A/3.B sidebar surfaces; EPIC15 operator-config and
