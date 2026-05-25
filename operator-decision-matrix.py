@@ -216,7 +216,7 @@ def draw_matrix(ax, x0, y0, width, height):
     # ----- Axis label "RCA quality" (top of column-label band) -----
     ax.text(
         grid_x + grid_w / 2, grid_y + grid_h + label_top_h - 0.06,
-        "RCA quality  (app/main.py:_render_quality_label)",
+        "RCA quality  (app/rca_store.py:_classify_rca_quality)",
         ha="center", va="top",
         fontsize=9, color=TEXT, fontweight="bold",
     )
