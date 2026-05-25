@@ -556,6 +556,7 @@
 </div>
 
 <!-- ────────────────────── 7d — conflict & duplicate matrix ────────────────────── -->
+<span id="conflicts"></span>
 <h3 id="dashboard-audit-matrix">Conflict and duplicate matrix (Lina's question 3)</h3>
 
 <table>
@@ -699,7 +700,7 @@
   </table>
 </div>
 
-<div class="callout warn">
+<div class="callout warn" id="sprint4">
   <div class="callout-label">Sprint 4 candidates surfaced by this audit (in priority order)</div>
   <ol>
     <li><strong>Verdict-policy gate on low-confidence drain3.</strong> When <code>llm_confidence &lt; 0.30</code> AND no correlated alert within ±5 min AND <code>rca_quality ∈ {needs_review, data_starved}</code>, downgrade verdict from escalate to queue-without-email. Closes the bingbot-style false-positive (Lina's Q1). Mechanical fix, ~1 SP.</li>
