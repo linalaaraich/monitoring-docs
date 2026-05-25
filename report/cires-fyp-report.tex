@@ -175,7 +175,7 @@ an evaluation against a 4-axis RCA quality rubric, and a catalogue of
 the twenty-five durable design decisions (D1--D25, the final two
 recording the GPU migration and its co-shipped access lockdown)
 recorded during construction.  The triage-service test suite stood
-at \texttt{296/296} green on Sprint~4 day~1 (2026-05-25), the
+at \texttt{333/333} green on Sprint~4 day~1 (2026-05-25), the
 MCP-only invariant lint is clean, and the operational runner has
 been continuously up across both runner generations.  The final two
 chapters scope the Sprint~4 work currently in progress and the
@@ -2336,7 +2336,7 @@ false-positive escalation paths.  Items \#12--\#24 are wave 2.
 \section{Shipped before day~1 close (eight stories)}
 
 The eight stories below are shipped on the triage service repository
-with the test suite at \texttt{296/296} green and the triage
+with the test suite at \texttt{333/333} green and the triage
 container redeployed on \texttt{observability-gpu-uswest2} at
 09:11~UTC on day~1.  Each entry carries the commit identifier,
 the supporting tests, and the acceptance evidence that closed it.
@@ -2846,6 +2846,85 @@ Tracked in Jira as \textbf{S5-DRN-01} (id 320) parented to
 EPIC13; documented in
 \texttt{monitoring-docs/solution-brief.html} \S13.7.
 
+\section{Production deployment shape --- single-agent OTel for the NOC}
+\label{sec:single-agent-otel}
+
+A second forward-looking design conversation on 2026-05-25
+concerns the shape of the per-host collection stack at the
+moment the platform graduates from PoC to a CIRES production
+deployment. This is a \emph{production-transition} design item,
+not a Sprint~5 deliverable; it is recorded here because the
+conversation that will eventually authorise it benefits from
+having the alternative already specified.
+
+\paragraph{Current state and NOC concern.}
+Each PoC host today runs two collection daemons: the OTel
+Collector handles logs (via the \texttt{filelog/containers}
+receiver tailing
+\texttt{/var/lib/docker/containers/**/*-json.log}) and traces
+(via the \texttt{otlp} receiver), and \emph{node-exporter}
+handles host metrics scraped by Prometheus. The CIRES production
+reality constrains any future deployment story: the NOC team is
+reluctant to install new exporters in production for a
+security-posture reason --- every new agent is another binary
+with read access to host state, another update cadence, another
+threat surface to audit. CIRES already runs a mature
+\textbf{Zabbix}-based metrics collection in production; that
+stays in place. A Prometheus rollout on the CIRES private-cloud
+production target is unlikely, and the platform will consume
+Zabbix metrics (via existing Zabbix-to-Prometheus exporters or
+a later direct integration) rather than displacing the incumbent.
+
+\paragraph{The single-agent pitch.}
+For the production-transition conversation, the OTel Collector
+can absorb metrics duty as well, eliminating node-exporter and
+leaving exactly one binary per host doing logs, traces, and
+metrics. Three native OTel receivers do the work:
+
+\begin{itemize}
+  \item \texttt{hostmetrics} pulls CPU / memory / disk / network /
+        load / process metrics directly from \texttt{/proc} and
+        \texttt{/sys}: non-root, read-only access, no
+        \texttt{CAP\_*} capabilities required.
+  \item The \texttt{prometheus} receiver scrapes existing
+        application-layer \texttt{/metrics} endpoints (Spring Boot
+        Actuator, custom Go services); no central Prometheus on
+        the edge.
+  \item The \texttt{kubeletstats} receiver (k8s hosts only) pulls
+        pod and container metrics from the kubelet's stats API,
+        replacing the cAdvisor + kube-state-metrics scrape pair.
+\end{itemize}
+
+\paragraph{NOC-fit properties and trade-offs.}
+The single-agent shape is materially easier to audit: \emph{one
+binary, one systemd unit, one declarative YAML config} versus N
+exporters each with their own flags, update cadence, and threat
+surface. The Collector pushes outbound-only over OTLP, so no new
+listening ports appear on the host apart from a localhost-bound
+OTLP port for local applications. OpenTelemetry is a CNCF
+\emph{graduated} project with signed releases and public security
+advisories, a stronger supply-chain story than most ecosystem
+exporters. The trade-offs are honest: the Collector idles at
+roughly 80--150~MB resident versus node-exporter's $\sim$15~MB
+(acceptable on production-grade hosts), a handful of metrics
+(full process listings, BPF-based network stats) need extra
+capabilities or root and would be dropped if the NOC declines
+them, and the unified configuration is longer than
+node-exporter's --- counter-balanced by being the only
+configuration to maintain on the host.
+
+\paragraph{Place in the project's story.}
+The Promtail-to-OTel migration recorded in
+chapter~\ref{ch:sprint1} already set the precedent: the Collector
+absorbs more, not less. Extending that arc to absorb
+node-exporter is the same consolidation, scoped to the production
+transition rather than to a sprint deliverable. It pairs
+naturally with the CIRES private-cloud production target (no
+AWS-specific dependencies) and with the Zabbix-stays reality.
+The decision to actually retire node-exporter in production is a
+NOC-led one; it is surfaced here so that conversation can happen
+with the alternative already specified.
+
 \section{Sprint 6+ outlook}
 
 Beyond Sprint~5 sit three longer-arc directions that are worth
@@ -2958,7 +3037,7 @@ stack on AWS, with daily static and live audits producing a
 documented trail of operational health.  Median end-to-end pipeline
 latency stands at $\sim$38\,s on the GPU host (down from $\sim$5\,min
 on the laptop runner); the triage-service test suite stands at
-\texttt{296/296} green on Sprint~4 day~1; the MCP-only invariant
+\texttt{333/333} green on Sprint~4 day~1; the MCP-only invariant
 lint has been clean since S3-HF-08 landed on 2026-05-19; the GPU
 host has been continuously up since the 2026-05-21 migration.  The
 Sprint~5 work captured in chapter~\ref{ch:sprint5} --- a canonical
@@ -3096,7 +3175,7 @@ window 04-30 -- 05-19. \\
 GPU migration (D24/D25), SF-6 email overhaul, SF-7 operator
 feedback page, SF-4 dashboard collapsing, Phase~2.1 detail page,
 DA-4/DA-5 dedupe; queued: DA-2, Phase~3.A.KPI, DA-3, URL filters,
-SF-5 stretch.  Suite \texttt{296/296} green. \\
+SF-5 stretch.  Suite \texttt{333/333} green. \\
 5 & 2026-06-06 -- 2026-06-17 & \emph{Planned.}  EPIC13 microservice
 test bed (SF-13) + canonical scenario; EPIC14 incident entity and
 Phase~3.A/3.B sidebar surfaces; EPIC15 operator-config and

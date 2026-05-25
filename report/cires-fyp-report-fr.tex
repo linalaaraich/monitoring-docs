@@ -189,7 +189,7 @@ anti-hallucination, une évaluation contre une grille de qualité RCA
 durables de conception (D1--D25, les deux dernières actant la
 migration GPU et le verrouillage d'accès qui l'a accompagnée)
 consignées pendant la construction. La suite de tests du service de
-tri affichait \texttt{296/296} au vert le premier jour du sprint~4
+tri affichait \texttt{333/333} au vert le premier jour du sprint~4
 (2026-05-25), le lint d'invariant MCP-seul était propre et le
 \emph{runner} opérationnel était resté en service sans interruption
 au travers des deux générations de \emph{runner}. Les deux derniers
@@ -2614,7 +2614,7 @@ deuxième vague.
 \section{Livré avant la clôture du jour 1 (huit user stories)}
 
 Les huit user stories ci-dessous sont livrées sur le dépôt du
-service de tri avec la suite de tests à \texttt{296/296} au vert et
+service de tri avec la suite de tests à \texttt{333/333} au vert et
 le conteneur de tri redéployé sur
 \texttt{observability-gpu-uswest2} à 09h11~UTC le jour~1. Chaque
 entrée porte l'identifiant de \emph{commit}, les tests qui la
@@ -3146,16 +3146,13 @@ infrastructure), abandonné comme combinatoirement flou.}
 \end{figure}
 
 \paragraph{Rejeté~: le palier intersection.}
-L'esquisse originale incluait un quatrième palier --- applications
-partageant une base de données, un \emph{namespace} ou un hôte. Il
-a été abandonné comme combinatoirement flou~: différentes
-définitions d'intersection (db-partagée vs.\ ns-partagé vs.\
-hôte-partagé) se chevauchent confusément, et leur exposition
+L'esquisse originale incluait un quatrième palier d'applications
+partageant une infrastructure (db, \emph{namespace} ou hôte). Il
+a été abandonné comme combinatoirement flou~: les définitions
+d'intersection se chevauchent confusément et leur exposition
 comme regroupements réglables fait exploser la surface de
-configuration opérateur pour un signal supplémentaire limité que
-Tier~3 couvre déjà comme filet de sécurité. Les trois portées
-hiérarchiques propres ci-dessus sont conservées~; l'intersection
-est laissée de côté par dessein.
+configuration opérateur pour un signal limité que Tier~3 couvre
+déjà comme filet de sécurité.
 
 \paragraph{Dépendance de validation.}
 La validation requiert que SF-13 (banc microservice) soit en
@@ -3170,6 +3167,44 @@ Tier~3 à l'échelle système --- se déclenche bien. Suivi dans Jira
 comme \textbf{S5-DRN-01} (id 320) parenté à EPIC13~; documenté
 dans \texttt{monitoring-docs/solution-brief.html} \S13.7.
 
+\section{Forme de déploiement production --- OTel à agent unique pour le NOC}
+\label{sec:single-agent-otel}
+
+Une seconde discussion prospective du 2026-05-25 concerne la
+forme de la pile de collecte par hôte au passage du PoC à la
+production CIRES --- élément de transition, pas livrable de
+sprint, consigné ici pour que la conversation d'autorisation se
+tienne avec l'alternative déjà spécifiée. Chaque hôte du PoC fait
+tourner deux démons~: l'OTel Collector (journaux via
+\texttt{filelog/containers}, traces via \texttt{otlp}) et
+\emph{node-exporter} pour les métriques hôte. La production CIRES
+impose une contrainte~: l'équipe NOC est réticente à installer de
+nouveaux \emph{exporters} en production, chaque binaire étant une
+surface de menace supplémentaire. CIRES exploite déjà une collecte
+métriques mature basée sur \textbf{Zabbix}~; la plateforme ne la
+remplacera pas et consomme ces métriques via les \emph{exporters}
+existants.
+
+\paragraph{La proposition à agent unique.}
+L'OTel Collector peut absorber les métriques aussi, éliminant
+\emph{node-exporter}~: trois récepteurs natifs s'en chargent ---
+\texttt{hostmetrics} (CPU, mémoire, disque, réseau depuis
+\texttt{/proc} et \texttt{/sys}, sans \texttt{CAP\_*}),
+\texttt{prometheus} (scrape des endpoints \texttt{/metrics}
+applicatifs existants) et \texttt{kubeletstats} (k8s uniquement).
+Le résultat est un binaire par hôte~: un \emph{systemd unit}, un
+fichier YAML déclaratif et une sortie exclusivement sortante via
+OTLP forment une cible d'audit plus simple que N \emph{exporters},
+et OpenTelemetry est un projet CNCF \emph{graduated} avec une
+chaîne d'approvisionnement plus solide. La contrepartie est
+l'empreinte mémoire ($\sim$80--150~MB \emph{resident} contre
+$\sim$15~MB, acceptable en production) et le fait que quelques
+métriques privilégiées (processus, BPF) seraient abandonnées si
+le NOC refuse les capacités requises. La migration
+Promtail-vers-OTel du sprint~1 fixait le précédent~: le
+Collector absorbe plus, pas moins. La décision finale reste
+pilotée par le NOC.
+
 \section{Perspectives sprint 6+}
 
 Au-delà du sprint~5 se trouvent trois directions à plus long terme
@@ -3180,45 +3215,34 @@ chapitres~\ref{ch:sprint3} et~\ref{ch:sprint4}.
 
 \begin{itemize}
   \item \textbf{Un modèle de déploiement multi-tenant.} La
-        plateforme actuelle est mono-tenant par construction. Un
-        déploiement multi-tenant (par exemple un service de tri par
-        unité métier à Tanger Med, avec des ponts MCP partagés et
-        une pile d'observabilité partagée) requerrait une
-        isolation par \emph{namespace} dans l'historique RCA, des
-        bibliothèques d'exemplaires par tenant et un calibrage de
-        confiance par tenant. Périmètre naturel du sprint~6+.
+        plateforme actuelle est mono-tenant par construction~;
+        un déploiement multi-tenant (un service de tri par unité
+        métier, ponts MCP et pile d'observabilité partagés)
+        requerrait isolation par \emph{namespace} de l'historique
+        RCA, bibliothèques d'exemplaires et calibrage de confiance
+        par tenant. Périmètre naturel du sprint~6+.
   \item \textbf{Intégration directe avec les systèmes de production
-        de Tanger Med.} La plateforme est actuellement exercée
-        contre une pile web représentative et un banc microservice
-        (après sprint~5). L'\emph{onboarding} de services de
-        production réels demanderait une gestion soigneuse des
-        PII (contenu de retour d'opérateur, lignes de journal), un
+        de Tanger Med.} L'\emph{onboarding} de services de
+        production réels demanderait gestion soigneuse des PII, un
         programme SLO pour fixer des seuils de confiance
-        significatifs et un processus formel de contrôle des
-        changements pour les mises à jour de \emph{prompt} et
-        d'exemplaires. C'est le chemin vers la transition
-        production avec greenlight du superviseur que le mémo de
-        périmètre du projet (\texttt{[CIRES scope --- PoC vs
-        production]}) identifie comme l'état terminal du projet.
+        significatifs et un contrôle des changements formel pour
+        les mises à jour de \emph{prompt} et d'exemplaires. C'est
+        le chemin vers la transition production avec greenlight
+        superviseur que le mémo de périmètre du projet identifie
+        comme l'état terminal.
   \item \textbf{Évaluation fédérée de modèles.} À mesure que le
-        projet accumule des issues RCA étiquetées via la couche de
-        retour ingérée par SF-7 et SF-13, comparer des choix
-        alternatifs de LLM sur un échantillon retenu devient
-        faisable. Modèles dignes d'évaluation aux côtés de
-        l'incumbent \texttt{qwen2.5:14b-instruct}~:
-        \texttt{deepseek-r1:14b-distill},
-        \texttt{mistral-nemo:12b}, et le plus grand
-        \texttt{qwen2.5:32b-instruct} maintenant que l'hôte GPU a
-        de la marge en VRAM. La courbe coût-vs-qualité sera le
-        facteur décisif~; c'est le successeur naturel de la
+        projet accumule des issues RCA étiquetées via SF-7 et SF-13,
+        comparer des LLM alternatifs sur un échantillon retenu
+        devient faisable~: \texttt{deepseek-r1:14b-distill},
+        \texttt{mistral-nemo:12b} et \texttt{qwen2.5:32b-instruct}
+        aux côtés de l'incumbent. Successeur naturel de la
         migration GPU D24.
   \item \textbf{Observabilité prédictive (carve-out EPIC12).}
-        L'onglet signaux détectifs S4-PRED-01 absorbé dans
-        EPIC14 Phase 3.A.Anomalies est le pied dans la porte~;
-        PRED-02 piste de capacité, PRED-03 lignes de base de
-        bandes de saturation et PRED-04 prédicteur de cascade
-        sont des candidats sprint~6 qui poussent la plateforme du
-        diagnostic vers le territoire prédictif.
+        L'onglet signaux détectifs S4-PRED-01 absorbé dans EPIC14
+        Phase 3.A.Anomalies est le pied dans la porte~; PRED-02
+        (capacité), PRED-03 (saturation), PRED-04 (cascade) sont
+        des candidats sprint~6 qui poussent la plateforme du
+        diagnostic vers le prédictif.
 \end{itemize}
 
 % =====================================================================
@@ -3243,82 +3267,48 @@ Les contributions principales du travail sont~:
 
 \begin{enumerate}
   \item \textbf{Une mise en \oe{}uvre de référence de bout en bout.}
-        Une pile d'observabilité provisionnée par Terraform,
-        configurée par Ansible, exécutée sur k3s-et-Docker sur AWS,
-        avec un service de tri par IA basé sur FastAPI produisant
-        des RCA structurées à partir des webhooks Grafana via un
-        LLM hébergé localement (\texttt{qwen2.5:14b-instruct} sur
-        un hôte GPU AWS \texttt{g5.xlarge} dédié depuis le
-        2026-05-21, \texttt{qwen2.5:7b} sur portable conservé en
-        repli). Reproductible depuis une infrastructure vierge et
-        exploitable depuis une seule commande de \emph{playbook}.
+        Pile d'observabilité provisionnée par Terraform, configurée
+        par Ansible, exécutée sur k3s-et-Docker sur AWS, avec un
+        service de tri par IA basé sur FastAPI produisant des RCA
+        structurées à partir des webhooks Grafana via un LLM
+        hébergé localement (\texttt{qwen2.5:14b-instruct} sur hôte
+        GPU AWS \texttt{g5.xlarge} dédié depuis le 2026-05-21,
+        \texttt{qwen2.5:7b} sur portable en repli). Reproductible
+        depuis une infrastructure vierge.
   \item \textbf{L'invariant d'accès aux données via MCP uniquement.}
-        Une règle à l'échelle du projet, en partie architecturale
-        et en partie mécanique (via le lint S3-HF-08), selon
-        laquelle chaque donnée que voit le LLM doit transiter par
-        un pont MCP. La règle produit un régime de provenance sur
-        l'entrée du LLM et est appliquée par les métriques de la
-        couche pont, les rapports d'audit et un lint
-        d'intégration continue.
-  \item \textbf{Le pare-feu anti-hallucination.} Une combinaison
-        en couches de mécanismes (injection d'exemplaires, liste
-        noire par alerte, validateur de surface, validateur de
-        menu d'hypothèses, règle cause-preuves, bridage de
-        confiance avec retrait des actions, reprise à action
-        contenue) conçue pour garder la sortie LLM digne de
-        confiance sur le plan opérationnel. Chaque mécanisme
-        répond à un mode de défaillance spécifique observé
-        empiriquement pendant la construction et consigné dans le
-        journal des décisions avec les preuves qui l'ont
-        motivé.
+        Règle à l'échelle du projet, en partie architecturale et
+        en partie mécanique (via le lint S3-HF-08), selon laquelle
+        chaque donnée que voit le LLM doit transiter par un pont
+        MCP. Produit un régime de provenance sur l'entrée du LLM,
+        appliquée par les métriques de la couche pont, les
+        rapports d'audit et un lint d'intégration continue.
+  \item \textbf{Le pare-feu anti-hallucination.} Combinaison en
+        couches de mécanismes (exemplaires, liste noire, validateurs
+        de surface et de menu, cause-preuves, bridage de confiance,
+        reprise à action contenue), chacun répondant à un mode de
+        défaillance observé et consigné dans le journal des
+        décisions.
   \item \textbf{La couche de retour d'information de l'opérateur
-        en boucle fermée.} Un schéma et une surface qui capturent
-        les corrections et les notations d'opérateur sur les RCA
-        (livrés de bout en bout via SF-6 et SF-7 le jour~1 du
-        sprint~4) et les propagent dans la couche de suppression,
-        dans les métriques de précision/rappel et (au sprint~5)
-        dans le corpus de récupération curé.
+        en boucle fermée.} Schéma et surface capturant les
+        corrections et notations d'opérateur sur les RCA (livrés
+        via SF-6 et SF-7 le jour~1 du sprint~4), propagés dans la
+        couche de suppression, les métriques de précision/rappel
+        et (au sprint~5) le corpus de récupération curé.
   \item \textbf{Un journal des décisions documenté.} Vingt-cinq
         décisions durables de conception (D1--D25) consignées de
-        manière contemporaine aux travaux d'ingénierie,
-        comprenant le problème observé, les contraintes, la
-        décision et la vérification. Le journal est un livrable
-        primaire du projet et est exerçable lors d'audits
-        futurs.
+        manière contemporaine, comprenant le problème observé, les
+        contraintes, la décision et la vérification.
 \end{enumerate}
 
-La plateforme est en exploitation active contre une pile web
-représentative sur AWS, avec des audits quotidiens statiques et
-en condition réelle produisant une trace documentée de santé
-opérationnelle. La latence médiane de bout en bout du pipeline
-s'établit à $\sim$38\,s sur l'hôte GPU (en baisse depuis
-$\sim$5\,min sur le \emph{runner} portable)~; la suite de tests
-du service de tri est à \texttt{296/296} au vert le jour~1 du
-sprint~4~; le lint d'invariant MCP-seul est propre depuis
-l'atterrissage de S3-HF-08 le 2026-05-19~; l'hôte GPU est en
-service sans interruption depuis la migration du 2026-05-21. Le
-travail du sprint~5 capturé au chapitre~\ref{ch:sprint5} --- un
-banc de test microservice canonique, un modèle de données au
-niveau incident sur le tableau de bord, des surfaces de
-configuration opérateur et la nouvelle conception de détection
-d'anomalies Drain3 hiérarchique --- est l'évolution naturelle
-suivante et le corps de travail qui déterminera si la plateforme
-est prête pour la transition production avec greenlight du
-superviseur qui constitue l'état terminal de ce projet.
-
-Le choix méthodologique qui a conditionné la collecte agentique
-itérative (Tier~3) à un échafaudage de mesure (Tier~4) est, de
-l'avis de l'auteure, la leçon la plus durable que le projet
-emporte de sa phase de construction --- le coût d'expédition d'un
-mécanisme IA non mesurable en production excède matériellement le
-coût de construction préalable de la mesure. La même discipline
-informe la conception S5-DRN-01 des seuils Drain3 hiérarchiques
-du sprint~5~: l'intuition architecturale est arrivée le
-2026-05-25, mais la conception est explicitement conditionnée au
-fait que le banc microservice (SF-13) soit en service afin que le
-scénario d'acceptation inter-applications puisse être exercé sur
-des données réelles avant que la logique de seuils multi-paliers
-ne soit autorisée à approcher le trafic de production.
+La plateforme est en exploitation active sur AWS avec des audits
+quotidiens documentant la santé opérationnelle~: latence médiane
+$\sim$38\,s sur hôte GPU (depuis $\sim$5\,min sur portable),
+suite de tests \texttt{333/333} au vert, lint MCP-seul propre
+depuis S3-HF-08, hôte GPU sans interruption depuis la migration
+du 2026-05-21. Le travail du sprint~5 capturé au
+chapitre~\ref{ch:sprint5} déterminera si la plateforme est prête
+pour la transition production avec greenlight superviseur qui
+constitue l'état terminal de ce projet.
 
 % =====================================================================
 \appendix
@@ -3455,7 +3445,7 @@ de la migration GPU (D24/D25), refonte du courriel SF-6, page de
 retour d'opérateur SF-7, regroupement tableau de bord SF-4, page
 détail phase~2.1, déduplication DA-4/DA-5~; en file d'attente~:
 DA-2, phase~3.A.KPI, DA-3, filtres URL, SF-5 en étirement. Suite
-\texttt{296/296} au vert. \\
+\texttt{333/333} au vert. \\
 5 & 2026-06-06 -- 2026-06-17 & \emph{Planifié.} EPIC13 banc de
 test microservice (SF-13) + scénario canonique~; EPIC14 entité
 incident et surfaces phase~3.A/3.B en barre latérale~; EPIC15

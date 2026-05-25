@@ -166,6 +166,7 @@
     <li class="sub"><a href="#arch-strain">7.6.2 Where it's showing strain</a></li>
     <li class="sub"><a href="#arch-scalability">7.6.3 Scalability verdict</a></li>
     <li class="sub"><a href="#arch-multitenancy">7.6.4 Co-located-apps snapshot — car-rental</a></li>
+    <li class="sub"><a href="#arch-portability">7.6.5 Backend portability + ease of instrumentation</a></li>
     <li><a href="#asks">8. What we need from you</a></li>
     <li><a href="#study-plan">9. Recommended reading</a></li>
     <li><a href="#glossary">10. Glossary</a></li>
@@ -192,6 +193,7 @@
     <li class="sub"><a href="#be-phase4">13.5 Phase 4 — production hardening</a></li>
     <li class="sub"><a href="#be-deps">13.6 Dependencies + ship order</a></li>
     <li class="sub"><a href="#be-drain3-tiers">13.7 Hierarchical drain3 thresholds — 3 tiers (Sprint 5)</a></li>
+    <li class="sub"><a href="#be-single-agent-otel">13.8 Single-agent OTel deployment (NOC-conservative production option)</a></li>
     <li><a href="#sprint4-ops">14. Sprint 4 — operational shipping plan</a></li>
     <li class="sub"><a href="#s4-goal">14.1 The one goal</a></li>
     <li class="sub"><a href="#s4-week1">14.2 Week 1 — daily ships</a></li>
@@ -218,6 +220,7 @@
   <li><strong>Hallucination firewall.</strong> Every data source the LLM ever sees flows through an MCP bridge — no direct DB reads, no in-process module imports of evidence, no ad-hoc HTTP calls. The invariant is enforced by a CI lint (<code>scripts/check_mcp_invariant.py</code>), not just convention. If the LLM tries to invent a metric or a service that doesn't exist, the MCP call returns empty and the validator catches the unsupported claim downstream. See <a href="#quality">§5</a> and <a href="hallucination-firewall.html">hallucination-firewall.html</a>.</li>
   <li><strong>Five reinforcing output-quality defenses.</strong> Exemplar retrieval, alert-keyed hallucination blocklist, surface-only LEDE + hypothesis-menu validators, confidence clamp, bounded-agency single retry. Each catches a different failure mode; together they make LLM mistakes recoverable rather than load-bearing.</li>
   <li><strong>Operational track record, not promises.</strong> The triage container ran on <code>adolin-wsl</code> (laptop GTX 1060) for 28 days from Sprint 3 kickoff (2026-04-23); on 2026-05-21 it was promoted to a dedicated AWS <code>g5.xlarge</code> in us-west-2 (A10G GPU, instance <code>i-03aec662b1a47ad8f</code>, Tailscale name <code>observability-gpu-uswest2</code>) with the laptop kept as rollback fallback. 274 / 274 triage tests pass, the MCP-invariant lint is clean, and the 2026-05-19 heavy-load test produced 95 production-shape RCAs with a documented quality grade per RCA. Five of the twelve issues that test surfaced are already shipped.</li>
+  <li><strong>Backend-agnostic by construction.</strong> The MCP layer doubles as a portability seam — supporting Zabbix, Elasticsearch, Tempo, Datadog, or any other metrics / logs / traces backend is a ~3–5 day MCP bridge, not a re-architecture. Producer-side, OpenTelemetry auto-instrumentation covers most polyglot stacks with zero application-code change. See <a href="#arch-portability">§7.6.5</a>.</li>
 </ol>
 
 <p><strong>What we deliberately didn't build.</strong> The system prefers <strong>determinism and auditability over raw model capability</strong>. No agentic multi-step planning loop (one bounded retry max). No vector DB (the exemplar library is a curated YAML, deliberately frozen until operator feedback can curate retrieval well). No microservice mesh (one pipeline, one process, deterministic ordering). No native tool-calling (structured JSON output schemas instead, until we stabilise on the new larger-model runner). Every quality mechanism exists to make the LLM's mistakes recoverable. If you'd weight that trade-off differently, <a href="#asks">§8</a> is the conversation we want to have.</p>
@@ -1408,6 +1411,48 @@ than we'd like and is a signal that an archetype is missing.
   <p>If you have time after the four asks in §8, the highest-leverage extra topic is a <strong>new-application onboarding policy</strong>. Specifically: what should the minimum SLO be on a new application before it's allowed on the platform (actuator enabled? Drain3 baseline tagged? per-service Loki label?), and where should the abstraction boundary live so onboarding application #3 doesn't require touching 3 repos again? We'll codify your answer into <code>monitoring-docs/app-onboarding.md</code>.</p>
 </div>
 
+<h3 id="arch-portability">7.6.5 Backend portability + ease of instrumentation</h3>
+
+<p>Worth surfacing explicitly because it shapes how this platform fits into an existing observability estate — CIRES already runs Zabbix in the NOC; many estates standardise on Elasticsearch or Tempo. The MCP-only invariant that exists primarily as a hallucination firewall (<a href="#quality">§5</a>) is <em>also</em> a portability seam. Supporting a new backend reduces to <em>"write an MCP bridge for X"</em> — not a re-architecture.</p>
+
+<h4 style="margin-top:24px; margin-bottom:8px; color:var(--text);">Storage-side — backend swap matrix</h4>
+
+<table>
+  <thead><tr><th>Layer</th><th>Current</th><th>Drop-in candidates</th><th>Bridge effort</th></tr></thead>
+  <tbody>
+    <tr><td>Metrics</td><td>Prometheus</td><td>Zabbix, VictoriaMetrics, InfluxDB, Datadog, CloudWatch, Graphite</td><td>~3–5 days</td></tr>
+    <tr><td>Logs</td><td>Loki</td><td>Elasticsearch / OpenSearch, Splunk, Graylog, CloudWatch Logs</td><td>~3–5 days</td></tr>
+    <tr><td>Traces</td><td>Jaeger</td><td>Tempo, Zipkin, AWS X-Ray, Honeycomb</td><td>Tempo ~1 day; others ~3 days</td></tr>
+    <tr><td>Alert ingress</td><td>Grafana webhook</td><td>Alertmanager, Zabbix triggers, PagerDuty, Opsgenie</td><td>~1–2 days</td></tr>
+    <tr><td>Log-template engine</td><td>Drain3 (raw log lines)</td><td>Unchanged — any logs backend works</td><td>None</td></tr>
+  </tbody>
+</table>
+
+<p>A bridge exposes a few typed query tools — <code>query_metrics</code>, <code>query_logs</code>, <code>query_traces</code> — and translates them into the target backend's query language. The LLM never sees the underlying query syntax, only normalized results. Switching backends doesn't touch the 14 archetypes, the exemplar library, the validators, or the prompt templates beyond a light sweep for backend-specific examples.</p>
+
+<p><strong>Three honest caveats:</strong></p>
+<ul>
+  <li><strong>Tempo is essentially free</strong> — same OTel-traces model as Jaeger; the bridge changes one HTTP call.</li>
+  <li><strong>Elasticsearch is mid-effort</strong> — Query DSL ↔ LogQL translation is a real layer to write, but the text-line output shape is identical to Loki's.</li>
+  <li><strong>Zabbix has a semantic gap.</strong> Zabbix is <em>host-centric</em>; Prometheus is <em>label-centric</em> (pod / namespace / job). A Zabbix bridge works cleanly for host-level alerts (CPU / disk / memory on a VM); container/pod attribution needs a k8s/Rancher MCP alongside (planned as SF-9). For the CIRES NOC integration (<a href="#be-single-agent-otel">§13.8</a>) this is exactly the shape — Zabbix supplies host metrics, the OTel host agent + k8s MCP supplies the container layer.</li>
+</ul>
+
+<h4 style="margin-top:28px; margin-bottom:8px; color:var(--text);">Producer-side — OpenTelemetry for almost everything</h4>
+
+<p>The platform consumes whatever a standard OTel Collector emits, and OTel provides <em>zero-code auto-instrumentation</em> across most polyglot stacks:</p>
+<ul>
+  <li><strong>JVM (Spring Boot, Quarkus, Micronaut, …)</strong> — OTel Java agent injected via <code>JAVA_TOOL_OPTIONS</code> in an initContainer. Zero application-code change. Both the <code>spring-boot</code> service and the <code>rental-backend</code> side-deployment (<a href="#arch-multitenancy">§7.6.4</a>) get HTTP / JDBC / Spring Web traces this way.</li>
+  <li><strong>Python / Node / .NET / Ruby / PHP</strong> — language-specific agents, same env-var pattern. No app code touched.</li>
+  <li><strong>Go</strong> — needs a small SDK import (no runtime auto-instrumentation in Go), but &lt;10 lines.</li>
+  <li><strong>Infra metrics</strong> — node-exporter, cAdvisor, Kong, kube-state-metrics: standard Prometheus exporters, scraped by the OTel Collector's <code>prometheus</code> receiver.</li>
+  <li><strong>Logs</strong> — stdout/stderr via the OTel Collector's <code>filelog</code> receiver. No log-shipping library to vendor into the app.</li>
+</ul>
+
+<div class="callout note">
+  <div class="callout-label">One-line takeaway</div>
+  <p><strong>Backend-agnostic by construction, instrumentation-ecumenical via OpenTelemetry.</strong> Adding a new storage backend or a new application lands as a bounded, ~days-scale adapter, not a week-scale integration.</p>
+</div>
+
 <!-- ────────────────────── 8 ────────────────────── -->
 <h2 id="asks"><span class="num-badge">8</span>What we need from you</h2>
 
@@ -2391,6 +2436,112 @@ them.
   report should cite it as a forward-looking improvement to the drain3
   detection layer, surfaced during the DA-4 / DA-5 work on 2026-05-25, and
   scoped to land in EPIC13 once the microservice bed (SF-13) is live.
+</p>
+
+<!-- 13.8 -->
+<h3 id="be-single-agent-otel">13.8 Single-agent OTel deployment (NOC-conservative production option)</h3>
+
+<div class="callout note">
+  <div class="callout-label">Forward-looking pitch · surfaced 2026-05-25 · not Sprint 4/5 scope</div>
+  <p>
+    <strong>Current state (PoC, two-agent shape).</strong> Each host today
+    runs two collection daemons: the <strong>OTel Collector</strong> handles
+    <em>logs</em> (via the <code>filelog/containers</code> receiver tailing
+    <code>/var/lib/docker/containers/**/*-json.log</code>) and <em>traces</em>
+    (via the <code>otlp</code> receiver, with apps pushing spans to it), and
+    <strong>node-exporter</strong> handles host metrics (CPU / memory / disk /
+    network) scraped by Prometheus. Two binaries per host, two systemd units,
+    two configs to maintain.
+  </p>
+</div>
+
+<p>
+  <strong>NOC concern (CIRES production reality).</strong> Conversation with
+  CIRES on 2026-05-25 surfaced the production-side constraint that shapes any
+  future deployment story: the NOC team is reluctant to install <em>any</em>
+  new exporters in production. Their stated reason is a security-posture one
+  — every new agent is another binary with read access (or worse) to host
+  state, another update cadence to track, another threat surface to audit.
+  CIRES already runs a mature <strong>Zabbix</strong>-based metrics collection
+  in production; that stays in place. The platform will NOT replace Zabbix,
+  and Prometheus on CIRES private-cloud production is unlikely. The platform
+  consumes Zabbix metrics (via existing Zabbix→Prometheus exporters, or a
+  future direct integration) rather than displacing the incumbent.
+</p>
+
+<p>
+  <strong>The single-agent OTel pitch.</strong> For the production transition
+  conversation, the OTel Collector can absorb metrics duty as well, eliminating
+  node-exporter and leaving exactly <strong>one binary per host</strong> doing
+  logs + traces + metrics. Three native OTel receivers do the work:
+</p>
+
+<ul>
+  <li><strong><code>hostmetrics</code></strong> — pulls CPU / memory / disk /
+      network / load / process metrics directly from <code>/proc</code> and
+      <code>/sys</code>. No second daemon. Runs as a non-root user with
+      read-only filesystem access; the <code>/proc</code> and <code>/sys</code>
+      pseudo-filesystems are world-readable on standard Linux, so no
+      <code>CAP_*</code> capabilities are required.</li>
+  <li><strong><code>prometheus</code> receiver</strong> — scrapes any existing
+      application-layer <code>/metrics</code> HTTP endpoints (Spring Boot
+      Actuator, custom Go services, etc.). The Collector becomes the scraper;
+      no central Prometheus needs to live on the edge.</li>
+  <li><strong><code>kubeletstats</code> receiver</strong> (k8s hosts only) —
+      pulls pod / container metrics directly from the kubelet's stats API.
+      Replaces the cAdvisor / kube-state-metrics scrape pair for the most
+      common per-pod signals.</li>
+</ul>
+
+<p>
+  <strong>Why this fits the NOC's security posture.</strong> The single-agent
+  shape is materially easier to audit than the multi-exporter shape it replaces.
+  <em>One binary, one systemd unit, one config file</em> — versus N exporters
+  each with their own flags, update cadence, and threat surface. The Collector
+  pushes <em>outbound-only</em> over OTLP to central backends; no new listening
+  ports on the host (apart from a localhost-bound OTLP port for local apps that
+  push spans to it). The <code>hostmetrics</code> receiver needs only
+  read-only filesystem access — no capabilities, no root. OpenTelemetry is a
+  <strong>CNCF graduated project</strong> with signed releases, public security
+  advisories, and a regular CVE-patch cadence — a stronger supply-chain story
+  than most ecosystem exporters. And the configuration is <em>declarative YAML</em>:
+  the NOC can read the file and see exactly what is being collected, where it
+  is sent, and what credentials it uses; node-exporter's command-line flags
+  are less self-documenting, so the OTel config <em>is</em> the audit artifact.
+</p>
+
+<div class="callout warn">
+  <div class="callout-label">Trade-offs (be honest)</div>
+  <ul>
+    <li><strong>Memory footprint.</strong> The Collector idles at ~80–150 MB
+        of RSS versus node-exporter's ~15 MB. The per-host overhead is larger.
+        Acceptable on any production-grade host; meaningful only on
+        resource-constrained edge devices, which CIRES infrastructure does
+        not generally include.</li>
+    <li><strong>Privileged host metrics.</strong> A handful of metrics — full
+        process listings, BPF-based network stats — need extra capabilities or
+        root. If the NOC says no on those, the platform loses granular
+        per-process CPU attribution but keeps aggregate host vitals. Acceptable
+        for a triage-grade signal; not acceptable if forensic per-process
+        attribution is in scope, but that is a separate workstream.</li>
+    <li><strong>Configuration complexity.</strong> A single OTel config that
+        does logs + traces + metrics is longer than a single node-exporter
+        config that does only host metrics. Counter-balanced by being the
+        <em>only</em> config to maintain on the host.</li>
+  </ul>
+</div>
+
+<p>
+  <strong>How this lands in the project's story.</strong> This is a
+  forward-looking pitch for the production transition conversation, not a
+  Sprint 4 or Sprint 5 commitment. The Promtail → OTel Collector migration
+  already done in Sprint 1 (one less daemon for logs + traces) sets the
+  precedent — OTel doing <em>more</em>, not less. This subsection pairs with
+  the CIRES private-cloud production target (no AWS-specific dependencies)
+  and with the Zabbix-stays reality: the platform consumes Zabbix metrics,
+  it does not replace them. The decision to actually retire node-exporter in
+  production is a NOC-led one, surfaced here so the production-transition
+  conversation can happen with the alternative already specified.
 </p>
 
 <!-- ────────────────────── 14 ────────────────────── -->
