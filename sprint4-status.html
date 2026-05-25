@@ -121,17 +121,18 @@
       <code>linalaaraich/jira/Sprint4-additions.csv</code>.
     </p>
     <p class="lead" style="margin-bottom:0;">
-      <strong>As of Sat 2026-05-23 afternoon:</strong> 6 of the §14
-      day-by-day items shipped (4 from the §14 plan + 2 supporting Phase
-      2 work). 5 still scheduled across the remaining 8 working days of
-      Sprint 4. 24 longer-form backlog candidates carry from the
-      pre-supervisor-feedback ranking — many will roll to Sprint 5 / 6.
+      <strong>As of Mon 2026-05-25 (Sprint 4 day-1 official start):</strong>
+      8 of the §14 day-by-day items shipped (6 from the §14 plan + 2
+      supporting Phase 2 work). 5 still scheduled across the remaining 8
+      working days of Sprint 4. 24 longer-form backlog candidates carry
+      from the pre-supervisor-feedback ranking — many will roll to
+      Sprint 5 / 6.
     </p>
     <div class="pill-row" style="margin-top:20px;">
-      <span class="pill green">6 shipped</span>
+      <span class="pill green">8 shipped</span>
       <span class="pill orange">5 scheduled</span>
       <span class="pill blue">24 backlog</span>
-      <span class="pill red">tests 285/285</span>
+      <span class="pill red">tests 296/296</span>
     </div>
   </div>
 </section>
@@ -139,7 +140,7 @@
 <div class="layout">
 <section class="content">
 
-<h2 id="shipped">✅ Shipped — 6 stories (commit refs + acceptance evidence)</h2>
+<h2 id="shipped">✅ Shipped — 8 stories (commit refs + acceptance evidence)</h2>
 
 <table>
   <thead>
@@ -182,6 +183,18 @@
       <td><code><a href="https://github.com/linalaaraich/monitoring-triage-service/commit/9b61e74">9b61e74</a></code> + <code><a href="https://github.com/linalaaraich/monitoring-triage-service/commit/a904eda">a904eda</a></code> empty-render fix (2026-05-22 Fri)</td>
       <td>Smoke: real short_id → HTTP 200, full DetailPage renders with reasoning[] + related[] + drain3 + deploy fields populated.</td>
     </tr>
+    <tr>
+      <td>209</td>
+      <td><strong>S4-DA-05</strong> · Alertname-family dedupe — <code>ALERT_FAMILIES</code> map (cpu/memory/disk/loki-disk) + <code>family_dedup_key(alert)</code> so Medium/High/Critical on the same instance collapse as one family</td>
+      <td><code><a href="https://github.com/linalaaraich/monitoring-triage-service/commit/b8fa2c8">b8fa2c8</a></code> (2026-05-25 Mon — pulled forward from §14 W1 Thu)</td>
+      <td>Suite 285 → 296 (+11 across DA-5+DA-4). 5 unit tests cover family collapse, instance-scope preservation, unknown-alertname fallback to Grafana fingerprint, missing-instance fallback to service, end-to-end High→Critical CPU collapse with linked decision_id.</td>
+    </tr>
+    <tr>
+      <td>208</td>
+      <td><strong>S4-DA-04</strong> · Drain3 content-hashed fingerprint — <code>drain3-{service}-{sha256(top-3-templates)[:12]}</code>, falls back to anomalous_lines then to legacy plain key so unrelated drain3 batches no longer silently collapse into one dedup window</td>
+      <td><code><a href="https://github.com/linalaaraich/monitoring-triage-service/commit/b8fa2c8">b8fa2c8</a></code> (2026-05-25 Mon — pulled forward from §14 W1 Thu, paired with DA-5)</td>
+      <td>6 unit tests cover hash stability, divergence on different templates, service separation, fallback to anomalous_lines when no templates, graceful empty-input handling, whitespace normalisation.</td>
+    </tr>
   </tbody>
 </table>
 
@@ -198,20 +211,6 @@
     <tr><th>Jira ID</th><th>Story</th><th>§14 slot</th><th>Effort</th><th>Acceptance</th></tr>
   </thead>
   <tbody>
-    <tr>
-      <td>209</td>
-      <td><strong>S4-DA-05</strong> · Alertname-family dedupe equivalence — <code>ALERT_FAMILIES</code> map so HighCpu + CriticalCpu + MediumCpu on same instance collapse as one family</td>
-      <td>W1 Thu</td>
-      <td>~2 SP, ~4 h</td>
-      <td>Induce CriticalCpu + HighCpu on same node within 1 min → one row on the dashboard, not two.</td>
-    </tr>
-    <tr>
-      <td>208</td>
-      <td><strong>S4-DA-04</strong> · Drain3 fingerprint content-hashing — <code>drain3-{service}-{hash(top-3-novel-templates)}</code> so unrelated drain3 events don't share fp</td>
-      <td>W1 Thu</td>
-      <td>~2 SP, ~3 h</td>
-      <td>Inject two different drain3 anomaly batches in same hour with different templates → see two distinct fingerprints, not one collapse.</td>
-    </tr>
     <tr>
       <td>206</td>
       <td><strong>S4-DA-02</strong> · Unsafe-action stripping (clamp-independent) — strip kubectl/ssh/restart/systemctl when <code>quality=actionable AND no named cause</code>, regardless of confidence</td>
@@ -297,10 +296,9 @@
 <h2 id="next-week">🎯 Concrete next-session pick order</h2>
 
 <ol>
-  <li><strong>Sun rest day</strong> if you want it — Sprint 4 starts Mon 2026-05-25 officially.</li>
-  <li><strong>Mon 2026-05-25 (or Sun if pushing)</strong> — DA-5 + DA-4 (both Thu W1 in §14, can bank by shipping early). Both small, ~3 h combined.</li>
+  <li><strong>✅ Mon 2026-05-25</strong> — DA-5 + DA-4 shipped (commit <code>b8fa2c8</code>). Banked from §14 W1 Thu.</li>
   <li><strong>Tue 2026-05-26</strong> — DA-2 unsafe-action stripping (~4 h). The §7c.4 <code>systemctl restart k3s-node.service</code> fix.</li>
-  <li><strong>Wed 2026-05-26</strong> — Phase 3.A.KPI route (~1 day). Supervisor-asked-for.</li>
+  <li><strong>Wed 2026-05-27</strong> — Phase 3.A.KPI route (~1 day). Supervisor-asked-for.</li>
   <li><strong>Thu 2026-05-28</strong> — DA-3 cross-row coherence (~5 SP, ~1 day).</li>
   <li><strong>Fri 2026-05-29</strong> — URL filter persistence + range filter (~3 SP, ~half-day).</li>
   <li><strong>Week 2 buffer days</strong> — supervisor feedback round + auto-refresh + full-UUID copy (30-min adds each).</li>
