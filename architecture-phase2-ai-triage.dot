@@ -1,0 +1,225 @@
+digraph Phase2AITriage {
+    // === Graph-level styling ===
+    rankdir=TB;
+    bgcolor="#ffffff";
+    fontname="Helvetica";
+    fontsize=20;
+    labelloc="t";
+    label=<<B>CIRES Observability Platform &mdash; Phase 2: AI triage layer (the FYP contribution)</B><BR/><FONT POINT-SIZE="14">Webhook &rarr; dedup &rarr; MCP-only context &rarr; LLM verdict &rarr; operator-facing brief</FONT>>;
+    fontcolor="#0f1117";
+    pad=0.5;
+    nodesep=0.5;
+    ranksep=0.7;
+    splines=spline;
+    compound=true;
+
+    // === Defaults ===
+    node [shape=box, style="rounded,filled", penwidth=1.8,
+          fontname="Helvetica", fontsize=16, fontcolor="#0f1117",
+          color="#3a3f52", margin="0.28,0.18"];
+    edge [color="#3a3f52", penwidth=1.4, fontname="Helvetica",
+          fontsize=12, fontcolor="#3a3f52", arrowsize=0.9];
+
+    // ===========================================================
+    // CLUSTER 1 — TRIGGERS (blue)
+    // ===========================================================
+    subgraph cluster_triggers {
+        label=<<B>Triggers</B>>;
+        labeljust="c";
+        labelloc="t";
+        fontsize=15;
+        fontcolor="#2d6fa0";
+        style="rounded,filled";
+        fillcolor="#eaf3fb";
+        color="#4ea8de";
+        penwidth=2;
+        margin=18;
+
+        trig_graf   [label="Grafana alert\nwebhook",
+                     fillcolor="#e9f4fb", color="#4ea8de"];
+        trig_drain  [label="Drain3 anomaly\nproducer",
+                     fillcolor="#e9f4fb", color="#4ea8de"];
+        trig_manual [label="Manual\nwebhook",
+                     fillcolor="#e9f4fb", color="#4ea8de"];
+
+        { rank=same; trig_graf; trig_drain; trig_manual; }
+    }
+
+    // ===========================================================
+    // CLUSTER 2 — TRIAGE PIPELINE (orange, vertical chain)
+    // ===========================================================
+    subgraph cluster_pipeline {
+        label=<<B>Triage pipeline</B>>;
+        labeljust="c";
+        labelloc="t";
+        fontsize=15;
+        fontcolor="#c97a2a";
+        style="rounded,filled";
+        fillcolor="#fdf2e6";
+        color="#f0a050";
+        penwidth=2;
+        margin=18;
+
+        pl_dedup     [label="Dedup\n(DA-5 family + DA-4 content-hash)",
+                      fillcolor="#fbe3cb", color="#f0a050"];
+        pl_suppress  [label="Pre-LLM suppression",
+                      fillcolor="#fbe3cb", color="#f0a050"];
+        pl_recur     [label="Recurrence gate",
+                      fillcolor="#fbe3cb", color="#f0a050"];
+        pl_context   [label="Context gather",
+                      fillcolor="#fbe3cb", color="#f0a050"];
+        pl_annotate  [label="Drain3 annotate",
+                      fillcolor="#fbe3cb", color="#f0a050"];
+
+        pl_dedup    -> pl_suppress;
+        pl_suppress -> pl_recur;
+        pl_recur    -> pl_context;
+        pl_context  -> pl_annotate;
+    }
+
+    // ===========================================================
+    // SAFETY OVERLAY (red, side annotation) — declared early for layout
+    // ===========================================================
+    safety [label=<<B>Bounded agency</B><BR ALIGN="LEFT"/><FONT POINT-SIZE="11">clamp_actions strips unsafe<BR ALIGN="LEFT"/>kubectl / ssh / restart when<BR ALIGN="LEFT"/>verdict actionable but no<BR ALIGN="LEFT"/>named cause</FONT>>,
+            shape=note, fillcolor="#fde8ea", color="#e06070", penwidth=2,
+            fontcolor="#0f1117", fontsize=13, margin="0.22,0.16"];
+
+    // ===========================================================
+    // PHASE 1 SHIM — represents the upstream stores (side)
+    // ===========================================================
+    phase1_ref [label=<<B>Phase 1 storage stores</B><BR/><FONT POINT-SIZE="11">Prometheus &middot; Loki &middot; Jaeger &middot; Drain3 state</FONT>>,
+                shape=folder, fillcolor="#e8f9f9", color="#40d0d0", penwidth=2,
+                fontsize=13, margin="0.28,0.18"];
+
+    // ===========================================================
+    // CLUSTER 3 — MCP LAYER (green inside RED dashed firewall)
+    // ===========================================================
+    subgraph cluster_mcp {
+        label=<<B><FONT COLOR="#e06070">MCP-only data access &mdash; hallucination firewall</FONT></B><BR/><FONT POINT-SIZE="11" COLOR="#8890a0">every byte the LLM sees passes through this boundary</FONT>>;
+        labeljust="c";
+        labelloc="t";
+        fontsize=15;
+        fontcolor="#e06070";
+        style="rounded,dashed,filled";
+        fillcolor="#fff5f5";
+        color="#e06070";
+        penwidth=3;
+        margin=22;
+
+        mcp_prom   [label="Prometheus\nMCP",  fillcolor="#dff3e3", color="#6bcf7f"];
+        mcp_loki   [label="Loki\nMCP",        fillcolor="#dff3e3", color="#6bcf7f"];
+        mcp_jaeger [label="Jaeger\nMCP",      fillcolor="#dff3e3", color="#6bcf7f"];
+        mcp_drain  [label="Drain3\nMCP",      fillcolor="#dff3e3", color="#6bcf7f"];
+        mcp_rca    [label="RCA-history\nMCP", fillcolor="#dff3e3", color="#6bcf7f"];
+        mcp_k8s    [label="k8s / Rancher MCP\n(planned Sprint 5)",
+                    fillcolor="#f6fbf7", color="#6bcf7f",
+                    style="rounded,filled,dashed", fontcolor="#5a8a64"];
+
+        { rank=same; mcp_prom; mcp_loki; mcp_jaeger; mcp_drain; mcp_rca; mcp_k8s; }
+    }
+
+    // ===========================================================
+    // CLUSTER 4 — LLM (purple)
+    // ===========================================================
+    subgraph cluster_llm {
+        label=<<B>LLM core</B>>;
+        labeljust="c";
+        labelloc="t";
+        fontsize=15;
+        fontcolor="#7b4cb8";
+        style="rounded,filled";
+        fillcolor="#f4ecfb";
+        color="#b07ee8";
+        penwidth=2;
+        margin=18;
+
+        llm_primary  [label="Ollama qwen2.5:14b\n(primary)",
+                      fillcolor="#e6d5f4", color="#b07ee8"];
+        llm_fallback [label="qwen2.5:7b\n(fallback)",
+                      fillcolor="#e6d5f4", color="#b07ee8"];
+        llm_host     [label="g5.xlarge / A10G GPU / us-west-2",
+                      fillcolor="#f0e3fa", color="#b07ee8",
+                      fontsize=13];
+
+        { rank=same; llm_primary; llm_fallback; }
+        llm_primary  -> llm_host [style=dotted, color="#8890a0", arrowhead=none];
+        llm_fallback -> llm_host [style=dotted, color="#8890a0", arrowhead=none];
+    }
+
+    // ===========================================================
+    // CLUSTER 5 — OUTPUTS (blue + cyan)
+    // ===========================================================
+    subgraph cluster_outputs {
+        label=<<B>Outputs &mdash; operator-facing</B>>;
+        labeljust="c";
+        labelloc="t";
+        fontsize=15;
+        fontcolor="#2d6fa0";
+        style="rounded,filled";
+        fillcolor="#eaf3fb";
+        color="#4ea8de";
+        penwidth=2;
+        margin=18;
+
+        out_email     [label="Email notifier\n(SMTP)",
+                       fillcolor="#e9f4fb", color="#4ea8de"];
+        out_dashboard [label="/dashboard/v2\n(FastAPI)",
+                       fillcolor="#e9f4fb", color="#4ea8de"];
+        out_sqlite    [label="RCA SQLite\nstore",
+                       fillcolor="#d3f1f1", color="#40d0d0"];
+        out_feedback  [label="Operator\nfeedback page",
+                       fillcolor="#e9f4fb", color="#4ea8de"];
+
+        { rank=same; out_email; out_dashboard; out_sqlite; out_feedback; }
+    }
+
+    // ===========================================================
+    // EDGES — main flow (top to bottom)
+    // ===========================================================
+
+    // Triggers -> pipeline (top stage)
+    trig_graf   -> pl_dedup;
+    trig_drain  -> pl_dedup;
+    trig_manual -> pl_dedup;
+
+    // Pipeline tail -> MCP layer (fans out to all MCPs)
+    pl_annotate -> mcp_prom   [label=" fan-out", fontsize=11];
+    pl_annotate -> mcp_loki   [arrowsize=0.7];
+    pl_annotate -> mcp_jaeger [arrowsize=0.7];
+    pl_annotate -> mcp_drain  [arrowsize=0.7];
+    pl_annotate -> mcp_rca    [arrowsize=0.7];
+
+    // MCP -> LLM (converging into primary)
+    mcp_prom   -> llm_primary [label=" sanctioned\n context only", fontsize=11];
+    mcp_loki   -> llm_primary;
+    mcp_jaeger -> llm_primary;
+    mcp_drain  -> llm_primary;
+    mcp_rca    -> llm_primary;
+
+    // LLM -> outputs (verdict, clamped)
+    llm_primary -> out_dashboard [label=" verdict\n (clamped)", fontsize=11];
+    llm_primary -> out_email;
+    llm_primary -> out_sqlite;
+    llm_primary -> out_feedback;
+
+    // ===========================================================
+    // EDGES — cross-cluster annotations
+    // ===========================================================
+
+    // Cross-phase dashed arrows — Phase 1 storage feeds the MCPs (read-only)
+    // Single annotated arrow into the cluster head, plus thin shadow arrows for the other MCPs
+    phase1_ref -> mcp_prom    [style=dashed, color="#1f9494", penwidth=2.4,
+                               label=<<B>  reads from Phase 1  </B>>, fontsize=13,
+                               fontcolor="#1f9494", constraint=false, lhead=cluster_mcp];
+    phase1_ref -> mcp_loki    [style=dashed, color="#1f9494", penwidth=1.4,
+                               constraint=false, arrowsize=0.6];
+    phase1_ref -> mcp_jaeger  [style=dashed, color="#1f9494", penwidth=1.4,
+                               constraint=false, arrowsize=0.6];
+    phase1_ref -> mcp_drain   [style=dashed, color="#1f9494", penwidth=1.4,
+                               constraint=false, arrowsize=0.6];
+
+    // Safety overlay attached by dashed line to pipeline cluster
+    safety -> pl_recur [style=dashed, color="#e06070", penwidth=1.6,
+                        arrowhead=none, constraint=false];
+
+}

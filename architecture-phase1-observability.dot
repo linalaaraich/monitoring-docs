@@ -1,0 +1,164 @@
+digraph Phase1Observability {
+    // === Graph-level styling ===
+    rankdir=TB;
+    bgcolor="#ffffff";
+    fontname="Helvetica";
+    fontsize=20;
+    labelloc="t";
+    label=<<B>CIRES Observability Platform &mdash; Phase 1: Observability foundation</B><BR/><FONT POINT-SIZE="14">Application instrumentation &rarr; time-series storage &rarr; operator dashboards + alerting</FONT>>;
+    fontcolor="#0f1117";
+    pad=0.5;
+    nodesep=0.55;
+    ranksep=0.85;
+    splines=spline;
+    compound=true;
+
+    // === Defaults ===
+    node [shape=box, style="rounded,filled", penwidth=1.8,
+          fontname="Helvetica", fontsize=16, fontcolor="#0f1117",
+          color="#3a3f52", margin="0.28,0.18"];
+    edge [color="#3a3f52", penwidth=1.4, fontname="Helvetica",
+          fontsize=12, fontcolor="#3a3f52", arrowsize=0.9];
+
+    // ===========================================================
+    // CLUSTER 1 — APPLICATION (blue)
+    // ===========================================================
+    subgraph cluster_app {
+        label=<<B>Application &mdash; react-springboot-mysql on k3s</B>>;
+        labeljust="c";
+        labelloc="t";
+        fontsize=15;
+        fontcolor="#2d6fa0";
+        style="rounded,filled";
+        fillcolor="#eaf3fb";
+        color="#4ea8de";
+        penwidth=2;
+        margin=20;
+
+        kong [label="kong\napi gateway",
+              fillcolor="#cbe4f5", color="#4ea8de"];
+
+        app_react   [label="react\nfrontend",     fillcolor="#e9f4fb", color="#4ea8de"];
+        app_spring  [label="spring-boot\nbackend", fillcolor="#e9f4fb", color="#4ea8de"];
+        app_mysql   [label="mysql\ndb",           fillcolor="#e9f4fb", color="#4ea8de"];
+
+        // Keep app tier on one row, kong below as the network layer
+        { rank=same; app_react; app_spring; app_mysql; }
+
+        app_react  -> kong [style=invis];
+        app_spring -> kong [style=invis];
+        app_mysql  -> kong [style=invis];
+    }
+
+    // ===========================================================
+    // CLUSTER 2 — TELEMETRY COLLECTORS (green)
+    // ===========================================================
+    subgraph cluster_collect {
+        label=<<B>Telemetry collectors</B>>;
+        labeljust="c";
+        labelloc="t";
+        fontsize=15;
+        fontcolor="#3b9e4f";
+        style="rounded,filled";
+        fillcolor="#ecf8ee";
+        color="#6bcf7f";
+        penwidth=2;
+        margin=20;
+
+        col_node   [label="node-exporter\n(host metrics)",
+                    fillcolor="#dff3e3", color="#6bcf7f"];
+        col_otel   [label="OTel Collector\n(spans + JVM metrics)",
+                    fillcolor="#dff3e3", color="#6bcf7f"];
+        col_loki   [label="Promtail / Loki agent\n(logs)",
+                    fillcolor="#dff3e3", color="#6bcf7f"];
+
+        { rank=same; col_node; col_otel; col_loki; }
+    }
+
+    // ===========================================================
+    // CLUSTER 3 — STORAGE (cyan)
+    // ===========================================================
+    subgraph cluster_storage {
+        label=<<B>Storage &mdash; time-series + object stores</B>>;
+        labeljust="c";
+        labelloc="t";
+        fontsize=15;
+        fontcolor="#1f9494";
+        style="rounded,filled";
+        fillcolor="#e8f9f9";
+        color="#40d0d0";
+        penwidth=2;
+        margin=20;
+
+        st_prom   [label="Prometheus\n(metrics, 15-day retention)",
+                   fillcolor="#d3f1f1", color="#40d0d0"];
+        st_loki   [label="Loki\n(logs, 7-day retention)",
+                   fillcolor="#d3f1f1", color="#40d0d0"];
+        st_jaeger [label="Jaeger\n(traces, ~24h)",
+                   fillcolor="#d3f1f1", color="#40d0d0"];
+        st_drain  [label="Drain3 state store\n(log-template clusters)",
+                   fillcolor="#d3f1f1", color="#40d0d0"];
+
+        { rank=same; st_prom; st_loki; st_jaeger; st_drain; }
+    }
+
+    // ===========================================================
+    // CLUSTER 4 — SURFACING / OPERATOR UX (orange)
+    // ===========================================================
+    subgraph cluster_surface {
+        label=<<B>Surfacing &mdash; operator UX</B>>;
+        labeljust="c";
+        labelloc="t";
+        fontsize=15;
+        fontcolor="#c97a2a";
+        style="rounded,filled";
+        fillcolor="#fdf2e6";
+        color="#f0a050";
+        penwidth=2;
+        margin=20;
+
+        graf_dash [label="Grafana dashboards\n(host / app / latency)",
+                   fillcolor="#fbe3cb", color="#f0a050"];
+        graf_alerts [label=<<B>Grafana alerting rules</B><BR/>HighCpuUsage<BR/>HighMemoryUsage<BR/>HighP95Latency<BR/>HighErrorRate<BR/>Drain3AnomalyDetected>,
+                     fillcolor="#fbe3cb", color="#f0a050"];
+
+        { rank=same; graf_dash; graf_alerts; }
+    }
+
+    // ===========================================================
+    // OUTPUT EDGE — webhook fired off the diagram
+    // ===========================================================
+    webhook_out [label=<<B>Webhook fired</B><BR/>POST /webhook/grafana<BR/><FONT POINT-SIZE="11" COLOR="#8890a0">&rarr; to AI triage (see Phase 2)</FONT>>,
+                 shape=cds, fillcolor="#fff5e6", color="#f0a050", penwidth=2.2,
+                 fontsize=14, margin="0.32,0.20"];
+
+    // ===========================================================
+    // EDGES
+    // ===========================================================
+
+    // App -> kong (network)
+    app_react  -> kong [constraint=false, style=dotted, color="#8890a0", arrowsize=0.7];
+    app_spring -> kong [constraint=false, style=dotted, color="#8890a0", arrowsize=0.7];
+    app_mysql  -> kong [constraint=false, style=dotted, color="#8890a0", arrowsize=0.7];
+
+    // App cluster -> collectors (use anchor edges)
+    kong       -> col_node   [ltail=cluster_app, lhead=cluster_collect,
+                               label=" host + app telemetry", fontsize=12];
+
+    // Collectors -> Storage (one edge each, primary path)
+    col_node -> st_prom;
+    col_otel -> st_prom    [label=" metrics", fontsize=11];
+    col_otel -> st_jaeger  [label=" traces",  fontsize=11];
+    col_loki -> st_loki;
+    col_loki -> st_drain   [label=" template extract", fontsize=11, style=dashed];
+
+    // Storage -> Grafana surfacing
+    st_prom   -> graf_dash;
+    st_loki   -> graf_dash;
+    st_jaeger -> graf_dash;
+    st_drain  -> graf_alerts [style=dashed, label=" anomalies", fontsize=11];
+    st_prom   -> graf_alerts;
+
+    // Alerts -> webhook out
+    graf_alerts -> webhook_out [penwidth=2.2, color="#c97a2a", arrowsize=1.1];
+}
