@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Designer Prompt — Architecture (Phase 1 + Phase 2) — CIRES Observability Platform</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --bg-soft: #13151e;
+    --card: #1a1d27;
+    --card-alt: #1e2230;
+    --border: #2a2d3a;
+    --border-hi: #3a3f52;
+    --text: #e4e6ee;
+    --text-soft: #c0c5d0;
+    --muted: #8890a0;
+    --accent-blue: #4ea8de;
+    --accent-green: #6bcf7f;
+    --accent-orange: #f0a050;
+    --accent-purple: #b07ee8;
+    --accent-red: #e06070;
+    --accent-cyan: #40d0d0;
+    --accent-yellow: #e0d060;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { font-family:'Inter','Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); line-height:1.65; font-size:15px; -webkit-font-smoothing:antialiased; }
+  code, pre, .mono { font-family:'JetBrains Mono','Fira Code',ui-monospace,monospace; font-size:0.88em; }
+
+  .topnav { display:flex; align-items:center; gap:12px; padding:14px 40px; background:var(--bg-soft); border-bottom:1px solid var(--border); flex-wrap:wrap; }
+  .topnav span.nav-label { color:var(--muted); font-size:13px; font-weight:600; margin-right:4px; }
+  .navlink { display:inline-flex; align-items:center; gap:6px; padding:7px 14px; border-radius:8px; font-size:13px; font-weight:600; text-decoration:none; border:1px solid; transition:background .2s, transform .15s; }
+  .navlink:hover { transform:translateY(-1px); }
+  .navlink-home { color:var(--text); border-color:var(--border); background:var(--card); }
+  .navlink-log { color:var(--accent-orange); border-color:rgba(240,160,80,.4); background:rgba(240,160,80,.08); }
+  .navlink-sys { color:var(--accent-cyan); border-color:rgba(64,208,208,.4); background:rgba(64,208,208,.08); }
+  .navlink-triage { color:var(--accent-purple); border-color:rgba(176,126,232,.4); background:rgba(176,126,232,.12); }
+  .navlink-design { color:var(--accent-purple); border-color:rgba(176,126,232,.4); background:rgba(176,126,232,.12); }
+
+  .hero { padding:56px 40px 40px; border-bottom:1px solid var(--border); background:linear-gradient(180deg, #13151e 0%, var(--bg) 100%); }
+  .hero .inner { max-width:1040px; margin:0 auto; }
+  .hero .eyebrow { font-size:11px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:var(--accent-purple); margin-bottom:12px; }
+  .hero h1 { font-size:36px; font-weight:800; letter-spacing:-.5px; margin-bottom:14px; line-height:1.2; }
+  .hero h1 span.accent { color:var(--accent-purple); }
+  .hero p.lead { font-size:16px; color:var(--text-soft); max-width:820px; line-height:1.7; margin-bottom:20px; }
+  .hero .pill-row { display:flex; gap:8px; flex-wrap:wrap; }
+  .pill { font-size:11px; font-weight:600; padding:4px 10px; border-radius:12px; border:1px solid; letter-spacing:.2px; }
+  .pill.red { color:var(--accent-red); border-color:rgba(224,96,112,.35); background:rgba(224,96,112,.08); }
+  .pill.orange { color:var(--accent-orange); border-color:rgba(240,160,80,.35); background:rgba(240,160,80,.08); }
+  .pill.green { color:var(--accent-green); border-color:rgba(107,207,127,.35); background:rgba(107,207,127,.08); }
+  .pill.blue { color:var(--accent-blue); border-color:rgba(78,168,222,.35); background:rgba(78,168,222,.08); }
+  .pill.purple { color:var(--accent-purple); border-color:rgba(176,126,232,.35); background:rgba(176,126,232,.08); }
+  .pill.cyan { color:var(--accent-cyan); border-color:rgba(64,208,208,.35); background:rgba(64,208,208,.08); }
+
+  .layout { max-width:1040px; margin:0 auto; padding:32px 40px 80px; }
+  .content h2 { font-size:24px; font-weight:700; margin:40px 0 14px; letter-spacing:-.3px; scroll-margin-top:24px; padding-bottom:8px; border-bottom:1px solid var(--border); }
+  .content h2:first-child { margin-top:0; }
+  .content h3 { font-size:17px; font-weight:700; margin:24px 0 8px; color:var(--text); }
+  .content h4 { font-size:13px; font-weight:700; margin:14px 0 4px; letter-spacing:1px; text-transform:uppercase; color:var(--muted); }
+  .content p { margin-bottom:14px; color:var(--text-soft); }
+  .content p strong { color:var(--text); font-weight:600; }
+  .content ul, .content ol { margin:8px 0 16px 24px; color:var(--text-soft); }
+  .content li { margin-bottom:6px; }
+  .content code { background:var(--card); border:1px solid var(--border); padding:1px 6px; border-radius:4px; font-size:0.85em; color:var(--accent-cyan); }
+  .content pre { background:var(--card); border:1px solid var(--border); padding:14px 16px; border-radius:8px; margin:12px 0 18px; overflow-x:auto; line-height:1.5; font-size:12.5px; }
+  .content pre code { background:none; border:none; padding:0; color:var(--text); font-size:1em; }
+  .content a { color:var(--accent-blue); text-decoration:none; border-bottom:1px dashed rgba(78,168,222,.35); }
+  .content a:hover { border-bottom-style:solid; }
+
+  .callout { border-left:3px solid; border-radius:0 8px 8px 0; padding:14px 18px; margin:16px 0; background:var(--card); }
+  .callout.note { border-color:var(--accent-blue); }
+  .callout.tip { border-color:var(--accent-green); }
+  .callout.warn { border-color:var(--accent-orange); }
+  .callout.critical { border-color:var(--accent-red); }
+  .callout-label { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; margin-bottom:6px; }
+  .callout.note .callout-label { color:var(--accent-blue); }
+  .callout.tip .callout-label { color:var(--accent-green); }
+  .callout.warn .callout-label { color:var(--accent-orange); }
+  .callout.critical .callout-label { color:var(--accent-red); }
+
+  .paste-block { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:18px 22px; overflow-x:auto; line-height:1.55; font-size:12.5px; color:var(--text); white-space:pre-wrap; word-wrap:break-word; font-family:'Inter','Segoe UI',system-ui,sans-serif; }
+  .paste-block strong { color:var(--accent-cyan); font-weight:700; }
+</style>
+</head>
+<body>
+
+<nav class="topnav">
+  <span class="nav-label">CIRES Observability Platform</span>
+  <a href="index.html" class="navlink navlink-home">🏠 Home</a>
+  <a href="decisions-log.html" class="navlink navlink-log">📝 Decisions Log</a>
+  <a href="system-explained.html" class="navlink navlink-sys">🔬 System Explained</a>
+  <a href="triage-service.html" class="navlink navlink-triage">🧠 Triage Service</a>
+  <a href="design-prompt.html" class="navlink navlink-design">🎨 UX Design Prompt</a>
+</nav>
+
+
+<section class="hero">
+  <div class="inner">
+    <div class="eyebrow">FYP report figures · Claude Designer briefing</div>
+    <h1>Claude Designer Prompt — <span class="accent">Architecture (Phase 1 + Phase 2)</span></h1>
+    <p class="lead">
+      Paste-ready brief for designer-quality A4 figures of the CIRES Observability
+      Platform architecture, split across <strong>two diagrams</strong> for clarity: the
+      Phase 1 observability foundation, and the Phase 2 AI-triage layer that
+      sits on top of it. Destination is Lina's FYP final report — academic
+      jury + supervisor audience, printed at A4 portrait, must be visually
+      striking and legible.
+    </p>
+    <p class="lead" style="margin-bottom:0;">
+      <strong>How to use:</strong> open Claude Designer (claude.ai with the design
+      skill on the Max plan), paste the prompt block below verbatim, then in
+      the <em>next</em> message attach reference screenshots — the existing
+      <a href="system-architecture.png" style="color:var(--accent-cyan);">system-architecture.png</a>,
+      <a href="hallucination-firewall.png" style="color:var(--accent-cyan);">hallucination-firewall.png</a>,
+      <a href="triage-pipeline.png" style="color:var(--accent-cyan);">triage-pipeline.png</a> — so
+      the designer knows the canonical components + flow that need to be
+      preserved (and the cramped layout we're moving away from). Claude
+      Designer retains context within the conversation; follow-ups stay in
+      the same chat.
+    </p>
+    <div class="pill-row" style="margin-top:20px;">
+      <span class="pill purple">2 diagrams</span>
+      <span class="pill green">A4 portrait, 300 DPI</span>
+      <span class="pill blue">Hybrid light bg + dashboard accents</span>
+      <span class="pill orange">Fallback for FYP report</span>
+    </div>
+  </div>
+</section>
+
+<div class="layout">
+<section class="content">
+
+<h3 id="how-to-use">How to use this prompt</h3>
+
+<p>
+This is the <strong>third fallback option</strong> alongside two parallel agents
+producing graphviz + matplotlib variants of the same two diagrams. Claude
+Designer (the design-skill version of Claude) produces magazine-quality
+figures when given the right briefing — use this when the
+deterministic-tooling output is too cramped or too plain to print at A4
+in the report. The brief below is built from every piece of canonical
+context the platform has captured: the
+<a href="solution-brief.html#be-shape">§13 backend roadmap</a>,
+<a href="solution-brief.html#s4-goal">§14 Sprint 4 day-by-day</a>,
+<a href="system-explained.html">system-explained.html</a> architecture
+story, and the existing <code>.dot</code> sources for the three diagrams
+the platform already ships (<code>system-architecture.dot</code>,
+<code>hallucination-firewall.dot</code>, <code>triage-pipeline.dot</code>).
+</p>
+
+<div class="callout note">
+  <div class="callout-label">Tip — what to attach in the next message</div>
+  <p>
+    After pasting the block below, drag in the three current PNG diagrams
+    as reference (so the designer can see the components + flow that have
+    to be preserved, and the cramped layout to improve on):
+    <strong>1.</strong> <code>system-architecture.png</code> — the original
+    combined diagram (now considered too cramped for A4),
+    <strong>2.</strong> <code>hallucination-firewall.png</code> — the
+    MCP-only invariant figure,
+    <strong>3.</strong> <code>triage-pipeline.png</code> — the alert journey.
+    If the first pass undershoots, ask follow-ups in the same chat — don't
+    restart.
+  </p>
+</div>
+
+<h3 id="paste-block">Paste-ready brief</h3>
+
+<pre class="paste-block">
+You are designing TWO architecture diagrams for a Final Year Project (FYP) report at a Moroccan engineering school. The project is the CIRES Observability Platform — an AI-assisted root-cause-analysis layer running in production at CIRES Technologies (Tanger Med). The diagrams will be printed in the report, shown to an academic jury, and used in the supervisor defence. They must be visually striking, technically accurate, and printable at A4 portrait.
+
+I will attach reference screenshots of the current diagrams (system-architecture.png, hallucination-firewall.png, triage-pipeline.png) in the next message so you can see the components + flow that need to be preserved — and the cramped layout we're moving away from.
+
+================================================================
+SECTION 1 — CONTEXT &amp; GOAL
+================================================================
+
+The diagrams are for the FYP final report. Audience: academic jury + supervisor (a working SRE/DevOps lead). They must:
+
+  - Fit cleanly on A4 portrait (210 × 297 mm / 8.27 × 11.69 in) — one page per diagram, full bleed acceptable but a 12 mm margin preferred for printing
+  - Be printable AND visually striking on screen
+  - Read at first glance — the jury will spend 30 seconds on each figure during the defence; they need the architecture story to land in that time
+  - Be split into TWO diagrams for clarity (the original combined diagram tried to show everything at once and is too cramped to read at A4)
+
+The two diagrams:
+  DIAGRAM 1 — Phase 1: Observability foundation (the metrics/logs/traces stack)
+  DIAGRAM 2 — Phase 2: AI triage layer (the FYP contribution that sits ON TOP of Phase 1)
+
+================================================================
+SECTION 2 — BRAND &amp; VISUAL STYLE
+================================================================
+
+HYBRID style — light/off-white background (so they print cleanly on white paper) with the dashboard's accent colours for component categories. This matches the visual language already established on linalaaraich.github.io/monitoring-docs/ — specifically the sprint4-status.html and solution-brief.html surfaces.
+
+Colour palette (use these exact hex values for component categories):
+  #4ea8de  blue       — sources, ingress, edges into the system
+  #6bcf7f  green      — MCP layer, healthy/success states
+  #40d0d0  cyan       — terminal/storage states, terminal outputs
+  #f0a050  orange     — pipeline stages, transformations
+  #b07ee8  purple     — AI / LLM components
+  #e06070  red        — safety boundary, hallucination firewall, clamps
+
+Background: white (#ffffff) or near-white (#fafafa) for the page; subgraph clusters may have a very pale tinted fill (e.g. #fff5f5 for the MCP firewall cluster, matching hallucination-firewall.dot).
+
+Typography:
+  - Sans-serif throughout (Helvetica, Inter, or similar)
+  - Component labels: 11-13 pt, bold
+  - Subgraph cluster labels: 12-14 pt, semibold
+  - Annotations / captions: 9-10 pt, regular, grey (#3a3f52)
+  - Generous whitespace between layers — the diagram should breathe; no edge crossings if avoidable
+  - Clear visual hierarchy: layer titles &gt; component labels &gt; annotations
+
+Component shape language:
+  - Rounded rectangles for components (8 px corner radius)
+  - 1.5 px borders, 100% colour
+  - Fills at full saturation for primary components; pastel tinted fills (~15% opacity) for "planned" / "future" components, with dashed borders
+  - Arrows: solid 1.2 px for primary data flow; dashed for "planned" or "cross-phase" edges
+  - Subgraph clusters: rounded dashed outline, 12-14 px margin, label top-left
+
+REFERENCE: match the visual language of sprint4-status.html and solution-brief.html on linalaaraich.github.io/monitoring-docs/ — same pill style, same accent palette, same generous-whitespace feel.
+
+================================================================
+SECTION 3 — DIAGRAM 1: PHASE 1 — OBSERVABILITY FOUNDATION
+================================================================
+
+Title at top: "Phase 1 — Observability Foundation"
+Subtitle (smaller, grey): "The metrics, logs, and traces stack that feeds the AI triage layer"
+
+LAYOUT: top-to-bottom (TB) flow, A4 portrait. Five horizontal layers:
+
+  LAYER 1 (top) — APPLICATION (blue cluster)
+    - react-springboot-mysql application on k3s (single rounded box, labelled "react-springboot-mysql on k3s")
+    - kong gateway (single rounded box, labelled "Kong API Gateway")
+    Note (10 pt grey, below the cluster): "Instrumented enough to feed the stack — the application is not the subject of the platform; it's the workload being observed."
+
+  LAYER 2 — TELEMETRY COLLECTORS (blue cluster)
+    - node-exporter (DaemonSet on k3s)
+    - OTel Collector (filelog + OTLP receivers)
+    - Promtail (Loki shipping)
+
+  LAYER 3 — STORAGE / BACKENDS (cyan cluster)
+    - Prometheus (metrics TSDB)
+    - Loki (log aggregation)
+    - Jaeger (distributed traces)
+    - Drain3 state (log-template fingerprints — embedded in triage service)
+
+  LAYER 4 — SURFACING (orange cluster)
+    - Grafana (unified dashboards + alerting rules — single binary, no Alertmanager)
+    - Alert rules (HighCpuUsage, HighKongP95Latency, OOMKill, LokiIngestionRateLow, etc.)
+    Visual emphasis: the alert rules are the BRIDGE to Phase 2. Show them as a slightly highlighted sub-box.
+
+  LAYER 5 (bottom) — OUTPUT EDGE (purple — pointing to Phase 2)
+    - Single labelled arrow exiting downward: "→ Webhook to Phase 2 AI triage"
+    - This is the "handoff" — show it visually as a clear outbound edge, like the diagram is a funnel pouring into the next page
+
+EDGES (data flow):
+  - node-exporter → Prometheus (scrape)
+  - OTel Collector → Loki (logs) AND → Jaeger (traces)
+  - Promtail → Loki
+  - Application + Kong → OTel Collector (instrumented)
+  - Prometheus + Loki → Grafana (datasources)
+  - Grafana alerting rules → Webhook (the outbound edge)
+
+VISUAL EMPHASIS for the jury:
+  - The observability stack is mature + standard (Prometheus/Loki/Jaeger/Grafana) — the jury should recognise these tools immediately
+  - The application is just instrumented enough to feed the stack — it's the workload, not the subject
+  - The alert rules at the bottom of Grafana are the bridge to Phase 2 — visually they should look like an "exit point"
+
+A4 PORTRAIT FIT: 210 × 297 mm with ~12 mm safety margin. The diagram should fill the page without feeling cramped. Five horizontal layers means each layer gets roughly 50 mm of vertical space — plenty of room for clear component boxes and short annotations.
+
+================================================================
+SECTION 4 — DIAGRAM 2: PHASE 2 — AI TRIAGE LAYER (the FYP contribution)
+================================================================
+
+Title at top: "Phase 2 — AI Triage Layer"
+Subtitle (smaller, grey): "Five-stage pipeline + MCP-only data access + LLM verdict, on top of Phase 1"
+
+LAYOUT: top-to-bottom (TB) flow, A4 portrait. Five horizontal layers:
+
+  LAYER 1 (top) — TRIGGERS (blue cluster)
+    - Grafana webhook (the handoff from Phase 1 — show this as the entry edge from above, mirroring the Phase 1 exit)
+    - Drain3 anomaly producer (log-template novelty self-fires)
+    - Manual webhook (operator-initiated triage)
+
+  LAYER 2 — TRIAGE PIPELINE (orange cluster — five stages in sequence)
+    Five components in a horizontal row OR a vertical sequence (whichever lays out better at A4):
+      1. Dedup (DA-5 family + DA-4 content-hash fingerprinting)
+      2. Suppression (Layer 2 — pre-LLM gate)
+      3. Recurrence Gate (US-5.8 — N-fires-in-window check)
+      4. Context Gather (fans out to MCP layer)
+      5. Drain3 Annotate (log-template tagging)
+    Visual emphasis: each stage is a gate that either lets the alert through or terminates early — show this with small "early-exit" arrows on stages 1-3 pointing to "Persist + END" terminals (cyan).
+
+  LAYER 3 — MCP LAYER — HALLUCINATION FIREWALL (green cluster with RED DASHED outline)
+    THIS IS THE SAFETY STORY. Render this layer with:
+      - A bright RED DASHED 2.5 px outline around the entire cluster
+      - Pale red tinted fill (#fff5f5) inside the cluster
+      - Cluster label in red (#e06070), 13 pt bold: "MCP-only data access — hallucination firewall"
+    Components inside (green fill, #6bcf7f):
+      - Prometheus MCP
+      - Loki MCP
+      - Jaeger MCP
+      - Drain3 MCP
+      - RCA-history MCP
+      - k8s/Rancher MCP (PLANNED — render with dashed border, pastel fill, grey label "Sprint 5, planned")
+    Annotation BELOW the cluster (10 pt grey): "Every byte the LLM sees came through an MCP. No exceptions. Eliminates the hallucination path."
+
+  LAYER 4 — LLM CORE (purple cluster)
+    - Ollama qwen2.5:14b primary / 7b fallback on A10G GPU (single large box, labelled clearly)
+    - Bounded-agency action clamps (red box, white text — this is the safety layer below the LLM)
+    Visual emphasis: the clamp is positioned BETWEEN the LLM and the outputs — show it as a gate the LLM output has to pass through.
+
+  LAYER 5 (bottom) — OUTPUTS
+    - Email notifier (blue)
+    - /dashboard/v2 (blue)
+    - RCA SQLite store (cyan — terminal/storage)
+    - Operator feedback (cyan — closes the loop)
+
+CROSS-PHASE EDGE (the integration story):
+  - A DASHED back-arrow from the MCP layer (LAYER 3) curving up to Phase 1's storage layer, labelled "reads back from Phase 1 stores (metrics / logs / traces / drain3 state)"
+  - This makes the integration visible — the AI layer doesn't have its own data sources; it reads back through MCPs from the observability stack on the previous page
+
+SAFETY OVERLAY ANNOTATIONS (callouts, top-right or floating beside the relevant layer):
+  - "Hallucination firewall" callout pointing at LAYER 3 MCP cluster
+  - "Bounded-agency action clamps" callout pointing at the clamp box in LAYER 4
+  - Both rendered as small badges with red border + red text on white fill, like a margin note
+
+A4 PORTRAIT FIT: 210 × 297 mm with ~12 mm safety margin. Five layers, same as Diagram 1.
+
+================================================================
+SECTION 5 — WHAT TO HIGHLIGHT (jury-facing narrative beats)
+================================================================
+
+The diagrams must communicate these four narrative beats visually — without needing the report's prose to explain them:
+
+  1. "MCP boundary is the safety story." The red dashed outline around the MCP cluster in Diagram 2 should be the most visually prominent element on the page. Every viewer must understand at first glance: this is a controlled boundary, not a casual abstraction.
+
+  2. "AI layer sits ON TOP of existing observability — not replacing it." The cross-phase dashed back-arrow from MCPs to Phase 1 storage is the visual proof of integration. The two diagrams stack vertically in the report; the back-arrow makes them feel like one system.
+
+  3. "Pipeline stages compress operator cognitive load (one row, one verdict)." The five-stage pipeline in Diagram 2 with early-exit terminals shows the gating logic — most alerts get absorbed before they ever reach the LLM. This is the operator-cognitive-load story.
+
+  4. "Real numbers anchor it." Where appropriate, embed real production numbers as small annotations (not full labels):
+     - "median 38 s end-to-end" (next to the LLM)
+     - "285/285 tests" (corner annotation, Diagram 2)
+     - "26 unique fingerprints from 288 raw rows" (next to Dedup stage)
+     - "14 archetypes pre-injected" (next to Context Gather)
+
+================================================================
+SECTION 6 — DELIVERABLES EXPECTED
+================================================================
+
+  1. Two final figures, one per diagram:
+     - SVG file (vector, infinitely scalable)
+     - PNG export at 300 DPI, A4 portrait dimensions
+     - Both files at the same colour palette and visual style — they should feel like a pair
+
+  2. Source / editable format so I can iterate later:
+     - Figma file (preferred), OR
+     - Excalidraw export, OR
+     - Layered SVG with named groups for each cluster
+
+  3. One paragraph caption per diagram (~3-5 sentences), written in academic-report voice, that I can paste directly into the report below the figure. The caption should:
+     - Name what the diagram shows
+     - Identify the 2-3 most important elements (e.g. "the red dashed MCP boundary is the hallucination firewall")
+     - Connect the diagram to the next/previous section of the report
+
+================================================================
+SECTION 7 — HARD RULES
+================================================================
+
+  - HYBRID STYLE ONLY: light/off-white background + dashboard accent colours. NOT pure dark theme (it won't print cleanly), NOT pure flat marketing illustration (it's a technical figure).
+
+  - NO ICONS THAT CONFLICT WITH REALITY: do not invent components, services, or arrows that aren't in the spec above. If you're unsure whether something belongs, leave it out and ask in chat.
+
+  - EVERY LABEL MUST MATCH CANONICAL NAMES: use the exact strings from the spec — "Ollama qwen2.5:14b" not "LLM model", "Drain3 MCP" not "Pattern MCP", "node-exporter" not "metrics agent", "Grafana Alerting" not "Alert system". I will spot mismatches and bounce the deliverable.
+
+  - NO MARKETING FLUFF: no taglines, no decorative elements, no "Powered by AI" badges. This is a technical figure for an academic report. The only text on the figure is the title, subtitle, layer labels, component labels, and the few annotations specified in Section 5.
+
+  - PRINTABLE AT A4: assume the figure will be printed in black-and-white as a fallback for some report copies. Colour categories must remain distinguishable in greyscale — use 4-5 distinct value levels (very dark, dark, medium, light, very light) for the cluster fills so the hierarchy survives greyscale conversion.
+
+  - ONE PAGE PER DIAGRAM: do not combine the two diagrams onto one page. The whole point of splitting them is to give each enough room to breathe.
+
+================================================================
+END OF BRIEF — REFERENCE MATERIAL ATTACHED IN NEXT MESSAGE
+================================================================
+
+I'll paste in the next message:
+  - system-architecture.png — the original combined diagram (now considered too cramped for A4)
+  - hallucination-firewall.png — the MCP-only invariant figure (the red dashed boundary you'll emulate in Diagram 2)
+  - triage-pipeline.png — the alert journey (the five pipeline stages you'll render in Diagram 2)
+
+If you have any clarifying questions before producing the figures, ask them first. Otherwise, produce both diagrams + their captions.
+</pre>
+
+<p>
+  When the figures come back: drop them into the FYP report's
+  <code>report/figures/</code> directory, reference them in the body text
+  next to the architecture chapter, and use the supplied captions
+  verbatim. If the supervisor wants edits, paste them back into the same
+  Claude Designer chat — Claude Designer retains context within the
+  conversation, so revisions stay coherent.
+</p>
+
+
+<p style="margin-top:40px; padding-top:20px; border-top:1px solid var(--border); font-size:13px; color:var(--muted);">
+Created 2026-05-25. Third fallback alongside the graphviz + matplotlib agent
+outputs for the same two diagrams. Source materials:
+<a href="solution-brief.html#be-shape">solution-brief.html §13</a>,
+<a href="solution-brief.html#s4-goal">§14</a>,
+<a href="system-explained.html">system-explained.html</a>,
+plus the canonical <code>.dot</code> sources for
+<a href="system-architecture.png">system-architecture</a>,
+<a href="hallucination-firewall.png">hallucination-firewall</a>, and
+<a href="triage-pipeline.png">triage-pipeline</a>. Update this page if the
+component list changes; the prompt should remain a faithful brief, not
+drift from the source.
+</p>
+
+</section>
+</div>
+
+</body>
+</html>
