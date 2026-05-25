@@ -129,8 +129,13 @@ This dissertation reports on the design and implementation of the
 observability stack augmented with an AI-driven Root-Cause Analysis
 (RCA) layer.  The platform was built between February and May 2026 at
 CIRES Technologies (Tanger Med, Digital Factory Observability Service)
-across four planned sprints.  Sprints 1--3 were completed during the
-project period; Sprint 4 is documented as scoped future work.
+across a phased sprint sequence.  Sprints 0--3 were completed during
+the project period; Sprint 4 is currently in progress (eight stories
+shipped on its first operational day) and Sprint 5's scope is
+captured in chapter~\ref{ch:sprint5} as a forward-looking plan that
+extends the platform from a single-application test bed to a
+multi-application microservice scenario with hierarchical anomaly
+detection.
 
 The work addresses an operational problem surfaced during the discovery
 phase: incidents in the target production environment were being
@@ -142,7 +147,13 @@ provisioned by Ansible on AWS, with a FastAPI-based AI triage service
 on top that consumes alerts via Grafana webhooks, gathers cross-pillar
 context through five Model-Context-Protocol (MCP) bridge servers, and
 produces structured root-cause analyses with a local Large Language
-Model (\texttt{qwen2.5:7b-instruct} on Ollama).
+Model.  The model layer migrated on 2026-05-21 from
+\texttt{qwen2.5:7b-instruct} on a Tailscale-attached laptop GPU to
+\texttt{qwen2.5:14b-instruct} on a dedicated AWS \texttt{g5.xlarge}
+(A10G) instance in \texttt{us-west-2}, gated by a Lambda autoshutoff
+gateway; the laptop runner is retained as failover.  Median
+end-to-end pipeline latency dropped from roughly five minutes on the
+laptop runner to thirty-eight seconds on the cloud GPU host.
 
 The implementation introduces several novel mechanisms to keep the
 LLM output operationally trustworthy: an exemplar library of fourteen
@@ -161,11 +172,17 @@ The dissertation presents the architecture, sprint-by-sprint
 implementation history, an in-depth case study of the
 \texttt{0b215ef3} incident that drove the hallucination-firewall epic,
 an evaluation against a 4-axis RCA quality rubric, and a catalogue of
-the twenty-three durable design decisions (D1--D23) recorded during
-construction.  The final chapter scopes future work, including
-iterative agentic gather, curated retrieval-augmented generation
-fed from operator feedback, and a labelled chaos-test corpus for
-regression-grade quality measurement.
+the twenty-five durable design decisions (D1--D25, the final two
+recording the GPU migration and its co-shipped access lockdown)
+recorded during construction.  The triage-service test suite stood
+at \texttt{296/296} green on Sprint~4 day~1 (2026-05-25), the
+MCP-only invariant lint is clean, and the operational runner has
+been continuously up across both runner generations.  The final two
+chapters scope the Sprint~4 work currently in progress and the
+Sprint~5 plan, including iterative agentic gather, curated retrieval-
+augmented generation fed from operator feedback, a multi-application
+microservice test bed, and a three-tier hierarchical drain3
+anomaly-detection design.
 
 \vspace{1em}
 \noindent\textbf{Keywords:} observability, SRE, AIOps, root-cause
@@ -301,10 +318,14 @@ Chapter~\ref{ch:case-study} provides an in-depth case study of the
 epic.  Chapter~\ref{ch:evaluation} evaluates the platform against a
 four-axis RCA quality rubric, the chaos-injection harness, and the
 recurring static and live audit cycles.  Chapter~\ref{ch:decisions}
-catalogues the twenty-three durable design decisions (D1--D23)
+catalogues the twenty-five durable design decisions (D1--D25)
 recorded during construction and discusses the three most consequential
-in depth.  Chapter~\ref{ch:future} scopes Sprint 4 and beyond, and
-chapter~\ref{ch:conclusion} concludes.
+in depth.  Chapter~\ref{ch:sprint4} documents the Sprint~4 work
+currently in progress (eight stories shipped on day~1, five
+scheduled across the remaining plan).  Chapter~\ref{ch:sprint5}
+presents the Sprint~5 plan and the longer-arc Sprint~6+ outlook,
+including the new \emph{hierarchical drain3 thresholds} design.
+Chapter~\ref{ch:conclusion} concludes.
 
 % =====================================================================
 \chapter{Background and Related Work}
@@ -497,8 +518,8 @@ project's hallucination firewall in its most general statement.
   \item \textbf{New Relic Applied Intelligence} (\emph{NRAI}) provides
         correlation and prioritisation across alerts.  Its
         ``incident intelligence'' graph is a useful precedent for the
-        Sprint-4 \emph{incident correlator} (US-5.2) that the CIRES
-        platform scopes as future work.
+        \emph{incident correlator} (US-5.2) that the CIRES platform
+        scopes for Sprint~5 EPIC14 (chapter~\ref{ch:sprint5}).
   \item \textbf{Honeycomb BubbleUp} surfaces feature-value
         distributions that distinguish a slow request population from a
         fast one --- an effective bottom-up tool but one that requires
@@ -694,6 +715,51 @@ existing alert routing.  If the AI layer is taken down, the platform
 degrades gracefully to a standard Grafana-alerting setup; the inverse
 is not true.
 
+Figures~\ref{fig:arch-phase1} and \ref{fig:arch-phase2} render the
+same architecture in component-graph form, split by the two
+deliverable phases of the project.  Phase~1 is the conventional
+observability foundation; Phase~2 is the AI-triage layer built on
+top of it.  The figures use a single colour vocabulary across both
+panels so that the eye can trace a signal from a service emission
+through to an escalation email; figure~\ref{fig:arch-combined}
+shows the combined view at slightly smaller scale for cross-
+reference.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{../architecture-phase1-observability.png}
+\caption{Phase~1 --- observability foundation.  Application
+instrumentation (Spring Boot, Kong, MySQL, k3s) flows into
+collectors (Prometheus scrape, Promtail, OTel Collector) and into
+storage (Prometheus TSDB, Loki, Jaeger).  Grafana surfaces the
+data and routes alerts through the unified-alerting webhook
+contact point.}
+\label{fig:arch-phase1}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{../architecture-phase2-ai-triage.png}
+\caption{Phase~2 --- AI triage layer.  Webhook receivers (Grafana,
+Drain3) feed the ten-stage pipeline; context gather fans out to the
+five MCP bridges; the LLM is invoked once on the pre-gathered
+evidence pack; the validators, confidence clamp and bounded-agency
+retry close the loop before the RCA is persisted, surfaced on the
+dashboard, and dispatched as an escalation email.}
+\label{fig:arch-phase2}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.95\textwidth]{../system-architecture.png}
+\caption{Complete platform overview (Phase~1 + Phase~2) at
+reduced scale, retained for cross-reference with the split panels
+above.  An alternative \emph{designer-style} rendering generated
+in matplotlib (\texttt{architecture-phase1-observability-v2.png})
+is held in the repository as a stylistic alternative.}
+\label{fig:arch-combined}
+\end{figure}
+
 \section{Runtime topology}
 
 After the Sprint~2 migration the platform's runtime topology
@@ -756,7 +822,24 @@ This pipeline is described stage-by-stage in chapters~\ref{ch:sprint2}
 and~\ref{ch:sprint3}; the validator and confidence-clamp mechanisms
 introduced in stages~6b and~6d are central to the project's
 hallucination-firewall theme and are treated at length in
-chapter~\ref{ch:sprint3}.
+chapter~\ref{ch:sprint3}.  Figure~\ref{fig:triage-pipeline} renders
+the same pipeline as a vertical flowchart with the dedup, suppression,
+recurrence-gate, LLM, validator and notification stages laid out
+top-to-bottom; the two off-ramps (suppressed early, dismissed by
+validator) are explicit in that view.
+
+\begin{figure}[p]
+\centering
+\includegraphics[height=0.85\textheight]{../triage-pipeline.png}
+\caption{The triage pipeline as a vertical flowchart.  An alert
+descends from the webhook receiver through dedup, suppression and
+recurrence-gate stages, into context gather, the LLM call, the
+validator stack, and the persistence + notification stages.  The
+two early off-ramps (suppressed pre-LLM, dismissed by validator) are
+the design's defences against wasted LLM calls and operationally
+untrustworthy output.}
+\label{fig:triage-pipeline}
+\end{figure}
 
 \section{The MCP-only data-access invariant}
 
@@ -782,6 +865,19 @@ Three breaches of the invariant were detected during the
 Epic-4 hallucination-firewall stories (S3-HF-04 / S3-HF-05 /
 S3-HF-06).  See chapters~\ref{ch:case-study} and~\ref{ch:sprint3}
 for the diagnosis and fix plan.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{../hallucination-firewall.png}
+\caption{The MCP-only data-access invariant rendered as a
+firewall diagram.  The LLM is shown only what arrives through one
+of the five MCP bridges; the dashed paths show the three direct
+in-process or direct-HTTP accesses that the
+\texttt{0b215ef3} incident exposed and that the Sprint-3
+hallucination-firewall epic closed.  The continuous-integration
+lint shipped as S3-HF-08 is the mechanical enforcement layer.}
+\label{fig:firewall}
+\end{figure}
 
 % =====================================================================
 \chapter{Sprint 1 --- Observability Foundation}
@@ -1752,11 +1848,26 @@ revising them.
 
 The next critical re-audit is scheduled for the close of Sprint~4,
 against the same 8-criterion rubric.  Sprint-4 acceptance: the
-pass rate for C4 (no-noise) is expected to move from 33\% to
-$\geq$80\%, C7 (\texttt{rca\_quality} accuracy) from 33\% to
-$\geq$70\%, C6 (non-templated diagnostic steps) from 17\% to
-$\geq$60\%.  If those three move, the structural-foundation /
-output-quality framing of this audit is empirically validated.
+pass rate for C4 (no-noise) is expected to move from 33\,\% to
+$\geq$\,80\,\%, C7 (\texttt{rca\_quality} accuracy) from 33\,\%
+to $\geq$\,70\,\%, C6 (non-templated diagnostic steps) from
+17\,\% to $\geq$\,60\,\%.  If those three move, the structural-
+foundation / output-quality framing of this audit is empirically
+validated.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{../operator-decision-matrix.png}
+\caption{The operator decision matrix (LLM verdict $\times$ RCA
+quality) $\to$ \texttt{action\_taken}, with the pre-LLM lane
+shown separately.  The matrix encodes the platform's response
+to every combination of confidence and quality signal; the
+pre-LLM lane (suppressed-by-fingerprint, suppressed-by-
+recurrence-gate) is rendered on a separate track because those
+decisions are made before any LLM call is dispatched and thus
+do not have a verdict to combine with the quality signal.}
+\label{fig:decision-matrix}
+\end{figure}
 
 \section{Chaos-run outcomes}
 
@@ -1788,7 +1899,7 @@ following the Epic-4 close-out commits.  The live audit (cron on
 \texttt{claude-controller}) silently stopped firing after 2026-04-29
 due to a controller-uptime issue; the cron was reinstalled on
 2026-05-19 and is now firing daily.  The 20-day gap is filed as
-resilience item R-1 (chapter~\ref{ch:future}).
+resilience item R-1 (chapter~\ref{ch:sprint5}, EPIC15 resilience tier).
 
 \section{Latency budget}
 
@@ -1917,6 +2028,14 @@ D22 & SESSION\_HANDOFF kept controller-local
 D23 & Per-service Drain3 template trees
     & Dictionary of \texttt{service $\to$ TemplateMiner};
       file persistence per service; migration of pre-split state. \\
+D24 & Cloud GPU runner --- bursty duty-cycle frame
+    & Move LLM onto AWS \texttt{g5.xlarge} (A10G) in
+      \texttt{us-west-2}; promote \texttt{qwen2.5:14b-instruct} to
+      primary; Lambda autoshutoff after 20\,min idle; CloudWatch
+      hard-cap \$50/month; laptop retained as failover. \\
+D25 & GPU host access lockdown
+    & Grafana webhook arrives via IP-allowlisted API Gateway; operator
+      paths via Tailscale only; public SSH disabled on the instance. \\
 \end{longtable}
 
 \section{Three decisions in depth}
@@ -1992,21 +2111,41 @@ without a measurement scaffold; this gating is a deliberate
 methodological choice.
 
 % =====================================================================
-\chapter{Future Work and Sprint 4 Roadmap}
-\label{ch:future}
+\chapter{Sprint 4 --- In Progress}
+\label{ch:sprint4}
 
-\section{Sprint 4 candidate ranking}
+Sprint~4 runs 2026-05-25 to 2026-06-05.  Day~1 (2026-05-25) is the
+day this chapter was written; eight stories shipped before the
+day's close, five remain scheduled across the rest of the plan,
+and one (SF-5) sits as a stretch goal in the second week.  The
+chapter is deliberately written in two halves --- \emph{shipped}
+and \emph{queued} --- so that the boundary between completed and
+planned work is visible at a glance, and so that subsequent
+re-reads of this report can be cross-checked against the public
+\texttt{sprint4-status.html} dashboard.
+
+The sprint's central narrative is \emph{operational maturity}.  The
+Sprint~3 close-out delivered a structurally sound system; Sprint~4's
+mandate is to harden the operator-facing surfaces against the
+classes of imperfection surfaced by the 2026-05-21 dashboard
+output audit and by the live operating week that followed the GPU
+migration.  No new structural epic is opened; the work is
+disproportionately small commits with high operator-visible
+impact.
+
+\section{Sprint 4 candidate ranking (carry-over)}
 
 The ranked list of Sprint~4 candidates as of 2026-05-19 is reproduced
-in table~\ref{tab:sprint4}.  The list integrates the twelve findings
-(P0--P11) from the 2026-05-19 real-load investigation with the
-existing carry-forward backlog items, ranked by
+in table~\ref{tab:sprint4} as the original planning artefact.  The
+list integrates the twelve findings (P0--P11) from the 2026-05-19
+real-load investigation with the existing carry-forward backlog
+items, ranked by
 $(\text{impact}\times\text{frequency})\div\text{effort}$.  The two
 original anchor items were \textbf{(P0+P9)} \emph{Latency bundle}
 --- the latency unblocker, scoped as a bundle of small fixes
 after the 2026-05-19 GPU-migration drop --- and \textbf{P2}
 \emph{Suppression-cascade fixes}.  The 2026-05-21 reversal of the
-GPU drop (\S\ref{sec:gpu-dropped}) shipped the underlying latency
+GPU drop (\S\ref{sec:gpu-shipped}) shipped the underlying latency
 fix directly, so the P0 bundle now ships as defensive margin
 rather than as the primary latency intervention; the
 output-quality dimensions (P1, P3, P11, P6) become the binding
@@ -2179,67 +2318,25 @@ deliver the largest perceived-quality improvement.  Items \#3\,+\,\#4
 are the ``the prose is now honest'' work.  Items \#5--\#11 close the
 false-positive escalation paths.  Items \#12--\#24 are wave 2.
 
-\section{Tier 3 --- iterative agentic gather}
+\section{Shipped before day~1 close (eight stories)}
 
-The Tier-3 design replaces the single-shot bounded-agency retry with
-a three-iteration tool-call loop, each iteration producing a partial
-hypothesis tree that the model expands on the next iteration.  The
-hypothesis tree is stored in the prompt as a structured section; at
-each iteration the model is asked to expand the most promising leaf,
-gather supporting evidence via a single MCP call, and update the
-tree.  Termination conditions: a confidence threshold reached, a
-maximum-depth limit hit, or a total latency budget exhausted.
+The eight stories below are shipped on the triage service repository
+with the test suite at \texttt{296/296} green and the triage
+container redeployed on \texttt{observability-gpu-uswest2} at
+09:11~UTC on day~1.  Each entry carries the commit identifier,
+the supporting tests, and the acceptance evidence that closed it.
 
-This is materially more permissive than the bounded-agency retry;
-the gating on S3-HF-09 reflects the project's view that shipping
-Tier~3 without an automated quality-regression gate would be
-imprudent.
-
-\section{Curated RAG retrieval (US-3.3 / US-3.4)}
-
-Once the Epic-2 operator feedback table has accumulated rated entries,
-curated retrieval becomes worth the engineering effort.  The design:
-a weekly job reads the feedback table for the last seven days; entries
-above a quality threshold are written as YAML to a
-\texttt{library\_curated.yaml} file; the triage prompt's exemplar
-section is supplemented by a small number ($k=3$ positives, $k=2$
-anti-examples) retrieved by BM25 over that curated set.  The
-investigation-window dry-run established that BM25 over the
-fourteen-archetype \emph{base} library is degenerate but did not
-evaluate BM25 over an enriched library; that is the actual
-production scenario and will be measured once Epic~2 ships.
-
-\section{Resilience tier (R-1 to R-5)}
-
-The 20-day investigation window surfaced five operational-resilience
-items that were not blocking but are worth Sprint~4 inclusion:
-
-\begin{itemize}
-  \item \textbf{R-1} Live-cron heartbeat metric on a Prometheus
-        push-gateway with a \texttt{LiveAuditMissing} Grafana rule.
-  \item \textbf{R-2} Move the live-audit cron off the ephemeral
-        \texttt{claude-controller} onto the durable
-        \texttt{observability-rca-monitoring} EC2 via a
-        \texttt{systemd} timer.
-  \item \textbf{R-3} CI lint that fails if any
-        \texttt{sprint*-plan.md} window end-date is in the past.
-  \item \textbf{R-4} \texttt{the-bigger-picture.md} staleness badge in
-        the repository README, red at fourteen days.
-  \item \textbf{R-5} \texttt{SESSION\_HANDOFF.md} S3 backup, folded
-        into the O-10 nightly-backup work.
-\end{itemize}
-
-\section{Cloud GPU migration: dropped 2026-05-19, shipped 2026-05-21}
-\label{sec:gpu-dropped}
+\subsection{D24 + D25 --- Cloud GPU migration (shipped 2026-05-21)}
+\label{sec:gpu-shipped}
 
 The cloud-GPU migration to \texttt{us-west-2} (\texttt{g5.xlarge}
-A10G 24\,GB, host for \texttt{qwen2.5:14b}) sat as a Sprint-4
-candidate from 2026-04-27, when the \texttt{G+VT} on-demand vCPU
-quota was approved. The decision was \textbf{dropped on cost
-grounds on 2026-05-19}, then \textbf{reversed and shipped on
-2026-05-21} after a cost-frame rebuild. Both halves of the
-decision are recorded here because the reversal is itself the
-interesting story.
+A10G 24\,GB, host for \texttt{qwen2.5:14b-instruct}) sat as a
+Sprint-4 candidate from 2026-04-27, when the \texttt{G+VT}
+on-demand vCPU quota was approved.  The decision was
+\textbf{dropped on cost grounds on 2026-05-19}, then
+\textbf{reversed and shipped on 2026-05-21} after a cost-frame
+rebuild.  Both halves of the decision are recorded here because
+the reversal is itself the interesting story.
 
 \paragraph{The 2026-05-19 drop.}
 A \texttt{g5.xlarge} runs approximately one US dollar per hour
@@ -2261,62 +2358,523 @@ A Lambda watching for idle traffic stops the instance after 20
 minutes of no webhooks; SQS buffers the cold-start ($\sim$90~s
 wake on the first webhook of a quiet window); a CloudWatch
 billing alarm hard-caps the account at \$50/month.  Realistic
-duty cycle under \$15\%\$, pushing effective on-demand cost from
-\$730 to \$$\sim$100/mo.  Migration shipped same day as documented
-in decisions-log entry D24: instance
+duty cycle under 15\,\%, pushing effective on-demand cost from
+\$730 to \$$\sim$100/month.  Migration shipped same day as
+documented in decisions-log entry D24: instance
 \texttt{i-03aec662b1a47ad8f}, Tailscale hostname
-\texttt{observability-gpu-uswest2}, \texttt{qwen2.5:14b-instruct}
-primary with the laptop runner retained as failover (a
-DNS-level flip on Grafana's webhook target).  Phase~2 smoke test
-on the new runner produced end-to-end median $\sim$38~s versus
-the laptop's $\sim$5~min baseline --- an $\sim$8$\times$ speedup
-without behavioural regressions (test suite stays 252/252 green).
-A co-shipped access lockdown (D25) routes the Grafana webhook
-through an IP-allowlisted API Gateway, restricts operator paths
-to Tailscale, and disables public SSH on the instance.
+\texttt{observability-gpu-uswest2},
+\texttt{qwen2.5:14b-instruct} primary with the laptop runner
+retained as failover (a DNS-level flip on Grafana's webhook
+target).  Phase~2 smoke test on the new runner produced
+end-to-end median $\sim$38~s versus the laptop's $\sim$5~min
+baseline --- an $\sim$8$\times$ speedup without behavioural
+regressions.  A co-shipped access lockdown (D25) routes the
+Grafana webhook through an IP-allowlisted API Gateway,
+restricts operator paths to Tailscale, and disables public SSH
+on the instance.
 
 \paragraph{Knock-on effects.}
 First, the original Sprint-4 P0 latency bundle (per-stage
 instrumentation, hard 180~s pipeline timeout, Ollama serial
-concurrency, MCP native tool-calling rewrite) ships as
-defensive margin rather than as the latency fix --- the
-migration addressed the underlying single-LLM-on-consumer-GPU
-ceiling that the bundle was attempting to work around.
-Second, the \texttt{us-west-2} G+VT quota approval (4 vCPU,
-granted 2026-04-27) is now in use rather than held in reserve.
-Third, the lesson on the methodology: cost-grounds drops should
-specify the duty-cycle assumption explicitly; the 2026-05-19
-decision was correct under a 24/7 frame and wrong under a
-bursty-duty-cycle frame, and the frame was the load-bearing
-assumption.
+concurrency, MCP native tool-calling rewrite) ships as defensive
+margin rather than as the latency fix --- the migration
+addressed the underlying single-LLM-on-consumer-GPU ceiling that
+the bundle was attempting to work around.  Second, the
+\texttt{us-west-2} G+VT quota approval (4 vCPU, granted
+2026-04-27) is now in use rather than held in reserve.  Third,
+the methodological lesson: cost-grounds drops should specify the
+duty-cycle assumption explicitly; the 2026-05-19 decision was
+correct under a 24/7 frame and wrong under a bursty-duty-cycle
+frame, and the frame was the load-bearing assumption.
 
-\section{Beyond Sprint 4}
+\subsection{SF-6 --- Email overhaul (shipped 2026-05-23, commit f6d0a1b)}
 
-Beyond the ranked candidates, three longer-arc directions are worth
-recording for the supervisor's consideration:
+The escalation email was rewritten end-to-end to operator-readable
+shape: a subject of the form
+\texttt{[env] [ns] [VERDICT] alertPlain} (with a 70-character
+ceiling enforced in test), a banner, identity pills, a one-line
+WHAT, a Why narrative, a single recommended ACTION, four
+explicit operator buttons (acknowledge, escalate further,
+dismiss, comment), and an email-safe inline-CSS render so the
+mail renders correctly across Gmail web, Outlook web, and the
+common mobile clients.  Eleven new tests assert the subject
+constraint, the button presence, and the inline-CSS escape.  Test
+suite stepped 274 $\to$ 285.
+
+\subsection{SF-7 --- Operator feedback page (shipped 2026-05-23, commit 10ebd4e)}
+
+The four email buttons feed into a new \texttt{rate.html} page
+served by the triage service at
+\texttt{/rate/\{short\_id\}}; the operator selects a rating and
+optionally writes a free-text \texttt{actual\_root\_cause} and a
+comment.  Submissions hit a new
+\texttt{POST /feedback/rate/\{short\_id\}} endpoint backed by a
+seven-column schema migration on the existing US-5.3 feedback
+table (rating, comment, rated\_at, rater identifier columns added
+alongside the existing override/confirm fields).  The endpoint is
+idempotent on \texttt{short\_id}.  Together with SF-6, this closes
+the feedback loop from the email surface back into the
+\texttt{feedback} table that feeds the \texttt{triage\_precision}
+and \texttt{triage\_recall} metrics (D20).
+
+\subsection{SF-4 --- Same-alert dashboard collapsing (shipped 2026-05-23, commit 7d0adeb)}
+
+The Phase-2 dashboard (\texttt{/dashboard/v2}) previously showed
+the raw RCA history one row per fire, so a flapping alert filled
+the entire surface.  SF-4 groups by fingerprint at render time
+(no schema migration), keeps the latest RCA per fingerprint, and
+paginates the unique list.  The live impact on day~1: 288 raw
+rows collapse to 26 unique fingerprints in the default 24-hour
+window.  The schema-side dedup work (DA-5, below) ships as the
+complementary structural fix.
+
+\subsection{Phase 2.1 --- Detail page route (shipped 2026-05-22, commits 9b61e74 + a904eda)}
+
+The \texttt{/dashboard/v2/alert/\{short\_id\}} route renders a
+single decision in full, with a left-hand panel showing
+\texttt{cause}, \texttt{action}, and the incident-history
+context, and a right-hand sidebar showing the evidence list,
+Drain3 templates that fired, the LLM reasoning trail, and the
+related-alerts list inside the correlation window.  This page is
+the surface the operator clicks through from the email's
+acknowledge button; it is the operator's read-only audit view of
+the platform's reasoning.
+
+\subsection{DA-5 + DA-4 --- Alertname-family dedupe + drain3 content-hashed fingerprints (shipped 2026-05-25, commit b8fa2c8)}
+
+DA-5 introduces an \texttt{ALERT\_FAMILIES} map covering the four
+dominant alert classes (\texttt{cpu}, \texttt{memory},
+\texttt{disk}, \texttt{loki-disk}) and a
+\texttt{family\_dedup\_key(alert)} helper, so that
+\texttt{MediumCpuUsage}, \texttt{HighCpuUsage}, and
+\texttt{CriticalCpuUsage} firing on the same instance collapse
+as a single family in the suppression layer rather than as three
+separate fingerprints racing each other.  Unknown alertnames
+fall back to the Grafana fingerprint; missing-instance cases
+fall back to service-scoped collapse.  DA-4 hardens the Drain3
+fingerprint shape to
+\texttt{drain3-\{service\}-\{sha256(top-3-templates)[:12]\}},
+falling back to \texttt{anomalous\_lines} then to the legacy
+plain key, so unrelated Drain3 batches no longer silently
+collapse into one dedup window.  Eleven new tests cover hash
+stability, divergence on different templates, service separation,
+fallback behaviour, and end-to-end High$\to$Critical CPU collapse
+with linked \texttt{decision\_id}.  Test suite stepped 285 $\to$
+296.
+
+\subsection{Day-1 shipping observation}
+
+The eight stories above were originally ranked across two weeks
+of the day-by-day plan, and finished on day~1.  This is not
+incidental; the post-Sprint-3 close-out left the suite,
+dashboard, and notifier surfaces in a state where small,
+well-scoped commits could land at high velocity, and the GPU
+migration freed enough latency headroom that the operator can
+test changes in seconds rather than minutes.  The remaining
+queued work below is therefore proportionately larger per item
+(DA-3 cross-row coherence and the \texttt{/dashboard/v2/kpi}
+route are both day-shaped, not hour-shaped).
+
+\section{Queued for the rest of Sprint 4}
+
+The five items scheduled between day~2 and the sprint close are
+listed below in calendar order.  Each is sized in story points
+or hours as appropriate; the sprint-plan source of record is
+\texttt{monitoring-docs/sprint4-status.html} \S14.
 
 \begin{itemize}
-  \item A \textbf{multi-tenant deployment model}.  The current
+  \item \textbf{Tue 2026-05-26 --- DA-2 unsafe-action stripping
+        ($\sim$3\,SP).}  A clamp-independent gate that strips
+        \texttt{kubectl} / \texttt{ssh} / \texttt{restart} /
+        \texttt{systemctl} actions when
+        \texttt{rca\_quality=actionable} \textsc{and} no named
+        cause is present in the prose, regardless of LLM
+        confidence.  The motivating case is the
+        \texttt{systemctl restart k3s-node.service} suggestion
+        recorded in the \S7c.4 audit row.
+  \item \textbf{Wed 2026-05-27 --- Phase 3.A.KPI dashboard
+        route ($\sim$3\,SP).}  A new
+        \texttt{/dashboard/v2/kpi} route surfacing the
+        \texttt{triage\_precision} / \texttt{triage\_recall} /
+        suppression-rate / mean-RCA-latency metrics in
+        Grafana-style cards above the unique-fingerprint table.
+        Supervisor-requested.
+  \item \textbf{Thu 2026-05-28 --- DA-3 cross-row verdict
+        coherence ($\sim$5\,SP).}  When the same fingerprint
+        fires within $N$ minutes of a prior decision, the prior
+        \texttt{cause} is prepended into the LLM context with
+        an explicit ``changed my mind because\ldots'' framing
+        rule.  Prevents the platform from emitting contradictory
+        RCAs across consecutive fires of the same flap.
+  \item \textbf{Fri 2026-05-29 --- URL filter persistence +
+        range filter wire-up ($\sim$3\,SP).}  Dashboard filters
+        (verdict, severity, alertname-family, time range) are
+        encoded in the URL query string so the operator can
+        bookmark and share filtered views, and so the back
+        button restores prior context.  Range filter wire-up
+        completes the day-1 schema layer left at half-mast.
+  \item \textbf{W2 Fri (stretch) --- SF-5 sustained-vs-spike
+        verdict modifier ($\sim$3\,SP).}  Adds a
+        ``duration-above-threshold'' feature to the alert payload
+        and classifies short-duration breaches as
+        \texttt{rca\_quality=transient\_spike} with
+        \texttt{action\_taken=shelved}.  Stretch goal --- ships
+        only if DA-3 lands clean and the operator-feedback
+        volume from SF-7 supports the threshold tuning.
+\end{itemize}
+
+The five items together total approximately seventeen story
+points across four working days plus a stretch.  At Sprint~4
+close on 2026-06-05 the suite is expected at $\sim$310 tests
+green; the next critical RCA audit (an eight-criterion repeat
+of the 2026-05-21 audit recorded in
+\S\ref{sec:critical-rca-audit}) is scheduled for the
+following Monday.
+
+\section{Tier 3, curated RAG, and the resilience tier (deferred to Sprint 5)}
+
+The three larger planned items below \emph{did not} make Sprint~4
+on the operational-maturity framing; they sit in Sprint~5's
+scope (chapter~\ref{ch:sprint5}) and are summarised here only
+briefly so the Sprint-4 reader does not lose track of them.
+
+\paragraph{Tier 3 --- iterative agentic gather.}
+The Tier-3 design replaces the single-shot bounded-agency retry
+with a three-iteration tool-call loop, each iteration producing a
+partial hypothesis tree that the model expands on the next.  The
+hypothesis tree is stored in the prompt as a structured section;
+at each iteration the model is asked to expand the most promising
+leaf, gather supporting evidence via a single MCP call, and update
+the tree.  Termination conditions: a confidence threshold reached,
+a maximum-depth limit hit, or a total latency budget exhausted.
+This is materially more permissive than the bounded-agency retry;
+the gating on S3-HF-09 (now satisfied) reflects the project's view
+that shipping Tier~3 without an automated quality-regression gate
+would be imprudent.
+
+\paragraph{Curated RAG retrieval (US-3.3 / US-3.4).}
+Once the Epic-2 operator feedback table has accumulated enough
+rated entries via the SF-7 surface, curated retrieval becomes
+worth the engineering effort.  The design: a weekly job reads the
+feedback table for the last seven days; entries above a quality
+threshold are written as YAML to a
+\texttt{library\_curated.yaml} file; the triage prompt's exemplar
+section is supplemented by a small number ($k=3$ positives,
+$k=2$ anti-examples) retrieved by BM25 over that curated set.
+The investigation-window dry-run established that BM25 over the
+fourteen-archetype \emph{base} library is degenerate; the
+production scenario is BM25 over an enriched library, and that is
+what will be measured once SF-7 has fed enough rated rows in.
+
+\paragraph{Resilience tier (R-1 to R-5).}
+The 20-day investigation window surfaced five operational-resilience
+items, retained for Sprint~5 inclusion:
+
+\begin{itemize}
+  \item \textbf{R-1} Live-cron heartbeat metric on a Prometheus
+        push-gateway with a \texttt{LiveAuditMissing} Grafana rule.
+  \item \textbf{R-2} Move the live-audit cron off the ephemeral
+        \texttt{claude-controller} onto the durable
+        \texttt{observability-rca-monitoring} EC2 via a
+        \texttt{systemd} timer.
+  \item \textbf{R-3} CI lint that fails if any
+        \texttt{sprint*-plan.md} window end-date is in the past.
+  \item \textbf{R-4} \texttt{the-bigger-picture.md} staleness badge in
+        the repository README, red at fourteen days.
+  \item \textbf{R-5} \texttt{SESSION\_HANDOFF.md} S3 backup, folded
+        into the O-10 nightly-backup work.
+\end{itemize}
+
+\section{Legacy section anchor for the GPU migration}
+\label{sec:gpu-dropped}
+
+The GPU migration's combined drop-and-ship story (originally
+filed under this label as Sprint~4 future work) now lives at
+\S\ref{sec:gpu-shipped} on the shipped-stories list.  This anchor
+is retained so the chapter~\ref{ch:intro} scope-and-limitations
+bullet and the chapter~\ref{ch:discovery} non-functional-requirements
+cross-reference continue to resolve.
+
+% =====================================================================
+\chapter{Sprint 5 --- Planned (2026-06-06 to 2026-06-17)}
+\label{ch:sprint5}
+
+Sprint~5 runs 2026-06-06 to 2026-06-17 and shifts the platform's
+centre of gravity outward.  Sprints 1--4 built and hardened the
+core triage loop against a single representative web stack
+(Spring Boot + Kong + MySQL + React, plus the co-located
+\texttt{car-rental} test application that arrived during the
+sprint-3 close-out).  Sprint~5's mandate is twofold: stand up a
+canonical microservice test bed that exercises the platform's
+multi-application paths properly, and ship the operator-config
+and production-hardening work that has been queuing through
+Sprints 3 and 4.
+
+The sprint is structured in three concurrent epics.  Each epic
+carries enough work to fill the two-week sprint on its own; the
+team's three-engineer capacity means each epic gets one
+disproportionate owner and two reviewers, with explicit pairing
+on the integration points (microservice bed acceptance scenario
+$\times$ hierarchical drain3 thresholds, incident entity table
+$\times$ phase 3.B incidents tab).
+
+Figure~\ref{fig:sprint-roadmap} places Sprint~5 in the broader
+sprint chronology --- discovery, the foundation sprints, the
+in-progress Sprint~4, and the Sprint~6+ outlook that closes
+this chapter.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{../sprint-roadmap.png}
+\caption{Sprint roadmap, Sprint~0 through Sprint~6+.  Each
+column carries the sprint's window and its headline outcome;
+the milestones beneath the timeline are the structural beats
+of the project (problem statement, observability foundation,
+AI MVP, hallucination firewall, GPU migration, microservice
+bed, hierarchical drain3).  Sprint~4 is shaded as
+\emph{in progress}.}
+\label{fig:sprint-roadmap}
+\end{figure}
+
+\section{EPIC13 --- Microservice test bed + canonical scenario}
+
+The PoC bed has carried two applications since Sprint~3
+close-out: the original \texttt{react-springboot-mysql}
+derivative and the second-application \texttt{car-rental}
+service.  Two applications with two components each are enough
+to demonstrate that the platform's multi-application paths
+\emph{exist}, but not enough to exercise the cross-application
+aggregation work that EPIC14 will surface.  EPIC13 closes that
+gap:
+
+\begin{itemize}
+  \item \textbf{SF-13 (keystone, $\sim$8\,SP).}  Deploy a
+        canonical five-service microservice bed on the existing
+        k3s cluster (\texttt{observability-rca-k3s}): a
+        front-end, two back-end services with their own
+        databases, a queue, and a worker that consumes from the
+        queue.  Each service is OTel-instrumented, scraped by
+        Prometheus, logged to Loki via Promtail.  Helm charts
+        live in the \texttt{monitoring-project} repository; the
+        bed is reproducible from clean k3s via a single
+        \texttt{helm install} batch.
+  \item \textbf{SF-9 ($\sim$3\,SP).}  A new \texttt{k8s-mcp}
+        bridge surfacing read-only \texttt{kubectl get},
+        \texttt{kubectl describe}, and Rancher-API tools to the
+        triage pipeline's context-gather step.  Closes the
+        cross-pillar gap that pod-level alerts could only be
+        partially diagnosed because the LLM never saw the pod's
+        own \texttt{kubectl describe} output.
+  \item \textbf{SF-10 ($\sim$3\,SP).}  Application-layer
+        monitoring (per-endpoint p95, per-endpoint error rate,
+        per-service connection-pool saturation) as a set of new
+        Grafana rules feeding the microservice bed's services.
+  \item \textbf{SF-11 ($\sim$3\,SP).}  Scenario validation: the
+        ``developer deletes a letter from a config key'' chaos
+        induction that produces a cascading failure across the
+        microservice bed and exercises the platform's
+        cross-application correlation paths.  The acceptance
+        criterion is a single coherent RCA email naming the
+        config-key edit, not five separate alert emails.
+\end{itemize}
+
+EPIC13 is the prerequisite for everything in EPIC14 and for the
+S5-DRN-01 design item in \S\ref{sec:drn-01}.  The Tier~2 (per-
+application) and Tier~3 (system-wide) drain3 thresholds cannot
+be meaningfully validated until the bed has at least three
+components per application.
+
+\section{EPIC14 --- Incident entity + sidebar insight surfaces}
+
+The dashboard's current \emph{alert} unit is too small for the
+incidents that span multiple alerts.  EPIC14 introduces an
+\textbf{incident} entity on top of the existing decision rows:
+
+\begin{itemize}
+  \item \textbf{Phase~2.2 incident table.}  A schema-level
+        \texttt{incidents} table aggregating related decisions
+        by correlation-window membership and shared service /
+        instance.  The dashboard renders one incident card per
+        incident, with the constituent alerts as a drill-down.
+  \item \textbf{Phase~3.A Stats.}  A KPI strip showing the
+        incident-rate over the last 7/30 days, the
+        mean-time-to-RCA, the dismiss-vs-escalate ratio, and the
+        operator-override rate per alert family.  Extends the
+        Phase~3.A.KPI route that lands during Sprint~4.
+  \item \textbf{Phase~3.A Anomalies.}  A detective-signals tab
+        rendering the per-service Drain3 novelty rate against
+        the same-hour-7-days-ago baseline, with a tile per
+        service.  Operator-facing surface for the data the
+        Drain3 poller already produces.
+  \item \textbf{Phase~3.B Incidents.}  The full incident
+        timeline view --- one incident, its constituent alerts,
+        the operator's response trail, and the post-incident
+        feedback loop.  This is the surface that completes the
+        SF-7 feedback ingestion path: an operator can rate the
+        platform's handling of an entire incident, not just one
+        alert in isolation.
+\end{itemize}
+
+The two cross-cutting integration points are the Phase~3.A
+Anomalies tab (which depends on the hierarchical-drain3 work in
+\S\ref{sec:drn-01}) and the incident-table data model (which
+the SF-13 microservice-bed scenario will exercise as its
+acceptance test).
+
+\section{EPIC15 --- Operator config + production hardening}
+
+\begin{itemize}
+  \item \textbf{Phase~3.C Alerts-config.}  An operator-facing
+        page for editing Grafana alert thresholds, recurrence-gate
+        opt-ins, and adaptive-baseline parameters from the
+        triage dashboard.  Writes back into Grafana via the
+        provisioned-rules API.
+  \item \textbf{Phase~3.C Drain3-engine.}  Operator surface for
+        the per-service drain miners --- snapshot, restore, and
+        per-service threshold tuning, exposing the dormant S3
+        plumbing finally wired during this sprint.
+  \item \textbf{Phase~3.C Integrations.}  Slack and webhook
+        notifier targets alongside the existing SMTP escalation
+        path.  Per-team routing keys driven by service-label.
+  \item \textbf{Phase~4 SSE + server-side filter.}  Push-based
+        dashboard updates via server-sent events; server-side
+        filter evaluation so the dashboard renders only the
+        operator's view of interest.  Replaces the current
+        client-side filtering, which scales poorly past a
+        thousand-row corpus.
+  \item \textbf{Phase~4 operator identity.}  Per-operator
+        identity via Tailscale ACL.  The SF-7 feedback ratings
+        already carry a \texttt{rater} column; this is the
+        plumbing that populates it.
+  \item \textbf{Phase~4 React pre-compile.}  Replace the
+        current Jinja2-rendered HTML with a pre-compiled React
+        bundle for the heavier dashboard surfaces.
+  \item \textbf{SF-12 + DA-6.}  Pod-level RCA drill-down ---
+        clicking through a pod-level alert opens the pod's
+        events, container logs and exec-shell-readable diagnostic
+        commands inline.
+\end{itemize}
+
+\section{New design item --- S5-DRN-01 hierarchical drain3 thresholds}
+\label{sec:drn-01}
+
+The design discussion held alongside the DA-5 / DA-4 ship on
+2026-05-25 surfaced an architectural gap in the project's
+anomaly-detection layer.  The current Drain3 poller fires a
+\texttt{Drain3AnomalyDetected} webhook using a single per-service
+threshold on the novel-template rate.  This per-service threshold
+is the weakest link in the detection chain: it cannot
+distinguish ``this one service is being weird'' from ``many
+services are quietly weird at once''.  A subthreshold-but-correlated
+drift across multiple components looks like silence to the
+per-service gate, even though the system as a whole has clearly
+moved.
+
+\paragraph{The three-tier design.}
+The proposed Sprint~5 solution introduces three independently-firing
+tiers of anomaly threshold, each scoped at a different level of
+the system hierarchy.  Tier $N$ firing does not suppress Tier
+$N+1$ --- they are complementary signals, not a fallback chain.
+
+\begin{itemize}
+  \item \textbf{Tier 1 --- component.}  Narrowest: per backend /
+        frontend / captor / db of each application.  Computed at
+        the finest scope Drain3 can group by.  Catches single-
+        component drift --- ``the \texttt{checkout-backend} pod
+        is generating novel templates at a rate that is unusual
+        for that component specifically.''
+  \item \textbf{Tier 2 --- application.}  Per application,
+        aggregating anomaly rate across that app's components
+        (backend + frontend + db + captor as one bucket).
+        Catches cross-component drift within one app even when
+        no single component crosses Tier~1.
+  \item \textbf{Tier 3 --- system.}  Aggregated across all
+        applications under monitoring.  Catches platform-wide
+        drift that no single application would notice in
+        isolation --- the ``many services are quietly weird''
+        case the per-service gate is structurally blind to.
+\end{itemize}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{../drain3-three-tier-thresholds.png}
+\caption{The Sprint~5 hierarchical drain3 thresholds design ---
+three tiers (component, application, system) that fire
+independently of each other.  Tier $N$ firing does not suppress
+Tier $N+1$.  The right-hand panel annotates the rejected
+``intersection'' tier (apps sharing infrastructure), dropped as
+combinatorially fuzzy.}
+\label{fig:drain3-tiers}
+\end{figure}
+
+\paragraph{Rejected: the intersection tier.}
+The original sketch included a fourth tier --- apps sharing a
+database, a namespace, or a host.  It was dropped as
+combinatorially fuzzy: different intersection definitions
+(db-shared vs.\ ns-shared vs.\ host-shared) overlap messily, and
+exposing them as tunable groupings blows up the operator config
+surface for limited extra signal that Tier~3 already covers as a
+backstop.  The three clean hierarchical scopes above are kept;
+intersection is left out by design.
+
+\paragraph{Validation dependency.}
+Validation requires SF-13 (microservice bed) to be live with at
+least two applications each carrying three or more components,
+so the cross-app aggregation paths can be exercised.  The
+acceptance scenario is a cross-app chaos induction where no
+individual component crosses Tier~1 (each component's novelty
+rate stays within its own baseline) but the Tier~2 aggregate of
+one app --- or the Tier~3 system-wide aggregate --- does fire.
+Tracked in Jira as \textbf{S5-DRN-01} (id 320) parented to
+EPIC13; documented in
+\texttt{monitoring-docs/solution-brief.html} \S13.7.
+
+\section{Sprint 6+ outlook}
+
+Beyond Sprint~5 sit three longer-arc directions that are worth
+recording for the supervisor's consideration but that are not
+yet sprint-scoped.  These are the natural continuations of the
+work described in chapters~\ref{ch:sprint3} and~\ref{ch:sprint4}.
+
+\begin{itemize}
+  \item \textbf{A multi-tenant deployment model.}  The current
         platform is single-tenant by construction.  A multi-tenant
         deployment (e.g.\ one triage service per business unit at
         Tanger Med, with shared MCP bridges and a shared
-        observability stack) would require namespace isolation in the
-        RCA history, per-tenant exemplar libraries, and per-tenant
-        confidence calibration.
+        observability stack) would require namespace isolation in
+        the RCA history, per-tenant exemplar libraries, and
+        per-tenant confidence calibration.  Natural Sprint~6+
+        scope.
   \item \textbf{Direct integration with Tanger Med production
-        systems}.  The platform is currently exercised against a
-        representative web stack.  Onboarding actual production
-        services would require careful PII handling (operator
-        feedback content, log lines), an SLO programme to set
-        meaningful confidence thresholds, and a formal change-control
-        process for prompt and exemplar updates.
-  \item \textbf{Federated model evaluation}.  As the project
-        accumulates labelled RCA outcomes via the feedback layer,
-        comparing alternative LLM choices on a held-out set becomes
-        feasible.  Models worth evaluating: \texttt{qwen2.5:14b-instruct},
-        \texttt{deepseek-r1:14b-distill}, \texttt{mistral-nemo:12b}.
-        The cost-vs-quality curve will be the deciding factor; this
-        is the natural successor to the dropped GPU migration.
+        systems.}  The platform is currently exercised against a
+        representative web stack and a microservice bed (post
+        Sprint~5).  Onboarding actual production services would
+        require careful PII handling (operator feedback content,
+        log lines), an SLO programme to set meaningful confidence
+        thresholds, and a formal change-control process for
+        prompt and exemplar updates.  This is the path to
+        supervisor-greenlit production transition the project's
+        scope memo (\texttt{[CIRES scope --- PoC vs production]})
+        identifies as the project's end state.
+  \item \textbf{Federated model evaluation.}  As the project
+        accumulates labelled RCA outcomes via the feedback layer
+        ingested through SF-7 and SF-13, comparing alternative
+        LLM choices on a held-out set becomes feasible.  Models
+        worth evaluating alongside the incumbent
+        \texttt{qwen2.5:14b-instruct}:
+        \texttt{deepseek-r1:14b-distill},
+        \texttt{mistral-nemo:12b}, and the larger
+        \texttt{qwen2.5:32b-instruct} now that the GPU host has
+        VRAM headroom.  The cost-vs-quality curve will be the
+        deciding factor; this is the natural successor to the
+        D24 GPU migration.
+  \item \textbf{Predictive observability (EPIC12 carve-out).}
+        The S4-PRED-01 detective-signals tab absorbed into
+        EPIC14 Phase~3.A.Anomalies is the foothold; PRED-02
+        capacity-runway, PRED-03 saturation-band baselines, and
+        PRED-04 cascade predictor are Sprint~6 candidates that
+        push the platform from diagnostic into predictive
+        territory.
 \end{itemize}
 
 % =====================================================================
@@ -2325,12 +2883,16 @@ recording for the supervisor's consideration:
 
 This dissertation has reported on the design and implementation of
 the CIRES Observability Platform, an AI-augmented observability
-solution built over three completed sprints at CIRES Technologies.
-The platform addresses the operational gap identified during Sprint~0
-field research --- that the team was finding out about production
-problems after the fact rather than proactively --- by combining a
-conventional open-source observability stack with an AI triage layer
-that turns each alert into a structured, pre-investigated RCA.
+solution built over four sprints (with a fifth scoped in
+chapter~\ref{ch:sprint5}) at CIRES Technologies.  Sprints~0
+through~3 are closed; Sprint~4 is in active progress with eight
+stories shipped on day~1 and five more scheduled across the
+remaining plan.  The platform addresses the operational gap
+identified during Sprint~0 field research --- that the team was
+finding out about production problems after the fact rather than
+proactively --- by combining a conventional open-source
+observability stack with an AI triage layer that turns each alert
+into a structured, pre-investigated RCA.
 
 The principal contributions of the work are:
 
@@ -2339,11 +2901,14 @@ The principal contributions of the work are:
         Terraform-provisioned, Ansible-configured, k3s-and-Docker
         observability stack on AWS, with a FastAPI-based AI triage
         service producing structured RCAs from Grafana webhooks via
-        a locally-hosted LLM.  Reproducible from clean infrastructure
-        and operable from a single playbook command.
+        a locally-hosted LLM (\texttt{qwen2.5:14b-instruct} on a
+        dedicated AWS \texttt{g5.xlarge} GPU host since
+        2026-05-21, laptop \texttt{qwen2.5:7b} retained as
+        failover).  Reproducible from clean infrastructure and
+        operable from a single playbook command.
   \item \textbf{The MCP-only data-access invariant.}  A project-wide
         rule, partly architectural and partly mechanical (via the
-        Sprint-4 lint), that every datum the LLM sees must arrive
+        S3-HF-08 lint), that every datum the LLM sees must arrive
         through an MCP bridge.  The rule produces a provenance
         regime over the LLM's input and is enforced via the bridge
         layer's metrics, the audit reports, and a continuous-integration
@@ -2358,26 +2923,46 @@ The principal contributions of the work are:
         construction and is recorded in the decisions log with the
         evidence that drove it.
   \item \textbf{The closed-loop operator-feedback layer.}  A schema
-        and surface that captures operator overrides on RCAs and
-        propagates them into the suppression layer, the precision/recall
-        metrics, and (in Sprint~4) the curated retrieval corpus.
-  \item \textbf{A documented decisions log.}  Twenty-three durable
-        design decisions (D1--D23) recorded contemporaneously with
+        and surface that captures operator overrides and ratings on
+        RCAs (shipped end-to-end via SF-6 and SF-7 on Sprint~4
+        day~1) and propagates them into the suppression layer, the
+        precision/recall metrics, and (in Sprint~5) the curated
+        retrieval corpus.
+  \item \textbf{A documented decisions log.}  Twenty-five durable
+        design decisions (D1--D25) recorded contemporaneously with
         the engineering work, including the problem observed, the
-        constraints, the decision, and the verification.  The log is
-        a primary deliverable of the project and is exercisable in
-        future audits.
+        constraints, the decision, and the verification.  The log
+        is a primary deliverable of the project and is exercisable
+        in future audits.
 \end{enumerate}
 
-The platform is in active service against a representative web stack
-on AWS, with daily static and live audits producing a documented
-trail of operational health.  The remaining Sprint~3 work and the
-ranked Sprint~4 candidates carry the platform forward; the
-methodological choice to gate Sprint~4's iterative agentic gather
-(Tier 3) on a measurement scaffold (Tier 4) is, in the author's view,
-the most important durable lesson from the project --- the cost of
-shipping an unmeasurable AI mechanism into production materially
-exceeds the cost of building the measurement first.
+The platform is in active operation against a representative web
+stack on AWS, with daily static and live audits producing a
+documented trail of operational health.  Median end-to-end pipeline
+latency stands at $\sim$38\,s on the GPU host (down from $\sim$5\,min
+on the laptop runner); the triage-service test suite stands at
+\texttt{296/296} green on Sprint~4 day~1; the MCP-only invariant
+lint has been clean since S3-HF-08 landed on 2026-05-19; the GPU
+host has been continuously up since the 2026-05-21 migration.  The
+Sprint~5 work captured in chapter~\ref{ch:sprint5} --- a canonical
+microservice test bed, an incident-level data model on the
+dashboard, operator-config surfaces, and the new hierarchical
+drain3 anomaly-detection design --- is the natural next evolution
+and the body of work that will determine whether the platform is
+ready for the supervisor-greenlit production transition that is
+this project's end state.
+
+The methodological choice that gated the iterative agentic gather
+(Tier~3) on a measurement scaffold (Tier~4) is, in the author's
+view, the most durable lesson the project carries away from its
+construction phase --- the cost of shipping an unmeasurable AI
+mechanism into production materially exceeds the cost of building
+the measurement first.  The same discipline informs the Sprint~5
+S5-DRN-01 hierarchical drain3 design: the architectural intuition
+arrived on 2026-05-25, but the design is explicitly gated on the
+microservice bed (SF-13) being live so that the cross-application
+acceptance scenario can be exercised on real data before the
+multi-tier threshold logic is allowed near production traffic.
 
 % =====================================================================
 \appendix
@@ -2490,12 +3075,25 @@ thresholds. \\
 3 & 2026-04-23 -- 2026-05-19 & RCA quality close-out, hallucination
 firewall epic added on 2026-04-29 after 0b215ef3, 20-day investigation
 window 04-30 -- 05-19. \\
-4 & TBD & Ranked candidate list: incident correlator, Tier 3 agentic
-gather, curated RAG, pod-rule fixes, R-1..R-5 resilience tier. GPU
-migration dropped on cost grounds. \\
+4 & 2026-05-25 -- 2026-06-05 & \emph{In progress.}  Day-1 ship of
+GPU migration (D24/D25), SF-6 email overhaul, SF-7 operator
+feedback page, SF-4 dashboard collapsing, Phase~2.1 detail page,
+DA-4/DA-5 dedupe; queued: DA-2, Phase~3.A.KPI, DA-3, URL filters,
+SF-5 stretch.  Suite \texttt{296/296} green. \\
+5 & 2026-06-06 -- 2026-06-17 & \emph{Planned.}  EPIC13 microservice
+test bed (SF-13) + canonical scenario; EPIC14 incident entity and
+Phase~3.A/3.B sidebar surfaces; EPIC15 operator-config and
+Phase~4 hardening; S5-DRN-01 hierarchical drain3 thresholds (3
+tiers, intersection tier rejected). \\
+6+ & 2026-06-18 onward & Outlook: multi-tenant deployment model,
+Tanger Med production-transition pilot, federated model
+evaluation, EPIC12 predictive-observability carve-out
+(PRED-02/03/04). \\
 \bottomrule
 \end{tabular}
-\caption{Sprint chronology, condensed.}
+\caption{Sprint chronology, condensed.  Sprints~0--3 closed;
+Sprint~4 in progress on 2026-05-25; Sprint~5 scoped; Sprint~6+
+outlook recorded.}
 \label{tab:sprint-summary}
 \end{table}
 
