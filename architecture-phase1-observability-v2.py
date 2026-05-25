@@ -190,36 +190,36 @@ def main() -> None:
             ha="center", va="center", fontsize=11.5, fontweight="bold",
             color=TEXT, zorder=4)
 
-    coll_w, coll_h = 22, 8.5
-    coll_xs = [22, 50, 78]
+    coll_w, coll_h = 32, 9.5
+    coll_xs = [25, 70]
     coll_data = [
         ("node-exporter", "host metrics"),
-        ("OTel collector", "spans + JVM"),
-        ("promtail / loki agent", "logs"),
+        ("OTel Collector", "logs via filelog/containers\n+ traces via OTLP"),
     ]
     for x, (t, sub) in zip(coll_xs, coll_data):
         add_card(ax, x, layer2_cy - 1.5, coll_w, coll_h, t, subtitle=sub,
-                 accent=GREEN, title_fs=10)
+                 accent=GREEN, title_fs=10, sub_fs=7.0)
 
     # Arrows: APPLICATION -> COLLECTORS
     # App row card centers: 11, 32, 53 (apps) + 81 (kong), card height 8.5
-    # Collector row card centers: 22, 50, 78, card height 8.5
+    # Collector row card centers: 25, 70, card height 9.5
     arrow_color_app = BLUE
     app_bottom_y = layer1_cy - 1.5 - 8.5 / 2   # bottom edge of app cards
-    coll_top_y = layer2_cy - 1.5 + 8.5 / 2     # top edge of collector cards
+    coll_top_y = layer2_cy - 1.5 + 9.5 / 2     # top edge of collector cards
     # frontend -> node-exporter
-    add_arrow(ax, 11, app_bottom_y, 22, coll_top_y,
+    add_arrow(ax, 11, app_bottom_y, 25, coll_top_y,
               color=arrow_color_app)
-    # backend -> OTel
-    add_arrow(ax, 32, app_bottom_y, 50, coll_top_y,
-              color=arrow_color_app)
-    # mysql -> promtail (logs)
-    add_arrow(ax, 53, app_bottom_y, 78, coll_top_y,
+    # backend -> OTel (logs+traces via OTel Collector)
+    add_arrow(ax, 32, app_bottom_y, 65, coll_top_y,
+              color=arrow_color_app,
+              connectionstyle="arc3,rad=-0.10")
+    # mysql -> OTel (container logs picked up by filelog/containers receiver)
+    add_arrow(ax, 53, app_bottom_y, 70, coll_top_y,
               color=arrow_color_app)
     # kong -> OTel (gateway emits its own telemetry)
-    add_arrow(ax, 81, app_bottom_y, 56, coll_top_y,
+    add_arrow(ax, 81, app_bottom_y, 75, coll_top_y,
               color=arrow_color_app, alpha=0.55,
-              connectionstyle="arc3,rad=-0.18")
+              connectionstyle="arc3,rad=-0.10")
 
     # ============================================================
     # LAYER 3 — STORAGE
@@ -244,27 +244,27 @@ def main() -> None:
                  accent=CYAN, title_fs=10)
 
     # Arrows: COLLECTORS -> STORAGE
-    # Collector card centers: 22, 50, 78. Storage centers: 14, 38, 62, 86
+    # Collector card centers: 25, 70. Storage centers: 14, 38, 62, 86
     arrow_color_coll = GREEN
-    coll_bottom_y = layer2_cy - 1.5 - 8.5 / 2
+    coll_bottom_y = layer2_cy - 1.5 - 9.5 / 2
     store_top_y = layer3_cy - 1.0 + 11 / 2
     # node-exporter -> Prometheus
-    add_arrow(ax, 22, coll_bottom_y, 14, store_top_y,
+    add_arrow(ax, 25, coll_bottom_y, 14, store_top_y,
               color=arrow_color_coll)
-    # OTel -> Prometheus (metrics, slight curve to avoid overlap)
-    add_arrow(ax, 50, coll_bottom_y, 18, store_top_y,
-              color=arrow_color_coll, alpha=0.6,
+    # OTel Collector -> Prometheus (metrics, slight curve to avoid overlap)
+    add_arrow(ax, 70, coll_bottom_y, 18, store_top_y,
+              color=arrow_color_coll, alpha=0.55,
               connectionstyle="arc3,rad=-0.18")
-    # OTel -> Jaeger (traces)
-    add_arrow(ax, 50, coll_bottom_y, 62, store_top_y,
-              color=arrow_color_coll)
-    # promtail -> Loki
-    add_arrow(ax, 78, coll_bottom_y, 38, store_top_y,
+    # OTel Collector -> Loki (logs via native loki exporter)
+    add_arrow(ax, 70, coll_bottom_y, 38, store_top_y,
               color=arrow_color_coll,
-              connectionstyle="arc3,rad=0.18")
-    # promtail -> Drain3 (logs feed template extraction)
-    add_arrow(ax, 78, coll_bottom_y, 86, store_top_y,
+              connectionstyle="arc3,rad=0.10")
+    # OTel Collector -> Jaeger (traces)
+    add_arrow(ax, 70, coll_bottom_y, 62, store_top_y,
               color=arrow_color_coll)
+    # OTel Collector -> Drain3 (logs feed template extraction)
+    add_arrow(ax, 70, coll_bottom_y, 86, store_top_y,
+              color=arrow_color_coll, alpha=0.7)
 
     # ============================================================
     # LAYER 4 — SURFACING

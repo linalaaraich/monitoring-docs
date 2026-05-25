@@ -258,6 +258,7 @@
   <li>The three-VM topology — replaced in Sprint 2 by AWS EC2 + k3s. The Ansible roles survived; the inventory changed.</li>
   <li>Alertmanager — removed in Sprint 2 (decision <a href="decisions-log.html#d6">D6</a>, 2026-04-24). Grafana unified alerting with a single <code>triage-webhook</code> contact point replaced it.</li>
   <li>The Gmail SMTP contact point — replaced by the triage service's own SMTP send so escalation emails carry the AI verdict + RCA + suggested actions, not just a Grafana alert dump.</li>
+  <li>Promtail — retired 2026-03-30 in favour of the OTel Collector's <code>filelog/containers</code> receiver + native <code>loki</code> exporter. Unified the logs + traces ingest pipeline and removed one daemon per host. See <code>monitoring-project/what-still-needs-to-be-done.md</code> for the migration commit list.</li>
   <li>The <code>192.168.127.x</code> address space — pre-AWS legacy; live system is on a Tailscale tailnet now.</li>
 </ul>
 

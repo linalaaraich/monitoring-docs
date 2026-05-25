@@ -67,12 +67,10 @@ digraph Phase1Observability {
 
         col_node   [label="node-exporter\n(host metrics)",
                     fillcolor="#dff3e3", color="#6bcf7f"];
-        col_otel   [label="OTel Collector\n(spans + JVM metrics)",
-                    fillcolor="#dff3e3", color="#6bcf7f"];
-        col_loki   [label="Promtail / Loki agent\n(logs)",
+        col_otel   [label="OTel Collector\n(logs via filelog/containers\n+ traces via OTLP)",
                     fillcolor="#dff3e3", color="#6bcf7f"];
 
-        { rank=same; col_node; col_otel; col_loki; }
+        { rank=same; col_node; col_otel; }
     }
 
     // ===========================================================
@@ -149,8 +147,8 @@ digraph Phase1Observability {
     col_node -> st_prom;
     col_otel -> st_prom    [label=" metrics", fontsize=11];
     col_otel -> st_jaeger  [label=" traces",  fontsize=11];
-    col_loki -> st_loki;
-    col_loki -> st_drain   [label=" template extract", fontsize=11, style=dashed];
+    col_otel -> st_loki    [label=" logs (loki exporter)", fontsize=11];
+    col_otel -> st_drain   [label=" template extract", fontsize=11, style=dashed];
 
     // Storage -> Grafana surfacing
     st_prom   -> graf_dash;

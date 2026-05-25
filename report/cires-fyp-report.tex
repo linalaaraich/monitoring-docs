@@ -397,10 +397,15 @@ combination for modern infrastructure observability:
         interval.  Spring Boot exposes \texttt{/actuator/prometheus},
         Kong exposes its statistics endpoint, and host-level
         \texttt{node\_exporter} and \texttt{cAdvisor} fill in the gaps.
-  \item \textbf{Loki} for logs.  Pull-based ingestion via Promtail.
-        Loki stores log streams indexed by labels rather than by
-        full-text content, which keeps storage costs low and pairs
-        cleanly with Prometheus's label model.
+  \item \textbf{Loki} for logs.  Ingestion via the OpenTelemetry
+        Collector's \texttt{filelog/containers} receiver, which tails
+        Docker container logs under
+        \texttt{/var/lib/docker/containers/**/*-json.log} and forwards
+        them through the collector's native \texttt{loki} exporter to
+        \texttt{loki:3100/loki/api/v1/push}.  Loki stores log streams
+        indexed by labels rather than by full-text content, which
+        keeps storage costs low and pairs cleanly with Prometheus's
+        label model.
   \item \textbf{Jaeger} for traces.  OpenTelemetry Collector receives
         spans from the OTel Java agent injected into Spring Boot, and
         from the Kong OTel plugin at the gateway layer, and forwards
@@ -730,10 +735,11 @@ reference.
 \includegraphics[width=\textwidth]{../architecture-phase1-observability.png}
 \caption{Phase~1 --- observability foundation.  Application
 instrumentation (Spring Boot, Kong, MySQL, k3s) flows into
-collectors (Prometheus scrape, Promtail, OTel Collector) and into
-storage (Prometheus TSDB, Loki, Jaeger).  Grafana surfaces the
-data and routes alerts through the unified-alerting webhook
-contact point.}
+collectors (Prometheus scrape, OTel Collector with its
+\texttt{filelog/containers} receiver for logs and OTLP receiver
+for traces) and into storage (Prometheus TSDB, Loki, Jaeger).
+Grafana surfaces the data and routes alerts through the
+unified-alerting webhook contact point.}
 \label{fig:arch-phase1}
 \end{figure}
 
@@ -963,6 +969,15 @@ The carry-forward items at sprint close were: the three-VM topology
 Sprint~2 by D6); the Gmail SMTP contact point (replaced by the triage
 service's own SMTP send); and the on-premises IP address space
 (replaced by a Tailscale tailnet).
+
+Promtail was retired on 2026-03-30 and replaced by the OpenTelemetry
+Collector.  The collector's \texttt{filelog/containers} receiver picks
+up Docker container logs from
+\texttt{/var/lib/docker/containers/**/*-json.log} and the native
+\texttt{loki} exporter pushes them to
+\texttt{loki:3100/loki/api/v1/push}.  This unified the logs and
+traces ingest pipeline (previously split between Promtail for logs
+and the OTel Collector for traces) and eliminated one daemon per host.
 
 % =====================================================================
 \chapter{Sprint 2 --- AWS Migration and AI RCA MVP}
@@ -2654,9 +2669,11 @@ gap:
         front-end, two back-end services with their own
         databases, a queue, and a worker that consumes from the
         queue.  Each service is OTel-instrumented, scraped by
-        Prometheus, logged to Loki via Promtail.  Helm charts
-        live in the \texttt{monitoring-project} repository; the
-        bed is reproducible from clean k3s via a single
+        Prometheus, and its container logs are shipped to Loki
+        by the OTel Collector's \texttt{filelog/containers}
+        receiver.  Helm charts live in the
+        \texttt{monitoring-project} repository; the bed is
+        reproducible from clean k3s via a single
         \texttt{helm install} batch.
   \item \textbf{SF-9 ($\sim$3\,SP).}  A new \texttt{k8s-mcp}
         bridge surfacing read-only \texttt{kubectl get},

@@ -447,11 +447,16 @@ infrastructures~:
         \texttt{/actuator/prometheus}, Kong expose son endpoint de
         statistiques, et au niveau hôte \texttt{node\_exporter} et
         \texttt{cAdvisor} comblent les manques.
-  \item \textbf{Loki} pour les journaux. Ingestion en mode
-        \emph{pull} via Promtail. Loki stocke les flux de journaux
-        indexés par étiquettes plutôt que par contenu plein texte,
-        ce qui maintient les coûts de stockage faibles et s'aligne
-        proprement sur le modèle d'étiquettes de Prometheus.
+  \item \textbf{Loki} pour les journaux. Ingestion via le récepteur
+        \texttt{filelog/containers} de l'OpenTelemetry Collector, qui
+        suit les journaux de conteneurs Docker sous
+        \texttt{/var/lib/docker/containers/**/*-json.log} et les
+        transmet via l'exportateur natif \texttt{loki} du collecteur
+        vers \texttt{loki:3100/loki/api/v1/push}. Loki stocke les
+        flux de journaux indexés par étiquettes plutôt que par
+        contenu plein texte, ce qui maintient les coûts de stockage
+        faibles et s'aligne proprement sur le modèle d'étiquettes de
+        Prometheus.
   \item \textbf{Jaeger} pour les traces. L'OpenTelemetry Collector
         reçoit les \emph{spans} de l'agent Java OTel injecté dans
         Spring Boot et du \emph{plug-in} OTel de Kong à la couche
@@ -828,10 +833,11 @@ correspondance.
 \includegraphics[width=\textwidth]{../architecture-phase1-observability.png}
 \caption{Phase~1 --- fondation d'observabilité. L'instrumentation
 applicative (Spring Boot, Kong, MySQL, k3s) alimente les collecteurs
-(scrape Prometheus, Promtail, OTel Collector) et le stockage
-(Prometheus TSDB, Loki, Jaeger). Grafana expose les données et
-achemine les alertes via le point de contact webhook de l'alerting
-unifié.}
+(scrape Prometheus, OTel Collector avec son récepteur
+\texttt{filelog/containers} pour les journaux et son récepteur OTLP
+pour les traces) et le stockage (Prometheus TSDB, Loki, Jaeger).
+Grafana expose les données et achemine les alertes via le point de
+contact webhook de l'alerting unifié.}
 \label{fig:arch-phase1}
 \end{figure}
 
@@ -1077,6 +1083,15 @@ Les éléments reportés à la clôture du sprint étaient~: la topologie
 (retiré au sprint~2 par D6)~; le point de contact SMTP Gmail
 (remplacé par l'envoi SMTP du service de tri lui-même)~; et l'espace
 d'adressage IP sur site (remplacé par un \emph{tailnet} Tailscale).
+
+Promtail a été retiré le 2026-03-30 et remplacé par l'OTel Collector.
+Le récepteur \texttt{filelog/containers} du collecteur capte les
+journaux des conteneurs Docker depuis
+\texttt{/var/lib/docker/containers/**/*-json.log} et l'exportateur
+natif \texttt{loki} les pousse vers
+\texttt{loki:3100/loki/api/v1/push}. Cela unifie l'ingestion logs +
+traces (auparavant scindée entre Promtail pour les journaux et l'OTel
+Collector pour les traces) et élimine un démon par hôte.
 
 % =====================================================================
 \chapter{Sprint 2 --- Migration AWS et MVP RCA par IA}
@@ -2960,11 +2975,12 @@ ferme cet écart~:
         \emph{front-end}, deux services de \emph{back-end} avec
         leurs propres bases de données, une file et un
         \emph{worker} qui consomme la file. Chaque service est
-        instrumenté OTel, scrapé par Prometheus, journalisé vers
-        Loki via Promtail. Les \emph{Helm charts} vivent dans le
-        dépôt \texttt{monitoring-project}~; le banc est
-        reproductible depuis k3s vierge via un seul lot de
-        \texttt{helm install}.
+        instrumenté OTel, scrapé par Prometheus, et ses journaux
+        de conteneur sont expédiés vers Loki par le récepteur
+        \texttt{filelog/containers} de l'OTel Collector. Les
+        \emph{Helm charts} vivent dans le dépôt
+        \texttt{monitoring-project}~; le banc est reproductible
+        depuis k3s vierge via un seul lot de \texttt{helm install}.
   \item \textbf{SF-9 ($\sim$3\,SP).} Un nouveau pont \texttt{k8s-mcp}
         exposant à l'étape de collecte de contexte du pipeline de
         tri des outils en lecture seule \texttt{kubectl get},

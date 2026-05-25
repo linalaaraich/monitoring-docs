@@ -1034,7 +1034,7 @@
       <li><code>docker</code> — Docker CE + compose plugin</li>
       <li><code>prometheus</code> — scrape configs including <code>kubernetes_sd_configs</code> with a SA token</li>
       <li><code>grafana</code> — datasources, 3 dashboards, 17 alert rules, webhook contact point</li>
-      <li><code>loki</code>, <code>jaeger</code>, <code>otel-collector</code>, <code>node_exporter</code>, <code>cadvisor</code>, <code>promtail</code></li>
+      <li><code>loki</code>, <code>jaeger</code>, <code>otel-collector</code> (also ships logs via <code>filelog/containers</code> receiver + native <code>loki</code> exporter — replaced the standalone <code>promtail</code> role on 2026-03-30), <code>node_exporter</code>, <code>cadvisor</code></li>
     </ul>
     <p><strong>K3s-node roles</strong> (deployed by <code>playbooks/k3s.yml</code>):</p>
     <ul>

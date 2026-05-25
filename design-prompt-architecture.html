@@ -235,9 +235,8 @@ LAYOUT: top-to-bottom (TB) flow, A4 portrait. Five horizontal layers:
     Note (10 pt grey, below the cluster): "Instrumented enough to feed the stack — the application is not the subject of the platform; it's the workload being observed."
 
   LAYER 2 — TELEMETRY COLLECTORS (blue cluster)
-    - node-exporter (DaemonSet on k3s)
-    - OTel Collector (filelog + OTLP receivers)
-    - Promtail (Loki shipping)
+    - node-exporter (DaemonSet on k3s, host metrics)
+    - OTel Collector (logs via filelog/containers receiver + traces via OTLP, exports to Loki/Jaeger)
 
   LAYER 3 — STORAGE / BACKENDS (cyan cluster)
     - Prometheus (metrics TSDB)
@@ -256,9 +255,8 @@ LAYOUT: top-to-bottom (TB) flow, A4 portrait. Five horizontal layers:
 
 EDGES (data flow):
   - node-exporter → Prometheus (scrape)
-  - OTel Collector → Loki (logs) AND → Jaeger (traces)
-  - Promtail → Loki
-  - Application + Kong → OTel Collector (instrumented)
+  - OTel Collector → Loki (logs via native loki exporter) AND → Jaeger (traces)
+  - Application + Kong → OTel Collector (instrumented; container logs picked up by filelog/containers receiver from /var/lib/docker/containers/**/*-json.log)
   - Prometheus + Loki → Grafana (datasources)
   - Grafana alerting rules → Webhook (the outbound edge)
 
