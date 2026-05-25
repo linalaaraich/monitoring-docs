@@ -121,18 +121,18 @@
       <code>linalaaraich/jira/Sprint4-additions.csv</code>.
     </p>
     <p class="lead" style="margin-bottom:0;">
-      <strong>As of Mon 2026-05-25 (Sprint 4 day-1 official start):</strong>
-      8 of the §14 day-by-day items shipped (6 from the §14 plan + 2
-      supporting Phase 2 work). 5 still scheduled across the remaining 8
+      <strong>As of Mon 2026-05-25 (Sprint 4 day-1 — late afternoon):</strong>
+      9 of the §14 day-by-day items shipped (7 from the §14 plan + 2
+      supporting Phase 2 work). 4 still scheduled across the remaining 8
       working days of Sprint 4. 24 longer-form backlog candidates carry
       from the pre-supervisor-feedback ranking — many will roll to
       Sprint 5 / 6.
     </p>
     <div class="pill-row" style="margin-top:20px;">
-      <span class="pill green">8 shipped</span>
-      <span class="pill orange">5 scheduled</span>
+      <span class="pill green">9 shipped</span>
+      <span class="pill orange">4 scheduled</span>
       <span class="pill blue">24 backlog</span>
-      <span class="pill red">tests 296/296</span>
+      <span class="pill red">tests 313/313</span>
     </div>
   </div>
 </section>
@@ -140,7 +140,7 @@
 <div class="layout">
 <section class="content">
 
-<h2 id="shipped">✅ Shipped — 8 stories (commit refs + acceptance evidence)</h2>
+<h2 id="shipped">✅ Shipped — 9 stories (commit refs + acceptance evidence)</h2>
 
 <table>
   <thead>
@@ -195,10 +195,16 @@
       <td><code><a href="https://github.com/linalaaraich/monitoring-triage-service/commit/b8fa2c8">b8fa2c8</a></code> (2026-05-25 Mon — pulled forward from §14 W1 Thu, paired with DA-5)</td>
       <td>6 unit tests cover hash stability, divergence on different templates, service separation, fallback to anomalous_lines when no templates, graceful empty-input handling, whitespace normalisation.</td>
     </tr>
+    <tr>
+      <td>206</td>
+      <td><strong>S4-DA-02</strong> · Unsafe-action stripping (clamp-independent) — strip kubectl/ssh/restart/systemctl/reboot/docker-restart from <code>suggested_actions</code> when <code>quality=actionable AND no named cause-of-cause</code> in the RCA prose, regardless of confidence. Independent of the F-4 confidence clamp — guards the high-confidence + actionable + symptom-only-RCA gap the §7c.4 audit caught</td>
+      <td><code><a href="https://github.com/linalaaraich/monitoring-triage-service/commit/909e40b">909e40b</a></code> (2026-05-25 Mon — pulled forward from §14 W1 Fri)</td>
+      <td>Suite 296 → 313 (+17 unit tests). Covers each unsafe-verb shape (systemctl restart / kubectl rollout / ssh / reboot / docker restart / service-name restart), the cause-keyword recognition (slow query · gc pause · pool exhaustion · deploy · because · due-to · ...), partial-strip on mixed action lists, and the audit-canonical case (CriticalCpu RCA = "CPU usage is critically high" + `systemctl restart k3s-node.service` → stripped). New <code>unsafe_actions_stripped_total</code> Prometheus counter per action-kind.</td>
+    </tr>
   </tbody>
 </table>
 
-<h2 id="scheduled">📅 Scheduled — 5 stories on the §14 day-by-day plan</h2>
+<h2 id="scheduled">📅 Scheduled — 4 stories on the §14 day-by-day plan</h2>
 
 <p>
   Each row maps to a specific weekday in
@@ -211,13 +217,6 @@
     <tr><th>Jira ID</th><th>Story</th><th>§14 slot</th><th>Effort</th><th>Acceptance</th></tr>
   </thead>
   <tbody>
-    <tr>
-      <td>206</td>
-      <td><strong>S4-DA-02</strong> · Unsafe-action stripping (clamp-independent) — strip kubectl/ssh/restart/systemctl when <code>quality=actionable AND no named cause</code>, regardless of confidence</td>
-      <td>W1 Fri</td>
-      <td>~3 SP, ~4 h</td>
-      <td>Induce stress3-pattern CriticalCpu → the resulting RCA's emailed actions MUST NOT contain <code>systemctl restart</code> unless the prose names a specific cause-of-cause.</td>
-    </tr>
     <tr>
       <td>215</td>
       <td><strong>S4-PHASE-3.A.KPI</strong> · <code>/dashboard/v2/kpi</code> platform-health page — emails-per-day / FP rate / median latency / cheap-path % / archetype coverage / GPU util</td>
@@ -297,9 +296,8 @@
 <h2 id="next-week">🎯 Concrete next-session pick order</h2>
 
 <ol>
-  <li><strong>✅ Mon 2026-05-25</strong> — DA-5 + DA-4 shipped (commit <code>b8fa2c8</code>). Banked from §14 W1 Thu.</li>
-  <li><strong>Tue 2026-05-26</strong> — DA-2 unsafe-action stripping (~4 h). The §7c.4 <code>systemctl restart k3s-node.service</code> fix.</li>
-  <li><strong>Wed 2026-05-27</strong> — Phase 3.A.KPI route (~1 day). Supervisor-asked-for.</li>
+  <li><strong>✅ Mon 2026-05-25</strong> — DA-5 + DA-4 + DA-2 shipped (commits <code>b8fa2c8</code> + <code>909e40b</code>). 3 §14 days banked in day-1.</li>
+  <li><strong>Tue 2026-05-26</strong> — Phase 3.A.KPI route (~1 day). Supervisor-asked-for. (Originally Wed; pulled forward since DA-2 already shipped.)</li>
   <li><strong>Thu 2026-05-28</strong> — DA-3 cross-row coherence (~5 SP, ~1 day).</li>
   <li><strong>Fri 2026-05-29</strong> — URL filter persistence + range filter (~3 SP, ~half-day).</li>
   <li><strong>Week 2 buffer days</strong> — supervisor feedback round + auto-refresh + full-UUID copy (30-min adds each).</li>
