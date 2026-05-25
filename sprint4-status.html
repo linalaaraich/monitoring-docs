@@ -122,17 +122,17 @@
     </p>
     <p class="lead" style="margin-bottom:0;">
       <strong>As of Mon 2026-05-25 (Sprint 4 day-1 — late afternoon):</strong>
-      9 of the §14 day-by-day items shipped (7 from the §14 plan + 2
-      supporting Phase 2 work). 4 still scheduled across the remaining 8
+      10 of the §14 day-by-day items shipped (8 from the §14 plan + 2
+      supporting Phase 2 work). 3 still scheduled across the remaining 8
       working days of Sprint 4. 24 longer-form backlog candidates carry
       from the pre-supervisor-feedback ranking — many will roll to
       Sprint 5 / 6.
     </p>
     <div class="pill-row" style="margin-top:20px;">
-      <span class="pill green">9 shipped</span>
-      <span class="pill orange">4 scheduled</span>
+      <span class="pill green">10 shipped</span>
+      <span class="pill orange">3 scheduled</span>
       <span class="pill blue">24 backlog</span>
-      <span class="pill red">tests 313/313</span>
+      <span class="pill red">tests 333/333</span>
     </div>
   </div>
 </section>
@@ -140,7 +140,7 @@
 <div class="layout">
 <section class="content">
 
-<h2 id="shipped">✅ Shipped — 9 stories (commit refs + acceptance evidence)</h2>
+<h2 id="shipped">✅ Shipped — 10 stories (commit refs + acceptance evidence)</h2>
 
 <table>
   <thead>
@@ -201,10 +201,16 @@
       <td><code><a href="https://github.com/linalaaraich/monitoring-triage-service/commit/909e40b">909e40b</a></code> (2026-05-25 Mon — pulled forward from §14 W1 Fri)</td>
       <td>Suite 296 → 313 (+17 unit tests). Covers each unsafe-verb shape (systemctl restart / kubectl rollout / ssh / reboot / docker restart / service-name restart), the cause-keyword recognition (slow query · gc pause · pool exhaustion · deploy · because · due-to · ...), partial-strip on mixed action lists, and the audit-canonical case (CriticalCpu RCA = "CPU usage is critically high" + `systemctl restart k3s-node.service` → stripped). New <code>unsafe_actions_stripped_total</code> Prometheus counter per action-kind.</td>
     </tr>
+    <tr>
+      <td>215</td>
+      <td><strong>S4-PHASE-3.A.KPI</strong> · <code>/dashboard/v2/kpi</code> platform-health surface — 6 live KPIs (emails-per-day / FP rate / median latency / cheap-path % / archetype coverage / GPU util) + 2 static (MCP firewall / tests passing). Server-rendered HTML matching the v2 design tokens; 2×4 grid; auto-refresh 60 s. New <code>app/kpi_queries.py</code> reads from the existing RCAStore connection — no new data path, MCP-invariant clean</td>
+      <td><code><a href="https://github.com/linalaaraich/monitoring-triage-service/commit/adbb720">adbb720</a></code> (2026-05-25 Mon — pulled forward from §14 W2 Mon)</td>
+      <td>Suite 313 → 333 (+20 unit tests). Live smoke on <code>observability-gpu-uswest2</code>: <code>/dashboard/v2/kpi</code> returns 200 with real numbers — emails 1/day (7d-avg 8.4), FP rate 0.0% over 1 rated, median latency 25 s (p95 42 s over 19 runs), cheap-path 65% (37 vs 20), 6 distinct alert archetypes in 7 d (MediumCpuUsage 351 leads). Sidebar "KPI · Evaluation" item now links to the route.</td>
+    </tr>
   </tbody>
 </table>
 
-<h2 id="scheduled">📅 Scheduled — 4 stories on the §14 day-by-day plan</h2>
+<h2 id="scheduled">📅 Scheduled — 3 stories on the §14 day-by-day plan</h2>
 
 <p>
   Each row maps to a specific weekday in
@@ -217,13 +223,6 @@
     <tr><th>Jira ID</th><th>Story</th><th>§14 slot</th><th>Effort</th><th>Acceptance</th></tr>
   </thead>
   <tbody>
-    <tr>
-      <td>215</td>
-      <td><strong>S4-PHASE-3.A.KPI</strong> · <code>/dashboard/v2/kpi</code> platform-health page — emails-per-day / FP rate / median latency / cheap-path % / archetype coverage / GPU util</td>
-      <td>W2 Mon</td>
-      <td>~3 SP, ~3 d</td>
-      <td>Click "KPI · Evaluation" in sidebar → land on populated page (not 404). 6+ real numbers, update on refresh.</td>
-    </tr>
     <tr>
       <td>207</td>
       <td><strong>S4-DA-03</strong> · Cross-row verdict coherence — when fingerprint reused within N min, prepend prior cause to LLM context + require "changed my mind because…" framing</td>
@@ -296,10 +295,10 @@
 <h2 id="next-week">🎯 Concrete next-session pick order</h2>
 
 <ol>
-  <li><strong>✅ Mon 2026-05-25</strong> — DA-5 + DA-4 + DA-2 shipped (commits <code>b8fa2c8</code> + <code>909e40b</code>). 3 §14 days banked in day-1.</li>
-  <li><strong>Tue 2026-05-26</strong> — Phase 3.A.KPI route (~1 day). Supervisor-asked-for. (Originally Wed; pulled forward since DA-2 already shipped.)</li>
-  <li><strong>Thu 2026-05-28</strong> — DA-3 cross-row coherence (~5 SP, ~1 day).</li>
-  <li><strong>Fri 2026-05-29</strong> — URL filter persistence + range filter (~3 SP, ~half-day).</li>
+  <li><strong>✅ Mon 2026-05-25</strong> — DA-5 + DA-4 + DA-2 + Phase 3.A.KPI shipped (commits <code>b8fa2c8</code> + <code>909e40b</code> + <code>adbb720</code>). 4 §14 days banked in day-1.</li>
+  <li><strong>Tue 2026-05-26</strong> — DA-3 cross-row coherence (~5 SP, ~1 day). Originally Thu; pulled forward.</li>
+  <li><strong>Wed 2026-05-27</strong> — URL filter persistence + range filter (~3 SP, ~half-day).</li>
+  <li><strong>Fri 2026-05-29</strong> — SF-05 sustained-vs-spike modifier (~3 SP, stretch).</li>
   <li><strong>Week 2 buffer days</strong> — supervisor feedback round + auto-refresh + full-UUID copy (30-min adds each).</li>
   <li><strong>Sprint 5 import</strong> after Sprint 4 closes (~2026-06-03).</li>
 </ol>
