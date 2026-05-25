@@ -130,7 +130,7 @@ observability stack augmented with an AI-driven Root-Cause Analysis
 (RCA) layer.  The platform was built between February and May 2026 at
 CIRES Technologies (Tanger Med, Digital Factory Observability Service)
 across a phased sprint sequence.  Sprints 0--3 were completed during
-the project period; Sprint 4 is currently in progress (eight stories
+the project period; Sprint 4 is currently in progress (ten stories
 shipped on its first operational day) and Sprint 5's scope is
 captured in chapter~\ref{ch:sprint5} as a forward-looking plan that
 extends the platform from a single-application test bed to a
@@ -263,7 +263,7 @@ vendors.
         evidence, and suggested remediation actions, persisted to a
         durable history store.
   \item Bridge each telemetry source (Prometheus, Loki, Jaeger,
-        triage history, deployment events) behind an MCP server, and
+        Drain3 templates, triage history) behind an MCP server, and
         enforce an MCP-only data-access invariant so that every datum
         the LLM consumes is provenanced through a bridge.
   \item Develop and evaluate quality-control mechanisms that keep
@@ -321,7 +321,7 @@ recurring static and live audit cycles.  Chapter~\ref{ch:decisions}
 catalogues the twenty-five durable design decisions (D1--D25)
 recorded during construction and discusses the three most consequential
 in depth.  Chapter~\ref{ch:sprint4} documents the Sprint~4 work
-currently in progress (eight stories shipped on day~1, five
+currently in progress (ten stories shipped on day~1, three
 scheduled across the remaining plan).  Chapter~\ref{ch:sprint5}
 presents the Sprint~5 plan and the longer-arc Sprint~6+ outlook,
 including the new \emph{hierarchical drain3 thresholds} design.
@@ -491,10 +491,11 @@ sit between the data sources and the triage service:
   \item \texttt{loki-mcp:8092}  --- log queries against Loki.
   \item \texttt{jaeger-mcp:8093}  --- trace lookups against Jaeger,
         plus a \texttt{get\_trace} tool for full-trace retrieval.
-  \item \texttt{rca-history-mcp:8094}  --- read access to the
-        persistent RCA history (SQLite, on the laptop runner).
-  \item \texttt{deploy-events-mcp:8095}  --- deployment-event timeline
-        from the application repositories.
+  \item \texttt{drain3-mcp:8094}  --- per-service Drain3 template
+        miners and novelty-rate queries.
+  \item \texttt{rca-history-mcp:8095}  --- read access to the
+        persistent RCA history (SQLite, with quality-rated
+        \texttt{get\_similar\_decisions} tools).
 \end{itemize}
 
 In the default path, the triage service \emph{itself} (not the LLM)
@@ -670,8 +671,10 @@ before settling on the eventual two-layer design:
         documented in chapter~\ref{ch:evaluation}.
   \item \textbf{NFR-4 Cost.}  Total monthly run-rate target: under
         \$100/month, exclusive of AWS Free-Tier-eligible resources.
-        This budget drives the decision to drop the Sprint~4 GPU
-        migration (\S\ref{sec:gpu-dropped}).
+        This budget initially drove the 2026-05-19 decision to drop
+        the Sprint-4 GPU migration; the decision was reversed on
+        2026-05-21 once the cost frame was rebuilt around a Lambda
+        autoshutoff gateway (\S\ref{sec:gpu-shipped}).
   \item \textbf{NFR-5 Auditability.}  Every change to the platform
         shall be reviewable in version control; durable design
         decisions shall be captured in a decisions log; daily
@@ -692,11 +695,11 @@ figure~\ref{fig:layers}.
 \begin{tabular}{|c|}
 \hline
 \textbf{Layer 3 --- AI triage} \\
-FastAPI service, qwen2.5:7b on Ollama, dashboard, SMTP escalation \\
+FastAPI service, qwen2.5:14b on Ollama, dashboard, SMTP escalation \\
 \hline
 \textbf{Layer 2 --- MCP bridge} \\
 \texttt{prometheus-mcp}, \texttt{loki-mcp}, \texttt{jaeger-mcp},
-\texttt{rca-history-mcp}, \texttt{deploy-events-mcp} \\
+\texttt{drain3-mcp}, \texttt{rca-history-mcp} \\
 \hline
 \textbf{Layer 1 --- Observability foundation} \\
 Prometheus, Loki, Jaeger, Grafana, OTel Collector, node-exporter,
@@ -782,12 +785,18 @@ distributes across three classes of host:
         application workload (Spring Boot, Kong, MySQL, front-end) on
         a single-node k3s cluster.  A node-exporter DaemonSet provides
         host-level metrics from the k3s side.
-  \item \textbf{AI host} (the engineer's laptop,
-        WSL2 + Docker Desktop, NVIDIA GTX~1060 6\,GB).  Runs the
-        triage service, the five MCP servers, and Ollama with
-        \texttt{qwen2.5:7b-instruct} loaded.  The laptop is reachable
-        over a Tailscale tailnet and addressed by MagicDNS
-        (\texttt{adolin-wsl}).
+  \item \textbf{AI host} (\texttt{observability-gpu-uswest2},
+        AWS EC2 \texttt{g5.xlarge} in \texttt{us-west-2}, NVIDIA
+        A10G 24\,GB).  Runs the triage service, the five MCP
+        servers, and Ollama with \texttt{qwen2.5:14b-instruct}
+        loaded as primary.  The host is reachable over a Tailscale
+        tailnet (operator paths) and via an IP-allowlisted API
+        Gateway (Grafana webhook ingress); a Lambda autoshutoff
+        gateway stops the instance after 20\,min idle (decisions
+        D24/D25).  The engineer's laptop
+        (WSL2 + Docker Desktop, NVIDIA GTX~1060 6\,GB, MagicDNS
+        \texttt{adolin-wsl}) is retained as failover with
+        \texttt{qwen2.5:7b-instruct}.
 \end{enumerate}
 
 All three hosts share a Tailscale tailnet that also contains the
@@ -811,7 +820,7 @@ stages, summarised in figure~\ref{fig:pipeline}.
 3  & Context gather (Prom, Loki, Jaeger, Drain3, RCA history) & \texttt{context.py} \\
 4  & Numeric metric interpretation                 & \texttt{metric\_interpreter.py} \\
 5  & Exemplar injection (1 of 14 archetypes)       & \texttt{exemplars/} \\
-6  & LLM call (structured output, qwen2.5:7b)      & \texttt{llm\_client.py} \\
+6  & LLM call (structured output, qwen2.5:14b)     & \texttt{llm\_client.py} \\
 6b & Response validation (surface-only, hypothesis-menu, blocklist) & \texttt{response\_validator.py} \\
 6c & Bounded-agency retry (one MCP call max)       & \texttt{bounded\_agency.py} \\
 6d & Confidence clamp (strip actions if untrustworthy) & \texttt{pipeline.py} \\
@@ -1036,8 +1045,10 @@ comprises:
         metrics, logs, and traces.
   \item \textbf{Local LLM.}  \texttt{qwen2.5:7b-instruct} via Ollama,
         initially on a \texttt{g4dn.xlarge} EC2 (decommissioned), then
-        moved to the laptop's GTX 1060 on 2026-04-23 (still the
-        production runner today).
+        moved to the laptop's GTX 1060 on 2026-04-23 as the
+        Sprint-2-era production runner (later superseded by the
+        \texttt{g5.xlarge} GPU host on 2026-05-21, see
+        \S\ref{sec:gpu-shipped}).
 \end{itemize}
 
 \section{Epic 3 --- Kubernetes migration}
@@ -1453,8 +1464,10 @@ window closed:
 The bounded-agency retry is the platform's mechanism for handling
 genuinely data-starved RCAs: if the validator flags the first pass,
 the LLM is given exactly one additional MCP call from a six-tool
-whitelist (Prometheus instant query, Loki range, Jaeger get-traces,
-RCA-history lookup, deploy-events, and \texttt{get\_trace}).  The
+whitelist (\texttt{prometheus.query}, \texttt{loki.query\_range},
+\texttt{jaeger.get\_traces}, \texttt{rca\_history.similar},
+\texttt{rca\_history.list\_exemplars}, and
+\texttt{rca\_history.get\_exemplar}).  The
 whitelist plus the Pydantic schema plus a retry feedback string
 constrain the second call; the model is re-prompted, the output is
 revalidated, and the first-pass output is kept if the retry is still
@@ -1922,12 +1935,15 @@ The Sprint~2 verdict-story field note recorded an end-to-end pipeline
 latency of \texttt{67\,995\,ms} ($\approx$\,68\,s) on the laptop
 runner with \texttt{qwen2.5:7b-instruct}, against a historical
 k3s-on-CPU baseline of 20--40 \emph{minutes} per alert.  Sustained
-steady-state latencies on the laptop are 25--35\,s warm.  Five
-recent fires were anomalously slow (323, 399, 533, 755, 1081\,s)
-and the per-stage instrumentation drafted during the investigation
-window will surface whether the cause is bounded-agency retries,
-LLM prefill saturation, or MCP tail latency; the instrumentation is
-held until S3-HF-05 ships so the retry path is properly attributable.
+steady-state latencies on the laptop runner were 25--35\,s warm in
+the investigation-window evaluation.  Five fires in that window
+were anomalously slow (323, 399, 533, 755, 1081\,s) and the
+per-stage instrumentation drafted during the investigation window
+held until S3-HF-05 shipped so the retry path could be properly
+attributed.  Post-migration measurements on the
+\texttt{g5.xlarge} GPU host show median end-to-end latency at
+$\sim$38\,s --- the order-of-magnitude improvement that motivated
+D24/D25 (\S\ref{sec:gpu-shipped}).
 
 \section{Operational steady state}
 
@@ -1952,13 +1968,13 @@ RCAs.
 
 The project maintains a durable decisions log
 (\texttt{monitoring-docs/decisions-log.html}) recording the
-twenty-three substantive design or rule-of-thumb decisions taken
+twenty-five substantive design or rule-of-thumb decisions taken
 during construction.  Each entry follows a stable structure: the
 problem observed, the constraints, the decision, and the verification
 that closed it.  Table~\ref{tab:decisions} summarises the catalogue.
 
 \begin{longtable}{p{0.04\textwidth} p{0.34\textwidth} p{0.56\textwidth}}
-\caption{Catalogue of durable design decisions D1--D23.}
+\caption{Catalogue of durable design decisions D1--D25.}
 \label{tab:decisions} \\
 \toprule
 \textbf{ID} & \textbf{Title} & \textbf{One-line decision} \\
@@ -2129,10 +2145,11 @@ methodological choice.
 \chapter{Sprint 4 --- In Progress}
 \label{ch:sprint4}
 
-Sprint~4 runs 2026-05-25 to 2026-06-05.  Day~1 (2026-05-25) is the
-day this chapter was written; eight stories shipped before the
-day's close, five remain scheduled across the rest of the plan,
-and one (SF-5) sits as a stretch goal in the second week.  The
+Sprint~4 runs 2026-05-20 to 2026-06-03.  Mon 2026-05-25 is the
+operational day-1 of the sprint --- the day this chapter was
+written --- when ten stories shipped before close, two remain
+scheduled across the rest of the plan, and one (SF-5) sits as a
+stretch goal in the second week.  The
 chapter is deliberately written in two halves --- \emph{shipped}
 and \emph{queued} --- so that the boundary between completed and
 planned work is visible at a glance, and so that subsequent
@@ -2559,7 +2576,7 @@ the sprint-plan source of record is
 
 The three items together total approximately eleven story
 points across the remaining sprint window plus a stretch.  At
-Sprint~4 close on 2026-06-05 the suite is expected at
+Sprint~4 close on 2026-06-03 the suite is expected at
 $\sim$350 tests green; the next critical RCA audit (an
 eight-criterion repeat of the 2026-05-21 audit recorded in
 \S\ref{sec:critical-rca-audit}) is scheduled for the
@@ -3000,8 +3017,8 @@ This dissertation has reported on the design and implementation of
 the CIRES Observability Platform, an AI-augmented observability
 solution built over four sprints (with a fifth scoped in
 chapter~\ref{ch:sprint5}) at CIRES Technologies.  Sprints~0
-through~3 are closed; Sprint~4 is in active progress with eight
-stories shipped on day~1 and five more scheduled across the
+through~3 are closed; Sprint~4 is in active progress with ten
+stories shipped on day~1 and three more scheduled across the
 remaining plan.  The platform addresses the operational gap
 identified during Sprint~0 field research --- that the team was
 finding out about production problems after the fact rather than
@@ -3190,12 +3207,13 @@ thresholds. \\
 3 & 2026-04-23 -- 2026-05-19 & RCA quality close-out, hallucination
 firewall epic added on 2026-04-29 after 0b215ef3, 20-day investigation
 window 04-30 -- 05-19. \\
-4 & 2026-05-25 -- 2026-06-05 & \emph{In progress.}  Day-1 ship of
-GPU migration (D24/D25), SF-6 email overhaul, SF-7 operator
+4 & 2026-05-20 -- 2026-06-03 & \emph{In progress.}  Day-1
+(Mon 2026-05-25) ship of GPU migration (D24/D25, instance live
+since 2026-05-21), SF-6 email overhaul, SF-7 operator
 feedback page, SF-4 dashboard collapsing, Phase~2.1 detail page,
-DA-4/DA-5 dedupe, DA-2 unsafe-action stripping, Phase~3.A.KPI
-dashboard route; queued: DA-3, URL filters, SF-5 stretch.  Suite
-\texttt{333/333} green. \\
+DA-1/DA-2/DA-4/DA-5 dedupe + unsafe-action stripping,
+Phase~3.A.KPI dashboard route; queued: DA-3, URL filters, SF-5
+stretch.  Suite \texttt{333/333} green. \\
 5 & 2026-06-06 -- 2026-06-17 & \emph{Planned.}  EPIC13 microservice
 test bed (SF-13) + canonical scenario; EPIC14 incident entity and
 Phase~3.A/3.B sidebar surfaces; EPIC15 operator-config and
