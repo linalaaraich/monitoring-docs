@@ -191,6 +191,7 @@
     <li class="sub"><a href="#be-phase3">13.4 Phase 3 — sidebar nav surfaces (8 new routes)</a></li>
     <li class="sub"><a href="#be-phase4">13.5 Phase 4 — production hardening</a></li>
     <li class="sub"><a href="#be-deps">13.6 Dependencies + ship order</a></li>
+    <li class="sub"><a href="#be-drain3-tiers">13.7 Hierarchical drain3 thresholds — 3 tiers (Sprint 5)</a></li>
     <li><a href="#sprint4-ops">14. Sprint 4 — operational shipping plan</a></li>
     <li class="sub"><a href="#s4-goal">14.1 The one goal</a></li>
     <li class="sub"><a href="#s4-week1">14.2 Week 1 — daily ships</a></li>
@@ -2309,6 +2310,87 @@ them.
   asked for KPIs specifically) → Phase 2.2 (incident table).</strong> That order
   gives him three click-through surfaces inside ~2 weeks, with the incident
   entity backfill happening after he's verified the design shape.
+</p>
+
+<!-- 13.7 -->
+<h3 id="be-drain3-tiers">13.7 Hierarchical drain3 thresholds — 3 tiers (Sprint 5)</h3>
+
+<div class="callout note">
+  <div class="callout-label">Forward-looking design · surfaced 2026-05-25 alongside the DA-5 / DA-4 ship</div>
+  <p>
+    <strong>Problem.</strong> Today drain3 anomaly detection uses a
+    <em>single per-service threshold</em> — the weakest link in the detection chain.
+    It cannot distinguish "this one service is being weird" from "many services
+    are quietly weird at once." A subthreshold-but-correlated drift across multiple
+    components looks like silence to the per-service gate, even though the system as
+    a whole has clearly moved.
+  </p>
+</div>
+
+<p>
+  <strong>Solution.</strong> Three independently-firing tiers of anomaly threshold,
+  each scoped at a different level of the system hierarchy. Tier N firing does not
+  suppress Tier N+1 — they are complementary signals, not a fallback chain.
+</p>
+
+<table>
+  <thead><tr><th>Tier</th><th>Scope</th><th>What it catches</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>Tier 1 — component</strong></td>
+      <td>Narrowest: per backend / frontend / captor / db of each application. Computed at the finest scope drain3 can group by.</td>
+      <td>Single-component drift — "the <code>checkout-backend</code> pod is generating novel templates at a rate that is unusual <em>for that component specifically</em>."</td>
+    </tr>
+    <tr>
+      <td><strong>Tier 2 — application</strong></td>
+      <td>Per application, aggregating anomaly rate across that app's components (backend + frontend + db + captor as one bucket).</td>
+      <td>"Whole app is quietly weird" — no single component crosses Tier 1, but the application's aggregate novelty rate is unusual <em>for that app</em>. Catches correlated subthreshold drift within one app.</td>
+    </tr>
+    <tr>
+      <td><strong>Tier 3 — system</strong></td>
+      <td>System-wide aggregate across every component of every application. Outage backstop.</td>
+      <td>"Everything weird at once" — every component looks subthreshold individually, every app looks subthreshold individually, but the platform as a whole has clearly drifted. Catches cross-app correlated incidents (shared infra blip, network partition, control-plane stall).</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="callout warn">
+  <div class="callout-label">Explicitly rejected — the "intersection" tier</div>
+  <p>
+    The original sketch included a fourth tier — apps sharing a database, a
+    namespace, or a host. It was dropped as <strong>combinatorially fuzzy</strong>:
+    different intersection definitions (db-shared vs ns-shared vs host-shared)
+    overlap messily, and exposing them as tunable groupings blows up the operator
+    config surface for limited extra signal that Tier 3 already covers as a
+    backstop. The three clean hierarchical scopes above are kept; intersection
+    is left out by design.
+  </p>
+</div>
+
+<p>
+  <strong>Validation dependency.</strong> Requires <a href="#sf-sprint5">SF-13</a>
+  (microservice test bed with ≥2 applications, each with multiple components) to
+  exercise the cross-app aggregation paths. The current bed —
+  <code>react-springboot-mysql</code> + <code>car-rental</code> — has the shape
+  but the canonical acceptance scenario needs ≥3 components per app to make Tier 2
+  meaningful vs Tier 1. Tracked in Jira as <strong>S5-DRN-01</strong> (id 320)
+  parented to EPIC13.
+</p>
+
+<p>
+  <strong>Acceptance scenario.</strong> A cross-app chaos induction where no
+  individual component crosses Tier 1 (each component's novelty rate stays
+  within its own baseline) but the Tier 2 aggregate of one app — or the Tier 3
+  system-wide aggregate — does fire. This is the test case the single-threshold
+  scheme provably fails today.
+</p>
+
+<p>
+  <strong>FYP-report framing.</strong> This is a Sprint 5 design item, not a
+  Sprint 4 deliverable; it ships after Sprint 4 closes (~2026-06-03). The FYP
+  report should cite it as a forward-looking improvement to the drain3
+  detection layer, surfaced during the DA-4 / DA-5 work on 2026-05-25, and
+  scoped to land in EPIC13 once the microservice bed (SF-13) is live.
 </p>
 
 <!-- ────────────────────── 14 ────────────────────── -->
