@@ -1,0 +1,112 @@
+digraph HallucinationFirewall {
+    // Graph-level styling
+    rankdir=TB;
+    bgcolor="#ffffff";
+    fontname="Helvetica";
+    fontsize=12;
+    labelloc="t";
+    label="Hallucination Firewall — MCP-only data access invariant";
+    fontcolor="#0f1117";
+    pad=0.4;
+    nodesep=0.35;
+    ranksep=0.6;
+    splines=spline;
+    compound=true;
+
+    // Defaults
+    node [shape=box, style="rounded,filled", penwidth=1.5,
+          fontname="Helvetica", fontsize=11, fontcolor="#0f1117",
+          color="#3a3f52", margin="0.18,0.10"];
+    edge [color="#3a3f52", penwidth=1.2, fontname="Helvetica",
+          fontsize=9, fontcolor="#3a3f52", arrowsize=0.8];
+
+    // === DATA SOURCES (top, cyan) ===
+    subgraph cluster_sources {
+        label="Data Sources";
+        labeljust="c";
+        fontsize=12;
+        fontcolor="#3a3f52";
+        style="rounded,dashed";
+        color="#8890a0";
+        margin=12;
+        src_prom   [label="Prometheus\n(metrics)",          fillcolor="#40d0d0"];
+        src_loki   [label="Loki\n(logs)",                   fillcolor="#40d0d0"];
+        src_jaeger [label="Jaeger\n(traces)",               fillcolor="#40d0d0"];
+        src_drain  [label="Drain3 state\n(templates)",      fillcolor="#40d0d0"];
+        src_sqlite [label="SQLite\nRCA history",            fillcolor="#40d0d0"];
+    }
+
+    // === MCP BOUNDARY (middle, green) ===
+    subgraph cluster_mcp {
+        label="MCP Boundary — only sanctioned data crosses here";
+        labeljust="c";
+        fontsize=13;
+        fontcolor="#e06070";
+        style="rounded,filled";
+        fillcolor="#fff5f5";
+        color="#e06070";
+        penwidth=2.5;
+        margin=16;
+        mcp_prom   [label="Prometheus\nMCP",  fillcolor="#6bcf7f"];
+        mcp_loki   [label="Loki\nMCP",        fillcolor="#6bcf7f"];
+        mcp_jaeger [label="Jaeger\nMCP",      fillcolor="#6bcf7f"];
+        mcp_drain  [label="Drain3\nMCP",      fillcolor="#6bcf7f"];
+        mcp_rca    [label="RCA-history\nMCP", fillcolor="#6bcf7f"];
+
+        // Keep MCPs on one rank to look like a horizontal bar
+        { rank=same; mcp_prom; mcp_loki; mcp_jaeger; mcp_drain; mcp_rca; }
+    }
+
+    // === LLM (purple, below boundary) ===
+    llm [label="LLM\n(Ollama qwen2.5:14b)",
+         fillcolor="#b07ee8", penwidth=1.8];
+
+    // === FORBIDDEN PATHS (red, on the side) ===
+    subgraph cluster_forbidden {
+        label="FORBIDDEN — direct paths blocked";
+        labeljust="c";
+        fontsize=12;
+        fontcolor="#e06070";
+        style="rounded,filled";
+        fillcolor="#fff0f0";
+        color="#e06070";
+        penwidth=2;
+        margin=12;
+        fb_db   [label="Direct DB\nread",                fillcolor="#e06070", fontcolor="#ffffff"];
+        fb_prom [label="In-process\nPrometheus client", fillcolor="#e06070", fontcolor="#ffffff"];
+        fb_file [label="Raw file\nread",                fillcolor="#e06070", fontcolor="#ffffff"];
+    }
+
+    // === LEGEND ===
+    legend [shape=note, style="filled", fillcolor="#fafafa",
+            color="#8890a0", fontsize=10, fontcolor="#0f1117",
+            label="Every byte the LLM sees came through an MCP. No exceptions.\nEliminates hallucination paths where the LLM invents data\nnot present in source-of-truth telemetry."];
+
+    // === EDGES: sources -> own MCP ===
+    src_prom   -> mcp_prom;
+    src_loki   -> mcp_loki;
+    src_jaeger -> mcp_jaeger;
+    src_drain  -> mcp_drain;
+    src_sqlite -> mcp_rca;
+
+    // === EDGES: MCPs converge to LLM ===
+    mcp_prom   -> llm;
+    mcp_loki   -> llm;
+    mcp_jaeger -> llm;
+    mcp_drain  -> llm;
+    mcp_rca    -> llm;
+
+    // === FORBIDDEN edges — red X-crossed dashed ===
+    fb_db   -> llm [color="#e06070", penwidth=2, style=dashed,
+                    label=" X BLOCKED", fontcolor="#e06070", fontsize=10,
+                    arrowhead=tee];
+    fb_prom -> llm [color="#e06070", penwidth=2, style=dashed,
+                    label=" X BLOCKED", fontcolor="#e06070", fontsize=10,
+                    arrowhead=tee];
+    fb_file -> llm [color="#e06070", penwidth=2, style=dashed,
+                    label=" X BLOCKED", fontcolor="#e06070", fontsize=10,
+                    arrowhead=tee];
+
+    // Layout hint: legend at bottom
+    { rank=sink; legend; }
+}

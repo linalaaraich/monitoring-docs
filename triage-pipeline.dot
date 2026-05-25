@@ -1,0 +1,91 @@
+digraph TriagePipeline {
+    // Graph-level styling
+    rankdir=TB;
+    bgcolor="#ffffff";
+    fontname="Helvetica";
+    fontsize=12;
+    labelloc="t";
+    label="Triage Pipeline — Alert Journey";
+    fontcolor="#0f1117";
+    pad=0.4;
+    nodesep=0.35;
+    ranksep=0.45;
+    splines=spline;
+
+    // Defaults
+    node [shape=box, style="rounded,filled", penwidth=1.5,
+          fontname="Helvetica", fontsize=11, fontcolor="#0f1117",
+          color="#3a3f52", margin="0.18,0.10"];
+    edge [color="#3a3f52", penwidth=1.2, fontname="Helvetica",
+          fontsize=10, fontcolor="#3a3f52", arrowsize=0.8];
+
+    // === START (blue oval) ===
+    start [label="Alert arrives", shape=ellipse, fillcolor="#4ea8de", penwidth=1.8];
+
+    // === STEP 1: Dedup decision ===
+    dedup [label="Dedup window\ncheck",
+           shape=diamond, fillcolor="#f0a050",
+           width=2.4, height=1.4];
+    dedup_note [shape=note, fillcolor="#fafafa", color="#8890a0",
+                fontsize=9, fontcolor="#3a3f52",
+                label="uses DA-5 family_dedup_key\n+ DA-4 drain3_fingerprint\n(shipped 2026-05-25)"];
+    dedup_yes [label="Persist\nsuppressed_duplicate\n=> END",
+               fillcolor="#40d0d0", shape=box];
+
+    // === STEP 2: Suppression decision ===
+    suppress [label="Pre-LLM suppression\n(Layer 2)",
+              shape=diamond, fillcolor="#f0a050",
+              width=2.6, height=1.4];
+    suppress_yes [label="Persist\ntriage_suppressed\n=> END",
+                  fillcolor="#40d0d0", shape=box];
+
+    // === STEP 3: Recurrence gate decision ===
+    recurrence [label="Recurrence gate\n(US-5.8)",
+                shape=diamond, fillcolor="#f0a050",
+                width=2.4, height=1.4];
+    recurrence_yes [label="Persist\ngated row\n=> END",
+                    fillcolor="#40d0d0", shape=box];
+
+    // === STEP 4: MCP fan-out (green) ===
+    context [label="Gather context\n(MCP fan-out — 5 MCPs in parallel)",
+             fillcolor="#6bcf7f"];
+
+    // === STEP 5: Drain3 annotate ===
+    annotate [label="Annotate logs\n(Drain3)", fillcolor="#f0a050"];
+
+    // === STEP 6: LLM ===
+    llm [label="LLM verdict\n(qwen2.5:14b)", fillcolor="#b07ee8"];
+
+    // === STEP 7: Quality + clamp ===
+    clamp [label="Quality classify\n+ clamp actions\n(Bounded-agency safety layer)",
+           fillcolor="#e06070", fontcolor="#ffffff"];
+
+    // === STEP 8: Notifier ===
+    notifier [label="Notifier\n(email + dashboard)", fillcolor="#4ea8de"];
+
+    // === END (cyan terminal) ===
+    persist [label="Persist RCA row",
+             shape=ellipse, fillcolor="#40d0d0", penwidth=1.8];
+
+    // === MAIN FLOW ===
+    start      -> dedup;
+    dedup      -> dedup_yes      [label=" YES (dup)", fontcolor="#e06070"];
+    dedup      -> suppress       [label=" NO",        fontcolor="#3a3f52"];
+    suppress   -> suppress_yes   [label=" YES",       fontcolor="#e06070"];
+    suppress   -> recurrence     [label=" NO",        fontcolor="#3a3f52"];
+    recurrence -> recurrence_yes [label=" YES",       fontcolor="#e06070"];
+    recurrence -> context        [label=" NO",        fontcolor="#3a3f52"];
+    context    -> annotate;
+    annotate   -> llm;
+    llm        -> clamp;
+    clamp      -> notifier;
+    notifier   -> persist;
+
+    // Note dangle off dedup
+    dedup -> dedup_note [style=dotted, color="#8890a0", arrowhead=none];
+
+    // Keep the early-exit terminals aligned to the right
+    { rank=same; dedup;      dedup_yes;      dedup_note; }
+    { rank=same; suppress;   suppress_yes; }
+    { rank=same; recurrence; recurrence_yes; }
+}

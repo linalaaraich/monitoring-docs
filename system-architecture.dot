@@ -1,0 +1,145 @@
+digraph SystemArchitecture {
+    // Graph-level styling
+    rankdir=LR;
+    bgcolor="#ffffff";
+    fontname="Helvetica";
+    fontsize=12;
+    labelloc="t";
+    label="CIRES Observability Platform — System Architecture";
+    fontcolor="#0f1117";
+    pad=0.4;
+    nodesep=0.35;
+    ranksep=0.55;
+    splines=spline;
+
+    // Default node and edge styling
+    node [shape=box, style="rounded,filled", penwidth=1.5,
+          fontname="Helvetica", fontsize=11, fontcolor="#0f1117",
+          color="#3a3f52", margin="0.18,0.10"];
+    edge [color="#3a3f52", penwidth=1.2, fontname="Helvetica",
+          fontsize=9, fontcolor="#3a3f52", arrowsize=0.8];
+
+    // === SOURCES (blue) ===
+    subgraph cluster_sources {
+        label="Sources";
+        labeljust="l";
+        fontsize=12;
+        fontcolor="#3a3f52";
+        style="rounded,dashed";
+        color="#8890a0";
+        margin=12;
+        grafana    [label="Grafana\nAlerting",     fillcolor="#4ea8de"];
+        drain3_src [label="Drain3\nanomaly producer", fillcolor="#4ea8de"];
+        manual     [label="Manual\nwebhooks",      fillcolor="#4ea8de"];
+    }
+
+    // === INGRESS (orange) ===
+    subgraph cluster_ingress {
+        label="Ingress";
+        labeljust="l";
+        fontsize=12;
+        fontcolor="#3a3f52";
+        style="rounded,dashed";
+        color="#8890a0";
+        margin=12;
+        ingress [label="Triage Service (FastAPI)\n/webhook/grafana\n/webhook/drain3",
+                 fillcolor="#f0a050"];
+    }
+
+    // === PIPELINE STAGES (orange) ===
+    subgraph cluster_pipeline {
+        label="Pipeline";
+        labeljust="l";
+        fontsize=12;
+        fontcolor="#3a3f52";
+        style="rounded,dashed";
+        color="#8890a0";
+        margin=12;
+        dedup      [label="Dedup\n(DA-5 family + DA-4\ncontent-hash)", fillcolor="#f0a050"];
+        suppress   [label="Suppression\n(Layer 2)",                    fillcolor="#f0a050"];
+        recurrence [label="Recurrence\nGate (US-5.8)",                 fillcolor="#f0a050"];
+        context    [label="Context\nGather",                           fillcolor="#f0a050"];
+        annotate   [label="Drain3\nAnnotate",                          fillcolor="#f0a050"];
+    }
+
+    // === MCP LAYER (green) ===
+    subgraph cluster_mcp {
+        label="MCP Layer (hallucination firewall)";
+        labeljust="l";
+        fontsize=12;
+        fontcolor="#e06070";
+        style="rounded,dashed";
+        color="#e06070";
+        penwidth=2;
+        margin=14;
+        mcp_prom   [label="Prometheus\nMCP",  fillcolor="#6bcf7f"];
+        mcp_loki   [label="Loki\nMCP",        fillcolor="#6bcf7f"];
+        mcp_jaeger [label="Jaeger\nMCP",      fillcolor="#6bcf7f"];
+        mcp_drain  [label="Drain3\nMCP",      fillcolor="#6bcf7f"];
+        mcp_rca    [label="RCA-history\nMCP", fillcolor="#6bcf7f"];
+        mcp_k8s    [label="k8s/Rancher MCP\n(Sprint 5, planned)",
+                    fillcolor="#ffffff", color="#6bcf7f", style="rounded,filled,dashed",
+                    fontcolor="#8890a0"];
+    }
+
+    // === LLM (purple) ===
+    subgraph cluster_llm {
+        label="LLM Core";
+        labeljust="l";
+        fontsize=12;
+        fontcolor="#3a3f52";
+        style="rounded,dashed";
+        color="#8890a0";
+        margin=14;
+        llm [label="Ollama\nqwen2.5:14b (primary)\n7b (fallback)\nA10G GPU",
+             fillcolor="#b07ee8"];
+        clamp [label="Bounded-agency\naction clamps",
+               fillcolor="#e06070", fontcolor="#ffffff"];
+    }
+
+    // === OUTPUTS (blue + cyan) ===
+    subgraph cluster_outputs {
+        label="Outputs";
+        labeljust="l";
+        fontsize=12;
+        fontcolor="#3a3f52";
+        style="rounded,dashed";
+        color="#8890a0";
+        margin=12;
+        notifier  [label="Email\nNotifier",         fillcolor="#4ea8de"];
+        dashboard [label="/dashboard/v2",           fillcolor="#4ea8de"];
+        sqlite    [label="RCA SQLite\nStore",      fillcolor="#40d0d0"];
+    }
+
+    // === EDGES ===
+    grafana    -> ingress;
+    drain3_src -> ingress;
+    manual     -> ingress;
+
+    ingress    -> dedup;
+    dedup      -> suppress;
+    suppress   -> recurrence;
+    recurrence -> context;
+    context    -> annotate;
+
+    // Context gather fans out to MCPs
+    annotate -> mcp_prom;
+    annotate -> mcp_loki;
+    annotate -> mcp_jaeger;
+    annotate -> mcp_drain;
+    annotate -> mcp_rca;
+
+    // MCPs converge to LLM
+    mcp_prom   -> llm;
+    mcp_loki   -> llm;
+    mcp_jaeger -> llm;
+    mcp_drain  -> llm;
+    mcp_rca    -> llm;
+    mcp_k8s    -> llm [style=dashed, color="#8890a0"];
+
+    // LLM through clamp to outputs
+    llm   -> clamp;
+    clamp -> notifier;
+    clamp -> dashboard;
+    clamp -> sqlite;
+}
