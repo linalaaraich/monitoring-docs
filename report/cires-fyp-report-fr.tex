@@ -133,7 +133,7 @@ intelligence artificielle. La plateforme a été construite entre
 février et mai 2026 chez CIRES Technologies (Tanger Med, Digital
 Factory Observability Service) au fil d'une séquence de sprints. Les
 sprints~0 à~3 ont été clôturés pendant la période du projet~; le
-sprint~4 est actuellement en cours (huit user stories livrées dès son
+sprint~4 est actuellement en cours (dix user stories livrées dès son
 premier jour opérationnel) et le périmètre du sprint~5 est consigné
 au chapitre~\ref{ch:sprint5} sous forme de plan prospectif qui étend
 la plateforme depuis un banc de test mono-applicatif vers un
@@ -356,8 +356,8 @@ et en condition réelle. Le chapitre~\ref{ch:decisions} catalogue les
 vingt-cinq décisions durables de conception (D1--D25) consignées
 pendant la construction et examine les trois plus marquantes en
 profondeur. Le chapitre~\ref{ch:sprint4} documente le travail du
-sprint~4 actuellement en cours (huit user stories livrées le
-jour~1, cinq programmées sur le reste du plan). Le
+sprint~4 actuellement en cours (dix user stories livrées le
+jour~1, trois programmées sur le reste du plan). Le
 chapitre~\ref{ch:sprint5} présente le plan du sprint~5 et les
 perspectives à plus long terme du sprint~6 et au-delà, en y
 incluant la nouvelle conception des \emph{seuils Drain3
@@ -1157,8 +1157,10 @@ Elle comporte~:
         traces.
   \item \textbf{LLM local.} \texttt{qwen2.5:7b-instruct} via Ollama,
         d'abord sur une EC2 \texttt{g4dn.xlarge} (décommissionnée),
-        puis déplacé sur le GTX 1060 du portable le 2026-04-23
-        (toujours le \emph{runner} de production aujourd'hui).
+        puis déplacé sur le GTX 1060 du portable le 2026-04-23~;
+        promu à \texttt{qwen2.5:14b-instruct} sur hôte GPU AWS
+        \texttt{g5.xlarge} (\S\ref{sec:gpu-shipped}) le 2026-05-21,
+        portable conservé en repli.
 \end{itemize}
 
 \section{Épopée 3 --- Migration Kubernetes}
@@ -2158,21 +2160,21 @@ reprise soit correctement attribuable.
 
 \section{Régime opérationnel permanent}
 
-L'observation qualitative que la plateforme a maintenu un régime
-permanent sur la fenêtre d'investigation de vingt jours --- plus
-une vague de clôture de sprint le 2026-05-19 qui a posé dix SP de
-refactorings à travers quatre dépôts sans régression --- est en
-soi un résultat d'évaluation. Aucun incident n'a été observé sur
-les vingt-sept jours allant de la clôture du sprint~2 le
-2026-04-23 à la vérification du 2026-05-20~; les instances AWS
-sont restées en service sur la fenêtre complète~; le conteneur
-\texttt{ai-triage-service} sur le portable n'a requis qu'un seul
-redémarrage manuel sur la période (causé par un Docker
-\emph{restart-backoff} après une mise en veille WSL, et non par une
+La plateforme a maintenu un régime permanent sur la fenêtre
+d'investigation de vingt jours --- plus une vague de clôture de
+sprint le 2026-05-19 (dix SP de refactorings à travers quatre
+dépôts sans régression) --- résultat d'évaluation en soi. Aucun
+incident sur les vingt-sept jours du 2026-04-23 (clôture sprint~2)
+au 2026-05-20~; instances AWS continues~; le conteneur
+\texttt{ai-triage-service} sur le \emph{runner} portable n'a requis
+qu'un redémarrage manuel sur la période (Docker
+\emph{restart-backoff} après mise en veille WSL, pas une
 défaillance de la plateforme). Cela valide le choix architectural
 de faire tourner la couche IA séparément de l'infrastructure de
-production~: une défaillance portable transitoire n'affecte pas la
-pile d'observabilité, seulement les RCA assistées par IA.
+production. Depuis la migration GPU du 2026-05-21
+(\S\ref{sec:gpu-shipped}), le conteneur tourne sur
+\texttt{observability-gpu-uswest2} avec portable en repli~; le
+même invariant tient.
 
 % =====================================================================
 \chapter{Décisions de conception et justifications}
@@ -2387,8 +2389,8 @@ méthodologique délibéré.
 \label{ch:sprint4}
 
 Le sprint~4 court du 2026-05-25 au 2026-06-05. Le jour~1
-(2026-05-25) est celui où ce chapitre a été rédigé~; huit user
-stories ont été livrées avant la fin de la journée, cinq restent
+(2026-05-25) est celui où ce chapitre a été rédigé~; dix user
+stories ont été livrées avant la fin de la journée, deux restent
 programmées sur le reste du plan, et une (SF-5) figure comme
 objectif d'étirement en seconde semaine. Le chapitre est
 délibérément rédigé en deux moitiés --- \emph{livré} et
@@ -2671,20 +2673,18 @@ via une API Gateway en liste blanche d'IP, restreint les chemins
 opérateur à Tailscale et désactive SSH public sur l'instance.
 
 \paragraph{Effets de bord.}
-Premièrement, le \emph{bundle} de latence P0 original du sprint~4
-(instrumentation par étape, \emph{timeout} dur 180~s du pipeline,
-concurrence sérielle Ollama, réécriture en \emph{native
-tool-calling} MCP) est livré comme marge défensive plutôt que
-comme correction de latence --- la migration a traité le plafond
-sous-jacent \og~LLM unique sur GPU grand public~\fg{} que le
-\emph{bundle} cherchait à contourner. Deuxièmement, l'approbation
-de quota G+VT \texttt{us-west-2} (4 vCPU, octroyée le 2026-04-27)
-est désormais utilisée plutôt qu'en réserve. Troisièmement, la
-leçon méthodologique~: les abandons pour raisons de coût doivent
-expliciter l'hypothèse de cycle d'usage~; la décision du
-2026-05-19 était correcte sous un cadre 24/7 et fausse sous un
-cadre de cycle d'usage \emph{bursty}, et le cadre était
-l'hypothèse porteuse.
+Le \emph{bundle} de latence P0 original du sprint~4
+(instrumentation par étape, \emph{timeout} 180~s, concurrence
+sérielle Ollama, réécriture \emph{native tool-calling} MCP) est
+livré comme marge défensive plutôt que comme correction de
+latence --- la migration a traité le plafond \og~LLM unique sur
+GPU grand public~\fg{} sous-jacent. Le quota G+VT
+\texttt{us-west-2} (4 vCPU, octroyé le 2026-04-27) passe en usage
+plutôt qu'en réserve. Leçon méthodologique~: les abandons pour
+raisons de coût doivent expliciter l'hypothèse de cycle d'usage~;
+la décision du 2026-05-19 était correcte sous un cadre 24/7 et
+fausse sous un cadre \emph{bursty}, et le cadre était l'hypothèse
+porteuse.
 
 \subsection{SF-6 --- Refonte du courriel (livrée 2026-05-23, commit f6d0a1b)}
 
@@ -2766,7 +2766,7 @@ de repli et le regroupement de bout en bout High$\to$Critical CPU
 avec \texttt{decision\_id} lié. La suite de tests est passée de
 285 à 296.
 
-\subsection{DA-2 --- Retrait des actions non sûres (commit 909e40b)}
+\subsection{DA-2 --- Retrait des actions non sûres (livré 2026-05-25, commit 909e40b)}
 
 Barrière indépendante du bridage~: retire \texttt{kubectl} /
 \texttt{ssh} / \texttt{systemctl} / \texttt{docker restart}
@@ -2778,7 +2778,7 @@ prose. Cas motivant \texttt{systemctl restart k3s-node.service}
 \texttt{unsafe\_actions\_stripped\_total} par type d'action.
 Suite 296 $\to$ 313.
 
-\subsection{Phase 3.A.KPI --- Route KPI (commit adbb720)}
+\subsection{Phase 3.A.KPI --- Route KPI (livrée 2026-05-25, commit adbb720)}
 
 Route \texttt{/dashboard/v2/kpi} affichant
 \texttt{triage\_precision} / \texttt{triage\_recall} / taux de
@@ -2791,24 +2791,21 @@ menés par \texttt{MediumCpuUsage} (351). Vingt tests~; suite
 
 \subsection{Observation de livraison du jour 1}
 
-Les dix user stories ci-dessus étaient initialement classées sur
-les deux semaines du plan jour par jour, et ont été achevées le
-jour~1. Ce n'est pas accidentel~: la clôture du sprint~3 a laissé
-les surfaces suite, tableau de bord et notificateur dans un état
-où de petits \emph{commits} bien périmétrés pouvaient atterrir à
-haute vélocité, et la migration GPU a libéré assez de marge de
-latence pour que l'opérateur puisse tester les changements en
-secondes plutôt qu'en minutes. Le travail restant en file
-d'attente ci-dessous est donc proportionnellement plus important
-par élément (la cohérence inter-lignes DA-3 est à l'échelle de la
-journée, pas de l'heure).
+Les dix user stories ci-dessus étaient classées sur les deux
+semaines du plan jour par jour et ont été achevées le jour~1. La
+clôture du sprint~3 a laissé les surfaces suite, tableau de bord
+et notificateur dans un état où de petits \emph{commits} bien
+périmétrés atterrissaient à haute vélocité, et la migration GPU a
+libéré la marge de latence permettant de tester en secondes plutôt
+qu'en minutes. Le travail restant en file d'attente est donc
+proportionnellement plus important par élément (DA-3 est à
+l'échelle de la journée).
 
 \section{En file d'attente pour le reste du sprint 4}
 
 Les trois éléments programmés entre le jour~2 et la clôture du
-sprint sont listés ci-dessous par ordre calendaire~; la source de
-référence du plan de sprint est
-\texttt{monitoring-docs/sprint4-status.html} \S14.
+sprint, par ordre calendaire (source de référence~:
+\texttt{monitoring-docs/sprint4-status.html} \S14)~:
 
 \begin{itemize}
   \item \textbf{DA-3 cohérence verdict inter-lignes
@@ -2855,36 +2852,23 @@ opérationnelle~; ils figurent dans le périmètre du sprint~5
 seulement afin que le lecteur du sprint~4 n'en perde pas la trace.
 
 \paragraph{Tier 3 --- collecte agentique itérative.}
-La conception Tier-3 remplace la reprise à action contenue à coup
-unique par une boucle d'appel d'outils sur trois itérations,
-chaque itération produisant un arbre d'hypothèses partiel que le
-modèle étoffe à la suivante. L'arbre d'hypothèses est stocké dans
-le \emph{prompt} comme section structurée~; à chaque itération, le
-modèle est invité à étendre la feuille la plus prometteuse, à
-collecter les preuves de soutien via un unique appel MCP et à
-mettre à jour l'arbre. Conditions de terminaison~: seuil de
-confiance atteint, limite de profondeur maximale atteinte ou
-budget de latence total épuisé. C'est matériellement plus
-permissif que la reprise à action contenue~; le conditionnement à
-S3-HF-09 (désormais satisfait) reflète la position du projet selon
-laquelle livrer Tier~3 sans barrière automatisée de régression de
-qualité serait imprudent.
+Boucle d'appel d'outils sur trois itérations, chacune étoffant un
+arbre d'hypothèses partiel via un appel MCP, jusqu'à seuil de
+confiance, limite de profondeur ou budget de latence épuisé.
+Matériellement plus permissif que la reprise à action contenue~;
+le conditionnement à S3-HF-09 (désormais satisfait) reflète la
+position selon laquelle livrer Tier~3 sans barrière automatisée de
+régression de qualité serait imprudent.
 
 \paragraph{Récupération RAG curée (US-3.3 / US-3.4).}
-Une fois que la table de retour d'opérateur de l'Épopée~2 aura
-accumulé suffisamment d'entrées notées via la surface SF-7, la
-récupération curée devient digne de l'effort d'ingénierie. La
-conception~: un job hebdomadaire lit la table de retour pour les
-sept derniers jours~; les entrées au-dessus d'un seuil de qualité
-sont écrites en YAML dans un fichier
+Une fois la table de retour SF-7 suffisamment alimentée, un job
+hebdomadaire écrit les entrées notées au-dessus d'un seuil dans
 \texttt{library\_curated.yaml}~; la section exemplaire du
-\emph{prompt} de tri est complétée par un petit nombre ($k=3$
-positifs, $k=2$ anti-exemples) récupérés par BM25 sur ce corpus
-curé. Le \emph{dry-run} de la fenêtre d'investigation a établi que
-BM25 sur la bibliothèque \emph{de base} de quatorze archétypes est
-dégénéré~; le scénario de production est BM25 sur une bibliothèque
-enrichie, et c'est ce qui sera mesuré une fois que SF-7 aura
-alimenté assez de lignes notées.
+\emph{prompt} est complétée par BM25 ($k=3$ positifs, $k=2$
+anti-exemples) sur ce corpus. Le \emph{dry-run} de la fenêtre
+d'investigation a montré BM25 dégénéré sur la bibliothèque de base
+à quatorze archétypes~; le scénario de production est BM25 sur une
+bibliothèque enrichie, mesuré une fois SF-7 alimenté.
 
 \paragraph{Palier résilience (R-1 à R-5).}
 La fenêtre d'investigation de 20 jours a fait émerger cinq
@@ -2924,30 +2908,22 @@ chapitre~\ref{ch:discovery} continuent de se résoudre.
 \chapter{Sprint 5 --- Planifié (2026-06-06 au 2026-06-17)}
 \label{ch:sprint5}
 
-Le sprint~5 court du 2026-06-06 au 2026-06-17 et déplace le centre
-de gravité de la plateforme vers l'extérieur. Les sprints~1 à~4
-ont construit et durci la boucle de tri centrale contre une unique
-pile web représentative (Spring Boot + Kong + MySQL + React, plus
-l'application de test \texttt{car-rental} arrivée pendant la
+Le sprint~5 (2026-06-06 au 2026-06-17) déplace le centre de gravité
+de la plateforme vers l'extérieur. Les sprints~1--4 ont durci la
+boucle de tri centrale contre une pile web représentative (Spring
+Boot + Kong + MySQL + React, plus \texttt{car-rental} arrivé en
 clôture du sprint~3). Le mandat du sprint~5 est double~: déployer
-un banc de test microservice canonique qui exerce correctement les
-chemins multi-applicatifs de la plateforme et livrer le travail de
-configuration opérateur et de durcissement production qui faisait
-la file d'attente à travers les sprints~3 et~4.
+un banc microservice canonique exerçant les chemins
+multi-applicatifs et livrer la configuration opérateur et le
+durcissement production en file d'attente depuis les sprints~3--4.
 
-Le sprint est structuré en trois épopées concurrentes. Chaque
-épopée porte assez de travail pour remplir à elle seule le sprint
-de deux semaines~; la capacité à trois ingénieurs de l'équipe
-signifie que chaque épopée reçoit un propriétaire disproportionné
-et deux relecteurs, avec une mise en binôme explicite aux points
-d'intégration (scénario d'acceptation du banc microservice
-$\times$ seuils Drain3 hiérarchiques, table d'entités d'incident
-$\times$ onglet incidents phase 3.B).
-
-La figure~\ref{fig:sprint-roadmap} situe le sprint~5 dans la
-chronologie plus large des sprints --- la découverte, les sprints
-de fondation, le sprint~4 en cours et les perspectives sprint~6+
-qui closent ce chapitre.
+Le sprint est structuré en trois épopées concurrentes~; la
+capacité à trois ingénieurs signifie un propriétaire dédié et deux
+relecteurs par épopée, avec mise en binôme explicite aux points
+d'intégration (banc microservice $\times$ Drain3 hiérarchiques,
+table d'incidents $\times$ onglet phase 3.B). La
+figure~\ref{fig:sprint-roadmap} situe le sprint~5 dans la
+chronologie globale.
 
 \begin{figure}[h]
 \centering
@@ -3096,17 +3072,13 @@ comme test d'acceptation).
 
 La discussion de conception tenue aux côtés de la livraison
 DA-5 / DA-4 le 2026-05-25 a fait émerger un manque architectural
-dans la couche de détection d'anomalies du projet. Le \emph{poller}
-Drain3 courant déclenche un webhook
-\texttt{Drain3AnomalyDetected} en utilisant un unique seuil par
-service sur le taux de modèles nouveaux. Ce seuil par service est
-le maillon faible de la chaîne de détection~: il ne peut
-distinguer \og~ce service est bizarre tout seul~\fg{} de
-\og~beaucoup de services sont discrètement bizarres en même
-temps~\fg{}. Une dérive en dessous du seuil mais corrélée à travers
-plusieurs composants ressemble à du silence vu de la barrière par
-service, alors même que le système dans son ensemble a clairement
-bougé.
+dans la détection d'anomalies. Le \emph{poller} Drain3 actuel
+déclenche \texttt{Drain3AnomalyDetected} via un unique seuil par
+service sur le taux de modèles nouveaux~: il ne peut distinguer
+\og~un service bizarre tout seul~\fg{} de \og~beaucoup de services
+discrètement bizarres en même temps~\fg{}. Une dérive corrélée
+sous le seuil par service est silencieuse, alors même que le
+système global a bougé.
 
 \paragraph{La conception à trois paliers.}
 La solution sprint~5 proposée introduit trois paliers de seuil
@@ -3174,40 +3146,16 @@ dans \texttt{monitoring-docs/solution-brief.html} \S13.7.
 \section{Forme de déploiement production --- OTel à agent unique pour le NOC}
 \label{sec:single-agent-otel}
 
-Une seconde discussion prospective du 2026-05-25 concerne la
-forme de la pile de collecte par hôte au passage du PoC à la
-production CIRES --- élément de transition, pas livrable de
-sprint, consigné ici pour que la conversation d'autorisation se
-tienne avec l'alternative déjà spécifiée. Chaque hôte du PoC fait
-tourner deux démons~: l'OTel Collector (journaux via
-\texttt{filelog/containers}, traces via \texttt{otlp}) et
-\emph{node-exporter} pour les métriques hôte. La production CIRES
-impose une contrainte~: l'équipe NOC est réticente à installer de
-nouveaux \emph{exporters} en production, chaque binaire étant une
-surface de menace supplémentaire. CIRES exploite déjà une collecte
-métriques mature basée sur \textbf{Zabbix}~; la plateforme ne la
-remplacera pas et consomme ces métriques via les \emph{exporters}
-existants.
-
-\paragraph{La proposition à agent unique.}
-L'OTel Collector peut absorber les métriques aussi, éliminant
-\emph{node-exporter}~: trois récepteurs natifs s'en chargent ---
-\texttt{hostmetrics} (CPU, mémoire, disque, réseau depuis
-\texttt{/proc} et \texttt{/sys}, sans \texttt{CAP\_*}),
-\texttt{prometheus} (scrape des endpoints \texttt{/metrics}
-applicatifs existants) et \texttt{kubeletstats} (k8s uniquement).
-Le résultat est un binaire par hôte~: un \emph{systemd unit}, un
-fichier YAML déclaratif et une sortie exclusivement sortante via
-OTLP forment une cible d'audit plus simple que N \emph{exporters},
-et OpenTelemetry est un projet CNCF \emph{graduated} avec une
-chaîne d'approvisionnement plus solide. La contrepartie est
-l'empreinte mémoire ($\sim$80--150~MB \emph{resident} contre
-$\sim$15~MB, acceptable en production) et le fait que quelques
-métriques privilégiées (processus, BPF) seraient abandonnées si
-le NOC refuse les capacités requises. La migration
-Promtail-vers-OTel du sprint~1 fixait le précédent~: le
-Collector absorbe plus, pas moins. La décision finale reste
-pilotée par le NOC.
+Discussion prospective du 2026-05-25 sur la pile par hôte au
+passage à la production CIRES. La contrainte NOC --- pas de
+nouveaux \emph{exporters} en production, Zabbix reste l'incumbent
+métriques --- oriente vers un OTel Collector unique absorbant
+logs, traces et métriques via les récepteurs \texttt{hostmetrics},
+\texttt{prometheus} et \texttt{kubeletstats}, éliminant
+\emph{node-exporter}. Le détail complet (récepteurs, propriétés
+d'audit, contrepartie mémoire $\sim$80--150~MB) figure dans la
+version anglaise du mémoire et dans
+\texttt{solution-brief.html} §13.8.
 
 \section{Perspectives sprint 6+}
 
@@ -3257,15 +3205,14 @@ Ce mémoire a rendu compte de la conception et de la mise en
 \oe{}uvre de la plateforme d'observabilité CIRES, une solution
 d'observabilité augmentée par IA construite sur quatre sprints
 (avec un cinquième scopé au chapitre~\ref{ch:sprint5}) chez CIRES
-Technologies. Les sprints~0 à~3 sont clôturés~; le sprint~4 est
-en cours actif avec huit user stories livrées le jour~1 et cinq
-autres programmées sur le reste du plan. La plateforme répond à
-l'écart opérationnel identifié pendant la recherche de terrain du
-sprint~0 --- à savoir que l'équipe découvrait les problèmes de
-production après coup plutôt que de manière proactive --- en
-combinant une pile d'observabilité \emph{open source} classique
-avec une couche de tri par IA qui transforme chaque alerte en une
-RCA structurée et pré-investiguée.
+Technologies. Les sprints~0--3 sont clôturés~; le sprint~4 est en
+cours actif avec dix user stories livrées le jour~1 et trois
+programmées sur le reste du plan. La plateforme répond à l'écart
+opérationnel identifié pendant la recherche de terrain du sprint~0
+--- l'équipe découvrait les problèmes de production après coup ---
+en combinant une pile d'observabilité \emph{open source} classique
+avec une couche de tri par IA transformant chaque alerte en une
+RCA structurée pré-investiguée.
 
 Les contributions principales du travail sont~:
 
