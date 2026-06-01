@@ -122,17 +122,16 @@
     </p>
     <p class="lead" style="margin-bottom:0;">
       <strong>As of Mon 2026-05-25 (Sprint 4 day-1 — late afternoon):</strong>
-      10 of the §14 day-by-day items shipped (8 from the §14 plan + 2
-      supporting Phase 2 work). 3 still scheduled across the remaining 8
-      working days of Sprint 4. 24 longer-form backlog candidates carry
-      from the pre-supervisor-feedback ranking — many will roll to
-      Sprint 5 / 6.
+      11 of the §14 day-by-day items shipped (9 from the §14 plan + 2
+      supporting Phase 2 work). 2 still scheduled. 24 longer-form
+      backlog candidates carry from the pre-supervisor-feedback
+      ranking — many will roll to Sprint 5 / 6.
     </p>
     <div class="pill-row" style="margin-top:20px;">
-      <span class="pill green">10 shipped</span>
-      <span class="pill orange">3 scheduled</span>
+      <span class="pill green">11 shipped</span>
+      <span class="pill orange">2 scheduled</span>
       <span class="pill blue">24 backlog</span>
-      <span class="pill red">tests 333/333</span>
+      <span class="pill red">tests 351/351</span>
     </div>
   </div>
 </section>
@@ -140,7 +139,7 @@
 <div class="layout">
 <section class="content">
 
-<h2 id="shipped">✅ Shipped — 10 stories (commit refs + acceptance evidence)</h2>
+<h2 id="shipped">✅ Shipped — 11 stories (commit refs + acceptance evidence)</h2>
 
 <table>
   <thead>
@@ -207,10 +206,16 @@
       <td><code><a href="https://github.com/linalaaraich/monitoring-triage-service/commit/adbb720">adbb720</a></code> (2026-05-25 Mon — pulled forward from §14 W2 Mon)</td>
       <td>Suite 313 → 333 (+20 unit tests). Live smoke on <code>observability-gpu-uswest2</code>: <code>/dashboard/v2/kpi</code> returns 200 with real numbers — emails 1/day (7d-avg 8.4), FP rate 0.0% over 1 rated, median latency 25 s (p95 42 s over 19 runs), cheap-path 65% (37 vs 20), 6 distinct alert archetypes in 7 d (MediumCpuUsage 351 leads). Sidebar "KPI · Evaluation" item now links to the route.</td>
     </tr>
+    <tr>
+      <td>207</td>
+      <td><strong>S4-DA-03</strong> · Cross-row verdict coherence — when a fingerprint is re-fired within <code>da3_verdict_coherence_window_minutes</code> (default 30 min), the prior decision's cause is prepended to the LLM prompt with a "reuse if unchanged / changed my mind because… / condition resolved" coherence rule. Prevents contradictory RCAs on consecutive fires of the same flap. Lookup uses the canonical store (MCP-sanctioned read path) — excludes short-path + synthetic rows</td>
+      <td><code><a href="https://github.com/linalaaraich/monitoring-triage-service/commit/63dcd67">63dcd67</a></code> (2026-05-29 Fri — pulled forward from §14 W2 Tue; deployed 2026-05-29 to <code>observability-gpu-uswest2</code> image <code>sha256:04e947a9</code>)</td>
+      <td>Suite 333 → 351 (+18 unit tests across store lookup window/exclusions, prompt-builder formatting, pipeline integration, and disabled-knob behaviour). Live: container restart 2026-05-29 18:25 UTC, <code>/health</code> healthy, <code>/dashboard/v2</code> + <code>/dashboard/v2/kpi</code> both 200. <strong>Pending real-induction acceptance</strong>: induce a recovery fire on the same fingerprint within the 30 min window → confirm the new <code>rca_report</code> reuses prior cause OR includes "condition resolved".</td>
+    </tr>
   </tbody>
 </table>
 
-<h2 id="scheduled">📅 Scheduled — 3 stories on the §14 day-by-day plan</h2>
+<h2 id="scheduled">📅 Scheduled — 2 stories on the §14 day-by-day plan</h2>
 
 <p>
   Each row maps to a specific weekday in
@@ -223,13 +228,6 @@
     <tr><th>Jira ID</th><th>Story</th><th>§14 slot</th><th>Effort</th><th>Acceptance</th></tr>
   </thead>
   <tbody>
-    <tr>
-      <td>207</td>
-      <td><strong>S4-DA-03</strong> · Cross-row verdict coherence — when fingerprint reused within N min, prepend prior cause to LLM context + require "changed my mind because…" framing</td>
-      <td>W2 Tue</td>
-      <td>~5 SP</td>
-      <td>Recovery fire on same fingerprint reuses cause OR includes "condition resolved" in rca_report.</td>
-    </tr>
     <tr>
       <td>—</td>
       <td><strong>URL filter persistence + range filter wire-up</strong> (no Jira story yet — could fold under 215 or DA-3, or add a separate one before import)</td>
