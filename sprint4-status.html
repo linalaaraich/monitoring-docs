@@ -122,16 +122,16 @@
     </p>
     <p class="lead" style="margin-bottom:0;">
       <strong>As of Mon 2026-05-25 (Sprint 4 day-1 — late afternoon):</strong>
-      11 of the §14 day-by-day items shipped (9 from the §14 plan + 2
-      supporting Phase 2 work). 2 still scheduled. 24 longer-form
-      backlog candidates carry from the pre-supervisor-feedback
+      12 of the §14 day-by-day items shipped (10 from the §14 plan + 2
+      supporting Phase 2 work). 1 still scheduled (SF-5 stretch). 24
+      longer-form backlog candidates carry from the pre-supervisor-feedback
       ranking — many will roll to Sprint 5 / 6.
     </p>
     <div class="pill-row" style="margin-top:20px;">
-      <span class="pill green">11 shipped</span>
-      <span class="pill orange">2 scheduled</span>
+      <span class="pill green">12 shipped</span>
+      <span class="pill orange">1 scheduled</span>
       <span class="pill blue">24 backlog</span>
-      <span class="pill red">tests 351/351</span>
+      <span class="pill red">tests 380/380</span>
     </div>
   </div>
 </section>
@@ -139,7 +139,7 @@
 <div class="layout">
 <section class="content">
 
-<h2 id="shipped">✅ Shipped — 11 stories (commit refs + acceptance evidence)</h2>
+<h2 id="shipped">✅ Shipped — 12 stories (commit refs + acceptance evidence)</h2>
 
 <table>
   <thead>
@@ -212,10 +212,16 @@
       <td><code><a href="https://github.com/linalaaraich/monitoring-triage-service/commit/63dcd67">63dcd67</a></code> (2026-05-29 Fri — pulled forward from §14 W2 Tue; deployed 2026-05-29 to <code>observability-gpu-uswest2</code> image <code>sha256:04e947a9</code>)</td>
       <td>Suite 333 → 351 (+18 unit tests across store lookup window/exclusions, prompt-builder formatting, pipeline integration, and disabled-knob behaviour). Live: container restart 2026-05-29 18:25 UTC, <code>/health</code> healthy, <code>/dashboard/v2</code> + <code>/dashboard/v2/kpi</code> both 200. <strong>Pending real-induction acceptance</strong>: induce a recovery fire on the same fingerprint within the 30 min window → confirm the new <code>rca_report</code> reuses prior cause OR includes "condition resolved".</td>
     </tr>
+    <tr>
+      <td>—</td>
+      <td><strong>URL filter persistence + range filter</strong> · <code>/dashboard/v2</code> filters (verdict / severity / alertname-family / range / search) now read from the query string, applied in the decisions query, and reflected back in the HTML controls — bookmark + share works. Tight allowlist on query keys (crafted-URL safe). Range filter wired end-to-end (1h / 6h / 24h / 7d / 15d)</td>
+      <td><code><a href="https://github.com/linalaaraich/monitoring-triage-service/commit/905c8a2">905c8a2</a></code> (2026-06-01 Mon — §14 W2 Wed; deployed 2026-06-01 to <code>observability-gpu-uswest2</code> image <code>sha256:64c8057c</code>)</td>
+      <td>Suite 351 → 380 (+29 unit tests). Live proof: unfiltered <code>/dashboard/v2</code> = 18.5 KB HTML; same URL with <code>?verdict=ESCALATE&severity=critical&family=cpu&range=24h</code> = 7.1 KB (filters genuinely narrow the result set). <code>/health</code> + <code>/dashboard/v2/kpi</code> both still 200 (no regression).</td>
+    </tr>
   </tbody>
 </table>
 
-<h2 id="scheduled">📅 Scheduled — 2 stories on the §14 day-by-day plan</h2>
+<h2 id="scheduled">📅 Scheduled — 1 story on the §14 day-by-day plan</h2>
 
 <p>
   Each row maps to a specific weekday in
@@ -228,13 +234,6 @@
     <tr><th>Jira ID</th><th>Story</th><th>§14 slot</th><th>Effort</th><th>Acceptance</th></tr>
   </thead>
   <tbody>
-    <tr>
-      <td>—</td>
-      <td><strong>URL filter persistence + range filter wire-up</strong> (no Jira story yet — could fold under 215 or DA-3, or add a separate one before import)</td>
-      <td>W2 Wed</td>
-      <td>~3 SP</td>
-      <td>Apply 2 filters + range=24h → refresh page → filters survive. Shareable URL.</td>
-    </tr>
     <tr>
       <td>213</td>
       <td><strong>S4-SF-05</strong> · Sustained-vs-spike verdict modifier — "duration above threshold" feature + <code>quality=transient_spike</code> classification → <code>action_taken=shelved</code></td>
