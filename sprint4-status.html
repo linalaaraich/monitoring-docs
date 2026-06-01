@@ -122,16 +122,17 @@
     </p>
     <p class="lead" style="margin-bottom:0;">
       <strong>As of Mon 2026-05-25 (Sprint 4 day-1 — late afternoon):</strong>
-      12 of the §14 day-by-day items shipped (10 from the §14 plan + 2
-      supporting Phase 2 work). 1 still scheduled (SF-5 stretch). 24
-      longer-form backlog candidates carry from the pre-supervisor-feedback
-      ranking — many will roll to Sprint 5 / 6.
+      <strong>All §14 day-by-day items shipped.</strong> 13 of the §14
+      items live (11 from the §14 plan including the SF-5 W2 Fri stretch
+      + 2 supporting Phase 2 work). 0 scheduled remaining. 24 longer-form
+      backlog candidates carry from the pre-supervisor-feedback ranking —
+      most roll to Sprint 5 / 6.
     </p>
     <div class="pill-row" style="margin-top:20px;">
-      <span class="pill green">12 shipped</span>
-      <span class="pill orange">1 scheduled</span>
+      <span class="pill green">13 shipped — §14 complete</span>
+      <span class="pill orange">0 scheduled</span>
       <span class="pill blue">24 backlog</span>
-      <span class="pill red">tests 380/380</span>
+      <span class="pill red">tests 401/401</span>
     </div>
   </div>
 </section>
@@ -139,7 +140,7 @@
 <div class="layout">
 <section class="content">
 
-<h2 id="shipped">✅ Shipped — 12 stories (commit refs + acceptance evidence)</h2>
+<h2 id="shipped">✅ Shipped — 13 stories (commit refs + acceptance evidence)</h2>
 
 <table>
   <thead>
@@ -218,10 +219,16 @@
       <td><code><a href="https://github.com/linalaaraich/monitoring-triage-service/commit/905c8a2">905c8a2</a></code> (2026-06-01 Mon — §14 W2 Wed; deployed 2026-06-01 to <code>observability-gpu-uswest2</code> image <code>sha256:64c8057c</code>)</td>
       <td>Suite 351 → 380 (+29 unit tests). Live proof: unfiltered <code>/dashboard/v2</code> = 18.5 KB HTML; same URL with <code>?verdict=ESCALATE&severity=critical&family=cpu&range=24h</code> = 7.1 KB (filters genuinely narrow the result set). <code>/health</code> + <code>/dashboard/v2/kpi</code> both still 200 (no regression).</td>
     </tr>
+    <tr>
+      <td>213</td>
+      <td><strong>S4-SF-05</strong> · Sustained-vs-spike verdict modifier — when an alert in a transient-prone family (cpu/memory/disk/loki-disk/latency-p95) refires within <code>sf5_transient_spike_window_seconds</code> (default 120 s) of a prior fire on the same family-scope key, classify as <code>quality=transient_spike</code> + <code>action_taken=shelved</code> with new <code>triage_decision='spike_shelved'</code>. Runs as Step 2.5 BEFORE the LLM call → no Ollama cost on shelved spikes. Reuses DA-5's <code>family_dedup_key</code> (so Medium→High CPU tier-bump also counts) and a new <code>rca_store.get_recent_decision_for_family_scope</code> (MCP-only canonical store)</td>
+      <td><code><a href="https://github.com/linalaaraich/monitoring-triage-service/commit/dc30bf7">dc30bf7</a></code> (2026-06-01 Mon — §14 W2 Fri stretch; deployed 2026-06-01 to <code>observability-gpu-uswest2</code> image <code>sha256:289fb8ab</code>)</td>
+      <td>Suite 380 → 401 (+21 unit tests). Live: <code>transient_spikes_shelved_total{family}</code> Prometheus counter registered + exposed on <code>/metrics</code>. Pending real-induction: a 90 s CPU burst should produce one normal RCA followed by <code>spike_shelved</code> short-paths for refires inside 120 s; a 10 min sustained stress should escalate normally.</td>
+    </tr>
   </tbody>
 </table>
 
-<h2 id="scheduled">📅 Scheduled — 1 story on the §14 day-by-day plan</h2>
+<h2 id="scheduled">📅 Scheduled — 0 stories remaining on the §14 day-by-day plan ✅</h2>
 
 <p>
   Each row maps to a specific weekday in
@@ -234,13 +241,6 @@
     <tr><th>Jira ID</th><th>Story</th><th>§14 slot</th><th>Effort</th><th>Acceptance</th></tr>
   </thead>
   <tbody>
-    <tr>
-      <td>213</td>
-      <td><strong>S4-SF-05</strong> · Sustained-vs-spike verdict modifier — "duration above threshold" feature + <code>quality=transient_spike</code> classification → <code>action_taken=shelved</code></td>
-      <td>W2 Fri (stretch)</td>
-      <td>~3 SP</td>
-      <td>90s CPU spike → shelved; sustained 10-min stress → escalates.</td>
-    </tr>
   </tbody>
 </table>
 
