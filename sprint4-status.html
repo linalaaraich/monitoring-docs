@@ -122,17 +122,22 @@
     </p>
     <p class="lead" style="margin-bottom:0;">
       <strong>As of Mon 2026-05-25 (Sprint 4 day-1 — late afternoon):</strong>
-      <strong>All §14 day-by-day items shipped.</strong> 13 of the §14
-      items live (11 from the §14 plan including the SF-5 W2 Fri stretch
-      + 2 supporting Phase 2 work). 0 scheduled remaining. 24 longer-form
-      backlog candidates carry from the pre-supervisor-feedback ranking —
-      most roll to Sprint 5 / 6.
+      <strong>§14 day-by-day plan complete + v2 front production
+      cutover done.</strong> 13 §14 items + 3 v2-front polish items =
+      <strong>16 shipped</strong>. The v2 dashboard is now <strong>the
+      production surface</strong> (<code>/dashboard</code> 302-redirects
+      to <code>/dashboard/v2</code>; legacy v1 preserved at
+      <code>/dashboard/v1</code>). Sidebar items routed live: KPI ·
+      Services · Alerts. Still-dead sidebar items (Incidents, Anomalies,
+      Stats, Drain3 engine, Integrations) all require Sprint 5 work
+      (EPIC14 incident entity + EPIC15 operator config). 24 longer-form
+      backlog candidates carry forward — most roll to Sprint 5 / 6.
     </p>
     <div class="pill-row" style="margin-top:20px;">
-      <span class="pill green">13 shipped — §14 complete</span>
+      <span class="pill green">16 shipped — §14 complete + v2 cutover</span>
       <span class="pill orange">0 scheduled</span>
       <span class="pill blue">24 backlog</span>
-      <span class="pill red">tests 401/401</span>
+      <span class="pill red">tests 428/428</span>
     </div>
   </div>
 </section>
@@ -140,7 +145,7 @@
 <div class="layout">
 <section class="content">
 
-<h2 id="shipped">✅ Shipped — 13 stories (commit refs + acceptance evidence)</h2>
+<h2 id="shipped">✅ Shipped — 16 stories (commit refs + acceptance evidence)</h2>
 
 <table>
   <thead>
@@ -224,6 +229,24 @@
       <td><strong>S4-SF-05</strong> · Sustained-vs-spike verdict modifier — when an alert in a transient-prone family (cpu/memory/disk/loki-disk/latency-p95) refires within <code>sf5_transient_spike_window_seconds</code> (default 120 s) of a prior fire on the same family-scope key, classify as <code>quality=transient_spike</code> + <code>action_taken=shelved</code> with new <code>triage_decision='spike_shelved'</code>. Runs as Step 2.5 BEFORE the LLM call → no Ollama cost on shelved spikes. Reuses DA-5's <code>family_dedup_key</code> (so Medium→High CPU tier-bump also counts) and a new <code>rca_store.get_recent_decision_for_family_scope</code> (MCP-only canonical store)</td>
       <td><code><a href="https://github.com/linalaaraich/monitoring-triage-service/commit/dc30bf7">dc30bf7</a></code> (2026-06-01 Mon — §14 W2 Fri stretch; deployed 2026-06-01 to <code>observability-gpu-uswest2</code> image <code>sha256:289fb8ab</code>)</td>
       <td>Suite 380 → 401 (+21 unit tests). Live: <code>transient_spikes_shelved_total{family}</code> Prometheus counter registered + exposed on <code>/metrics</code>. Pending real-induction: a 90 s CPU burst should produce one normal RCA followed by <code>spike_shelved</code> short-paths for refires inside 120 s; a 10 min sustained stress should escalate normally.</td>
+    </tr>
+    <tr>
+      <td>—</td>
+      <td><strong>v2 production cutover</strong> · <code>/dashboard</code> now <strong>302-redirects to <code>/dashboard/v2</code></strong> — v2 is THE production surface (was side-by-side preview since 2026-05-22). Legacy v1 preserved at <code>/dashboard/v1</code> for deep bookmarks. Plus two §14 buffer-day items shipped in the same commit: <code>&lt;meta http-equiv="refresh" content="60"/&gt;</code> on the v2 feed (no manual reload to see new alerts) and a click-to-copy full-UUID widget on the detail-page banner (saves the "go grep logs with the full UUID" round-trip)</td>
+      <td><code><a href="https://github.com/linalaaraich/monitoring-triage-service/commit/0b05ecc">0b05ecc</a></code> (2026-06-01 Mon — post-§14 polish; deployed 2026-06-01 to <code>observability-gpu-uswest2</code> image <code>sha256:c07f5771</code> then rolled to <code>sha256:69a7a866</code> with the sidebar pages below)</td>
+      <td>Live smoke: <code>GET /dashboard</code> → <strong>HTTP 302 Location: /dashboard/v2</strong>. <code>GET /dashboard/v1</code> → HTTP 200 (legacy preserved). <code>GET /dashboard/v2</code> → HTTP 200 with the meta-refresh tag. <code>GET /dashboard/v2/alert/&lt;id&gt;</code> → detail page renders with the new copy-UUID widget in the banner.</td>
+    </tr>
+    <tr>
+      <td>—</td>
+      <td><strong>v2 sidebar: Services page</strong> · New <code>/dashboard/v2/services</code> route — per-service rollup over the last 7 days (total fires, breakdown by action_taken / verdict / severity, last fire, dominant alertname). Each service name links to the filtered triage view (<code>/dashboard/v2?q=&lt;svc&gt;</code> via the URL-filter ship). Sidebar "Services" item now wired (was dead). New <code>RCAStore.get_service_summary(days=7)</code> helper (canonical store, MCP-only)</td>
+      <td><code><a href="https://github.com/linalaaraich/monitoring-triage-service/commit/b3e6486">b3e6486</a></code> (2026-06-01 Mon — fills a dead sidebar item)</td>
+      <td>Suite 401 → 414 (+13 tests covering route render, store-helper shape, empty-DB graceful render, anchor href correctness, summary-chip presence). Live: HTTP 200, 16.5 KB HTML.</td>
+    </tr>
+    <tr>
+      <td>—</td>
+      <td><strong>v2 sidebar: Alerts page (read-only)</strong> · New <code>/dashboard/v2/alerts</code> route — per-alertname rollup (fires/emails/dominant verdict/severity, last fire, email-ratio). Rows with email-ratio &gt; 0.50 highlighted as noise candidates. Detects recurrence-gate activity via <code>triage_decision='recurrence_gated_pre_llm'</code> rows + renders an explainer block with the Ansible template path + tuning recipe (references the just-shipped <code>db79ee7</code> MediumCpuUsage threshold raise). NO Grafana-API editing — that's EPIC15 Sprint-5 scope</td>
+      <td><code><a href="https://github.com/linalaaraich/monitoring-triage-service/commit/9ac4b51">9ac4b51</a></code> (2026-06-01 Mon — fills a dead sidebar item; ties the noise audit thread together)</td>
+      <td>Suite 414 → 428 (+14 tests). Live: HTTP 200, 16.3 KB HTML. Honest about annotation-not-persisted limitation (renders "(annotation not persisted — check Grafana rule)" rather than fabricating).</td>
     </tr>
   </tbody>
 </table>
