@@ -124,11 +124,11 @@
       <strong>As of Mon 2026-05-25 (Sprint 4 day-1 — late afternoon):</strong>
       <strong>§14 day-by-day plan complete + v2 front production
       cutover done.</strong> 13 §14 items + 3 v2-front polish items =
-      <strong>16 shipped</strong>. The v2 dashboard is now <strong>the
-      production surface</strong> (<code>/dashboard</code> 302-redirects
-      to <code>/dashboard/v2</code>; legacy v1 preserved at
-      <code>/dashboard/v1</code>). Sidebar items routed live: KPI ·
-      Services · Alerts. Still-dead sidebar items (Incidents, Anomalies,
+      <strong>16 shipped</strong>. The dashboard at <code>/dashboard</code>
+      is the canonical production surface (v2 prefix dropped 2026-06-02
+      in <code>a17be59</code>; legacy <code>/dashboard/v2/*</code> paths
+      301-redirect; v1 legacy route removed in the same cleanup).
+      Sidebar items routed live: KPI · Services · Alerts. Still-dead sidebar items (Incidents, Anomalies,
       Stats, Drain3 engine, Integrations) all require Sprint 5 work
       (EPIC14 incident entity + EPIC15 operator config). 24 longer-form
       backlog candidates carry forward — most roll to Sprint 5 / 6.
@@ -180,7 +180,7 @@
       <td>212</td>
       <td><strong>S4-SF-04</strong> · Same-alert collapsing dashboard-side (group by fingerprint, keep latest, paginate the unique list — no schema change yet)</td>
       <td><code><a href="https://github.com/linalaaraich/monitoring-triage-service/commit/7d0adeb">7d0adeb</a></code> (2026-05-23 Sat — pulled forward from §14 Wed)</td>
-      <td>Live verified: <strong>288 raw rows in 15d window → 26 unique fingerprints</strong> on <code>/dashboard/v2</code> (15 pages of 20 → 1.5 pages).</td>
+      <td>Live verified: <strong>288 raw rows in 15d window → 26 unique fingerprints</strong> on <code>/dashboard</code> (15 pages of 20 → 1.5 pages).</td>
     </tr>
     <tr>
       <td>214</td>
@@ -210,19 +210,19 @@
       <td>215</td>
       <td><strong>S4-PHASE-3.A.KPI</strong> · <code>/dashboard/v2/kpi</code> platform-health surface — 6 live KPIs (emails-per-day / FP rate / median latency / cheap-path % / archetype coverage / GPU util) + 2 static (MCP firewall / tests passing). Server-rendered HTML matching the v2 design tokens; 2×4 grid; auto-refresh 60 s. New <code>app/kpi_queries.py</code> reads from the existing RCAStore connection — no new data path, MCP-invariant clean</td>
       <td><code><a href="https://github.com/linalaaraich/monitoring-triage-service/commit/adbb720">adbb720</a></code> (2026-05-25 Mon — pulled forward from §14 W2 Mon)</td>
-      <td>Suite 313 → 333 (+20 unit tests). Live smoke on <code>observability-gpu-uswest2</code>: <code>/dashboard/v2/kpi</code> returns 200 with real numbers — emails 1/day (7d-avg 8.4), FP rate 0.0% over 1 rated, median latency 25 s (p95 42 s over 19 runs), cheap-path 65% (37 vs 20), 6 distinct alert archetypes in 7 d (MediumCpuUsage 351 leads). Sidebar "KPI · Evaluation" item now links to the route.</td>
+      <td>Suite 313 → 333 (+20 unit tests). Live smoke on <code>observability-gpu-uswest2</code>: <code>/dashboard/kpi</code> returns 200 with real numbers — emails 1/day (7d-avg 8.4), FP rate 0.0% over 1 rated, median latency 25 s (p95 42 s over 19 runs), cheap-path 65% (37 vs 20), 6 distinct alert archetypes in 7 d (MediumCpuUsage 351 leads). Sidebar "KPI · Evaluation" item now links to the route.</td>
     </tr>
     <tr>
       <td>207</td>
       <td><strong>S4-DA-03</strong> · Cross-row verdict coherence — when a fingerprint is re-fired within <code>da3_verdict_coherence_window_minutes</code> (default 30 min), the prior decision's cause is prepended to the LLM prompt with a "reuse if unchanged / changed my mind because… / condition resolved" coherence rule. Prevents contradictory RCAs on consecutive fires of the same flap. Lookup uses the canonical store (MCP-sanctioned read path) — excludes short-path + synthetic rows</td>
       <td><code><a href="https://github.com/linalaaraich/monitoring-triage-service/commit/63dcd67">63dcd67</a></code> (2026-05-29 Fri — pulled forward from §14 W2 Tue; deployed 2026-05-29 to <code>observability-gpu-uswest2</code> image <code>sha256:04e947a9</code>)</td>
-      <td>Suite 333 → 351 (+18 unit tests across store lookup window/exclusions, prompt-builder formatting, pipeline integration, and disabled-knob behaviour). Live: container restart 2026-05-29 18:25 UTC, <code>/health</code> healthy, <code>/dashboard/v2</code> + <code>/dashboard/v2/kpi</code> both 200. <strong>Pending real-induction acceptance</strong>: induce a recovery fire on the same fingerprint within the 30 min window → confirm the new <code>rca_report</code> reuses prior cause OR includes "condition resolved".</td>
+      <td>Suite 333 → 351 (+18 unit tests across store lookup window/exclusions, prompt-builder formatting, pipeline integration, and disabled-knob behaviour). Live: container restart 2026-05-29 18:25 UTC, <code>/health</code> healthy, <code>/dashboard</code> + <code>/dashboard/kpi</code> both 200. <strong>Pending real-induction acceptance</strong>: induce a recovery fire on the same fingerprint within the 30 min window → confirm the new <code>rca_report</code> reuses prior cause OR includes "condition resolved".</td>
     </tr>
     <tr>
       <td>—</td>
-      <td><strong>URL filter persistence + range filter</strong> · <code>/dashboard/v2</code> filters (verdict / severity / alertname-family / range / search) now read from the query string, applied in the decisions query, and reflected back in the HTML controls — bookmark + share works. Tight allowlist on query keys (crafted-URL safe). Range filter wired end-to-end (1h / 6h / 24h / 7d / 15d)</td>
+      <td><strong>URL filter persistence + range filter</strong> · <code>/dashboard</code> filters (verdict / severity / alertname-family / range / search) now read from the query string, applied in the decisions query, and reflected back in the HTML controls — bookmark + share works. Tight allowlist on query keys (crafted-URL safe). Range filter wired end-to-end (1h / 6h / 24h / 7d / 15d)</td>
       <td><code><a href="https://github.com/linalaaraich/monitoring-triage-service/commit/905c8a2">905c8a2</a></code> (2026-06-01 Mon — §14 W2 Wed; deployed 2026-06-01 to <code>observability-gpu-uswest2</code> image <code>sha256:64c8057c</code>)</td>
-      <td>Suite 351 → 380 (+29 unit tests). Live proof: unfiltered <code>/dashboard/v2</code> = 18.5 KB HTML; same URL with <code>?verdict=ESCALATE&severity=critical&family=cpu&range=24h</code> = 7.1 KB (filters genuinely narrow the result set). <code>/health</code> + <code>/dashboard/v2/kpi</code> both still 200 (no regression).</td>
+      <td>Suite 351 → 380 (+29 unit tests). Live proof: unfiltered <code>/dashboard</code> = 18.5 KB HTML; same URL with <code>?verdict=ESCALATE&severity=critical&family=cpu&range=24h</code> = 7.1 KB (filters genuinely narrow the result set). <code>/health</code> + <code>/dashboard/kpi</code> both still 200 (no regression).</td>
     </tr>
     <tr>
       <td>213</td>
@@ -233,7 +233,7 @@
     <tr>
       <td>—</td>
       <td><strong>v2 production cutover</strong> · <code>/dashboard</code> now <strong>302-redirects to <code>/dashboard/v2</code></strong> — v2 is THE production surface (was side-by-side preview since 2026-05-22). Legacy v1 preserved at <code>/dashboard/v1</code> for deep bookmarks. Plus two §14 buffer-day items shipped in the same commit: <code>&lt;meta http-equiv="refresh" content="60"/&gt;</code> on the v2 feed (no manual reload to see new alerts) and a click-to-copy full-UUID widget on the detail-page banner (saves the "go grep logs with the full UUID" round-trip)</td>
-      <td><code><a href="https://github.com/linalaaraich/monitoring-triage-service/commit/0b05ecc">0b05ecc</a></code> (2026-06-01 Mon — post-§14 polish; deployed 2026-06-01 to <code>observability-gpu-uswest2</code> image <code>sha256:c07f5771</code> then rolled to <code>sha256:69a7a866</code> with the sidebar pages below)</td>
+      <td><code><a href="https://github.com/linalaaraich/monitoring-triage-service/commit/0b05ecc">0b05ecc</a></code> (2026-06-01 Mon — post-§14 polish; deployed 2026-06-01 to <code>observability-gpu-uswest2</code> image <code>sha256:c07f5771</code> then rolled to <code>sha256:69a7a866</code> with the sidebar pages below) (v2 prefix dropped 2026-06-02 in <code><a href="https://github.com/linalaaraich/monitoring-triage-service/commit/a17be59">a17be59</a></code>)</td>
       <td>Live smoke: <code>GET /dashboard</code> → <strong>HTTP 302 Location: /dashboard/v2</strong>. <code>GET /dashboard/v1</code> → HTTP 200 (legacy preserved). <code>GET /dashboard/v2</code> → HTTP 200 with the meta-refresh tag. <code>GET /dashboard/v2/alert/&lt;id&gt;</code> → detail page renders with the new copy-UUID widget in the banner.</td>
     </tr>
     <tr>

@@ -204,7 +204,7 @@
     </tr>
     <tr>
       <td>Day-1 bank</td>
-      <td>Phase 3.A.KPI route <code>/dashboard/v2/kpi</code> with 6 live KPIs</td>
+      <td>Phase 3.A.KPI route <code>/dashboard/kpi</code> with 6 live KPIs</td>
       <td><code>adbb720</code></td>
       <td class="tag-ok">+20</td>
     </tr>
@@ -234,13 +234,13 @@
     </tr>
     <tr>
       <td>Sidebar page</td>
-      <td>Services rollup at <code>/dashboard/v2/services</code></td>
+      <td>Services rollup at <code>/dashboard/services</code></td>
       <td><code>b3e6486</code></td>
       <td class="tag-ok">+13</td>
     </tr>
     <tr>
       <td>Sidebar page</td>
-      <td>Alerts (read-only) at <code>/dashboard/v2/alerts</code>, noise-candidate highlighting</td>
+      <td>Alerts (read-only) at <code>/dashboard/alerts</code>, noise-candidate highlighting</td>
       <td><code>9ac4b51</code></td>
       <td class="tag-ok">+14</td>
     </tr>
@@ -320,10 +320,11 @@
       v2 was planned as a <strong>Sprint 5 promotion candidate</strong>.
       Supervisor approved 2026-05-22 and the surface has been stable
       since, so we promoted it Sprint-4 day-13 (<code>0b05ecc</code>).
-      <code>/dashboard</code> now 302-redirects to
-      <code>/dashboard/v2</code>; legacy v1 preserved at
-      <code>/dashboard/v1</code> for deep bookmarks. Sprint 5 no longer
-      needs a "front cutover" line item.
+      <code>/dashboard</code> became the canonical URL; the v2 prefix
+      was dropped the morning of 2026-06-02 in <code>a17be59</code>
+      after the surface settled, with legacy <code>/dashboard/v2/*</code>
+      paths 301-redirecting for any lingering bookmarks. Sprint 5 no
+      longer needs a "front cutover" line item.
     </p>
   </div>
 
@@ -410,10 +411,17 @@
 <p>
   Triage container on <code>observability-gpu-uswest2</code> is
   running image <code>sha256:69a7a866</code> (commit
-  <code>9ac4b51</code>). All <strong>7 v2 routes</strong> verified
-  HTTP 200. Email volume projection: drop from <strong>~71/day to
-  ~7/day</strong> with the recurrence-gate threshold raise (10x
-  headroom against current MediumCpuUsage cadence).
+  <code>9ac4b51</code>). All <strong>7 dashboard routes</strong>
+  verified HTTP 200. Email volume projection: drop from
+  <strong>~71/day to ~7/day</strong> with the recurrence-gate
+  threshold raise (10x headroom against current MediumCpuUsage
+  cadence).
+</p>
+
+<p>
+  Post-sprint cleanup 2026-06-02 morning: dropped the v2 prefix from
+  all route URLs (<code>a17be59</code>); v1 legacy route removed;
+  tests still 428/428.
 </p>
 
 <p style="margin-top:40px; padding-top:20px; border-top:1px solid var(--border); font-size:13px; color:var(--muted);">
