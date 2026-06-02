@@ -105,7 +105,7 @@
         <span class="tool-tag t-orch">Application layer</span>
       </div>
     </div>
-    <p class="tool-blurb">Container orchestrator. In this project Kubernetes runs the <strong>application workload</strong> (the <code>react-springboot-mysql</code> demo plus the secondary car-rental app) on <code>observability-rca-k3s</code>. We picked it over plain docker-compose so the same deploy primitives could survive a multi-node future, and because Helm charts make the per-service configuration auditable.</p>
+    <p class="tool-blurb">Container orchestrator. In this project Kubernetes runs the <strong>application workload</strong> (the <code>react-springboot-mysql</code> demo plus the secondary car-rental app) on <code>observability-rca-newacct-k3s</code>. We picked it over plain docker-compose so the same deploy primitives could survive a multi-node future, and because Helm charts make the per-service configuration auditable.</p>
     <h4>Core concepts to know</h4>
     <ul>
       <li><strong>Pod</strong> — the smallest deployable unit (one or more containers sharing a network namespace).</li>
@@ -139,7 +139,7 @@
         <span class="tool-tag t-orch">Single-binary</span>
       </div>
     </div>
-    <p class="tool-blurb">A <strong>certified Kubernetes distribution packaged as a single binary</strong>, designed to run on resource-constrained or single-node environments. We use k3s instead of full k8s on <code>observability-rca-k3s</code> (one <code>t3.xlarge</code> EC2 instance) because the full control plane would dominate the workload's resource budget on a single VM. From an application perspective k3s is just Kubernetes — every concept above applies — but the install is one <code>curl | sh</code> instead of <code>kubeadm</code>.</p>
+    <p class="tool-blurb">A <strong>certified Kubernetes distribution packaged as a single binary</strong>, designed to run on resource-constrained or single-node environments. We use k3s instead of full k8s on <code>observability-rca-newacct-k3s</code> (one <code>t3.xlarge</code> EC2 instance) because the full control plane would dominate the workload's resource budget on a single VM. From an application perspective k3s is just Kubernetes - every concept above applies - but the install is one <code>curl | sh</code> instead of <code>kubeadm</code>.</p>
     <h4>What's different from "vanilla" Kubernetes</h4>
     <ul>
       <li><strong>Single binary</strong> — controller + scheduler + kubelet + kube-proxy all in one process.</li>
@@ -149,7 +149,7 @@
     </ul>
     <h4>Where this project uses it</h4>
     <ul>
-      <li><code>monitoring-project/playbooks/k3s-bootstrap.yml</code> — single-node bootstrap on the <code>observability-rca-k3s</code> EC2 instance.</li>
+      <li><code>monitoring-project/playbooks/k3s-bootstrap.yml</code> - single-node bootstrap on the <code>observability-rca-newacct-k3s</code> EC2 instance.</li>
       <li><code>monitoring-project/inventory/tailnet.yml</code> — points Ansible at the host via MagicDNS.</li>
       <li><code>kubectl</code> on the host is shimmed via <code>sudo k3s kubectl</code>; the kubeconfig is owned by root.</li>
     </ul>
@@ -184,9 +184,9 @@
     <ul>
       <li><code>provisioning-monitoring-infra/</code> — the entire AWS estate.</li>
       <li><code>terraform.tfvars</code> — the operator-editable knobs (<code>allowed_ssh_cidrs</code>, instance types, AMI pin).</li>
-      <li><strong>Managed resources (us-east-1):</strong> <code>observability-rca-monitoring</code> (<code>t3.large</code>), <code>observability-rca-k3s</code> (<code>t3.xlarge</code>), <code>observability-rca-mysql</code> (RDS), the Loki S3 bucket, the Terraform state bucket.</li>
-      <li><strong>Managed resources (us-west-2, added 2026-05-21):</strong> <code>observability-rca-gpu</code> (<code>g5.xlarge</code>, A10G 24 GB VRAM), Lambda router + idle-checker, API Gateway HTTP API, SQS cold-start queue, DynamoDB gateway-state table, EventBridge cron, VPC endpoints. See <a href="decisions-log.html#d24">D24</a>.</li>
-      <li><strong>Account:</strong> <code>735115318342</code>, <strong>regions:</strong> <code>us-east-1</code> + <code>us-west-2</code>.</li>
+      <li><strong>Managed resources (us-east-1):</strong> <code>observability-rca-newacct-monitoring</code> (<code>t3.large</code>), <code>observability-rca-newacct-k3s</code> (<code>t3.xlarge</code>), <code>observability-rca-newacct-mysql</code> (RDS), the Loki S3 bucket <code>cires-observability-newacct-eb8e0c</code>, the Terraform state bucket.</li>
+      <li><strong>Managed resources (us-west-2):</strong> <code>observability-gpu-uswest2-newacct</code> (<code>g5.xlarge</code>, A10G 24 GB VRAM), Lambda router + idle-checker, API Gateway HTTP API, SQS cold-start queue, DynamoDB gateway-state table, EventBridge cron, VPC endpoints. See <a href="decisions-log.html#d24">D24</a>.</li>
+      <li><strong>Account:</strong> <code>321556173045</code> (carbon-copy provisioned 2026-06-02, replacing old account <code>735115318342</code>), <strong>regions:</strong> <code>us-east-1</code> + <code>us-west-2</code>.</li>
     </ul>
     <h4>Day-to-day commands</h4>
     <ul>

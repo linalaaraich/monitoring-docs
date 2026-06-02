@@ -131,9 +131,9 @@
   Tailscale fixes this by putting every node on a single WireGuard mesh
   (the <strong>tailnet</strong>) with stable <code>100.x.y.z</code>
   addresses and MagicDNS hostnames. The monitoring VM reaches the GPU host
-  at <code>observability-gpu-uswest2</code> regardless of EIP churn after
+  at <code>observability-gpu-uswest2-newacct</code> regardless of EIP churn after
   autoshutoff/restart cycles. Ansible runs against
-  <code>observability-rca-monitoring</code> regardless of whether AWS
+  <code>observability-rca-newacct-monitoring</code> regardless of whether AWS
   re-assigns the EIP. The us-west-2 GPU host's MCP bridges reach back to
   Prometheus/Loki/Jaeger in us-east-1 over the same tailnet. And none of
   this crosses the public internet — traffic goes peer-to-peer when
@@ -149,7 +149,7 @@
   </p>
 </div>
 
-<h2>The CIRES tailnet as of 2026-05-21</h2>
+<h2>The CIRES tailnet as of 2026-06-02 (new-account 321556173045 carbon copy)</h2>
 
 <table>
   <thead>
@@ -164,21 +164,21 @@
     </tr>
     <tr>
       <td>Monitoring VM (us-east-1)</td>
-      <td><code>observability-rca-monitoring</code></td>
-      <td>100.74.21.104</td>
-      <td>Prometheus, Loki, Jaeger, Grafana, OTel Collector <em>(Alertmanager removed Sprint 1, D6 2026-04-24; alerting now via Grafana unified-alerting &rarr; API Gateway in us-west-2)</em></td>
+      <td><code>observability-rca-newacct-monitoring</code></td>
+      <td>see MagicDNS</td>
+      <td>Prometheus, Loki, Jaeger, Grafana, OTel Collector <em>(Alertmanager removed Sprint 1, D6 2026-04-24; alerting now via Grafana unified-alerting -&gt; API Gateway in us-west-2)</em></td>
     </tr>
     <tr>
       <td>k3s VM (us-east-1)</td>
-      <td><code>observability-rca-k3s</code></td>
-      <td>100.104.90.72</td>
-      <td>Spring Boot + MySQL + Kong in k3s pods (monitored app). <strong>Joined tailnet 2026-04-28</strong> via the existing <code>roles/tailscale</code> ansible role. Public SSH (port 22) closed in the SG at the same time; reach via <code>ssh deploy@observability-rca-k3s</code>.</td>
+      <td><code>observability-rca-newacct-k3s</code></td>
+      <td>see MagicDNS</td>
+      <td>Spring Boot + MySQL + Kong in k3s pods (monitored app). Public SSH (port 22) closed in the SG; reach via <code>ssh deploy@observability-rca-newacct-k3s</code>.</td>
     </tr>
     <tr>
       <td><strong>GPU host (us-west-2)</strong></td>
-      <td><code>observability-gpu-uswest2</code></td>
-      <td>100.65.77.50</td>
-      <td><strong>Primary AI runner since 2026-05-21.</strong> EC2 <code>g5.xlarge</code> (A10G 24 GB VRAM), instance <code>i-03aec662b1a47ad8f</code>, EIP <code>52.27.21.89</code>. Hosts <code>ai-triage-service:8090</code>, 5 MCP containers on 8091-8095, Ollama as a host systemd service (not in compose; bridge containers reach it via <code>host.docker.internal:11434</code>), plus <code>drain-queue.service</code>, <code>triage-stack.service</code>, and <code>retention-cleanup.timer</code>. Webhook ingress is via API Gateway → Lambda → SQS, not direct. Public SSH closed (Tailscale SSH + SSM only). See <a href="decisions-log.html#d24">D24</a>.</td>
+      <td><code>observability-gpu-uswest2-newacct</code></td>
+      <td>100.114.76.43</td>
+      <td><strong>Primary AI runner.</strong> EC2 <code>g5.xlarge</code> (A10G 24 GB VRAM), EIP <code>35.164.128.201</code>. Hosts <code>ai-triage-service:8090</code>, 5 MCP containers on 8091-8095, Ollama as a host systemd service (not in compose; bridge containers reach it via <code>host.docker.internal:11434</code>), plus <code>drain-queue.service</code>, <code>triage-stack.service</code>, and <code>retention-cleanup.timer</code>. Webhook ingress is via API Gateway -&gt; Lambda -&gt; SQS, not direct. Public SSH closed (Tailscale SSH + SSM only). See <a href="decisions-log.html#d24">D24</a>.</td>
     </tr>
     <tr>
       <td>Laptop (Windows host)</td>
@@ -387,7 +387,7 @@ inventory = inventory/tailnet.yml</code></pre>
 
 <p>
   Short answer: nothing, from the ansible perspective. The controller
-  reaches the monitoring VM at <code>observability-rca-monitoring</code>;
+  reaches the monitoring VM at <code>observability-rca-newacct-monitoring</code>;
   Tailscale routes that over the tailnet regardless of what
   <code>aws_eip_association.monitoring</code> currently points at.
   Security groups can even drop port 22 from <code>0.0.0.0/0</code>

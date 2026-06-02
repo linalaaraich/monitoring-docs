@@ -257,7 +257,7 @@
       <div class="card-icon" style="background:rgba(64,208,208,.1);">🛰️</div>
       <div class="card-header-text">
         <h2>Tailscale Topology Guide</h2>
-        <p>The 5-node tailnet that connects everything: <code>claude-controller</code>, <code>adolin</code>, <code>adolin-wsl</code> (the AI host), <code>observability-rca-monitoring</code>, <code>observability-rca-k3s</code>. MagicDNS host names are stable across AWS stop/start; WireGuard is the transport for inter-host service traffic. This is the actual operational shape, not a future plan.</p>
+        <p>The tailnet that connects everything: <code>claude-controller</code>, <code>adolin</code>, <code>adolin-wsl</code> (rollback fallback for AI), <code>observability-rca-newacct-monitoring</code>, <code>observability-rca-newacct-k3s</code>, <code>observability-gpu-uswest2-newacct</code>. MagicDNS host names are stable across AWS stop/start; WireGuard is the transport for inter-host service traffic. This is the actual operational shape, not a future plan.</p>
       </div>
     </div>
     <div class="card-footer">
@@ -419,7 +419,7 @@
       <div class="card-icon" style="background:rgba(232,138,160,.1);">📋</div>
       <div class="card-header-text">
         <h2>Dashboard Guide</h2>
-        <p>Operator reference for the triage dashboard at <code>http://observability-gpu-uswest2:8090/dashboard</code> and the escalation emails. Every column, every internal code (action_taken, rca_quality, triage_decision), every abbreviation (RCA, MCP, refId, fingerprint, p95, kill-chain, shelved, data_starved). Six worked scenarios covering ESCALATE / DISMISS / shelved Drain3 / deduped / timeout / thin-RCA rows.</p>
+        <p>Operator reference for the triage dashboard at <code>http://observability-gpu-uswest2-newacct:8090/dashboard</code> and the escalation emails. Every column, every internal code (action_taken, rca_quality, triage_decision), every abbreviation (RCA, MCP, refId, fingerprint, p95, kill-chain, shelved, data_starved). Six worked scenarios covering ESCALATE / DISMISS / shelved Drain3 / deduped / timeout / thin-RCA rows.</p>
       </div>
     </div>
     <div class="card-footer">

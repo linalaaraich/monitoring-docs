@@ -207,7 +207,7 @@
     <tr><td><code>monitoring-mcp-servers</code></td><td>5 MCP HTTP bridges: prometheus-mcp, loki-mcp, jaeger-mcp, drain3-mcp, rca-history-mcp.</td></tr>
     <tr><td><code>monitoring-project</code></td><td>Ansible — Grafana/Prometheus/Loki/Jaeger/OTel config, alert rules, contact points.</td></tr>
     <tr><td><code>provisioning-monitoring-infra</code></td><td>Terraform — the AWS EC2s + security groups that host the observability stack.</td></tr>
-    <tr><td><code>monitoring-triage-service</code> (compose dir <code>/opt/triage/</code> on <code>observability-gpu-uswest2</code> since 2026-05-21; previously <code>~/cires-ai/</code> on adolin-wsl)</td><td>Docker-compose for the GPU AI stack: 6 bridge containers (triage + 5 MCPs) via <code>triage-stack.service</code> systemd unit. Ollama itself runs as host systemd (not in compose; bridge containers reach it via <code>host.docker.internal:11434</code>). Image rolls operator-triggered — no Watchtower or polling daemon. See <a href="decisions-log.html#d24">D24</a>.</td></tr>
+    <tr><td><code>monitoring-triage-service</code> (compose dir <code>/opt/triage/</code> on <code>observability-gpu-uswest2-newacct</code>; previously <code>~/cires-ai/</code> on adolin-wsl)</td><td>Docker-compose for the GPU AI stack: 6 bridge containers (triage + 5 MCPs) via <code>triage-stack.service</code> systemd unit. Ollama itself runs as host systemd (not in compose; bridge containers reach it via <code>host.docker.internal:11434</code>). Image rolls operator-triggered - no Watchtower or polling daemon. See <a href="decisions-log.html#d24">D24</a>.</td></tr>
     <tr><td><code>monitoring-docs</code></td><td>You are here.</td></tr>
     <tr><td><code>monitoring-load-tests</code> + <code>monitoring-chaos-tests</code></td><td>Load generators + chaos scenarios.</td></tr>
   </tbody>
@@ -246,8 +246,8 @@
   └──────────────────────────────────────────────────────────────────────┘  │
                                                                             │
   ┌──────────────────────────────────────────────────────────────────────┐  │
-  │   GPU HOST / observability-gpu-uswest2  (us-west-2 g5.xlarge, A10G)  │◀─┘
-  │   tailnet 100.65.77.50 · public EIP 52.27.21.89 · since 2026-05-21   │
+  │   GPU HOST / observability-gpu-uswest2-newacct (us-west-2 g5.xlarge) │◀─┘
+  │   tailnet 100.114.76.43 · public EIP 35.164.128.201                  │
   │                                                                      │
   │  ┌──────────────────────┐   ┌──────────────────────┐                 │
   │  │ Ollama (host systemd)│◀──│ Triage Service :8090 │                 │
@@ -274,13 +274,13 @@
 </pre>
 
 <p>
-  Tailscale MagicDNS hostnames in use (updated 2026-05-21):
+  Tailscale MagicDNS hostnames in use (updated 2026-06-02 for new-account 321556173045 carbon copy):
   <code>claude-controller</code> (ephemeral EC2 orchestrator),
   <code>adolin</code> (laptop Windows host),
-  <code>adolin-wsl</code> (laptop WSL2 — rollback fallback only),
-  <code>observability-gpu-uswest2</code> (us-west-2 g5.xlarge — triage lives here),
-  <code>observability-rca-monitoring</code> (EC2 monitoring VM us-east-1),
-  <code>observability-rca-k3s</code> (EC2 k3s VM us-east-1).
+  <code>adolin-wsl</code> (laptop WSL2 - rollback fallback only),
+  <code>observability-gpu-uswest2-newacct</code> (us-west-2 g5.xlarge - triage lives here),
+  <code>observability-rca-newacct-monitoring</code> (EC2 monitoring VM us-east-1),
+  <code>observability-rca-newacct-k3s</code> (EC2 k3s VM us-east-1).
 </p>
 
 <!-- ============================================================== -->
@@ -908,7 +908,7 @@
 
 <h4>Deep-link + timezone + deployment map</h4>
 <table class="kv-table"><tbody>
-  <tr><td>GRAFANA_URL</td><td>http://52.202.21.192:3000 default; should be tailnet MagicDNS</td></tr>
+  <tr><td>GRAFANA_URL</td><td>http://52.201.92.19:3000 default; should be tailnet MagicDNS</td></tr>
   <tr><td>SERVICE_DEPLOYMENT_TYPE</td><td>dict (P1.9). Spring-boot/kong/otel-collector=k8s; grafana/prometheus/loki/jaeger/monitoring=docker-vm; k3s-node/node-exporter=systemd.</td></tr>
   <tr><td>INSTANCE_HOSTS</td><td>IP → friendly hostname map</td></tr>
   <tr><td>INSTANCE_PORTS</td><td>port → role map for UI enrichment</td></tr>
@@ -919,7 +919,7 @@
 
 <p>
   Production mode = Docker containers on AWS EC2 <code>g5.xlarge</code> in
-  us-west-2 (<code>observability-gpu-uswest2</code>), deployed via
+  us-west-2 (<code>observability-gpu-uswest2-newacct</code>), deployed via
   <code>triage-stack.service</code> systemd unit wrapping <code>docker compose</code>
   against <code>/opt/triage/docker-compose.gpu.yml</code>. Migrated from
   <code>adolin-wsl</code> on 2026-05-21 (<a href="decisions-log.html#d24">D24</a>); laptop kept as rollback. Containers:
@@ -944,13 +944,13 @@
   container restarts.
 </p>
 <p>
-  Tailscale: triage on <code>observability-gpu-uswest2:8090</code> (us-west-2),
-  Grafana on <code>observability-rca-monitoring:3000</code> (us-east-1).
+  Tailscale: triage on <code>observability-gpu-uswest2-newacct:8090</code> (us-west-2),
+  Grafana on <code>observability-rca-newacct-monitoring:3000</code> (us-east-1).
   Grafana webhook URL in <code>monitoring-project/inventory/group_vars/monitoring.yml</code>
-  now points at the API Gateway (since 2026-05-21):
-  <code>triage_service_webhook_url: "https://l5anj15qi0.execute-api.us-west-2.amazonaws.com/webhook/grafana"</code> —
+  points at the API Gateway:
+  <code>triage_service_webhook_url: "https://p2j9dqjh3h.execute-api.us-west-2.amazonaws.com/webhook/grafana"</code> -
   Lambda router applies an IP allowlist (Grafana's host + Lina's home) before
-  forwarding to the instance's private IP. MCP cross-region reach (us-west-2 →
+  forwarding to the instance's private IP. MCP cross-region reach (us-west-2 -&gt;
   us-east-1) over Tailscale MagicDNS; no VPC peering, no public internet.
 </p>
 

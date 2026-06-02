@@ -212,14 +212,14 @@
 
 <p><strong>What it does.</strong> The CIRES Observability Platform is a two-layer response. The foundation: a conventional open-source observability stack (Prometheus / Loki / Jaeger / Grafana on AWS, Ansible-deployable). The differentiator: an <strong>AI triage service</strong> on top that, for every Grafana webhook, gathers cross-pillar context through five MCP servers, picks the closest of 14 RCA archetypes, asks a local LLM (<code>qwen2.5:7b-instruct</code> on Ollama) for a cause-first analysis, runs three validators, and emits <code>ESCALATE</code> (email the on-call) or <code>DISMISS</code> (record the reason and move on). Operators can override either way; their feedback flows back into the suppression and exemplar layers.</p>
 
-<p><strong>Scope of this brief.</strong> This is a <strong>proof of concept</strong>, built and validated on a local test bed — a sample <code>react-springboot-mysql</code> application (Spring Boot + Kong + MySQL + React) plus an additional co-located test application — running on a lab AWS environment. Inference moved on 2026-05-21 from a Tailscale-attached laptop (GTX 1060 + <code>qwen2.5:7b</code>, which ran the platform for the first 28 days) to a dedicated AWS <code>g5.xlarge</code> in us-west-2 (A10G GPU + <code>qwen2.5:14b-instruct</code> primary), reached over Tailscale at <code>observability-gpu-uswest2</code>; the laptop is retained as rollback fallback. <strong>Intended deployment target: CIRES Technologies (Tanger Med) production, contingent on the greenlight this brief supports.</strong> Alert volumes, latencies, and load shapes discussed below describe the test bed, not CIRES production — see <a href="#architecture-review">§7.6</a> for an honest read on how the architecture would scale.</p>
+<p><strong>Scope of this brief.</strong> This is a <strong>proof of concept</strong>, built and validated on a local test bed - a sample <code>react-springboot-mysql</code> application (Spring Boot + Kong + MySQL + React) plus an additional co-located test application - running on a lab AWS environment. Inference moved on 2026-05-21 from a Tailscale-attached laptop (GTX 1060 + <code>qwen2.5:7b</code>, which ran the platform for the first 28 days) to a dedicated AWS <code>g5.xlarge</code> in us-west-2 (A10G GPU + <code>qwen2.5:14b-instruct</code> primary), reached over Tailscale at <code>observability-gpu-uswest2-newacct</code> (carbon-copy provisioned in new account 321556173045 on 2026-06-02); the laptop is retained as rollback fallback. <strong>Intended deployment target: CIRES Technologies (Tanger Med) production, contingent on the greenlight this brief supports.</strong> Alert volumes, latencies, and load shapes discussed below describe the test bed, not CIRES production - see <a href="#architecture-review">§7.6</a> for an honest read on how the architecture would scale.</p>
 
 <p><strong>Why it's worth your time.</strong> Three things distinguish this from a typical LLM-on-alerts integration:</p>
 
 <ol>
   <li><strong>Hallucination firewall.</strong> Every data source the LLM ever sees flows through an MCP bridge — no direct DB reads, no in-process module imports of evidence, no ad-hoc HTTP calls. The invariant is enforced by a CI lint (<code>scripts/check_mcp_invariant.py</code>), not just convention. If the LLM tries to invent a metric or a service that doesn't exist, the MCP call returns empty and the validator catches the unsupported claim downstream. See <a href="#quality">§5</a> and <a href="hallucination-firewall.html">hallucination-firewall.html</a>.</li>
   <li><strong>Five reinforcing output-quality defenses.</strong> Exemplar retrieval, alert-keyed hallucination blocklist, surface-only LEDE + hypothesis-menu validators, confidence clamp, bounded-agency single retry. Each catches a different failure mode; together they make LLM mistakes recoverable rather than load-bearing.</li>
-  <li><strong>Operational track record, not promises.</strong> The triage container ran on <code>adolin-wsl</code> (laptop GTX 1060) for 28 days from Sprint 3 kickoff (2026-04-23); on 2026-05-21 it was promoted to a dedicated AWS <code>g5.xlarge</code> in us-west-2 (A10G GPU, instance <code>i-03aec662b1a47ad8f</code>, Tailscale name <code>observability-gpu-uswest2</code>) with the laptop kept as rollback fallback. 274 / 274 triage tests pass, the MCP-invariant lint is clean, and the 2026-05-19 heavy-load test produced 95 production-shape RCAs with a documented quality grade per RCA. Five of the twelve issues that test surfaced are already shipped.</li>
+  <li><strong>Operational track record, not promises.</strong> The triage container ran on <code>adolin-wsl</code> (laptop GTX 1060) for 28 days from Sprint 3 kickoff (2026-04-23); on 2026-05-21 it was promoted to a dedicated AWS <code>g5.xlarge</code> in us-west-2 (A10G GPU, Tailscale name <code>observability-gpu-uswest2-newacct</code> in the new-account 321556173045 carbon-copy as of 2026-06-02) with the laptop kept as rollback fallback. 274 / 274 triage tests pass, the MCP-invariant lint is clean, and the 2026-05-19 heavy-load test produced 95 production-shape RCAs with a documented quality grade per RCA. Five of the twelve issues that test surfaced are already shipped.</li>
   <li><strong>Backend-agnostic by construction.</strong> The MCP layer doubles as a portability seam — supporting Zabbix, Elasticsearch, Tempo, Datadog, or any other metrics / logs / traces backend is a ~3–5 day MCP bridge, not a re-architecture. Producer-side, OpenTelemetry auto-instrumentation covers most polyglot stacks with zero application-code change. See <a href="#arch-portability">§7.6.5</a>.</li>
 </ol>
 
@@ -1479,7 +1479,7 @@ Four concrete inputs. We've tried to scope each so it doesn't cost you a week.
   </li>
   <li>
     <strong>3. Review a handful of recent live RCAs.</strong> The dashboard at
-    <code>http://observability-gpu-uswest2:8090/dashboard</code> (Tailscale-only) shows the
+    <code>http://observability-gpu-uswest2-newacct:8090/dashboard</code> (Tailscale-only) shows the
     last 50 verdicts. Flag any RCA that reads wrong to you — too confident,
     too hedged, wrong cause, wrong remediation, evidence cited that doesn't
     actually support the claim. Especially anything in the
@@ -1729,7 +1729,7 @@ to ask.
   makes you commit to a cause vs. keep digging." Take notes; this is the
   highest-value 15 minutes of the meeting.</li>
   <li><strong>Question 3 — Live RCAs on /dashboard.</strong> Open
-  <code>http://observability-gpu-uswest2:8090/dashboard</code> over Tailscale (test the
+  <code>http://observability-gpu-uswest2-newacct:8090/dashboard</code> over Tailscale (test the
   link before the meeting). Walk the last 5–10 verdicts together. Ask:
   "anything reads wrong to you — too confident, too hedged, wrong cause,
   wrong remediation?"</li>

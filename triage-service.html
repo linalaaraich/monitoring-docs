@@ -167,7 +167,7 @@
 
 <div style="background:rgba(107,207,127,.08); border-bottom:2px solid #6bcf7f; padding:14px 32px; font-size:13px; line-height:1.6;">
   <strong style="color:#6bcf7f; text-transform:uppercase; font-size:11px; letter-spacing:2px;">Refreshed 2026-04-28</strong> —
-  Page reconciled with the 2026-04-28 full-sweep audit (in private <code>monitoring-audit-results</code> repo). The pipeline is now <strong>10 stages</strong> (Drain3 annotation + exemplar injection were inserted in that order); <strong>response validator</strong>, <strong>bounded-agency retry</strong>, and <strong>action-template fallback</strong> are documented inside the LLM-investigation stage. LLM is <code>qwen2.5:14b-instruct</code> primary (7b fallback) on AWS us-west-2 <code>g5.xlarge</code> (<code>observability-gpu-uswest2</code>, NVIDIA A10G · 24 GB VRAM, since 2026-05-21 — see <a href="decisions-log.html#d24">D24</a>); the laptop runner is retained as rollback fallback. Cross-pipeline decisions: <a href="decisions-log.html#d17">D17</a> (exemplar library), <a href="decisions-log.html#d18">D18</a> (adaptive thresholds), <a href="decisions-log.html#d19">D19</a> (RCA prose philosophy). Dashboard at <code>http://observability-gpu-uswest2:8090/dashboard</code> over Tailscale.
+  Page reconciled with the 2026-04-28 full-sweep audit (in private <code>monitoring-audit-results</code> repo). The pipeline is now <strong>10 stages</strong> (Drain3 annotation + exemplar injection were inserted in that order); <strong>response validator</strong>, <strong>bounded-agency retry</strong>, and <strong>action-template fallback</strong> are documented inside the LLM-investigation stage. LLM is <code>qwen2.5:14b-instruct</code> primary (7b fallback) on AWS us-west-2 <code>g5.xlarge</code> (<code>observability-gpu-uswest2-newacct</code>, NVIDIA A10G · 24 GB VRAM, since 2026-05-21 - see <a href="decisions-log.html#d24">D24</a>; carbon-copied to new account 321556173045 on 2026-06-02); the laptop runner is retained as rollback fallback. Cross-pipeline decisions: <a href="decisions-log.html#d17">D17</a> (exemplar library), <a href="decisions-log.html#d18">D18</a> (adaptive thresholds), <a href="decisions-log.html#d19">D19</a> (RCA prose philosophy). Dashboard at <code>http://observability-gpu-uswest2-newacct:8090/dashboard</code> over Tailscale.
 </div>
 
 <div class="topnav">
@@ -246,7 +246,7 @@ Every decision — escalate, dismiss, suppress, or timeout — is persisted in a
 <h3>At-a-glance</h3>
 <table class="field-table">
   <tbody>
-    <tr><td class="name">Listen port</td><td class="desc"><code>:8090</code> (compose service <code>ai-triage-service</code> managed by <code>triage-stack.service</code> systemd unit on <code>observability-gpu-uswest2</code> in us-west-2)</td></tr>
+    <tr><td class="name">Listen port</td><td class="desc"><code>:8090</code> (compose service <code>ai-triage-service</code> managed by <code>triage-stack.service</code> systemd unit on <code>observability-gpu-uswest2-newacct</code> in us-west-2)</td></tr>
     <tr><td class="name">Repo</td><td class="desc"><a href="https://github.com/linalaaraich/monitoring-triage-service">linalaaraich/monitoring-triage-service</a></td></tr>
     <tr><td class="name">Entry point</td><td class="desc"><code>app/main.py</code> — FastAPI app + endpoint declarations</td></tr>
     <tr><td class="name">Pipeline</td><td class="desc"><code>app/pipeline.py</code> — the 10-stage flow below</td></tr>
@@ -257,7 +257,7 @@ Every decision — escalate, dismiss, suppress, or timeout — is persisted in a
     <tr><td class="name">Action-template fallback</td><td class="desc"><code>app/suggested_actions.yaml</code> — remediation-only templates keyed by alertname × deployment_type</td></tr>
     <tr><td class="name">Deployment-type map</td><td class="desc"><code>app/config.py:service_deployment_type</code> — drives validator arch-mismatch + action-template selection</td></tr>
     <tr><td class="name">Storage</td><td class="desc"><code>app/rca_store.py</code> — SQLite (<code>rca_history</code> table at <code>/data/rca_history.db</code>)</td></tr>
-    <tr><td class="name">LLM target</td><td class="desc">Ollama REST (<code>/api/generate</code>) — model is <code>qwen2.5:14b-instruct</code> primary (Q4_K_M, ~9 GB) with <code>qwen2.5:7b-instruct</code> as fallback, <code>temperature=0</code>, structured outputs, stable-prefix prompt cache. Runs on <code>observability-gpu-uswest2</code> NVIDIA A10G (24 GB VRAM); cached model load ~177 ms; 14b at ~50-65 tok/s + prompt eval ~1350 tok/s. Ollama is a host systemd service; bridge containers reach it via <code>host.docker.internal:11434</code>.</td></tr>
+    <tr><td class="name">LLM target</td><td class="desc">Ollama REST (<code>/api/generate</code>) - model is <code>qwen2.5:14b-instruct</code> primary (Q4_K_M, ~9 GB) with <code>qwen2.5:7b-instruct</code> as fallback, <code>temperature=0</code>, structured outputs, stable-prefix prompt cache. Runs on <code>observability-gpu-uswest2-newacct</code> NVIDIA A10G (24 GB VRAM); cached model load ~177 ms; 14b at ~50-65 tok/s + prompt eval ~1350 tok/s. Ollama is a host systemd service; bridge containers reach it via <code>host.docker.internal:11434</code>.</td></tr>
   </tbody>
 </table>
 
@@ -603,7 +603,7 @@ The two highlighted lines are the ones to watch: the model's verdict (<code>dism
 <div class="callout note">
   <div class="callout-label">Where to open it</div>
   <p style="margin:0">
-    From any tailnet peer: <code>http://observability-gpu-uswest2:8090/dashboard</code> (MagicDNS, preferred) or <code>http://100.65.77.50:8090/dashboard</code> (raw tailnet IP). On the instance itself: <code>http://localhost:8090/dashboard</code> via Tailscale SSH (<code>ssh ubuntu@observability-gpu-uswest2</code>) or SSM Session Manager as break-glass. The operator manual lives at <code>/dashboard/guide</code> — a sage-themed quick reference for every column, code, and abbreviation. The us-west-2 <code>g5.xlarge</code> (A10G) is the only host that runs the dashboard since the 2026-05-21 migration (<a href="decisions-log.html#d24">D24</a>); adolin-wsl is rollback only.
+    From any tailnet peer: <code>http://observability-gpu-uswest2-newacct:8090/dashboard</code> (MagicDNS, preferred) or <code>http://100.114.76.43:8090/dashboard</code> (raw tailnet IP). On the instance itself: <code>http://localhost:8090/dashboard</code> via Tailscale SSH (<code>ssh ubuntu@observability-gpu-uswest2-newacct</code>) or SSM Session Manager as break-glass. The operator manual lives at <code>/dashboard/guide</code> - a sage-themed quick reference for every column, code, and abbreviation. The us-west-2 <code>g5.xlarge</code> (A10G) is the only host that runs the dashboard since the 2026-05-21 migration (<a href="decisions-log.html#d24">D24</a>); adolin-wsl is rollback only.
   </p>
 </div>
 
