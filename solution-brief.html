@@ -626,7 +626,7 @@ than we'd like and is a signal that an archetype is missing.
     test the full chain — <strong>real Prometheus <code>up == 0</code> /
     real cgroup CPU saturation / real drain3 template novelty / real p95
     spike</strong> → real Grafana evaluation against the configured
-    <code>for:</code> windows → real Alertmanager webhook through API Gateway
+    <code>for:</code> windows → real Grafana webhook through API Gateway
     → triage service on GPU — under simultaneous load. No synthetic webhook
     POSTs, no replayed fixtures.
   </p>
@@ -1423,7 +1423,7 @@ than we'd like and is a signal that an archetype is missing.
     <tr><td>Metrics</td><td>Prometheus</td><td>Zabbix, VictoriaMetrics, InfluxDB, Datadog, CloudWatch, Graphite</td><td>~3–5 days</td></tr>
     <tr><td>Logs</td><td>Loki</td><td>Elasticsearch / OpenSearch, Splunk, Graylog, CloudWatch Logs</td><td>~3–5 days</td></tr>
     <tr><td>Traces</td><td>Jaeger</td><td>Tempo, Zipkin, AWS X-Ray, Honeycomb</td><td>Tempo ~1 day; others ~3 days</td></tr>
-    <tr><td>Alert ingress</td><td>Grafana webhook</td><td>Alertmanager, Zabbix triggers, PagerDuty, Opsgenie</td><td>~1–2 days</td></tr>
+    <tr><td>Alert ingress</td><td>Grafana webhook</td><td>Zabbix triggers, PagerDuty, Opsgenie</td><td>~1–2 days</td></tr>
     <tr><td>Log-template engine</td><td>Drain3 (raw log lines)</td><td>Unchanged — any logs backend works</td><td>None</td></tr>
   </tbody>
 </table>

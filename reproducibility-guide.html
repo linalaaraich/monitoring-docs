@@ -327,7 +327,7 @@ ansible-playbook playbooks/monitoring.yml --tags monitoring</code></pre>
     <li><strong>Play 1: base host setup</strong> (tags <code>common,docker</code>) — roles <code>common</code>, <code>docker</code>, <code>node_exporter</code>, <code>cadvisor</code>. Sets timezone, installs base packages + UFW, Docker CE + compose plugin, and pulls the node_exporter + cAdvisor images.</li>
     <li><strong>Play 2: monitoring stack</strong> (tag <code>monitoring</code>) — roles <code>prometheus</code>, <code>loki</code>, <code>jaeger</code>, <code>otel-collector</code>, <code>grafana</code>, then renders <code>monitoring-compose.yml.j2</code> to the path configured by <code>stack_dir</code> (default <code>/opt/stack/docker-compose.yml</code>) and brings the stack up with <code>community.docker.docker_compose_v2</code>. Final tasks wait for Prometheus/Grafana/Loki/Jaeger to respond on their ports.</li>
   </ol>
-  <p>The Grafana role provisions <strong>4 dashboards</strong> (<code>unified-overview</code>, <code>tracing-overview</code>, <code>otel-collector-health</code>, <code>triage-service-health</code>) plus alerting config (<code>contactpoints.yml.j2</code>, <code>policies.yml.j2</code>, <code>alertrules.yml.j2</code>) &mdash; the legacy Alertmanager role is already removed on origin/main.</p>
+  <p>The Grafana role provisions <strong>4 dashboards</strong> (<code>unified-overview</code>, <code>tracing-overview</code>, <code>otel-collector-health</code>, <code>triage-service-health</code>) plus alerting config (<code>contactpoints.yml.j2</code>, <code>policies.yml.j2</code>, <code>alertrules.yml.j2</code>).</p>
 </div>
 
 <div class="step">
