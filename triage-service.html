@@ -495,7 +495,8 @@ This is the endpoint you'll spend the most time with — both programmatically (
     <tr><td class="name">alert_name</td><td class="type">str</td><td class="desc">Copied from <code>labels.alertname</code>. The clearest key to filter on.</td></tr>
     <tr><td class="name">alert_fingerprint</td><td class="type">str</td><td class="desc">Grafana's own fingerprint — stable across re-fires of the same alert.</td></tr>
     <tr><td class="name">affected_service</td><td class="type">str</td><td class="desc">From <code>labels.service</code> (fallback <code>labels.job</code>). Feeds the MCP queries.</td></tr>
-    <tr><td class="name">severity</td><td class="type">str</td><td class="desc">The LLM's re-assessed severity (can differ from the raw alert severity — that's the point).</td></tr>
+    <tr><td class="name">env</td><td class="type">str</td><td class="desc">Environment (<code>prod</code> / <code>stg</code> / <code>preprod</code> / <code>uat</code> / <code>int</code> / <code>dev</code> / <code>unknown</code>). Resolved at pipeline-write time via the precedence chain in <a href="#env-resolution">§5.3</a>. First-class field on every row since 2026-06-02, including backfilled history.</td></tr>
+    <tr><td class="name">severity</td><td class="type">str</td><td class="desc">The LLM's re-assessed severity (can differ from the raw alert severity - that's the point).</td></tr>
     <tr><td class="name">triage_decision</td><td class="type">str</td><td class="desc">High-level path taken: <code>investigate</code> (full pipeline), <code>triage_suppressed</code> (Layer 2), <code>timeout_passthrough</code> (safety fallback).</td></tr>
     <tr><td class="name">llm_verdict</td><td class="type">str | null</td><td class="desc"><code>"escalate"</code>, <code>"dismiss"</code>, or <code>"inconclusive"</code>. <code>null</code> if we never reached the LLM (suppressed or timed out).</td></tr>
     <tr><td class="name">llm_confidence</td><td class="type">str | null</td><td class="desc">Optional self-reported confidence from the model. Small quantized models often omit this.</td></tr>
@@ -585,6 +586,37 @@ The two highlighted lines are the ones to watch: the model's verdict (<code>dism
   </p>
 </div>
 
+<h3 id="env-resolution"><code>env</code> - how the environment is resolved</h3>
+
+<p>
+Every persisted decision carries an <code>env</code> tag - <code>prod</code>, <code>stg</code>, <code>preprod</code>, <code>uat</code>, <code>int</code>, <code>dev</code>, or the explicit gap value <code>unknown</code>. The same value flows through the dashboard row, the email subject + body banner, the detail page, and the <code>?env=</code> URL filter, so the operator never sees one surface saying "prod" while another says "stg" for the same fingerprint.
+</p>
+
+<p>
+Resolution is centralised in <code>app.v2_mappings.env_resolver(...)</code> and applied at pipeline-write time. The precedence chain (first non-empty wins) is:
+</p>
+
+<ol>
+  <li>Per-alert label: <code>labels.env</code>, <code>labels.environment</code>, or <code>labels.deployment_environment</code></li>
+  <li>Alertmanager-style envelope: <code>commonLabels.env</code> / <code>groupLabels.env</code> / <code>commonLabels.environment</code></li>
+  <li>Annotations: <code>commonAnnotations.env</code> or <code>annotations.env</code></li>
+  <li>Namespace prefix inference: <code>prod-payments</code> -> prod, <code>stg-checkout</code> -> stg, etc. (also reads <code>labels.namespace</code> when no explicit namespace is provided)</li>
+  <li>Logical-namespace map: <code>rental</code> -> stg, <code>observability</code> / <code>kube-system</code> / <code>app</code> / <code>network</code> -> prod</li>
+  <li>Service-token inference: <code>rental-backend</code> -> stg via the <code>NAMESPACE</code> table</li>
+  <li>Fallback: <code>unknown</code> (NOT a silent prod default - the gap is intentionally visible)</li>
+</ol>
+
+<p>
+Raw label values go through a tight <code>KNOWN_ENVS</code> allowlist before being accepted, so a typo like <code>prdo</code> falls through to the next tier instead of leaking into the dashboard pill. Long forms are canonicalised: <code>production</code> -> <code>prod</code>, <code>staging</code> -> <code>stg</code>.
+</p>
+
+<div class="callout tip">
+  <div class="callout-label">Backfill of pre-2026-06-02 rows</div>
+  <p style="margin:0">
+    When the <code>env</code> column was added the migration ran <code>RCAStore.backfill_env_from_service()</code> on startup, applying the same resolver against <code>affected_service</code> for every row where <code>env IS NULL</code>. The first deploy backfilled 1143 historical rows in <code>rca_history.db</code> (1141 prod, 2 unknown - the two rows where the webhook carried <code>service="unknown"</code> and we have no signal to infer from). The backfill is idempotent: subsequent restarts touch zero rows.
+  </p>
+</div>
+
 <!-- ───────────────────────────────────────── -->
 <h2 id="dashboard"><span class="num">6.</span> The dashboard</h2>
 
@@ -595,7 +627,7 @@ The two highlighted lines are the ones to watch: the model's verdict (<code>dism
 <h3>What's in it</h3>
 <ul>
   <li><strong>Four stat cards</strong>: total decisions, count escalated, count dismissed, count timed out.</li>
-  <li><strong>Filter bar</strong>: type to narrow the table by <em>alert name</em>, <em>service</em>, or <em>verdict</em> in real time.</li>
+  <li><strong>Filter bar</strong>: narrow the table by <em>verdict</em>, <em>severity</em>, <em>family</em>, <em>env</em>, <em>range</em>, or free-text search. Every selection round-trips through the URL (<code>?env=prod&amp;verdict=escalate&amp;range=24h</code>) so refresh + back-button + shared links all preserve the view.</li>
   <li><strong>Decision table</strong>: timestamp, alert, source, service, severity, verdict, action taken, duration.</li>
   <li><strong>Click any row</strong> → an inline panel opens beneath it showing: full <code>rca_report</code>, full <code>llm_reasoning</code>, triage decision, alert fingerprint, LLM confidence, decision ID.</li>
 </ul>

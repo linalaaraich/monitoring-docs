@@ -531,6 +531,27 @@
   decision id so subsequent duplicates within the window get a link back.
 </p>
 
+<p>
+  <strong>Environment resolution</strong> happens just before the record is
+  built, via <code>app.v2_mappings.env_resolver(...)</code>
+  (<span class="file-ref">pipeline.py:953</span>). The resolver walks a
+  precedence chain - per-alert <code>labels.env</code> first, then
+  <code>commonLabels.env</code> / <code>groupLabels.env</code>, then
+  annotations, then namespace-prefix inference
+  (<code>prod-payments</code> -> prod), then the logical-namespace map
+  (<code>rental</code> -> stg, <code>observability</code> -> prod), and
+  finally the service token (<code>rental-backend</code> -> stg). Anything
+  outside the <code>KNOWN_ENVS</code> allowlist (prod / stg / preprod / uat /
+  int / dev) falls through to the next tier, so a typo like <code>prdo</code>
+  cannot leak into the dashboard pill. The resolved value lands in
+  <code>RCARecord.env</code>, the persisted <code>rca_history.env</code>
+  column, the dashboard row, the email subject (<code>[env] [ns] [VERDICT]</code>
+  ...), and the URL filter (<code>?env=prod</code>) - all surfaces read the
+  same persisted value so they cannot disagree. See
+  <a href="triage-service.html#env-resolution">triage-service.html §5.3</a>
+  for the full precedence table.
+</p>
+
 <!-- ============================================================== -->
 <h2 id="modules">4. Module reference</h2>
 
@@ -828,6 +849,7 @@
     <tr><td><code>evidence</code></td><td>TEXT</td><td>JSON list</td></tr>
     <tr><td><code>anomaly_summary</code></td><td>TEXT</td><td>Drain3 one-liner</td></tr>
     <tr><td><code>correlated_alerts</code></td><td>TEXT</td><td>JSON list of {timestamp,alert_name,service,verdict}</td></tr>
+    <tr><td><code>env</code></td><td>TEXT</td><td>prod / stg / preprod / uat / int / dev / unknown - first-class column since 2026-06-02; resolved by <code>v2_mappings.env_resolver</code> at write time and indexed for the dashboard's <code>?env=</code> filter</td></tr>
   </tbody>
 </table>
 
