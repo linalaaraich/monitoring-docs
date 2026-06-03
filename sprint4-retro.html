@@ -424,6 +424,23 @@
   tests still 428/428.
 </p>
 
+<p>
+  <strong>Postscript 2026-06-03 (post-migration stack-fix):</strong>
+  Three follow-up patches landed after the new-account cutover. MCP
+  env vars in <code>/opt/triage/docker-compose.gpu.yml</code> were
+  still pointing at old-account hostnames - swapped to
+  <code>-newacct-</code> hosts (<code>monitoring-gpu-migration
+  fa9985c</code>), restoring all 6 ai-* containers to healthy. A
+  bridge <code>Service</code> in the <code>observability</code>
+  namespace now resolves the spring-boot OTel SDK's hardcoded
+  in-cluster collector DNS to the monitoring VM (<code>monitoring-project
+  974d184</code>) - workaround pending a canonical OTel DaemonSet
+  deploy. Adaptive alert rules converted to static thresholds
+  (MediumCpuUsage > 70%, HighCpuUsage > 85%, ...) with a TODO to
+  revert on 2026-06-09 once the new account has a 7d baseline
+  (<code>monitoring-project 76d1e4a</code>).
+</p>
+
 <p style="margin-top:40px; padding-top:20px; border-top:1px solid var(--border); font-size:13px; color:var(--muted);">
   Created 2026-06-02 (Tue) for the supervisor meeting at CIRES
   Technologies. Sprint 4 dates 2026-05-20 to 2026-06-03. Companion to

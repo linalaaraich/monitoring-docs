@@ -283,6 +283,21 @@
   <code>observability-rca-newacct-k3s</code> (EC2 k3s VM us-east-1).
 </p>
 
+<p>
+  <strong>OTel bridge note (2026-06-03):</strong> spring-boot's OTel SDK
+  is compiled against the in-cluster collector DNS
+  <code>otel-collector.observability.svc.cluster.local:4317/4318</code>,
+  which does not resolve in this PoC topology (the collector runs on
+  the monitoring VM, not as a cluster DaemonSet). A bridge
+  <code>Service</code> in the <code>observability</code> namespace
+  forwards <code>4317/4318</code> to the monitoring VM at
+  <code>10.0.1.105</code> via Tailscale, so spring-boot logs and spans
+  reach Loki and Jaeger with traceid intact (committed in
+  <code>monitoring-project 974d184</code>). This is a workaround -
+  the canonical fix is to deploy the in-cluster OTel DaemonSet
+  (manifests already exist under <code>manifests/otel-collector/</code>).
+</p>
+
 <!-- ============================================================== -->
 <h2 id="lifecycle">3. Alert lifecycle — end-to-end</h2>
 
