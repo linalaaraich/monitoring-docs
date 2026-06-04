@@ -236,7 +236,7 @@
   ┌──────────────────────────────────────────────────────────────────────┐  │
   │                    K3S-NODE (EC2)                                    │  │
   │                                                                      │  │
-  │    app/    spring-boot  ─┐                   │ node-exporter         │  │
+  │    app/    employees-backend (container=spring-boot)  ─┐  │ node-exporter         │  │
   │    front/  react        ─┤  scraped by       │ (systemd on host)     │  │
   │    network/ kong         ├─ Prometheus ─────▶│                       │  │
   │    observ/ otel-col     ─┘                                           │  │
@@ -284,15 +284,17 @@
 </p>
 
 <p>
-  <strong>OTel bridge note (2026-06-03):</strong> spring-boot's OTel SDK
-  is compiled against the in-cluster collector DNS
+  <strong>OTel bridge note (2026-06-03):</strong> the employees-backend
+  workload's OTel SDK (chart <code>charts/spring-boot/</code>, container
+  name <code>spring-boot</code>) is compiled against the in-cluster
+  collector DNS
   <code>otel-collector.observability.svc.cluster.local:4317/4318</code>,
   which does not resolve in this PoC topology (the collector runs on
   the monitoring VM, not as a cluster DaemonSet). A bridge
   <code>Service</code> in the <code>observability</code> namespace
   forwards <code>4317/4318</code> to the monitoring VM at
-  <code>10.0.1.105</code> via Tailscale, so spring-boot logs and spans
-  reach Loki and Jaeger with traceid intact (committed in
+  <code>10.0.1.105</code> via Tailscale, so employees-backend logs and
+  spans reach Loki and Jaeger with traceid intact (committed in
   <code>monitoring-project 974d184</code>). This is a workaround -
   the canonical fix is to deploy the in-cluster OTel DaemonSet
   (manifests already exist under <code>manifests/otel-collector/</code>).
@@ -314,10 +316,12 @@
   Net result: Loki now sees <strong>5 distinct
   <code>service_name</code> values</strong> -
   <code>coredns</code>, <code>gpu-stack</code>, <code>host-syslog</code>,
-  <code>monitoring-vm</code>, <code>spring-boot</code> - up from 1
-  (<code>spring-boot</code> only) before the Phase 2 work. The
-  triage-service Loki MCP can now answer log queries that span the AI
-  stack itself, not just the application under observation.
+  <code>monitoring-vm</code>, <code>employees-backend</code> - up from 1
+  (<code>employees-backend</code> only, previously labelled
+  <code>spring-boot</code> before the WS-1 rename on 2026-06-04) before
+  the Phase 2 work. The triage-service Loki MCP can now answer log
+  queries that span the AI stack itself, not just the application under
+  observation.
 </p>
 
 <!-- ============================================================== -->
@@ -379,7 +383,7 @@
   <tbody>
     <tr><td><code>prometheus-mcp</code></td><td><span class="file-ref">context.py:164</span> <code>_fetch_prometheus()</code></td><td>Time-series for the rule's PromQL; falls back to <code>alert.annotations.expr</code> or instance-scoped query when primary empty.</td></tr>
     <tr><td><code>loki-mcp</code></td><td><span class="file-ref">context.py:218</span> <code>_fetch_loki()</code></td><td>Last <code>settings.loki_log_limit</code> lines for the service. Fallback to ambient (any-service) lines ONLY if <code>labels.signal=="log"</code>, because ambient fallback for metric alerts leads to the 50-log-line hallucination (see Decisions Log D1).</td></tr>
-    <tr><td><code>jaeger-mcp</code></td><td><span class="file-ref">context.py:274</span> <code>_fetch_jaeger()</code></td><td>Last <code>settings.jaeger_trace_limit</code> traces. Skipped entirely for non-traced services (<code>TRACED = {"spring-boot", "kong", "otel-collector"}</code>).</td></tr>
+    <tr><td><code>jaeger-mcp</code></td><td><span class="file-ref">context.py:274</span> <code>_fetch_jaeger()</code></td><td>Last <code>settings.jaeger_trace_limit</code> traces. Skipped entirely for non-traced services (<code>TRACED = {"employees-backend", "spring-boot" (legacy), "kong", "otel-collector"}</code>).</td></tr>
   </tbody>
 </table>
 <p>
@@ -773,7 +777,7 @@
 <p>
   Wraps <code>drain3.TemplateMiner</code> with a per-service router. Each service gets its own
   <code>TemplateMiner</code> instance + <code>FilePersistence</code> at <code>{drain3_state_dir}/{service}.bin</code>,
-  so spring-boot's templates don't blend with kong's. Key methods:
+  so employees-backend's templates don't blend with kong's. Key methods:
 </p>
 <ul>
   <li><code>analyze(log_line, service="_unknown")</code> — routes to the per-service miner (lazily creates one if not yet seen). Counters tracked per-service in <code>_lines_per_service</code> + <code>_anomalies_per_service</code>.</li>
@@ -1001,7 +1005,7 @@
 <h4>Deep-link + timezone + deployment map</h4>
 <table class="kv-table"><tbody>
   <tr><td>GRAFANA_URL</td><td>http://52.201.92.19:3000 default; should be tailnet MagicDNS</td></tr>
-  <tr><td>SERVICE_DEPLOYMENT_TYPE</td><td>dict (P1.9). Spring-boot/kong/otel-collector=k8s; grafana/prometheus/loki/jaeger/monitoring=docker-vm; k3s-node/node-exporter=systemd.</td></tr>
+  <tr><td>SERVICE_DEPLOYMENT_TYPE</td><td>dict (P1.9). employees-{backend,db,gateway} / spring-boot (legacy) / kong / otel-collector = k8s; grafana / prometheus / loki / jaeger / monitoring = docker-vm; k3s-node / node-exporter = systemd.</td></tr>
   <tr><td>INSTANCE_HOSTS</td><td>IP → friendly hostname map</td></tr>
   <tr><td>INSTANCE_PORTS</td><td>port → role map for UI enrichment</td></tr>
 </tbody></table>

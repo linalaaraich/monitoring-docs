@@ -350,7 +350,7 @@ Each Grafana alert the service accepts runs through these stages. Stages 1–3 a
           <li><strong>banned-phrases</strong> — known hedges that hide a real verdict ("metrics suggest", "potentially indicates"…) get logged and counted.</li>
           <li><strong>vague-action</strong> — <em>action</em> entries that read like prose rather than an executable command get pruned.</li>
           <li><strong>investigation-only</strong> — read-only "actions" (<code>kubectl get</code>, <code>docker logs</code>, <code>Query Grafana: …</code>, <code>ssh … 'top'</code>) get pruned per the <a href="decisions-log.html#d18">D18</a> remediation-only philosophy. Validated against 32/32 representative pairs.</li>
-          <li><strong>arch-mismatch</strong> — actions whose syntax doesn't match the affected service's <code>service_deployment_type</code> get pruned (no <code>docker restart spring-boot</code> when spring-boot is a k3s pod).</li>
+          <li><strong>arch-mismatch</strong> — actions whose syntax doesn't match the affected service's <code>service_deployment_type</code> get pruned (no <code>docker restart employees-backend</code> when employees-backend is a k3s pod; the legacy <code>spring-boot</code> token is still an accepted alias).</li>
           <li><strong>surface-only-lede</strong> (<a href="decisions-log.html#d19">D19</a>) — first-sentence regex catches RCAs that lead with raw PromQL or restate the alert; triggers a one-shot retry with a stricter cause-first prompt.</li>
         </ul>
         If after validator the verdict is <strong>data_starved</strong> AND <code>triage_bounded_agency_enabled=true</code>, the pipeline does one <strong>bounded-agency retry</strong>: the LLM is given access to a 6-tool whitelist (<code>prometheus.range_query</code>, <code>loki.query</code>, <code>jaeger.search</code>, <code>rca_history.similar</code>, <code>rca_history.list_exemplars</code>, <code>rca_history.get_exemplar</code>) and asked to issue exactly one MCP call before re-deciding. <code>triage_bounded_agency_invocations_total</code> counts these retries.
@@ -517,7 +517,7 @@ This is the endpoint you'll spend the most time with — both programmatically (
     <span class="k">"alert_source"</span>: <span class="s">"grafana"</span>,
     <span class="k">"alert_name"</span>: <span class="s">"LaptopSmoke_154806"</span>,
     <span class="k">"alert_fingerprint"</span>: <span class="s">"laptop-smoke-test"</span>,
-    <span class="k">"affected_service"</span>: <span class="s">"spring-boot-app"</span>,
+    <span class="k">"affected_service"</span>: <span class="s">"employees-backend"</span>,
     <span class="k">"severity"</span>: <span class="s">"info"</span>,
     <span class="k">"triage_decision"</span>: <span class="s">"investigate"</span>,
 <span class="hl">    <span class="k">"llm_verdict"</span>: <span class="s">"dismiss"</span>,</span>
