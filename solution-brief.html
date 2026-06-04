@@ -1101,18 +1101,23 @@ than we'd like and is a signal that an archetype is missing.
     measurably better with every override-loop cycle.
   </p>
   <p>
-    <strong>How Sprint 4 closes the gap.</strong> The feedback loop being
-    added in <a href="sprint-history.html">Sprint 4</a> (operator override
+    <strong>How Sprint 4 closes the gap.</strong> The feedback loop added
+    in <a href="sprint-history.html">Sprint 4</a> (operator override
     schema extension on the <code>feedback</code> table, <code>rate.html</code>
-    UI on every escalation email, four new MCP tools for
-    <code>rca_history.list_feedback</code> /
-    <code>get_similar_overrides</code> / <code>get_archetype_quality</code> /
-    <code>flag_action_unsafe</code>) is the structural answer to most
+    UI on every escalation email, MCP tool <code>rca_history.list_feedback</code>
+    in the bounded-agency catalogue) is the structural answer to most
     findings below: every operator "this was noise" override teaches the
     suppression cache; every "wrong remediation" flag adds to the
     hallucination blocklist; every cross-row verdict conflict resolved by
-    an operator becomes a tuning example. Combined with the four other
-    Sprint 4 candidates surfaced by this audit (~13 SP total, named on the
+    an operator becomes a tuning example. <strong>Update 2026-06-03 - the
+    loop is now closed end-to-end</strong> with the Phase 6 read-back
+    work (<code>8b7b319</code> triage + <code>5c690f4</code> mcp-bridges).
+    Operator corrections are now injected proactively into the LLM prompt
+    on every alert evaluation for the same family, and the LLM can pull
+    a wider feedback corpus on demand via <code>list_feedback</code>. See
+    <a href="feedback-loop.html">feedback-loop.html</a> for the
+    end-to-end write-up. Combined with the four other Sprint 4 candidates
+    surfaced by this audit (~13 SP total, named on the
     <a href="dashboard-audit-2026-05-21.html">detail page</a>), the
     failure modes here are not "fix forever" problems — they are
     "fix once, then keep refining with operator signal."
@@ -1309,7 +1314,7 @@ than we'd like and is a signal that an archetype is missing.
 
 <div class="callout note">
   <div class="callout-label">2026-05-21 critical audit — re-confirms the P0–P11 plan with fresh decision-ID evidence</div>
-  <p>A second-pass 8-criterion audit ran 2026-05-21 against the persisted <code>/decisions</code> corpus (271 rows; 12 cases sampled across the 6 dominant alert families). Headline: <strong>3/12 GOOD, 2/12 OK, 7/12 BAD</strong>. The six recurring failure modes (F1–F6) map 1:1 to existing P-tags below — <strong>no new stories needed</strong>. The table is annotated with the audit-confirmed decision IDs in the Evidence column. The audit also identifies <strong>Epic 2 (operator feedback loop) as the cross-cutting amplifier for P8 + P11</strong>: today these are point-in-time fixes; Epic 2 makes them continuous. Full audit text lives in the FYP report at <em>Evaluation → Critical RCA output audit — 12 representative cases</em>.</p>
+  <p>A second-pass 8-criterion audit ran 2026-05-21 against the persisted <code>/decisions</code> corpus (271 rows; 12 cases sampled across the 6 dominant alert families). Headline: <strong>3/12 GOOD, 2/12 OK, 7/12 BAD</strong>. The six recurring failure modes (F1–F6) map 1:1 to existing P-tags below — <strong>no new stories needed</strong>. The table is annotated with the audit-confirmed decision IDs in the Evidence column. The audit also identifies <strong>Epic 2 (operator feedback loop) as the cross-cutting amplifier for P8 + P11</strong>: today these are point-in-time fixes; Epic 2 makes them continuous. <strong>Update 2026-06-03 - Epic 2 SHIPPED</strong> (commits <code>8b7b319</code> triage + <code>5c690f4</code> mcp-bridges): the read-back half landed with proactive feedback injection + <code>rca_history.list_feedback</code> tool, so operator corrections now flow into every subsequent LLM call on the same alert family. See <a href="feedback-loop.html">feedback-loop.html</a>. Full audit text lives in the FYP report at <em>Evaluation → Critical RCA output audit — 12 representative cases</em>.</p>
   <p>End-of-Sprint-4 re-audit acceptance bars: <strong>C4 no-noise prose 33 % → ≥ 80 %</strong> (P1), <strong>C6 non-templated diagnostic steps 17 % → ≥ 60 %</strong> (P3), <strong>C7 <code>rca_quality</code> tag accuracy 33 % → ≥ 70 %</strong> (P11 + Epic 2). If those three move, the "structural foundation sound / output-quality binding" framing is empirically validated.</p>
 </div>
 
@@ -1352,7 +1357,7 @@ than we'd like and is a signal that an archetype is missing.
     <tr><td><strong>External-instrumentation principle</strong></td><td>Application code is untouched. OTel Java agent is injected via initContainer; the app deployment YAMLs import no monitoring library. Blast-radius of a monitoring change on app teams is zero.</td></tr>
     <tr><td><strong>Layered output-quality defenses</strong></td><td>Exemplar retrieval + hallucination blocklist + surface-only LEDE validator + confidence clamp + bounded-agency retry. Five independent gates between a wrong inference and an operator-facing verdict; each catches a different failure mode.</td></tr>
     <tr><td><strong>Recurrence gate + suppression-cascade fix</strong></td><td>The system models alert fatigue structurally — repeated fires escalate, dismisses suppress follow-ups within a window. The P2 suppression-cascade fix shipped 2026-05-19 closed the false-suppress side without disabling the mechanism (validated 6/6 across 3 audit-live runs).</td></tr>
-    <tr><td><strong>Closed-loop operator feedback</strong> <em>(Epic 2, in flight)</em></td><td>Every operator rating updates the quality classifier's training signal. Once shipped, the system's prose-quality bar can rise without engineer involvement — the right structural feature for long-term quality.</td></tr>
+    <tr><td><strong>Closed-loop operator feedback</strong> <em>(Epic 2, <a href="feedback-loop.html" style="color:var(--accent-green);">SHIPPED 2026-06-03</a>)</em></td><td>Every operator rating now flows back into the LLM. Two paths wired Phase 6 (commits <code>8b7b319</code> triage + <code>5c690f4</code> mcp-bridges): (a) proactive injection of high-value feedback (<code>verdict_was_right=no</code> OR non-empty <code>actual_cause</code>) into the prompt with "trust this HEAVILY" framing; (b) <code>rca_history.list_feedback</code> bounded-agency tool the LLM can invoke during its 1-call window. Operator ratings now actively shape every subsequent RCA on the same alert family - the prose-quality bar can rise without engineer involvement. Full write-up: <a href="feedback-loop.html">feedback-loop.html</a>.</td></tr>
   </tbody>
 </table>
 
@@ -1933,7 +1938,7 @@ ranked list.
     <tr>
       <td><strong>SF-7</strong></td>
       <td>Feedback / evaluation page — reprioritize from Sprint 4 carry to <em>must-ship</em></td>
-      <td>Already on the Sprint 4 carry (Epic 2 — SCRUM-149/150/151, the <code>rate.html</code> UI + feedback schema + 4 MCP tools). Move to top of Sprint 4 priority: he wants to give feedback as he uses it, and the loop tightens the system the same week he's testing.</td>
+      <td>Already on the Sprint 4 carry (Epic 2 — SCRUM-149/150/151, the <code>rate.html</code> UI + feedback schema + 4 MCP tools). Move to top of Sprint 4 priority: he wants to give feedback as he uses it, and the loop tightens the system the same week he's testing. <strong>Status 2026-06-03 - SHIPPED end-to-end.</strong> Collection landed Sprint 4 day 4 (<code>10ebd4e</code>); read-back landed Phase 6 (<code>8b7b319</code> triage + <code>5c690f4</code> mcp). LLM now consults operator corrections on every alert evaluation. Full write-up: <a href="feedback-loop.html">feedback-loop.html</a>.</td>
     </tr>
   </tbody>
 </table>

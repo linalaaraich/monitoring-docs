@@ -198,6 +198,24 @@
     </div>
   </a>
 
+  <a href="feedback-loop.html" class="card" style="border-color:rgba(240,160,80,.45); background:linear-gradient(180deg, rgba(240,160,80,.06), var(--card));">
+    <div class="card-header">
+      <div class="card-icon" style="background:rgba(240,160,80,.12);">FB</div>
+      <div class="card-header-text">
+        <h2>Closed-loop operator feedback - Epic 2 SHIPPED 2026-06-03</h2>
+        <p>The feedback loop is now closed end-to-end. SF-7 (collection: <code>/dashboard/alert/{id}/rate</code> + 7-column schema + POST endpoint) shipped 2026-05-23. Phase 6 (read-back) shipped 2026-06-03: (a) proactive injection of high-value operator corrections into the LLM prompt with "trust this HEAVILY" framing; (b) <code>rca_history.list_feedback</code> bounded-agency tool the LLM can invoke on demand. Operator ratings now actively shape every subsequent RCA on the same alert family. Commits <code>8b7b319</code> (triage) + <code>5c690f4</code> (mcp-bridges).</p>
+      </div>
+    </div>
+    <div class="card-footer">
+      <div class="card-tags">
+        <span class="tag tag-orange">Epic 2</span>
+        <span class="tag tag-green">SHIPPED 2026-06-03</span>
+        <span class="tag tag-purple">proactive + tool</span>
+      </div>
+      <div class="card-arrow">&rarr;</div>
+    </div>
+  </a>
+
   <a href="dashboard-audit-2026-05-21.html" class="card" style="border-color:rgba(224,96,112,.45); background:linear-gradient(180deg, rgba(224,96,112,.06), var(--card));">
     <div class="card-header">
       <div class="card-icon" style="background:rgba(224,96,112,.12);">🔍</div>

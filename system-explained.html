@@ -298,6 +298,28 @@
   (manifests already exist under <code>manifests/otel-collector/</code>).
 </p>
 
+<p id="loki-multihost">
+  <strong>Loki multi-host log shipping (Phase 2 of 2026-06-03 -
+  commits <code>ebbd025</code> + <code>18cdd8a</code> +
+  <code>611e29a</code> + <code>95e75a2</code>).</strong> All 3 hosts now
+  ship logs into the central Loki on the monitoring VM via dedicated
+  OTel collectors:
+</p>
+<ul>
+  <li><strong>k3s host:</strong> an OTel collector DaemonSet (one pod per node) with a <code>filelog</code> receiver tailing <code>/var/log/pods/*</code> - covers every pod plus node logs in one mechanism.</li>
+  <li><strong>monitoring VM:</strong> the existing central collector now also self-monitors with a <code>filelog</code> receiver on its own host log dirs.</li>
+  <li><strong>GPU host:</strong> a new OTel collector container declared in <code>/opt/triage/docker-compose.gpu.yml</code> (config at <code>otel-config.yaml</code>) tails the Docker JSON-log files for the triage service, the 5 MCP containers, and the Ollama systemd unit; ships via OTLP to Loki's native OTLP ingest endpoint on the monitoring VM.</li>
+</ul>
+<p>
+  Net result: Loki now sees <strong>5 distinct
+  <code>service_name</code> values</strong> -
+  <code>coredns</code>, <code>gpu-stack</code>, <code>host-syslog</code>,
+  <code>monitoring-vm</code>, <code>spring-boot</code> - up from 1
+  (<code>spring-boot</code> only) before the Phase 2 work. The
+  triage-service Loki MCP can now answer log queries that span the AI
+  stack itself, not just the application under observation.
+</p>
+
 <!-- ============================================================== -->
 <h2 id="lifecycle">3. Alert lifecycle — end-to-end</h2>
 
@@ -565,6 +587,39 @@
   same persisted value so they cannot disagree. See
   <a href="triage-service.html#env-resolution">triage-service.html §5.3</a>
   for the full precedence table.
+</p>
+
+<!-- 3.9 operator feedback loop -->
+<h3 id="lifecycle-step9">3.9 Operator feedback loop (Epic 2 - SHIPPED 2026-06-03)</h3>
+<p>
+  Every escalation email and every dashboard row links to
+  <code>GET /dashboard/alert/{short_id}/rate</code>
+  (<span class="file-ref">main.py:4462</span>), a per-decision form that
+  POSTs to <code>/feedback/rate/{short_id}</code>
+  (<span class="file-ref">main.py:347</span>) and writes a row to the
+  7-column extension of the <code>feedback</code> table
+  (<span class="file-ref">rca_store.py:209</span>). The columns are
+  <code>rating</code>, <code>verdict_was_right</code>,
+  <code>action_was_right</code>, <code>actual_cause</code>,
+  <code>tags</code>, <code>notes</code>, <code>rater</code>.
+</p>
+<p>
+  As of 2026-06-03 (commits <code>8b7b319</code> triage +
+  <code>5c690f4</code> mcp), every alert evaluation reads back from this
+  table by two paths: (a) <em>proactive injection</em>
+  (<code>RCAStore.get_high_value_feedback_for_family()</code>,
+  <span class="file-ref">rca_store.py:897</span>) - the pipeline pulls
+  the high-value subset (<code>verdict_was_right='no'</code> OR
+  non-empty <code>actual_cause</code>) for the
+  <code>(alertname, service)</code> pair before the LLM call, and
+  <code>llm_client._format_corrective_feedback_block()</code>
+  (<span class="file-ref">llm_client.py:393</span>) renders it under
+  <em>"## OPERATOR CORRECTIVE FEEDBACK ON SIMILAR PAST ALERTS"</em>
+  with "trust this HEAVILY" framing; (b) <em>on-demand tool</em>
+  <code>rca_history.list_feedback</code> registered in
+  <code>app/bounded_agency.py</code>, routed to the rca-history MCP at
+  <code>GET /tools/list_feedback</code> on port 8094. Full write-up:
+  <a href="feedback-loop.html">feedback-loop.html</a>.
 </p>
 
 <!-- ============================================================== -->

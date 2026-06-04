@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Closed-loop operator feedback - CIRES Observability Platform</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --bg-soft: #13151e;
+    --card: #1a1d27;
+    --card-alt: #1e2230;
+    --border: #2a2d3a;
+    --border-hi: #3a3f52;
+    --text: #e4e6ee;
+    --text-soft: #c0c5d0;
+    --muted: #8890a0;
+    --accent-blue: #4ea8de;
+    --accent-green: #6bcf7f;
+    --accent-orange: #f0a050;
+    --accent-purple: #b07ee8;
+    --accent-red: #e06070;
+    --accent-cyan: #40d0d0;
+    --accent-yellow: #e0d060;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { font-family:'Inter','Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); line-height:1.65; font-size:15px; -webkit-font-smoothing:antialiased; }
+  code, pre, .mono { font-family:'JetBrains Mono','Fira Code',ui-monospace,monospace; font-size:0.88em; }
+
+  .topnav { display:flex; align-items:center; gap:12px; padding:14px 40px; background:var(--bg-soft); border-bottom:1px solid var(--border); flex-wrap:wrap; }
+  .topnav span.nav-label { color:var(--muted); font-size:13px; font-weight:600; margin-right:4px; }
+  .navlink { display:inline-flex; align-items:center; gap:6px; padding:7px 14px; border-radius:8px; font-size:13px; font-weight:600; text-decoration:none; border:1px solid; transition:background .2s, transform .15s; }
+  .navlink:hover { transform:translateY(-1px); }
+  .navlink-home { color:var(--text); border-color:var(--border); background:var(--card); }
+  .navlink-brief { color:var(--accent-cyan); border-color:rgba(64,208,208,.4); background:rgba(64,208,208,.08); }
+  .navlink-sys { color:var(--accent-cyan); border-color:rgba(64,208,208,.4); background:rgba(64,208,208,.08); }
+  .navlink-triage { color:var(--accent-purple); border-color:rgba(176,126,232,.4); background:rgba(176,126,232,.12); }
+  .navlink-log { color:var(--accent-orange); border-color:rgba(240,160,80,.4); background:rgba(240,160,80,.08); }
+
+  .hero { padding:56px 40px 40px; border-bottom:1px solid var(--border); background:linear-gradient(180deg, #13151e 0%, var(--bg) 100%); }
+  .hero .inner { max-width:1040px; margin:0 auto; }
+  .hero .eyebrow { font-size:11px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:var(--accent-orange); margin-bottom:12px; }
+  .hero h1 { font-size:36px; font-weight:800; letter-spacing:-.5px; margin-bottom:14px; line-height:1.2; }
+  .hero h1 span.accent { color:var(--accent-orange); }
+  .hero p.lead { font-size:16px; color:var(--text-soft); max-width:820px; line-height:1.7; margin-bottom:20px; }
+  .hero .pill-row { display:flex; gap:8px; flex-wrap:wrap; }
+  .pill { font-size:11px; font-weight:600; padding:4px 10px; border-radius:12px; border:1px solid; letter-spacing:.2px; }
+  .pill.red { color:var(--accent-red); border-color:rgba(224,96,112,.35); background:rgba(224,96,112,.08); }
+  .pill.orange { color:var(--accent-orange); border-color:rgba(240,160,80,.35); background:rgba(240,160,80,.08); }
+  .pill.green { color:var(--accent-green); border-color:rgba(107,207,127,.35); background:rgba(107,207,127,.08); }
+  .pill.blue { color:var(--accent-blue); border-color:rgba(78,168,222,.35); background:rgba(78,168,222,.08); }
+  .pill.purple { color:var(--accent-purple); border-color:rgba(176,126,232,.35); background:rgba(176,126,232,.08); }
+  .pill.cyan { color:var(--accent-cyan); border-color:rgba(64,208,208,.35); background:rgba(64,208,208,.08); }
+
+  .layout { max-width:1040px; margin:0 auto; padding:32px 40px 80px; }
+  .content h2 { font-size:24px; font-weight:700; margin:40px 0 14px; letter-spacing:-.3px; scroll-margin-top:24px; padding-bottom:8px; border-bottom:1px solid var(--border); }
+  .content h2:first-child { margin-top:0; }
+  .content h3 { font-size:17px; font-weight:700; margin:24px 0 8px; color:var(--text); }
+  .content h4 { font-size:13px; font-weight:700; margin:14px 0 4px; letter-spacing:1px; text-transform:uppercase; color:var(--muted); }
+  .content p { margin-bottom:14px; color:var(--text-soft); }
+  .content p strong { color:var(--text); font-weight:600; }
+  .content ul, .content ol { margin:8px 0 16px 24px; color:var(--text-soft); }
+  .content li { margin-bottom:6px; }
+  .content code { background:var(--card); border:1px solid var(--border); padding:1px 6px; border-radius:4px; font-size:0.85em; color:var(--accent-cyan); }
+  .content pre { background:var(--card); border:1px solid var(--border); padding:14px 16px; border-radius:8px; margin:12px 0 18px; overflow-x:auto; line-height:1.5; font-size:12.5px; }
+  .content pre code { background:none; border:none; padding:0; color:var(--text); font-size:1em; }
+  .content a { color:var(--accent-blue); text-decoration:none; border-bottom:1px dashed rgba(78,168,222,.35); }
+  .content a:hover { border-bottom-style:solid; }
+
+  table { width:100%; border-collapse:collapse; margin:12px 0 20px; font-size:13px; }
+  table th, table td { padding:10px 12px; border-bottom:1px solid var(--border); text-align:left; vertical-align:top; }
+  table th { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--muted); background:var(--card); }
+  table tr:hover td { background:var(--card-alt); }
+
+  .callout { background:var(--card); border:1px solid var(--border); border-left:3px solid var(--accent-orange); border-radius:8px; padding:14px 18px; margin:14px 0 22px; }
+  .callout h4 { font-size:12px; font-weight:700; margin:0 0 6px; color:var(--accent-orange); letter-spacing:1px; text-transform:uppercase; }
+  .callout p { font-size:13.5px; color:var(--text-soft); margin:0 0 8px; line-height:1.6; }
+  .callout p:last-child { margin-bottom:0; }
+  .callout.green { border-left-color:var(--accent-green); }
+  .callout.green h4 { color:var(--accent-green); }
+  .callout.purple { border-left-color:var(--accent-purple); }
+  .callout.purple h4 { color:var(--accent-purple); }
+
+  .flowdiagram { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:18px 20px; margin:16px 0 22px; font-family:'JetBrains Mono','Fira Code',ui-monospace,monospace; font-size:12.5px; color:var(--text-soft); line-height:1.7; white-space:pre; overflow-x:auto; }
+</style>
+</head>
+<body>
+
+<nav class="topnav">
+  <span class="nav-label">CIRES Observability Platform</span>
+  <a href="index.html" class="navlink navlink-home">Home</a>
+  <a href="solution-brief.html" class="navlink navlink-brief">Solution Brief</a>
+  <a href="system-explained.html" class="navlink navlink-sys">System Explained</a>
+  <a href="triage-service.html" class="navlink navlink-triage">Triage Service</a>
+  <a href="decisions-log.html" class="navlink navlink-log">Decisions Log</a>
+</nav>
+
+<section class="hero">
+  <div class="inner">
+    <div class="eyebrow">Operator feedback loop - Epic 2 - SHIPPED 2026-06-03</div>
+    <h1>Closed-loop operator feedback - <span class="accent">the LLM now reads what operators wrote back</span></h1>
+    <p class="lead">
+      Operator wisdom must flow back into the LLM. Sprint 4 shipped the
+      collection half (SF-7: <code>rate.html</code> + 7-column feedback
+      schema + POST endpoint); the 2026-06-03 work ships the read-back
+      half. Every alert evaluation now consults the operator's prior
+      corrections on the same alert family, both proactively (injected
+      into the initial prompt) and on-demand (a new
+      <code>rca_history.list_feedback</code> tool the LLM can call during
+      its bounded-agency window). This page describes the loop end-to-end.
+    </p>
+    <div class="pill-row">
+      <span class="pill green">SHIPPED 2026-06-03</span>
+      <span class="pill orange">Epic 2 close-out</span>
+      <span class="pill cyan">commits 8b7b319 + 5c690f4</span>
+      <span class="pill purple">read-back: proactive + tool</span>
+    </div>
+  </div>
+</section>
+
+<div class="layout">
+<section class="content">
+
+<h2 id="why">1. Why - operator wisdom must flow back</h2>
+
+<p>
+  Epic 2 doctrine, restated: the people who actually run the platform
+  see things the model does not. They know that a given
+  <code>MediumCpuUsage</code> on a given service is a known nightly
+  cron, not a real fire. They know that a verdict the LLM keeps choosing
+  for a given alert family is structurally wrong. They know the
+  <em>actual</em> cause when the LLM names the wrong one. If that
+  knowledge stays in the operator's head (or worse, in a closed Jira
+  ticket), the LLM repeats the same mistake on the next firing of the
+  same alert family. The fix is structural: persist operator
+  corrections, and feed them back into the LLM the next time the same
+  alert family fires.
+</p>
+
+<p>
+  The 2026-05-21 critical RCA audit (12 cases sampled across the 6
+  dominant alert families) named Epic 2 as the cross-cutting amplifier
+  for P8 (<code>rca_quality=actionable</code> drift) and P11
+  (<code>actionable</code> tag has lost meaning) - today these are
+  point-in-time fixes, with Epic 2 they become continuous. The
+  collection half shipped 2026-05-23 inside Sprint 4 (SF-7,
+  <code>10ebd4e</code>); the read-back half shipped 2026-06-03 (Phase 6,
+  this page).
+</p>
+
+<div class="callout">
+  <h4>Hard rule preserved</h4>
+  <p>
+    Read-back goes through the MCP-only data-access invariant. The
+    proactive-injection path is a pre-LLM pipeline read (not the LLM
+    reading the DB directly); the tool path goes through the rca-history
+    MCP at port 8094 on the GPU host. There is no direct DB read from
+    the LLM at any point. See
+    <a href="hallucination-firewall.html">the Hallucination Firewall page</a>
+    for the broader invariant.
+  </p>
+</div>
+
+<h2 id="collection">2. Collection - what was already in place (SF-7, 2026-05-23)</h2>
+
+<p>
+  The collection surface has been live since Sprint 4 day 4. Every
+  escalation email and every dashboard row carries a "Rate this RCA"
+  link to a per-alert form; the form persists to a 7-column extension
+  of the existing <code>feedback</code> table.
+</p>
+
+<table>
+  <thead><tr><th>Piece</th><th>Where</th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Rate UI</td>
+      <td><code>GET /dashboard/alert/{short_id}/rate</code></td>
+      <td>Per-decision form, prefilled with the resolved alert + LLM verdict for context. Implemented in <code>app/main.py:4462</code>. Linked from every escalation email and from each dashboard row.</td>
+    </tr>
+    <tr>
+      <td>Submit endpoint</td>
+      <td><code>POST /feedback/rate/{short_id}</code></td>
+      <td>Writes one row to the <code>feedback</code> table. Implemented in <code>app/main.py:347</code>. Returns 201 on success; idempotent on resubmit (latest row wins).</td>
+    </tr>
+    <tr>
+      <td>Schema</td>
+      <td><code>feedback</code> table (7 operator columns)</td>
+      <td><code>rating</code> (1-5), <code>verdict_was_right</code> (yes/no/maybe), <code>action_was_right</code> (yes/no/maybe), <code>actual_cause</code> (free text), <code>tags</code> (free text, comma-separated), <code>notes</code> (free text), <code>rater</code> (operator handle). Defined in <code>app/rca_store.py:209</code>.</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>
+  At collection time the row sits in the DB as evidence. Until 2026-06-03
+  it did not flow back into the LLM. That is what changed.
+</p>
+
+<h2 id="read-back">3. Read-back - the 2026-06-03 work</h2>
+
+<p>
+  Two paths, both wired into Phase 6 (commits
+  <code>8b7b319</code> on monitoring-triage-service +
+  <code>5c690f4</code> on monitoring-mcp-bridges). Together they make
+  the operator's corrections visible to the LLM on every relevant
+  alert evaluation.
+</p>
+
+<h3 id="proactive">3.1 Proactive injection (always-on, pre-LLM)</h3>
+
+<p>
+  The pipeline now fetches operator feedback for the
+  <code>(alertname, service)</code> family before the LLM is called,
+  filtered to the <strong>high-value subset</strong>:
+</p>
+
+<ul>
+  <li><code>verdict_was_right = 'no'</code> (operator explicitly corrected the verdict), OR</li>
+  <li><code>actual_cause</code> is non-empty (operator wrote down what was actually wrong).</li>
+</ul>
+
+<p>
+  Implementation: <code>RCAStore.get_high_value_feedback_for_family()</code>
+  in <code>app/rca_store.py:897</code>, called from
+  <code>TriagePipeline._process_alert()</code> at <code>pipeline.py:564</code>.
+  Results are formatted by <code>llm_client._format_corrective_feedback_block()</code>
+  (<code>app/llm_client.py:393</code>) and injected into the prompt under:
+</p>
+
+<pre><code>## OPERATOR CORRECTIVE FEEDBACK ON SIMILAR PAST ALERTS
+
+[one line per feedback row: verdict/action override + actual_cause + notes]
+
+Trust this feedback HEAVILY. If your reasoning contradicts what
+operators wrote here, prefer their judgement.</code></pre>
+
+<p>
+  The "trust this HEAVILY" framing is deliberate. The LLM's default
+  posture is to lean on its own model of the world; this prompt
+  language tells it the operator's recorded correction outranks that
+  model whenever the two disagree. Empty operator history => empty block
+  => prompt is unchanged from the pre-Phase-6 shape; this path adds zero
+  tokens when there is nothing to say. Failures in the lookup are
+  swallowed and logged at WARNING (non-fatal); the pipeline continues
+  without proactive feedback rather than dropping the alert.
+</p>
+
+<h3 id="tool">3.2 On-demand tool - <code>rca_history.list_feedback</code></h3>
+
+<p>
+  Proactive injection only catches the high-value subset for the exact
+  <code>(alertname, service)</code> pair. The LLM may still want to
+  inspect a wider feedback corpus during its bounded-agency window
+  (one MCP call, see <a href="system-explained.html#mod-agency">system-explained.html §4.8</a>).
+  Phase 6 registers a new bounded-agency tool:
+</p>
+
+<table>
+  <thead><tr><th>Field</th><th>Value</th></tr></thead>
+  <tbody>
+    <tr><td>Tool name</td><td><code>rca_history.list_feedback</code></td></tr>
+    <tr><td>Args schema</td><td><code>RCAHistoryListFeedbackArgs(alert_name, service?, days=14, limit=20)</code></td></tr>
+    <tr><td>Registration</td><td><code>app/bounded_agency.py:_TOOL_SCHEMAS</code> (alongside the existing 4 tools)</td></tr>
+    <tr><td>Routed to</td><td><code>GET /tools/list_feedback</code> on the rca-history MCP (port 8094 on the GPU host)</td></tr>
+    <tr><td>MCP endpoint</td><td>monitoring-mcp-bridges commit <code>5c690f4</code></td></tr>
+    <tr><td>Returns</td><td>Recent feedback rows for the requested alert family, including verdict/action overrides, actual_cause, tags, notes, rater, ts</td></tr>
+  </tbody>
+</table>
+
+<p>
+  This is the broader-corpus path - the LLM uses it when it wants to
+  understand the operator history for an alert family in more depth
+  than the high-value subset gives it, or to inspect a related family
+  (different service, same alertname). It costs the LLM its single
+  agency call for that alert evaluation.
+</p>
+
+<h2 id="diagram">4. End-to-end flow</h2>
+
+<p>
+  The full loop, from one operator's correction to the next LLM
+  evaluation of the same alert family:
+</p>
+
+<div class="flowdiagram">
+  [T0]  Alert fires -> triage pipeline -> LLM -> verdict + RCA -> email + /dashboard row
+
+  [T1]  Operator opens /dashboard/alert/{id}/rate
+        Submits: verdict_was_right=no, actual_cause="cron at 03:00 UTC, known"
+        POST /feedback/rate/{id} -> feedback table
+
+  [T2]  Same alert family fires again (same alertname + service)
+        TriagePipeline._process_alert():
+          1. dedup + suppression checks
+          2. context gather (Prometheus / Loki / Jaeger MCPs)
+          3. metric_interpreter
+          4. exemplar injection
+        > 5. get_high_value_feedback_for_family(alertname, service)
+        >    -> formats as "## OPERATOR CORRECTIVE FEEDBACK ..." block
+        >    -> appended to prompt with "Trust this HEAVILY" framing
+          6. LLM call (Ollama, qwen2.5:14b)
+             -> sees the operator's prior correction
+             -> verdict + RCA reflect it (verifies or contradicts)
+
+  [T3]  Optional: LLM uses its single bounded-agency call to
+        invoke rca_history.list_feedback for a wider view
+        -> rca-history MCP :8094 -> GET /tools/list_feedback
+        -> returns recent feedback rows for the family
+        -> LLM revises and emits final decision</div>
+
+<p>
+  Both T2 and T3 are pure read paths from the LLM's side; the write
+  path (T1) is entirely operator-driven and goes through the existing
+  feedback endpoint. The pipeline is the only component that touches
+  the DB directly. The LLM only sees feedback rows that arrived through
+  either the proactive-injection prompt block or the MCP tool result.
+</p>
+
+<h2 id="for-operators">5. What this means for operators</h2>
+
+<div class="callout green">
+  <h4>Rate alerts - it actually matters now</h4>
+  <p>
+    Before 2026-06-03 the Rate form was data collection only. The form
+    persisted your input but the LLM never saw it. From 2026-06-03
+    onwards, your corrections actively shape every subsequent LLM
+    evaluation of the same alert family. The Rate link in every email
+    and every dashboard row is now the highest-leverage tuning surface
+    on the platform.
+  </p>
+  <p>
+    The two highest-value things you can write down:
+  </p>
+  <ul style="margin-top:8px;">
+    <li><strong>verdict_was_right = no</strong>, with one line in <code>actual_cause</code> explaining why - this is the single strongest correction signal; it pre-empts the LLM's default reasoning on the next firing.</li>
+    <li><strong>actual_cause</strong>, even when the verdict was right - this teaches the LLM the named cause for the family, raising prose quality next time and lifting <code>rca_quality</code> off boilerplate.</li>
+  </ul>
+</div>
+
+<p>
+  Operational caveat: the proactive-injection path only consults
+  feedback for the exact <code>(alertname, service)</code> pair. A
+  correction on <code>HighCpuUsage / spring-boot</code> does not surface
+  on the next <code>HighCpuUsage / kong</code>. The
+  <code>list_feedback</code> tool can cross that boundary on demand but
+  it costs the LLM's single agency call. This is intentional - it keeps
+  the proactive path bounded and predictable; broader cross-service
+  generalisation is Sprint 5 work.
+</p>
+
+<h2 id="refs">6. References</h2>
+
+<ul>
+  <li>Pipeline injection point: <code>app/pipeline.py:564</code> (monitoring-triage-service, commit <code>8b7b319</code>)</li>
+  <li>Prompt block formatter: <code>app/llm_client.py:393</code> (<code>_format_corrective_feedback_block</code>)</li>
+  <li>Tool registration: <code>app/bounded_agency.py</code> (<code>rca_history.list_feedback</code> entry in <code>_TOOL_SCHEMAS</code>)</li>
+  <li>Store query: <code>app/rca_store.py:897</code> (<code>get_high_value_feedback_for_family</code>)</li>
+  <li>MCP endpoint: <code>GET /tools/list_feedback</code> on rca-history MCP, port 8094 (monitoring-mcp-bridges, commit <code>5c690f4</code>)</li>
+  <li>Collection UI: <code>app/main.py:4462</code> (<code>GET /dashboard/alert/{id}/rate</code>); submit at <code>app/main.py:347</code> (<code>POST /feedback/rate/{id}</code>)</li>
+  <li>Feedback schema: <code>app/rca_store.py:209</code> (7-column extension shipped under SF-7, <code>10ebd4e</code>)</li>
+  <li>Test coverage: <code>tests/test_list_feedback_tool.py</code> (parse + execute + MCP routing)</li>
+</ul>
+
+<p style="margin-top:40px; padding-top:20px; border-top:1px solid var(--border); font-size:13px; color:var(--muted);">
+  Created 2026-06-03 for the Epic 2 close-out. Companion to the
+  <a href="solution-brief.html#known-issues">Solution Brief §7.5</a>
+  (P8 + P11 amplifier) and the
+  <a href="system-explained.html#mod-agency">System Explained §4.8</a>
+  (bounded-agency tools catalogue). The collection half shipped under
+  Sprint 4 SF-7 (<code>10ebd4e</code>, 2026-05-23); the read-back half
+  shipped 2026-06-03 (<code>8b7b319</code> triage + <code>5c690f4</code>
+  MCP).
+</p>
+
+</section>
+</div>
+
+</body>
+</html>

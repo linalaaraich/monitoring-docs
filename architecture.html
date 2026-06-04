@@ -231,6 +231,7 @@
   .flow-type.ai { background:rgba(176,126,232,.15); color:var(--accent-purple); }
   .flow-type.mcp { background:rgba(224,96,112,.15); color:var(--accent-red); }
   .flow-type.email { background:rgba(240,160,80,.15); color:var(--accent-orange); }
+  .flow-type.feedback { background:rgba(240,160,80,.18); color:var(--accent-orange); border:1px solid rgba(240,160,80,.5); font-weight:700; }
 
   /* GPU badge */
   .gpu-badge { display:inline-block; font-size:10px; font-weight:700; padding:2px 8px; border-radius:4px; background:rgba(224,96,112,.15); color:var(--accent-red); margin-left:8px; vertical-align:middle; }
@@ -675,6 +676,10 @@
         <span class="flow-type email">EMAIL</span>
         <span>Triage Service → SMTP (Gmail) → Developer inbox</span>
       </div>
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid rgba(240,160,80,.6);border-radius:8px;background:rgba(240,160,80,.06);font-size:12px;">
+        <span class="flow-type feedback">FEEDBACK</span>
+        <span>Operator → /dashboard/alert/{id}/rate → feedback table → next LLM prompt (proactive injection) + rca_history.list_feedback MCP tool <strong style="color:var(--accent-orange);">[operator feedback (closed loop) - SHIPPED 2026-06-03]</strong></span>
+      </div>
     </div>
   </div>
 
@@ -800,6 +805,14 @@
         <td>Gmail SMTP → Developer inbox</td>
         <td>SMTP (TLS)</td>
         <td>Sends validated RCA report to developers only when LLM confirms alert is valid</td>
+      </tr>
+      <tr>
+        <td>df-15</td>
+        <td><span class="flow-type feedback">Feedback</span></td>
+        <td>Operator (browser)</td>
+        <td>Triage Service /feedback/rate/{id} → feedback table</td>
+        <td>HTTP POST</td>
+        <td><strong>Operator feedback (closed loop) - SHIPPED 2026-06-03.</strong> Operator rates an RCA at /dashboard/alert/{id}/rate; the row is persisted to the 7-column feedback schema and read back into the next LLM evaluation for the same (alertname, service) family via (a) proactive prompt injection of high-value corrections + (b) rca_history.list_feedback bounded-agency tool. Commits 8b7b319 (triage) + 5c690f4 (mcp-bridges). Details: <a href="feedback-loop.html" style="color:var(--accent-blue);">feedback-loop.html</a>.</td>
       </tr>
     </tbody>
   </table>
