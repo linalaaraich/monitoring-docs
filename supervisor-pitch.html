@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Supervisor Pitch — Greenlight for Production — CIRES Observability Platform</title>
+<style>
+  :root {
+    --bg: #0f1117; --bg-soft: #13151e; --card: #1a1d27; --card-alt: #1e2230;
+    --border: #2a2d3a; --border-hi: #3a3f52; --text: #e4e6ee; --text-soft: #c0c5d0;
+    --muted: #8890a0; --accent-blue: #4ea8de; --accent-green: #6bcf7f;
+    --accent-orange: #f0a050; --accent-purple: #b07ee8; --accent-red: #e06070;
+    --accent-cyan: #40d0d0; --accent-yellow: #e0d060;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { font-family:'Inter','Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); line-height:1.65; font-size:15px; -webkit-font-smoothing:antialiased; }
+  code, pre, .mono { font-family:'JetBrains Mono','Fira Code',ui-monospace,monospace; font-size:0.88em; }
+
+  .topnav { display:flex; align-items:center; gap:12px; padding:14px 40px; background:var(--bg-soft); border-bottom:1px solid var(--border); flex-wrap:wrap; }
+  .topnav span.nav-label { color:var(--muted); font-size:13px; font-weight:600; margin-right:4px; }
+  .navlink { display:inline-flex; align-items:center; gap:6px; padding:7px 14px; border-radius:8px; font-size:13px; font-weight:600; text-decoration:none; border:1px solid; transition:background .2s, transform .15s; }
+  .navlink:hover { transform:translateY(-1px); }
+  .navlink-home { color:var(--text); border-color:var(--border); background:var(--card); }
+  .navlink-home:hover { background:var(--card-alt); }
+
+  .hero { padding:56px 40px 40px; border-bottom:1px solid var(--border); background:linear-gradient(180deg, #13151e 0%, var(--bg) 100%); }
+  .hero .inner { max-width:1080px; margin:0 auto; }
+  .hero .eyebrow { font-size:11px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:var(--accent-yellow); margin-bottom:12px; }
+  .hero h1 { font-size:38px; font-weight:800; letter-spacing:-.5px; margin-bottom:14px; line-height:1.2; }
+  .hero h1 span.accent { color:var(--accent-yellow); }
+  .hero p.lead { font-size:16px; color:var(--text-soft); max-width:840px; line-height:1.7; margin-bottom:20px; }
+  .hero .pill-row { display:flex; gap:8px; flex-wrap:wrap; }
+  .pill { font-size:11px; font-weight:600; padding:4px 10px; border-radius:12px; border:1px solid; letter-spacing:.2px; }
+  .pill.blue { color:var(--accent-blue); border-color:rgba(78,168,222,.35); background:rgba(78,168,222,.08); }
+  .pill.green { color:var(--accent-green); border-color:rgba(107,207,127,.35); background:rgba(107,207,127,.08); }
+  .pill.purple { color:var(--accent-purple); border-color:rgba(176,126,232,.35); background:rgba(176,126,232,.08); }
+  .pill.orange { color:var(--accent-orange); border-color:rgba(240,160,80,.35); background:rgba(240,160,80,.08); }
+  .pill.yellow { color:var(--accent-yellow); border-color:rgba(224,208,96,.35); background:rgba(224,208,96,.08); }
+
+  .layout { max-width:1080px; margin:0 auto; padding:32px 40px 80px; display:grid; grid-template-columns: 250px 1fr; gap:40px; }
+  @media (max-width: 900px) { .layout { grid-template-columns:1fr; } .toc-sidebar { position:static; } }
+  .toc-sidebar { position:sticky; top:20px; align-self:start; font-size:13px; }
+  .toc-sidebar h4 { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--muted); margin-bottom:10px; }
+  .toc-sidebar ol { list-style:none; padding:0; }
+  .toc-sidebar li { margin-bottom:4px; }
+  .toc-sidebar a { color:var(--text-soft); text-decoration:none; border-bottom:1px dashed transparent; }
+  .toc-sidebar a:hover { color:var(--accent-yellow); border-bottom-color:var(--accent-yellow); }
+
+  .content h2 { font-size:26px; font-weight:700; margin:48px 0 16px; letter-spacing:-.3px; scroll-margin-top:24px; padding-bottom:8px; border-bottom:1px solid var(--border); }
+  .content h2:first-child { margin-top:0; }
+  .content h3 { font-size:18px; font-weight:700; margin:28px 0 10px; color:var(--text); scroll-margin-top:24px; }
+  .content p { margin-bottom:14px; color:var(--text-soft); }
+  .content p strong { color:var(--text); font-weight:600; }
+  .content ul, .content ol { margin:8px 0 16px 24px; color:var(--text-soft); }
+  .content li { margin-bottom:6px; }
+  .content code { background:var(--card); border:1px solid var(--border); padding:1px 6px; border-radius:4px; font-size:0.85em; color:var(--accent-cyan); }
+  .content a { color:var(--accent-yellow); text-decoration:none; border-bottom:1px dashed rgba(224,208,96,.35); }
+  .content a:hover { border-bottom-style:solid; }
+
+  .callout { border-left:3px solid; border-radius:0 8px 8px 0; padding:14px 18px; margin:16px 0; background:var(--card); }
+  .callout.note { border-color:var(--accent-blue); }
+  .callout.tip { border-color:var(--accent-green); }
+  .callout.warn { border-color:var(--accent-orange); }
+  .callout-label { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; margin-bottom:6px; }
+  .callout.note .callout-label { color:var(--accent-blue); }
+  .callout.tip .callout-label { color:var(--accent-green); }
+  .callout.warn .callout-label { color:var(--accent-orange); }
+
+  table { width:100%; border-collapse:collapse; margin:12px 0 20px; font-size:13px; }
+  table th, table td { padding:10px 14px; border-bottom:1px solid var(--border); text-align:left; vertical-align:top; }
+  table th { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--muted); background:var(--card); }
+  table tr:hover td { background:var(--card-alt); }
+
+  .demo-step { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:16px 18px; margin:10px 0; }
+  .demo-step .num { display:inline-block; width:26px; height:26px; line-height:26px; text-align:center; border-radius:50%; background:rgba(224,208,96,.15); color:var(--accent-yellow); font-weight:700; font-size:13px; margin-right:10px; }
+  .demo-step .what { font-weight:700; color:var(--text); }
+  .demo-step .url { font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--accent-cyan); }
+</style>
+</head>
+<body>
+
+<nav class="topnav">
+  <span class="nav-label">CIRES Observability Platform</span>
+  <a href="index.html" class="navlink navlink-home">🏠 Home</a>
+  <a href="solution-brief.html" class="navlink" style="color:var(--accent-green); border-color:rgba(107,207,127,.4); background:rgba(107,207,127,.08);">📣 Solution Brief</a>
+  <a href="platform-architecture-deep.html" class="navlink" style="color:var(--accent-blue); border-color:rgba(78,168,222,.4); background:rgba(78,168,222,.08);">🧭 Architecture (E2E)</a>
+  <a href="production-deployment-guide.html" class="navlink" style="color:var(--accent-green); border-color:rgba(107,207,127,.4); background:rgba(107,207,127,.08);">🏭 Production Deploy</a>
+  <a href="kubernetes-observability.html" class="navlink" style="color:var(--accent-cyan); border-color:rgba(64,208,208,.4); background:rgba(64,208,208,.08);">☸️ K8s Observability</a>
+  <a href="test-and-onboarding.html" class="navlink" style="color:var(--accent-orange); border-color:rgba(240,160,80,.4); background:rgba(240,160,80,.08);">🧪 Test &amp; Onboarding</a>
+</nav>
+
+<section class="hero">
+  <div class="inner">
+    <div class="eyebrow">The value story · for production greenlight · no hype, no invented numbers</div>
+    <h1>Supervisor <span class="accent">Pitch</span></h1>
+    <p class="lead">
+      The case for greenlighting a transition of this platform from PoC to the CIRES private cloud.
+      It states the problem honestly, shows how the platform addresses it, points at proof from work
+      already done (not projections), walks a concrete demo, and lays out an honest roadmap with the
+      open gaps named. The ask is a greenlight to harden and integrate — not a claim that it is
+      already production.
+    </p>
+    <div class="pill-row">
+      <span class="pill yellow">the problem</span>
+      <span class="pill green">how it helps</span>
+      <span class="pill blue">proof points</span>
+      <span class="pill purple">demo flow + roadmap</span>
+    </div>
+  </div>
+</section>
+
+<div class="layout">
+  <aside class="toc-sidebar">
+    <h4>On this page</h4>
+    <ol>
+      <li><a href="#problem">1. The problem</a></li>
+      <li><a href="#help">2. How the platform helps</a></li>
+      <li><a href="#proof">3. Proof points</a></li>
+      <li><a href="#demo">4. The demo flow</a></li>
+      <li><a href="#ask">5. The ask</a></li>
+      <li><a href="#roadmap">6. Honest roadmap</a></li>
+      <li><a href="#risks">7. Risks &amp; open gaps</a></li>
+    </ol>
+  </aside>
+
+  <main class="content">
+
+    <h2 id="problem">1. The problem we are solving</h2>
+    <p>
+      Two failure modes cost an ops team time and trust, and both are visible in our own PoC history:
+    </p>
+    <ul>
+      <li><strong>Alert noise.</strong> A single active incident re-fires every evaluation interval;
+        flaky patterns page repeatedly; benign blips look identical to real ones. The team learns to
+        skim or mute — and muting is how the real one gets missed.</li>
+      <li><strong>Slow human root-cause analysis.</strong> When an alert <em>is</em> real, a human still
+        has to open Grafana, Loki, and Jaeger, correlate across them, and write down what broke. That
+        is minutes-to-tens-of-minutes of skilled attention per incident, repeated.</li>
+      <li><strong>The monitor going blind.</strong> The worst case is the one we actually hit: a service
+        was down and <em>no alert fired at all</em> because the metrics pipeline itself had silently
+        failed. A monitoring system that can't monitor itself is a liability dressed as an asset.</li>
+    </ul>
+
+    <h2 id="help">2. How the platform helps</h2>
+    <table>
+      <thead><tr><th>Problem</th><th>Mechanism</th><th>Effect</th></tr></thead>
+      <tbody>
+        <tr><td>Alert noise</td><td>Three cheap-path gates (fingerprint dedup, Layer-2 family suppression, recurrence gate) run before any GPU spend</td><td>Repeat/benign/flappy noise is absorbed cheaply; only survivors get a full investigation.</td></tr>
+        <tr><td>Slow human RCA</td><td>AI triage pulls metrics/logs/traces through MCP bridges and emits a <strong>named root cause</strong> with linked evidence</td><td>The operator reads a diagnosis instead of assembling one — the cross-tool correlation is done.</td></tr>
+        <tr><td>Trust in AI output</td><td>MCP-only data access + validators/clamps + bounded-agency + exemplar library</td><td>The model can only cite what it could fetch; verdicts that merely restate the alert or hedge are rejected. This is the hallucination firewall.</td></tr>
+        <tr><td>Monitor going blind</td><td>Self-monitoring: KSM-driven generic <code>KubeWorkloadDown</code> with <code>noDataState: Alerting</code>; drain3 self-fires</td><td>If a workload — or the metrics pipeline itself — dies, "no data" now means "alert", not silence.</td></tr>
+        <tr><td>Repeated wrong verdicts</td><td>Closed-loop operator feedback re-injected into the next RCA on the same alert family</td><td>The system learns the operator's corrections without retraining a model.</td></tr>
+      </tbody>
+    </table>
+    <div class="callout note">
+      <div class="callout-label">The differentiator</div>
+      The MCP-only boundary is both the hallucination firewall <em>and</em> a backend-portability seam:
+      it lets us integrate with the NOC's existing Zabbix metrics by writing one bridge, rather than
+      asking them to replace anything. See <a href="hallucination-firewall.html">the firewall page</a>
+      and the <a href="production-deployment-guide.html#otel">OTel+Zabbix model</a>.
+    </div>
+
+    <h2 id="proof">3. Proof points (from work already done)</h2>
+    <ul>
+      <li><strong>The no-alert outage — caught and closed.</strong> The 2026-06-04 audit found the
+        platform was blind to its own apps' health: Prometheus k8s service-discovery was dead on the
+        new account, kube-state-metrics didn't exist, and all 20 alert rules used
+        <code>noDataState: OK</code> so a never-discovered target could never fire. We restored
+        scraping, deployed KSM, and added the generic <code>KubeWorkloadDown</code> rule — then
+        <strong>verified by real induction</strong> (made a workload genuinely unavailable, watched the
+        alert fire and a triage row appear that had been silent before). Commit <code>da8b9d6</code>.
+        Write-up: <a href="kubernetes-observability.html">K8s Observability</a>.</li>
+      <li><strong>Real-induction verification, not synthetic tests.</strong> We don't POST fake webhooks
+        to claim success; we induce real breaches (CPU stress, genuine unavailability, real anomalies)
+        so the MCP bridges see real data. That is why the proof above is credible.</li>
+      <li><strong>The GPU migration.</strong> Moving the AI runner from a laptop GTX 1060 / 7b model to
+        an AWS A10G / <code>qwen2.5:14b</code> took the real-load median from ~5 minutes to ~38 seconds
+        end-to-end — measured, not projected (Phase 2 smoke test, 2026-05-21). See
+        <a href="decisions-log.html#d24">D24</a>/<a href="decisions-log.html#d25">D25</a>.</li>
+      <li><strong>A disciplined audit habit.</strong> The platform is built audit-first: audit → RCA →
+        brainstorm → fix → re-audit, checking both "is the code safe" and "is it actually applied to
+        live". See <a href="audit-fix-methodology.html">the methodology</a>.</li>
+    </ul>
+    <div class="callout warn">
+      <div class="callout-label">Deliberately no invented metrics</div>
+      We do not claim an MTTR reduction percentage or a noise-reduction figure — we have not run a
+      controlled production measurement, so quoting one would be dishonest. The latency numbers above
+      are the only hard figures, and they are measured smoke-test medians. The right next step is to
+      <em>measure</em> noise/MTTR in a CIRES pilot, which is part of the ask.
+    </div>
+
+    <h2 id="demo">4. The demo flow (which screens, in order)</h2>
+    <div class="demo-step"><span class="num">1</span><span class="what">Open the dashboard.</span>
+      <div><span class="url">http://observability-gpu-uswest2-newacct:8090/dashboard</span> — show the live feed of decisions: escalated, dismissed, suppressed. Point out that most rows are <em>cheap</em> (deduped/suppressed) — the noise the operator never had to see.</div></div>
+    <div class="demo-step"><span class="num">2</span><span class="what">Induce a real failure.</span>
+      <div>Make a workload genuinely unavailable (the Recreate + impossible-nodeSelector trick) or run a CPU stress. No synthetic webhook — induce the real thing so the bridges gather real evidence. Steps: <a href="test-and-onboarding.html#scenarios">Test &amp; Onboarding §scenarios</a>.</div></div>
+    <div class="demo-step"><span class="num">3</span><span class="what">Watch it travel the pipeline.</span>
+      <div>Grafana fires <code>KubeWorkloadDown</code> → API Gateway → triage. A new row appears within seconds-to-a-minute. Open it.</div></div>
+    <div class="demo-step"><span class="num">4</span><span class="what">Read the named root cause.</span>
+      <div>The detail view shows <code>human_cause</code> (the diagnosis), the evidence, and "View in Grafana/Loki/Jaeger" links. Emphasise: this is a <em>named cause</em>, not a metric dump.</div></div>
+    <div class="demo-step"><span class="num">5</span><span class="what">Correct it and show the loop close.</span>
+      <div>Open the Rate form, submit a correction with an <code>actual_cause</code>. Re-fire the same family; show the correction re-injected into the next RCA. See <a href="feedback-loop.html">feedback-loop</a>.</div></div>
+    <div class="demo-step"><span class="num">6</span><span class="what">Revert.</span>
+      <div>Restore the workload; show the alert clear. Leave the bed healthy.</div></div>
+
+    <h2 id="ask">5. The ask</h2>
+    <p>
+      Greenlight a <strong>hardening-and-integration phase</strong> to move the platform onto the CIRES
+      private cloud as a monitored pilot. Concretely: approve the security hardening + portability
+      swaps in the <a href="production-deployment-guide.html#checklist">production checklist</a>, the
+      OTel-single-agent + Zabbix-bridge integration with the NOC, and a scoped pilot to
+      <em>measure</em> noise reduction and time-to-named-cause on real CIRES alerts. The ask is not
+      "this is done" — it is "this has earned the next phase".
+    </p>
+
+    <h2 id="roadmap">6. Honest roadmap (Sprint 5)</h2>
+    <ul>
+      <li><strong>Hierarchical drain3 thresholds</strong> — 3-tier (component → app → system) anomaly
+        detection; depends on a microservice test bed.</li>
+      <li><strong>Incident table</strong> — group related alerts into incidents rather than treating
+        each in isolation.</li>
+      <li><strong>Operator config UI</strong> — let operators tune gates/thresholds/opt-ins without
+        code changes.</li>
+      <li><strong>Zabbix MCP bridge + OTel single-agent</strong> — the production integration model for
+        the NOC.</li>
+    </ul>
+
+    <h2 id="risks">7. Risks &amp; open gaps (stated plainly)</h2>
+    <ul>
+      <li><strong>It is a 3-person PoC.</strong> Production-grade ops (on-call, SLAs) is a staffing
+        question, not solved by the code.</li>
+      <li><strong>Security is not hardened.</strong> Prom/Loki/Jaeger are unauthenticated and open in
+        the PoC; MCP bridges have no auth. These are must-fixes before production (P2 items).</li>
+      <li><strong>Some internal paths are imperfect.</strong> SF-5 is dead and should be deprecated;
+        <code>rca_quality</code> can be stale; <code>has_named_cause</code> needs tightening; the
+        env-resolution chain needs confirming across all CIRES environments. All are tracked and
+        scoped — see the <a href="production-deployment-guide.html#checklist">checklist</a>.</li>
+      <li><strong>No production noise/MTTR measurement yet.</strong> That is exactly what the pilot is
+        for; we will not quote a number we haven't measured.</li>
+    </ul>
+
+  </main>
+</div>
+
+</body>
+</html>

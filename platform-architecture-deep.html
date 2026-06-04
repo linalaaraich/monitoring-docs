@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Platform Architecture — End-to-End — CIRES Observability Platform</title>
+<style>
+  :root {
+    --bg: #0f1117; --bg-soft: #13151e; --card: #1a1d27; --card-alt: #1e2230;
+    --border: #2a2d3a; --border-hi: #3a3f52; --text: #e4e6ee; --text-soft: #c0c5d0;
+    --muted: #8890a0; --accent-blue: #4ea8de; --accent-green: #6bcf7f;
+    --accent-orange: #f0a050; --accent-purple: #b07ee8; --accent-red: #e06070;
+    --accent-cyan: #40d0d0; --accent-yellow: #e0d060;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { font-family:'Inter','Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); line-height:1.65; font-size:15px; -webkit-font-smoothing:antialiased; }
+  code, pre, .mono { font-family:'JetBrains Mono','Fira Code',ui-monospace,monospace; font-size:0.88em; }
+
+  .topnav { display:flex; align-items:center; gap:12px; padding:14px 40px; background:var(--bg-soft); border-bottom:1px solid var(--border); flex-wrap:wrap; }
+  .topnav span.nav-label { color:var(--muted); font-size:13px; font-weight:600; margin-right:4px; }
+  .navlink { display:inline-flex; align-items:center; gap:6px; padding:7px 14px; border-radius:8px; font-size:13px; font-weight:600; text-decoration:none; border:1px solid; transition:background .2s, transform .15s; }
+  .navlink:hover { transform:translateY(-1px); }
+  .navlink-home { color:var(--text); border-color:var(--border); background:var(--card); }
+  .navlink-home:hover { background:var(--card-alt); }
+
+  .hero { padding:56px 40px 40px; border-bottom:1px solid var(--border); background:linear-gradient(180deg, #13151e 0%, var(--bg) 100%); }
+  .hero .inner { max-width:1080px; margin:0 auto; }
+  .hero .eyebrow { font-size:11px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:var(--accent-blue); margin-bottom:12px; }
+  .hero h1 { font-size:38px; font-weight:800; letter-spacing:-.5px; margin-bottom:14px; line-height:1.2; }
+  .hero h1 span.accent { color:var(--accent-blue); }
+  .hero p.lead { font-size:16px; color:var(--text-soft); max-width:840px; line-height:1.7; margin-bottom:20px; }
+  .hero .pill-row { display:flex; gap:8px; flex-wrap:wrap; }
+  .pill { font-size:11px; font-weight:600; padding:4px 10px; border-radius:12px; border:1px solid; letter-spacing:.2px; }
+  .pill.blue { color:var(--accent-blue); border-color:rgba(78,168,222,.35); background:rgba(78,168,222,.08); }
+  .pill.green { color:var(--accent-green); border-color:rgba(107,207,127,.35); background:rgba(107,207,127,.08); }
+  .pill.purple { color:var(--accent-purple); border-color:rgba(176,126,232,.35); background:rgba(176,126,232,.08); }
+  .pill.orange { color:var(--accent-orange); border-color:rgba(240,160,80,.35); background:rgba(240,160,80,.08); }
+  .pill.cyan { color:var(--accent-cyan); border-color:rgba(64,208,208,.35); background:rgba(64,208,208,.08); }
+
+  .layout { max-width:1080px; margin:0 auto; padding:32px 40px 80px; display:grid; grid-template-columns: 250px 1fr; gap:40px; }
+  @media (max-width: 900px) { .layout { grid-template-columns:1fr; } .toc-sidebar { position:static; } }
+  .toc-sidebar { position:sticky; top:20px; align-self:start; font-size:13px; }
+  .toc-sidebar h4 { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--muted); margin-bottom:10px; }
+  .toc-sidebar ol { list-style:none; padding:0; }
+  .toc-sidebar li { margin-bottom:4px; }
+  .toc-sidebar a { color:var(--text-soft); text-decoration:none; border-bottom:1px dashed transparent; }
+  .toc-sidebar a:hover { color:var(--accent-blue); border-bottom-color:var(--accent-blue); }
+
+  .content h2 { font-size:26px; font-weight:700; margin:48px 0 16px; letter-spacing:-.3px; scroll-margin-top:24px; padding-bottom:8px; border-bottom:1px solid var(--border); }
+  .content h2:first-child { margin-top:0; }
+  .content h3 { font-size:18px; font-weight:700; margin:28px 0 10px; color:var(--text); scroll-margin-top:24px; }
+  .content h4 { font-size:14px; font-weight:700; margin:20px 0 6px; color:var(--text); }
+  .content p { margin-bottom:14px; color:var(--text-soft); }
+  .content p strong { color:var(--text); font-weight:600; }
+  .content ul, .content ol { margin:8px 0 16px 24px; color:var(--text-soft); }
+  .content li { margin-bottom:6px; }
+  .content code { background:var(--card); border:1px solid var(--border); padding:1px 6px; border-radius:4px; font-size:0.85em; color:var(--accent-cyan); }
+  .content pre { background:var(--card); border:1px solid var(--border); padding:14px 16px; border-radius:8px; margin:12px 0 18px; overflow-x:auto; line-height:1.5; }
+  .content pre code { background:none; border:none; padding:0; color:var(--text); font-size:0.85em; }
+  .content a { color:var(--accent-blue); text-decoration:none; border-bottom:1px dashed rgba(78,168,222,.35); }
+  .content a:hover { border-bottom-style:solid; }
+
+  .callout { border-left:3px solid; border-radius:0 8px 8px 0; padding:14px 18px; margin:16px 0; background:var(--card); }
+  .callout.note { border-color:var(--accent-blue); }
+  .callout.tip { border-color:var(--accent-green); }
+  .callout.warn { border-color:var(--accent-orange); }
+  .callout.why { border-color:var(--accent-purple); }
+  .callout-label { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; margin-bottom:6px; }
+  .callout.note .callout-label { color:var(--accent-blue); }
+  .callout.tip .callout-label { color:var(--accent-green); }
+  .callout.warn .callout-label { color:var(--accent-orange); }
+  .callout.why .callout-label { color:var(--accent-purple); }
+
+  table { width:100%; border-collapse:collapse; margin:12px 0 20px; font-size:13px; }
+  table th, table td { padding:10px 14px; border-bottom:1px solid var(--border); text-align:left; vertical-align:top; }
+  table th { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--muted); background:var(--card); }
+  table tr:hover td { background:var(--card-alt); }
+
+  .flow { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:20px; margin:16px 0 22px; font-family:'JetBrains Mono','Fira Code',ui-monospace,monospace; font-size:12px; color:var(--text-soft); line-height:1.7; white-space:pre; overflow-x:auto; }
+  .gate { display:inline-block; padding:1px 7px; border-radius:4px; font-size:11px; font-weight:700; margin-right:6px; }
+  .gate.cheap { background:rgba(107,207,127,.12); color:var(--accent-green); border:1px solid rgba(107,207,127,.3); }
+  .gate.llm { background:rgba(176,126,232,.12); color:var(--accent-purple); border:1px solid rgba(176,126,232,.3); }
+</style>
+</head>
+<body>
+
+<nav class="topnav">
+  <span class="nav-label">CIRES Observability Platform</span>
+  <a href="index.html" class="navlink navlink-home">🏠 Home</a>
+  <a href="solution-brief.html" class="navlink" style="color:var(--accent-green); border-color:rgba(107,207,127,.4); background:rgba(107,207,127,.08);">📣 Solution Brief</a>
+  <a href="architecture.html" class="navlink" style="color:var(--accent-blue); border-color:rgba(78,168,222,.4); background:rgba(78,168,222,.08);">🏗️ Architecture Diagram</a>
+  <a href="triage-service.html" class="navlink" style="color:var(--accent-purple); border-color:rgba(176,126,232,.4); background:rgba(176,126,232,.12);">🧠 Triage Service</a>
+  <a href="system-explained.html" class="navlink" style="color:var(--accent-cyan); border-color:rgba(64,208,208,.4); background:rgba(64,208,208,.08);">🔬 System Explained</a>
+  <a href="production-deployment-guide.html" class="navlink" style="color:var(--accent-green); border-color:rgba(107,207,127,.4); background:rgba(107,207,127,.08);">🏭 Production Deploy</a>
+  <a href="supervisor-pitch.html" class="navlink" style="color:var(--accent-yellow); border-color:rgba(224,208,96,.4); background:rgba(224,208,96,.08);">🎯 Supervisor Pitch</a>
+  <a href="test-and-onboarding.html" class="navlink" style="color:var(--accent-orange); border-color:rgba(240,160,80,.4); background:rgba(240,160,80,.08);">🧪 Test &amp; Onboarding</a>
+</nav>
+
+<section class="hero">
+  <div class="inner">
+    <div class="eyebrow">Intimate end-to-end · one narrative · every decision gate</div>
+    <h1>Platform Architecture, <span class="accent">End to End</span></h1>
+    <p class="lead">
+      Follow a single alert from the moment a Grafana rule fires to the moment an
+      operator reads a named root cause and rates it. This page is the <em>narrative</em>
+      spine — it stitches every component into one story and, at each decision gate,
+      answers the question that matters most: <strong>why does this gate exist?</strong>
+      For the mechanism behind any stage, it links into the deep reference pages rather
+      than re-explaining them. Read this once to hold the whole pipeline in your head.
+    </p>
+    <div class="pill-row">
+      <span class="pill blue">alert sources → router → triage</span>
+      <span class="pill green">cheap-path gates absorb noise</span>
+      <span class="pill purple">MCP-only context + LLM investigation</span>
+      <span class="pill cyan">verdict → notify → feedback loop</span>
+    </div>
+  </div>
+</section>
+
+<div class="layout">
+  <aside class="toc-sidebar">
+    <h4>On this page</h4>
+    <ol>
+      <li><a href="#shape">1. The shape of the pipeline</a></li>
+      <li><a href="#sources">2. Alert sources — what can fire</a></li>
+      <li><a href="#router">3. API Gateway + Lambda router</a></li>
+      <li><a href="#ingest">4. Triage ingestion</a></li>
+      <li><a href="#cheap">5. The cheap-path gates</a></li>
+      <li><a href="#mcp">6. MCP context gathering</a></li>
+      <li><a href="#llm">7. LLM investigation</a></li>
+      <li><a href="#verdict">8. The verdict</a></li>
+      <li><a href="#notify">9. Notify + dashboard</a></li>
+      <li><a href="#feedback">10. Closed-loop feedback</a></li>
+      <li><a href="#whymap">11. Gate-by-gate "why" map</a></li>
+    </ol>
+  </aside>
+
+  <main class="content">
+
+    <h2 id="shape">1. The shape of the pipeline</h2>
+    <p>
+      The platform has two halves that meet at the triage service. The
+      <strong>observability half</strong> (Prometheus metrics, Loki logs, Jaeger traces,
+      Drain3 log-template anomalies) watches the <code>react / employees-backend / MySQL</code>
+      workload running on k3s. The <strong>AI half</strong> (the FastAPI triage service +
+      Ollama + five MCP bridges) lives on a dedicated AWS <code>g5.xlarge</code> GPU host
+      (<code>observability-gpu-uswest2-newacct</code>, A10G) in us-west-2, attached over
+      Tailscale. An alert is the unit of work that travels between them.
+    </p>
+    <p>
+      Crucially, the work is <strong>cheap-first</strong>. The GPU is the expensive resource,
+      so the pipeline spends as little of it as possible: three synchronous, sub-second gates
+      try to dispose of an alert <em>before</em> the LLM ever runs. Only alerts that survive all
+      three gates earn a full investigation.
+    </p>
+    <div class="flow">  ALERT SOURCES                    ROUTER                 TRIAGE SERVICE (FastAPI, GPU host)
+  ┌──────────────────┐         ┌────────────┐        ┌──────────────────────────────────────────┐
+  │ Grafana rules    │         │ API        │        │ CHEAP PATH (synchronous, sub-second)       │
+  │  • threshold     │  HTTP   │ Gateway    │  202   │  1 dedup (fingerprint, 10m)                │
+  │  • KubeWorkload  ├────────►│  +         ├───────►│  2 Layer-2 suppression (alertname,service) │
+  │    Down (KSM)    │ webhook │ Lambda     │        │  3 recurrence-gate / SF-5 spike            │
+  │ drain3 self-fire │         │ router     │        │      │ survives all three?                 │
+  └──────────────────┘         └────────────┘        │      ▼                                      │
+                                                      │ EXPENSIVE PATH                             │
+                                                      │  4 MCP context (Prom/Loki/Jaeger/drain3/   │
+                                                      │      rca-history)  ── MCP-only invariant   │
+                                                      │  5 LLM investigation (+1 bounded query)    │
+                                                      │  6 validators / clamps / anti-hedge retry  │
+                                                      │  7 verdict: human_cause + evidence + env   │
+                                                      └──────┬─────────────────────────────────────┘
+                                                             ▼
+                                              email (ESCALATE)  +  dashboard row  +  feedback link
+                                                             ▼
+                                              operator rating  ──►  re-injected into next RCA</div>
+    <div class="callout note">
+      <div class="callout-label">Mechanism lives elsewhere</div>
+      For the per-stage code (functions, line numbers, config keys) see
+      <a href="triage-service.html#pipeline">triage-service.html §pipeline</a> and
+      <a href="system-explained.html#lifecycle">system-explained.html §lifecycle</a>.
+      This page is the connective tissue between them.
+    </div>
+
+    <h2 id="sources">2. Alert sources — what can fire</h2>
+    <p>Three kinds of signal enter the pipeline, all as Grafana-shaped webhooks:</p>
+    <ul>
+      <li><strong>Grafana threshold rules</strong> — the classic alerts (CPU saturation, p95 latency,
+        error rate, disk pressure). These mostly use <code>noDataState: OK</code> on purpose: a CPU
+        rule should not page just because a node briefly stopped reporting.</li>
+      <li><strong>The generic <code>KubeWorkloadDown</code> rule</strong> — KSM-driven
+        (<code>kube_deployment_status_replicas_unavailable &gt; 0</code>), it gives liveness coverage
+        for <em>any</em> deployment with no per-service rules. It deliberately uses
+        <code>noDataState: Alerting</code> so that if kube-state-metrics itself disappears, "no data"
+        means "alert", not "all clear". This closed the structural blind spot behind the
+        <a href="#whymap">no-alert outage</a>. Full label-surgery write-up:
+        <a href="kubernetes-observability.html">kubernetes-observability.html</a>.</li>
+      <li><strong>Drain3 self-fires</strong> — when the log-template miner sees a novel or
+        anomalous template, it posts to the triage service's own <code>/webhook/drain3</code> bridge.
+        These are the monitor watching its own log stream.</li>
+    </ul>
+    <div class="callout why">
+      <div class="callout-label">Why a generic workload-down rule</div>
+      Per-service down-rules rot: every new service needs a new rule, and the one nobody wrote is the
+      one that fails silently. A single KSM-driven rule that names the workload from its own labels
+      scales to N services with zero new config. That is the difference between "we monitor what we
+      remembered to" and "we monitor what exists".
+    </div>
+
+    <h2 id="router">3. API Gateway + Lambda router</h2>
+    <p>
+      Grafana cannot reach the GPU host directly — the host's SSH is closed and the service is
+      Tailscale-internal. Instead, webhooks hit an <strong>AWS API Gateway</strong> endpoint that
+      invokes a small <strong>Lambda router</strong>. The router forwards the payload to the triage
+      service over the tailnet and, importantly, <strong>wakes the GPU instance</strong> if a cost
+      autoshutoff has stopped it.
+    </p>
+    <ul>
+      <li><strong>Cold start:</strong> the GPU box is stopped when idle (cost control). The first alert
+        after an idle period pays a cold-start penalty while the instance boots and Ollama loads the
+        14b model. Steady-state alerts do not.</li>
+      <li><strong>Autoshutoff:</strong> a 20-minute idle timer (EventBridge → Lambda) stops the
+        instance so a g5.xlarge does not bill 24/7. A <code>$50/mo</code> CloudWatch alarm is the
+        backstop.</li>
+    </ul>
+    <div class="callout warn">
+      <div class="callout-label">Known gap (audit P0.2)</div>
+      The <code>triage-idle-check</code> EventBridge rule was found <em>disabled in live AWS but
+      enabled in Terraform state</em> — so <code>plan</code> was blind and the GPU ran 24/7 guarded
+      only by the $50 alarm. The fix pins <code>state="ENABLED"</code> and re-applies. Flagged here so
+      the narrative does not pretend the autoshutoff has always worked.
+    </div>
+
+    <h2 id="ingest">4. Triage ingestion</h2>
+    <p>
+      <code>POST /webhook/grafana</code> accepts the payload, returns <code>202</code> immediately,
+      and enqueues the work. Stages 1–3 run synchronously and cheaply; stages 4 onward run under an
+      <code>asyncio.wait_for(...)</code> budget with a raw-alert fallback so a slow or stuck LLM can
+      never hang the request. Every alert — escalated, dismissed, suppressed, or timed-out — is
+      persisted as a row in the local SQLite <code>rca_history</code>, which doubles as the dashboard
+      feed, the Layer-2 suppression signal, the frequency context for future prompts, and the
+      feedback storage shape.
+    </p>
+
+    <h2 id="cheap">5. The cheap-path gates</h2>
+    <p>Three gates try to dispose of the alert before any GPU spend. Each exists for a specific noise class.</p>
+
+    <h3><span class="gate cheap">Gate 1</span> Fingerprint dedup (Layer 1)</h3>
+    <p>
+      Keyed on <strong>Grafana's stable label-hash <code>fingerprint</code></strong> with a 10-minute
+      TTL. Grafana re-fires the same alert every evaluation interval while it stays active; without
+      this gate one incident would trigger dozens of RCAs. On a hit, the pipeline writes a short-path
+      <code>suppressed_duplicate</code> row linked to the first decision and exits.
+      <em>Why fingerprint, not alertname+instance:</em> the fingerprint already encodes the full label
+      set, so it dedups precisely the alerts Grafana itself considers identical.
+    </p>
+
+    <h3><span class="gate cheap">Gate 2</span> Layer-2 history suppression</h3>
+    <p>
+      A <em>different</em> fingerprint but the same <code>(alertname, service)</code> family that we
+      recently <strong>dismissed</strong> (within <code>TRIAGE_HISTORY_LOOKBACK_MINUTES</code>, default
+      30 m). We replay that dismiss verdict without paying the GPU. This is what stops a flaky-test
+      noise pattern from re-investigating itself every half hour.
+    </p>
+
+    <h3><span class="gate cheap">Gate 3</span> Recurrence-gate + SF-5 spike</h3>
+    <p>
+      For opted-in flappy alerts (US-5.8), a per-rule hysteresis: suppress fires 1–4, then
+      <strong>force-escalate</strong> fire 5 — a sustained pattern is real even if each instance looks
+      benign. Critical-severity alerts are explicitly never gated. The SF-5 "spike-shelved" path was
+      intended to shelve very short spikes here.
+    </p>
+    <div class="callout warn">
+      <div class="callout-label">Honesty note (audit backend #4)</div>
+      SF-5 <code>spike_shelved</code> is currently <strong>structurally unreachable</strong>: its 120 s
+      window sits inside the 300 s dedup window, so the dedup gate always fires first. The audit
+      recommends <strong>deprecating</strong> the dead path (or reordering it ahead of dedup). Listed
+      here so the narrative reflects reality, not the design intent.
+    </div>
+
+    <h2 id="mcp">6. MCP context gathering</h2>
+    <p>
+      An alert that survives all three gates earns a real investigation. The first expensive step is
+      gathering evidence — and here the platform's defining invariant applies:
+      <strong>every data source the LLM ever sees comes through an MCP bridge.</strong> There are five
+      bridges: Prometheus, Loki, Jaeger, drain3, and rca-history, each exposing a small
+      <code>/tools/*</code> HTTP contract. The pipeline pre-gathers a context bundle (recent metrics,
+      log slices, trace samples, matching log-template clusters, prior RCAs for this family) and
+      renders it into the prompt under <code>## Pre-Gathered Context</code>.
+    </p>
+    <div class="callout why">
+      <div class="callout-label">Why MCP-only (the hallucination firewall)</div>
+      The LLM has <strong>no direct database, Prometheus, or in-process read access</strong>. If it
+      cannot fetch a number through an MCP tool, it cannot cite that number — so it cannot invent one
+      and dress it as evidence. The bridge boundary is the firewall. It is also a
+      <strong>portability seam</strong>: swap Prometheus for Zabbix, or Loki for Elasticsearch, by
+      writing one new bridge — the prompt and the LLM never change. See
+      <a href="hallucination-firewall.html">hallucination-firewall.html</a>.
+    </div>
+    <div class="callout warn">
+      <div class="callout-label">Known gap (audit misc)</div>
+      The MCP <code>/tools/*</code> handlers currently <code>raise_for_status()</code> on any non-200,
+      so a malformed LLM query (a 4xx) surfaces to the model as "source down" — conflating an LLM
+      fumble with a real outage. The fix distinguishes 4xx (fumble) from 5xx/conn-error (outage).
+    </div>
+
+    <h2 id="llm">7. LLM investigation</h2>
+    <p>
+      The prompt is assembled in a deliberate order: a matched <strong>exemplar</strong> (one of 14
+      archetypes, scored against this alert) is rendered <em>before</em> the gathered context, giving
+      the model a structural target before it sees the evidence; then the context; then the
+      frequency/recurrence framing; then any high-value operator feedback for this family. Ollama runs
+      <code>qwen2.5:14b-instruct</code> (7b fallback).
+    </p>
+    <p>The model's first answer is not trusted blindly. Several mechanisms harden it:</p>
+    <ul>
+      <li><strong>Bounded agency (one extra query):</strong> if the first pass comes back
+        <code>data_starved</code>, the model is handed a 6-tool whitelist and asked to issue
+        <em>exactly one</em> MCP call before re-deciding. Bounded, not open-ended — it cannot loop.</li>
+      <li><strong>Validators &amp; clamps:</strong> a surface-only validator rejects a verdict that
+        merely restates the alert; a hypothesis-menu validator rejects a hedge that lists every
+        possibility; a confidence clamp downgrades a thin verdict to a <code>diagnostic_steps</code>
+        fallback rather than letting it masquerade as a confident root cause.</li>
+      <li><strong>Anti-hedge retry:</strong> a <code>data_starved</code> first pass triggers one more
+        run with an escalated anti-hedge prompt before persisting — but only if budget remains.</li>
+    </ul>
+    <div class="callout warn">
+      <div class="callout-label">Known gaps (audit backend #2, #3; DA-2)</div>
+      Three honesty notes: (1) a data-starved verdict can still cost ~100–140 s of GPU before emitting
+      "cannot determine the root cause" — the fix is an early exit; (2) <code>rca_quality</code> was
+      snapshotted before the clamp/retry on ~24% of rows, so it must be recomputed after the gates;
+      (3) the <code>has_named_cause</code> check false-allows bare "because/due to", which can let an
+      unsafe <code>systemctl restart</code> action pass the clamp — it needs tightening.
+    </div>
+
+    <h2 id="verdict">8. The verdict</h2>
+    <p>
+      The output is a structured <code>RCARecord</code>, not prose. Its load-bearing fields:
+    </p>
+    <table>
+      <thead><tr><th>Field</th><th>What it carries</th></tr></thead>
+      <tbody>
+        <tr><td><code>human_cause</code></td><td>A <strong>named</strong> root cause in plain language — the diagnosis. Telemetry is the evidence <em>for</em> it, never a substitute.</td></tr>
+        <tr><td><code>evidence</code></td><td>The supporting PromQL/log/trace citations, each tied to a real MCP fetch with a "View in {source}" link.</td></tr>
+        <tr><td><code>rca_quality</code></td><td>4-axis rubric score — measures whether the verdict actually names a cause vs hedges.</td></tr>
+        <tr><td><code>env</code></td><td>Resolved environment (<code>prod/stg/.../unknown</code>) via the precedence chain — drives the email subject, dashboard filter, and URL filter so all surfaces agree. See <a href="triage-service.html#env-resolution">triage §5.3</a>.</td></tr>
+      </tbody>
+    </table>
+    <div class="callout why">
+      <div class="callout-label">Why "name a cause" is the contract</div>
+      A verdict that recites metric values but never says <em>what broke</em> is not RCA — it is a
+      dashboard screenshot in sentences. The validators exist precisely to enforce that
+      <code>human_cause</code> is a real diagnosis. This is the platform's core value claim.
+    </div>
+
+    <h2 id="notify">9. Notify + dashboard</h2>
+    <p>
+      If the verdict is <code>ESCALATE</code>, the notifier builds an HTML email (with correlated
+      alerts in the same incident window) and sends it via SMTP. A notifier failure is logged and
+      swallowed so persistence still happens. Every verdict — escalate or not — lands on the
+      <code>/dashboard</code> as a row, with an expandable detail view showing the evidence and the
+      "View in {Grafana/Loki/Jaeger}" links. The dashboard reads the same persisted <code>env</code>
+      and stats as the email, so the two can never disagree. Operator-facing reading guide:
+      <a href="dashboard-guide.html">dashboard-guide.html</a>.
+    </p>
+
+    <h2 id="feedback">10. Closed-loop feedback</h2>
+    <p>
+      Every email and every dashboard row links to <code>GET /dashboard/alert/{id}/rate</code> — a
+      form that POSTs to <code>/feedback/rate/{id}</code> and writes a 7-column feedback row
+      (<code>rating, verdict_was_right, action_was_right, actual_cause, tags, notes, rater</code>).
+      The loop closes because the next time the same <code>(alertname, service)</code> family fires,
+      the pipeline reads that feedback back two ways: (a) proactive injection of the high-value subset
+      (operator said the verdict was wrong, or supplied an actual cause) into the prompt with a
+      "trust this HEAVILY" framing; (b) an on-demand <code>rca_history.list_feedback</code> tool the
+      model can call. Operator corrections actively reshape subsequent RCAs.
+      Full write-up: <a href="feedback-loop.html">feedback-loop.html</a>.
+    </p>
+    <div class="callout note">
+      <div class="callout-label">Family-match caveat</div>
+      Feedback is matched by <code>(alert_name, service)</code> family with a default 14-day lookback
+      (<code>days=14</code>). A correction on one family does <em>not</em> transfer to a different
+      alertname or service, and it ages out after the window. Operators should know this when they
+      wonder why a correction "didn't stick" elsewhere.
+    </div>
+
+    <h2 id="whymap">11. Gate-by-gate "why" map</h2>
+    <table>
+      <thead><tr><th>Gate / step</th><th>Noise or failure class it absorbs</th><th>Why it exists</th></tr></thead>
+      <tbody>
+        <tr><td>KubeWorkloadDown (KSM)</td><td>The service that died with no rule watching it</td><td>The <strong>no-alert outage</strong>: Prometheus SD was dead on the new account, no KSM, all 20 rules used <code>noDataState: OK</code> — a never-discovered target's <code>up==0</code> is an empty vector that can never fire. A generic KSM rule with <code>noDataState: Alerting</code> closes the class.</td></tr>
+        <tr><td>Fingerprint dedup</td><td>One active incident re-firing every interval</td><td>Pay the GPU once per incident, not once per Grafana evaluation.</td></tr>
+        <tr><td>Layer-2 suppression</td><td>A known-benign family re-appearing</td><td>Replay a recent dismiss verdict for the same family without GPU.</td></tr>
+        <tr><td>Recurrence gate</td><td>Flappy alerts that are individually benign but collectively real</td><td>Suppress 1–4, force-escalate 5 — catch sustained patterns without paging on every blip.</td></tr>
+        <tr><td>MCP-only boundary</td><td>Invented metrics / hallucinated evidence</td><td>The model can only cite what it could fetch through a bridge. Firewall + portability seam.</td></tr>
+        <tr><td>Validators / clamps</td><td>Surface-restating and hedging verdicts</td><td>Force <code>human_cause</code> to be a real diagnosis, not a dashboard in prose.</td></tr>
+        <tr><td>Bounded agency</td><td>Data-starved first passes</td><td>One extra targeted fetch can rescue a verdict — bounded so it cannot loop or burn the GPU.</td></tr>
+        <tr><td>Feedback read-back</td><td>The same wrong verdict repeating</td><td>Operator corrections steer the next RCA on the same family.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout tip">
+      <div class="callout-label">Where to go next</div>
+      To run this in production → <a href="production-deployment-guide.html">Production Deployment Guide</a>.
+      To pitch it → <a href="supervisor-pitch.html">Supervisor Pitch</a>.
+      To stand it up and test it → <a href="test-and-onboarding.html">Test &amp; Onboarding</a>.
+    </div>
+
+  </main>
+</div>
+
+</body>
+</html>

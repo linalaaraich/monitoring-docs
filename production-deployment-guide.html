@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Production Deployment Guide — CIRES Private Cloud — CIRES Observability Platform</title>
+<style>
+  :root {
+    --bg: #0f1117; --bg-soft: #13151e; --card: #1a1d27; --card-alt: #1e2230;
+    --border: #2a2d3a; --border-hi: #3a3f52; --text: #e4e6ee; --text-soft: #c0c5d0;
+    --muted: #8890a0; --accent-blue: #4ea8de; --accent-green: #6bcf7f;
+    --accent-orange: #f0a050; --accent-purple: #b07ee8; --accent-red: #e06070;
+    --accent-cyan: #40d0d0; --accent-yellow: #e0d060;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { font-family:'Inter','Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); line-height:1.65; font-size:15px; -webkit-font-smoothing:antialiased; }
+  code, pre, .mono { font-family:'JetBrains Mono','Fira Code',ui-monospace,monospace; font-size:0.88em; }
+
+  .topnav { display:flex; align-items:center; gap:12px; padding:14px 40px; background:var(--bg-soft); border-bottom:1px solid var(--border); flex-wrap:wrap; }
+  .topnav span.nav-label { color:var(--muted); font-size:13px; font-weight:600; margin-right:4px; }
+  .navlink { display:inline-flex; align-items:center; gap:6px; padding:7px 14px; border-radius:8px; font-size:13px; font-weight:600; text-decoration:none; border:1px solid; transition:background .2s, transform .15s; }
+  .navlink:hover { transform:translateY(-1px); }
+  .navlink-home { color:var(--text); border-color:var(--border); background:var(--card); }
+  .navlink-home:hover { background:var(--card-alt); }
+
+  .hero { padding:56px 40px 40px; border-bottom:1px solid var(--border); background:linear-gradient(180deg, #13151e 0%, var(--bg) 100%); }
+  .hero .inner { max-width:1080px; margin:0 auto; }
+  .hero .eyebrow { font-size:11px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:var(--accent-green); margin-bottom:12px; }
+  .hero h1 { font-size:38px; font-weight:800; letter-spacing:-.5px; margin-bottom:14px; line-height:1.2; }
+  .hero h1 span.accent { color:var(--accent-green); }
+  .hero p.lead { font-size:16px; color:var(--text-soft); max-width:840px; line-height:1.7; margin-bottom:20px; }
+  .hero .pill-row { display:flex; gap:8px; flex-wrap:wrap; }
+  .pill { font-size:11px; font-weight:600; padding:4px 10px; border-radius:12px; border:1px solid; letter-spacing:.2px; }
+  .pill.blue { color:var(--accent-blue); border-color:rgba(78,168,222,.35); background:rgba(78,168,222,.08); }
+  .pill.green { color:var(--accent-green); border-color:rgba(107,207,127,.35); background:rgba(107,207,127,.08); }
+  .pill.purple { color:var(--accent-purple); border-color:rgba(176,126,232,.35); background:rgba(176,126,232,.08); }
+  .pill.orange { color:var(--accent-orange); border-color:rgba(240,160,80,.35); background:rgba(240,160,80,.08); }
+  .pill.cyan { color:var(--accent-cyan); border-color:rgba(64,208,208,.35); background:rgba(64,208,208,.08); }
+
+  .layout { max-width:1080px; margin:0 auto; padding:32px 40px 80px; display:grid; grid-template-columns: 250px 1fr; gap:40px; }
+  @media (max-width: 900px) { .layout { grid-template-columns:1fr; } .toc-sidebar { position:static; } }
+  .toc-sidebar { position:sticky; top:20px; align-self:start; font-size:13px; }
+  .toc-sidebar h4 { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--muted); margin-bottom:10px; }
+  .toc-sidebar ol { list-style:none; padding:0; }
+  .toc-sidebar li { margin-bottom:4px; }
+  .toc-sidebar a { color:var(--text-soft); text-decoration:none; border-bottom:1px dashed transparent; }
+  .toc-sidebar a:hover { color:var(--accent-green); border-bottom-color:var(--accent-green); }
+
+  .content h2 { font-size:26px; font-weight:700; margin:48px 0 16px; letter-spacing:-.3px; scroll-margin-top:24px; padding-bottom:8px; border-bottom:1px solid var(--border); }
+  .content h2:first-child { margin-top:0; }
+  .content h3 { font-size:18px; font-weight:700; margin:28px 0 10px; color:var(--text); scroll-margin-top:24px; }
+  .content h4 { font-size:14px; font-weight:700; margin:20px 0 6px; color:var(--text); }
+  .content p { margin-bottom:14px; color:var(--text-soft); }
+  .content p strong { color:var(--text); font-weight:600; }
+  .content ul, .content ol { margin:8px 0 16px 24px; color:var(--text-soft); }
+  .content li { margin-bottom:6px; }
+  .content code { background:var(--card); border:1px solid var(--border); padding:1px 6px; border-radius:4px; font-size:0.85em; color:var(--accent-cyan); }
+  .content pre { background:var(--card); border:1px solid var(--border); padding:14px 16px; border-radius:8px; margin:12px 0 18px; overflow-x:auto; line-height:1.5; }
+  .content pre code { background:none; border:none; padding:0; color:var(--text); font-size:0.85em; }
+  .content a { color:var(--accent-green); text-decoration:none; border-bottom:1px dashed rgba(107,207,127,.35); }
+  .content a:hover { border-bottom-style:solid; }
+
+  .callout { border-left:3px solid; border-radius:0 8px 8px 0; padding:14px 18px; margin:16px 0; background:var(--card); }
+  .callout.note { border-color:var(--accent-blue); }
+  .callout.tip { border-color:var(--accent-green); }
+  .callout.warn { border-color:var(--accent-orange); }
+  .callout.danger { border-color:var(--accent-red); }
+  .callout-label { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; margin-bottom:6px; }
+  .callout.note .callout-label { color:var(--accent-blue); }
+  .callout.tip .callout-label { color:var(--accent-green); }
+  .callout.warn .callout-label { color:var(--accent-orange); }
+  .callout.danger .callout-label { color:var(--accent-red); }
+
+  table { width:100%; border-collapse:collapse; margin:12px 0 20px; font-size:13px; }
+  table th, table td { padding:10px 14px; border-bottom:1px solid var(--border); text-align:left; vertical-align:top; }
+  table th { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--muted); background:var(--card); }
+  table tr:hover td { background:var(--card-alt); }
+
+  .check { list-style:none; margin-left:0; }
+  .check li { padding-left:26px; position:relative; margin-bottom:10px; }
+  .check li::before { content:"☐"; position:absolute; left:0; color:var(--accent-orange); font-weight:700; }
+  .sev { display:inline-block; padding:1px 7px; border-radius:4px; font-size:11px; font-weight:700; margin-right:6px; }
+  .sev.p2 { background:rgba(240,160,80,.12); color:var(--accent-orange); border:1px solid rgba(240,160,80,.3); }
+  .sev.must { background:rgba(224,96,112,.12); color:var(--accent-red); border:1px solid rgba(224,96,112,.3); }
+</style>
+</head>
+<body>
+
+<nav class="topnav">
+  <span class="nav-label">CIRES Observability Platform</span>
+  <a href="index.html" class="navlink navlink-home">🏠 Home</a>
+  <a href="platform-architecture-deep.html" class="navlink" style="color:var(--accent-blue); border-color:rgba(78,168,222,.4); background:rgba(78,168,222,.08);">🧭 Architecture (E2E)</a>
+  <a href="supervisor-pitch.html" class="navlink" style="color:var(--accent-yellow); border-color:rgba(224,208,96,.4); background:rgba(224,208,96,.08);">🎯 Supervisor Pitch</a>
+  <a href="test-and-onboarding.html" class="navlink" style="color:var(--accent-orange); border-color:rgba(240,160,80,.4); background:rgba(240,160,80,.08);">🧪 Test &amp; Onboarding</a>
+  <a href="reproducibility-guide.html" class="navlink" style="color:var(--accent-green); border-color:rgba(107,207,127,.4); background:rgba(107,207,127,.08);">🧭 Reproducibility (PoC)</a>
+  <a href="hallucination-firewall.html" class="navlink" style="color:var(--accent-red); border-color:rgba(224,96,112,.4); background:rgba(224,96,112,.08);">🛡️ Firewall</a>
+</nav>
+
+<section class="hero">
+  <div class="inner">
+    <div class="eyebrow">PoC → CIRES private cloud · portable open-source · honest gaps</div>
+    <h1>Production <span class="accent">Deployment Guide</span></h1>
+    <p class="lead">
+      How to take this from the local PoC test bed to the <strong>CIRES private cloud</strong> — the
+      real production target. Everything in <code>monitoring-*</code> today is a proof of concept; AWS
+      (account <code>321556173045</code>) is the dev/PoC bed, not where this ships. This page lists the
+      portable open-source swaps, the OTel-single-agent + Zabbix integration model the NOC actually
+      wants, the hardening that PoC convenience skipped, and a brutally honest PoC→prod checklist with
+      the audit's open items called out by ID. No hand-waving: where it is not production-ready, it
+      says so.
+    </p>
+    <div class="pill-row">
+      <span class="pill green">portable OSS swaps</span>
+      <span class="pill cyan">OTel single-agent + Zabbix</span>
+      <span class="pill orange">secrets · TLS · RBAC</span>
+      <span class="pill purple">PoC→prod checklist</span>
+    </div>
+  </div>
+</section>
+
+<div class="layout">
+  <aside class="toc-sidebar">
+    <h4>On this page</h4>
+    <ol>
+      <li><a href="#target">1. The production target</a></li>
+      <li><a href="#swaps">2. Portable open-source swaps</a></li>
+      <li><a href="#otel">3. OTel single-agent + Zabbix</a></li>
+      <li><a href="#hardening">4. Secrets, TLS, RBAC</a></li>
+      <li><a href="#ha">5. HA, scaling, retention</a></li>
+      <li><a href="#gpu">6. The AI host on-prem</a></li>
+      <li><a href="#checklist">7. PoC→prod checklist</a></li>
+    </ol>
+  </aside>
+
+  <main class="content">
+
+    <h2 id="target">1. The production target is the CIRES private cloud</h2>
+    <p>
+      Be explicit about the destination, because it changes every recommendation. The PoC runs on AWS
+      because AWS was a fast, cheap dev bed. <strong>Production is the CIRES private cloud</strong> —
+      an on-prem / self-hosted estate, not AWS. That means: prefer portable, self-hostable open-source
+      over managed AWS services; do not assume an internet-reachable API Gateway; and integrate with
+      what the CIRES NOC already runs rather than replacing it.
+    </p>
+    <p>
+      The architecture survives the move because of its seams. The <strong>MCP-only boundary</strong>
+      (every data source reaches the LLM through a bridge) means the metrics/logs/traces backends are
+      swappable without touching the prompt or the model. The triage service and MCP bridges are
+      already containers shipped via GHCR. What changes is the <em>substrate</em>, not the pipeline.
+      For the pipeline itself see <a href="platform-architecture-deep.html">the end-to-end architecture</a>.
+    </p>
+
+    <h2 id="swaps">2. Portable open-source swaps</h2>
+    <p>Each managed AWS dependency the PoC leans on has a self-hostable replacement. Recommend these for prod:</p>
+    <table>
+      <thead><tr><th>PoC (AWS / convenience)</th><th>Production (portable OSS)</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>SES (email escalations)</td><td><strong>Postfix</strong> (or the CIRES corporate SMTP relay)</td><td>No AWS dependency; the notifier already speaks plain SMTP — point it at an internal relay.</td></tr>
+        <tr><td>S3 (any object storage)</td><td><strong>MinIO</strong></td><td>S3-compatible API, runs on-prem; drop-in for backups/artifacts.</td></tr>
+        <tr><td>RDS MySQL (app DB)</td><td>Self-managed <strong>MySQL/MariaDB</strong> or the CIRES managed DB</td><td>Avoid RDS-specific knobs; the app speaks standard MySQL.</td></tr>
+        <tr><td>API Gateway + Lambda router</td><td><strong>Reverse proxy</strong> (nginx/Traefik) on the tailnet / internal network, or a small always-on forwarder</td><td>On-prem there is no cold-start GPU to wake and no need for a public webhook ingress — internal routing suffices.</td></tr>
+        <tr><td>EventBridge autoshutoff</td><td>Likely <strong>drop</strong> on-prem (the GPU host is owned, not metered hourly)</td><td>The 20-min idle-stop exists to stop AWS billing; a fixed on-prem GPU does not need it.</td></tr>
+        <tr><td>Ollama + qwen2.5:14b</td><td><strong>Same</strong> — Ollama is already self-hosted and portable</td><td>The model layer needs no change; it runs anywhere with an A10G-class GPU.</td></tr>
+      </tbody>
+    </table>
+    <div class="callout tip">
+      <div class="callout-label">The MCP bridges are the portability win</div>
+      Because the LLM only sees data through MCP <code>/tools/*</code>, swapping Prometheus→Zabbix or
+      Loki→Elasticsearch is "write one bridge" — the triage prompt is untouched. This is the single
+      most important property for a private-cloud migration.
+    </div>
+
+    <h2 id="otel">3. The forward model: OTel single-agent + Zabbix integration</h2>
+    <p>
+      The CIRES NOC uses <strong>Zabbix for metrics</strong> and is <strong>wary of exporters</strong>.
+      The PoC's per-target Prometheus exporters are a non-starter as a sell to that team. The
+      production pitch is therefore:
+    </p>
+    <ul>
+      <li><strong>One OpenTelemetry host-agent per node</strong> — a single collector that handles
+        logs and traces (and, where useful, host metrics), instead of a zoo of exporters. One agent to
+        deploy, secure, and reason about.</li>
+      <li><strong>Metrics stay in Zabbix.</strong> The platform does <em>not</em> try to replace the
+        NOC's metrics system. Instead an <strong>MCP bridge to Zabbix</strong> lets the LLM query
+        Zabbix metrics exactly as it queries Prometheus today — same <code>/tools/*</code> contract,
+        new backend. The platform owns logs + traces + the AI triage layer; Zabbix keeps metrics.</li>
+      <li><strong>Prometheus becomes PoC-only.</strong> It stays in the dev bed for fast iteration but
+        is not part of the production proposal.</li>
+    </ul>
+    <div class="callout note">
+      <div class="callout-label">Why this framing wins the NOC</div>
+      It asks them to add one agent and expose a read API, not to rip out Zabbix or trust a pile of
+      exporters. The value (AI root-cause naming on top of the signals they already collect) lands
+      without threatening their existing investment.
+    </div>
+    <div class="callout warn">
+      <div class="callout-label">Uncertain — confirm with the NOC</div>
+      The exact Zabbix read interface (Zabbix API vs a metrics export endpoint) and whether host metrics
+      should flow through the OTel agent <em>or</em> stay entirely in Zabbix is a design decision the
+      NOC should own. The bridge pattern accommodates either; the choice is theirs, not invented here.
+    </div>
+
+    <h2 id="hardening">4. Secrets, TLS, RBAC — what PoC convenience skipped</h2>
+    <p>The PoC trades hardening for iteration speed. Production must close these. The audit flagged them as P2 security items:</p>
+    <table>
+      <thead><tr><th>Item</th><th>PoC state</th><th>Production requirement</th></tr></thead>
+      <tbody>
+        <tr><td>Prom / Loki / Jaeger / Grafana exposure</td><td><span class="sev p2">P2 I-4</span> open to <code>0.0.0.0/0</code>; Prom/Loki/Jaeger <strong>unauthenticated</strong></td><td>Scope to operator /32 or internal-only; put auth (reverse-proxy SSO / mTLS) in front of every UI and API.</td></tr>
+        <tr><td>MCP bridge auth</td><td>Bridges are reachable on the tailnet with no auth</td><td>Add bridge authentication (token / mTLS) so only the triage service can call <code>/tools/*</code>.</td></tr>
+        <tr><td>Secrets</td><td>SMTP creds / tokens in env / files</td><td>A real secret store (Vault, or the CIRES standard) with rotation; no secrets in compose or repo.</td></tr>
+        <tr><td>TLS</td><td>Mostly plaintext over the tailnet</td><td>TLS on all inter-service hops that leave the host; internal CA per CIRES policy.</td></tr>
+        <tr><td>IAM / privilege</td><td><span class="sev p2">P2 I-3</span> Lambda <code>ec2:Stop/StartInstances</code> on <code>Resource:"*"</code></td><td>N/A on-prem if EventBridge autoshutoff is dropped; otherwise scope by tag condition. Apply least-privilege to whatever orchestration replaces it.</td></tr>
+        <tr><td>App DB durability</td><td><span class="sev p2">P2 I-10</span> RDS <code>skip_final_snapshot=true</code>, no deletion protection (116k-row <code>app_db</code> at risk)</td><td>Enable deletion protection + backups on the production DB; never destroy-without-snapshot.</td></tr>
+        <tr><td>k3s pods/proxy RBAC</td><td>Scraper SA fixed during the 2026-06-04 work</td><td>Carry the same least-privilege scraper SA pattern to the prod cluster; do not broaden.</td></tr>
+      </tbody>
+    </table>
+
+    <h2 id="ha">5. HA, scaling, and data retention</h2>
+    <h3>High availability</h3>
+    <p>
+      The PoC is single-instance everywhere (one triage service, one of each backend). For production:
+    </p>
+    <ul>
+      <li><strong>Triage service:</strong> the FastAPI service is stateless except for its SQLite
+        <code>rca_history</code>. To run more than one replica, move that store to the shared
+        production DB (MySQL/Postgres) — otherwise the dedup/suppression/feedback state is
+        per-replica and the cheap-path gates leak. <em>This is a real prerequisite for HA, not a nicety.</em></li>
+      <li><strong>Backends:</strong> Loki and Jaeger have HA modes; size per CIRES retention needs.
+        Grafana can run behind the corporate SSO proxy in HA.</li>
+      <li><strong>GPU host:</strong> a single A10G-class host handles the PoC's load comfortably
+        (~38 s median). Scale by adding hosts behind a queue only if alert volume demands it — measure
+        first.</li>
+    </ul>
+    <h3>Data retention</h3>
+    <ul>
+      <li><strong>Logs/traces:</strong> set Loki/Jaeger retention to CIRES policy (PoC defaults are
+        not compliance-grade).</li>
+      <li><strong>rca_history + feedback:</strong> these are operationally valuable training signal —
+        retain longer than raw telemetry. Note the feedback read-back uses a 14-day lookback by
+        default for prompt injection, but the rows themselves should be kept for audit/analysis.</li>
+    </ul>
+
+    <h2 id="gpu">6. The AI host on-prem</h2>
+    <p>
+      The PoC migrated the AI layer to a cloud GPU specifically because it should sit on a dedicated
+      GPU host, not on k3s with the apps. On-prem this becomes a single owned GPU box running Ollama +
+      the triage service + the five MCP bridges. Bring it under <strong>Ansible</strong> — the audit
+      flagged (<span class="sev p2">A-3</span>) that the GPU triage host is currently hand-managed
+      compose outside Ansible; production must have it reproducible like everything else.
+    </p>
+    <div class="callout warn">
+      <div class="callout-label">Drift is the dominant PoC failure mode</div>
+      The 2026-06-04 audit's headline finding: the code was correct but <em>never applied</em> to the
+      new account (dead Prometheus SD, missing KSM). For production, "in the repo" is not "in the
+      cluster" — every IaC change must be applied and verified by real induction, not assumed.
+    </div>
+
+    <h2 id="checklist">7. PoC → production checklist</h2>
+    <p>What must change before this is production on the CIRES private cloud. Honest, not aspirational:</p>
+    <h4>Must-fix before greenlight</h4>
+    <ul class="check">
+      <li><span class="sev must">SEC</span> Authenticate + network-scope Prom/Loki/Jaeger/Grafana (P2 I-4) — no unauthenticated UIs or APIs.</li>
+      <li><span class="sev must">SEC</span> Add MCP bridge auth so only the triage service can call <code>/tools/*</code>.</li>
+      <li><span class="sev must">DATA</span> Enable DB deletion protection + backups (P2 I-10).</li>
+      <li><span class="sev must">HA</span> Move <code>rca_history</code> off per-instance SQLite to the shared DB if running &gt;1 triage replica.</li>
+      <li><span class="sev must">REPRO</span> Bring the GPU/AI host under Ansible (A-3); kill hand-managed compose.</li>
+      <li><span class="sev must">REPRO</span> Apply-and-verify every IaC change by real induction (no "in repo = live").</li>
+    </ul>
+    <h4>Swap for portability</h4>
+    <ul class="check">
+      <li>SES → Postfix / CIRES SMTP relay; S3 → MinIO; RDS → CIRES-managed MySQL.</li>
+      <li>API Gateway + Lambda → internal reverse proxy; drop EventBridge autoshutoff on owned GPU.</li>
+      <li>Add a <strong>Zabbix MCP bridge</strong>; demote Prometheus to PoC-only; deploy the OTel single host-agent for logs/traces.</li>
+    </ul>
+    <h4>Multi-tenancy / correctness gaps to close</h4>
+    <ul class="check">
+      <li>Resolve the <strong>env-resolution gap</strong>: confirm the precedence chain (<a href="triage-service.html#env-resolution">triage §5.3</a>) correctly tags prod vs non-prod across all CIRES environments before relying on per-env routing/filtering.</li>
+      <li>Tighten <code>has_named_cause</code> (DA-2) so unsafe actions cannot pass the clamp on bare "because/due to".</li>
+      <li>Distinguish MCP 4xx (LLM fumble) from 5xx/conn-error (real outage) so a bad query is not mislabelled "source down".</li>
+      <li><strong>Deprecate SF-5</strong> spike-shelved (structurally unreachable dead path).</li>
+      <li>Recompute <code>rca_quality</code> after clamp/retry (stale on ~24% of PoC rows).</li>
+    </ul>
+    <div class="callout tip">
+      <div class="callout-label">Sequencing</div>
+      Mirror the audit's order: prove the platform sees its own apps (already done for k3s on 2026-06-04),
+      then security-scope, then portability swaps, then HA. Each step verified by real induction — see
+      <a href="audit-fix-methodology.html">the audit &amp; fix methodology</a> and
+      <a href="test-and-onboarding.html">the test guide</a>.
+    </div>
+
+  </main>
+</div>
+
+</body>
+</html>

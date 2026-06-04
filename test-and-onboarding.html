@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Test &amp; Onboarding Guide — for a teammate — CIRES Observability Platform</title>
+<style>
+  :root {
+    --bg: #0f1117; --bg-soft: #13151e; --card: #1a1d27; --card-alt: #1e2230;
+    --border: #2a2d3a; --border-hi: #3a3f52; --text: #e4e6ee; --text-soft: #c0c5d0;
+    --muted: #8890a0; --accent-blue: #4ea8de; --accent-green: #6bcf7f;
+    --accent-orange: #f0a050; --accent-purple: #b07ee8; --accent-red: #e06070;
+    --accent-cyan: #40d0d0; --accent-yellow: #e0d060;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { font-family:'Inter','Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); line-height:1.65; font-size:15px; -webkit-font-smoothing:antialiased; }
+  code, pre, .mono { font-family:'JetBrains Mono','Fira Code',ui-monospace,monospace; font-size:0.88em; }
+
+  .topnav { display:flex; align-items:center; gap:12px; padding:14px 40px; background:var(--bg-soft); border-bottom:1px solid var(--border); flex-wrap:wrap; }
+  .topnav span.nav-label { color:var(--muted); font-size:13px; font-weight:600; margin-right:4px; }
+  .navlink { display:inline-flex; align-items:center; gap:6px; padding:7px 14px; border-radius:8px; font-size:13px; font-weight:600; text-decoration:none; border:1px solid; transition:background .2s, transform .15s; }
+  .navlink:hover { transform:translateY(-1px); }
+  .navlink-home { color:var(--text); border-color:var(--border); background:var(--card); }
+  .navlink-home:hover { background:var(--card-alt); }
+
+  .hero { padding:56px 40px 40px; border-bottom:1px solid var(--border); background:linear-gradient(180deg, #13151e 0%, var(--bg) 100%); }
+  .hero .inner { max-width:1080px; margin:0 auto; }
+  .hero .eyebrow { font-size:11px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:var(--accent-orange); margin-bottom:12px; }
+  .hero h1 { font-size:38px; font-weight:800; letter-spacing:-.5px; margin-bottom:14px; line-height:1.2; }
+  .hero h1 span.accent { color:var(--accent-orange); }
+  .hero p.lead { font-size:16px; color:var(--text-soft); max-width:840px; line-height:1.7; margin-bottom:20px; }
+  .hero .pill-row { display:flex; gap:8px; flex-wrap:wrap; }
+  .pill { font-size:11px; font-weight:600; padding:4px 10px; border-radius:12px; border:1px solid; letter-spacing:.2px; }
+  .pill.blue { color:var(--accent-blue); border-color:rgba(78,168,222,.35); background:rgba(78,168,222,.08); }
+  .pill.green { color:var(--accent-green); border-color:rgba(107,207,127,.35); background:rgba(107,207,127,.08); }
+  .pill.purple { color:var(--accent-purple); border-color:rgba(176,126,232,.35); background:rgba(176,126,232,.08); }
+  .pill.orange { color:var(--accent-orange); border-color:rgba(240,160,80,.35); background:rgba(240,160,80,.08); }
+  .pill.cyan { color:var(--accent-cyan); border-color:rgba(64,208,208,.35); background:rgba(64,208,208,.08); }
+
+  .layout { max-width:1080px; margin:0 auto; padding:32px 40px 80px; display:grid; grid-template-columns: 250px 1fr; gap:40px; }
+  @media (max-width: 900px) { .layout { grid-template-columns:1fr; } .toc-sidebar { position:static; } }
+  .toc-sidebar { position:sticky; top:20px; align-self:start; font-size:13px; }
+  .toc-sidebar h4 { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--muted); margin-bottom:10px; }
+  .toc-sidebar ol { list-style:none; padding:0; }
+  .toc-sidebar li { margin-bottom:4px; }
+  .toc-sidebar a { color:var(--text-soft); text-decoration:none; border-bottom:1px dashed transparent; }
+  .toc-sidebar a:hover { color:var(--accent-orange); border-bottom-color:var(--accent-orange); }
+
+  .content h2 { font-size:26px; font-weight:700; margin:48px 0 16px; letter-spacing:-.3px; scroll-margin-top:24px; padding-bottom:8px; border-bottom:1px solid var(--border); }
+  .content h2:first-child { margin-top:0; }
+  .content h3 { font-size:18px; font-weight:700; margin:28px 0 10px; color:var(--text); scroll-margin-top:24px; }
+  .content h4 { font-size:14px; font-weight:700; margin:20px 0 6px; color:var(--text); }
+  .content p { margin-bottom:14px; color:var(--text-soft); }
+  .content p strong { color:var(--text); font-weight:600; }
+  .content ul, .content ol { margin:8px 0 16px 24px; color:var(--text-soft); }
+  .content li { margin-bottom:6px; }
+  .content code { background:var(--card); border:1px solid var(--border); padding:1px 6px; border-radius:4px; font-size:0.85em; color:var(--accent-cyan); }
+  .content pre { background:var(--card); border:1px solid var(--border); padding:14px 16px; border-radius:8px; margin:12px 0 18px; overflow-x:auto; line-height:1.5; }
+  .content pre code { background:none; border:none; padding:0; color:var(--text); font-size:0.85em; }
+  .content a { color:var(--accent-orange); text-decoration:none; border-bottom:1px dashed rgba(240,160,80,.35); }
+  .content a:hover { border-bottom-style:solid; }
+
+  .callout { border-left:3px solid; border-radius:0 8px 8px 0; padding:14px 18px; margin:16px 0; background:var(--card); }
+  .callout.note { border-color:var(--accent-blue); }
+  .callout.tip { border-color:var(--accent-green); }
+  .callout.warn { border-color:var(--accent-orange); }
+  .callout.danger { border-color:var(--accent-red); }
+  .callout-label { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; margin-bottom:6px; }
+  .callout.note .callout-label { color:var(--accent-blue); }
+  .callout.tip .callout-label { color:var(--accent-green); }
+  .callout.warn .callout-label { color:var(--accent-orange); }
+  .callout.danger .callout-label { color:var(--accent-red); }
+
+  table { width:100%; border-collapse:collapse; margin:12px 0 20px; font-size:13px; }
+  table th, table td { padding:10px 14px; border-bottom:1px solid var(--border); text-align:left; vertical-align:top; }
+  table th { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--muted); background:var(--card); }
+  table tr:hover td { background:var(--card-alt); }
+
+  .scenario { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:18px 20px; margin:14px 0; }
+  .scenario h4 { margin-top:0; color:var(--accent-orange); }
+</style>
+</head>
+<body>
+
+<nav class="topnav">
+  <span class="nav-label">CIRES Observability Platform</span>
+  <a href="index.html" class="navlink navlink-home">🏠 Home</a>
+  <a href="platform-architecture-deep.html" class="navlink" style="color:var(--accent-blue); border-color:rgba(78,168,222,.4); background:rgba(78,168,222,.08);">🧭 Architecture (E2E)</a>
+  <a href="dashboard-guide.html" class="navlink" style="color:#e88aa0; border-color:rgba(232,138,160,.4); background:rgba(232,138,160,.08);">📋 Dashboard Guide</a>
+  <a href="kubernetes-observability.html" class="navlink" style="color:var(--accent-cyan); border-color:rgba(64,208,208,.4); background:rgba(64,208,208,.08);">☸️ K8s Observability</a>
+  <a href="feedback-loop.html" class="navlink" style="color:var(--accent-orange); border-color:rgba(240,160,80,.4); background:rgba(240,160,80,.08);">FB Feedback Loop</a>
+  <a href="reproducibility-guide.html" class="navlink" style="color:var(--accent-green); border-color:rgba(107,207,127,.4); background:rgba(107,207,127,.08);">🧭 Reproducibility</a>
+</nav>
+
+<section class="hero">
+  <div class="inner">
+    <div class="eyebrow">For a teammate · stand it up · exercise it · read it · feed it back</div>
+    <h1>Test &amp; <span class="accent">Onboarding</span></h1>
+    <p class="lead">
+      A teammate's guide to standing the platform up and actually exercising it. Prerequisites, the
+      real-induction scenarios that make the AI do real work (CPU stress, the genuine workload-down
+      trick, a drain3 anomaly), how to read the dashboard and a verdict, and — importantly — how to
+      give feedback that actually trains the LLM. One hard rule runs through all of it:
+      <strong>real induction only, no synthetic webhooks.</strong>
+    </p>
+    <div class="pill-row">
+      <span class="pill orange">prerequisites</span>
+      <span class="pill cyan">real-induction scenarios</span>
+      <span class="pill green">reading the dashboard</span>
+      <span class="pill purple">feedback that trains</span>
+    </div>
+  </div>
+</section>
+
+<div class="layout">
+  <aside class="toc-sidebar">
+    <h4>On this page</h4>
+    <ol>
+      <li><a href="#rule">0. The one rule</a></li>
+      <li><a href="#prereq">1. Prerequisites</a></li>
+      <li><a href="#standup">2. Standing it up</a></li>
+      <li><a href="#scenarios">3. Real-induction scenarios</a></li>
+      <li><a href="#reading">4. Reading the dashboard</a></li>
+      <li><a href="#feedback">5. Feedback that trains</a></li>
+      <li><a href="#troubleshoot">6. If nothing fires</a></li>
+    </ol>
+  </aside>
+
+  <main class="content">
+
+    <h2 id="rule">0. The one rule: real induction only</h2>
+    <div class="callout danger">
+      <div class="callout-label">Do not POST synthetic webhooks</div>
+      Never fake a <code>/webhook/grafana</code> POST to "test" the platform. A synthetic alert carries
+      no real telemetry, so the MCP bridges gather nothing and the LLM verdict is meaningless — you
+      learn nothing about whether the platform works. Always induce a <strong>real breach</strong> so
+      Prometheus/Loki/Jaeger/drain3 see real data. (The old <code>hourly-demo-test.sh</code> synthetic
+      fire is being retired for exactly this reason.)
+    </div>
+
+    <h2 id="prereq">1. Prerequisites</h2>
+    <ul>
+      <li><strong>Tailscale</strong> membership on the CIRES tailnet — every service is addressed by
+        MagicDNS name, never raw IP (names survive AWS stop/start). Nodes: <code>claude-controller</code>,
+        <code>adolin</code>, <code>adolin-wsl</code> (AI rollback fallback),
+        <code>observability-rca-newacct-monitoring</code> (the monitoring VM),
+        <code>observability-rca-newacct-k3s</code> (the app cluster),
+        <code>observability-gpu-uswest2-newacct</code> (the GPU/triage host).</li>
+      <li><strong>kubectl</strong> access to the k3s cluster (for the workload-down scenario).</li>
+      <li><strong>The GPU host running.</strong> It auto-stops when idle to save cost; the first alert
+        after idle pays a cold-start while it boots and loads <code>qwen2.5:14b</code>. If you want an
+        instant demo, wake it first.</li>
+      <li>Read these two first: <a href="platform-architecture-deep.html">the end-to-end architecture</a>
+        (so you know what each scenario exercises) and <a href="dashboard-guide.html">the dashboard
+        guide</a> (so the columns make sense). Full deploy-from-scratch: <a href="reproducibility-guide.html">Reproducibility Guide</a>.</li>
+    </ul>
+
+    <h2 id="standup">2. Standing it up</h2>
+    <p>
+      If the platform is already deployed (the PoC bed), you only need tailnet access and the URLs
+      below — skip to the scenarios. To deploy from scratch, the
+      <a href="reproducibility-guide.html">Reproducibility Guide</a> is the runbook: clone the repos →
+      <code>terraform apply</code> → Ansible the monitoring VM → bootstrap k3s → Helm charts → validate.
+      Key endpoints once up:
+    </p>
+    <table>
+      <thead><tr><th>What</th><th>Where</th></tr></thead>
+      <tbody>
+        <tr><td>Triage dashboard</td><td><code>http://observability-gpu-uswest2-newacct:8090/dashboard</code></td></tr>
+        <tr><td>Prometheus</td><td><code>http://observability-rca-newacct-monitoring:9090</code></td></tr>
+        <tr><td>Grafana / Loki / Jaeger</td><td>on the monitoring VM (see architecture page for ports)</td></tr>
+      </tbody>
+    </table>
+
+    <h2 id="scenarios">3. Real-induction scenarios</h2>
+
+    <div class="scenario">
+      <h4>A. CPU stress (threshold rule)</h4>
+      <p>Drive CPU on a target so a threshold rule fires with real metrics behind it. Run a stress
+        load on the workload host (e.g. <code>stress-ng --cpu N</code> or the project's chaos runner),
+        wait for the saturation rule to fire, and watch a row appear. The LLM should pull the CPU
+        series via the Prometheus MCP and name saturation as the cause.</p>
+    </div>
+
+    <div class="scenario">
+      <h4>B. KubeWorkloadDown — the genuine-unavailability trick (with revert)</h4>
+      <p><strong>Do not</strong> <code>kubectl scale --replicas=0</code> — that sets desired=0, so
+        <code>unavailable = desired − available = 0</code> and the alert will <em>not</em> fire. You
+        must keep desired ≥ 1 while preventing the pod from becoming ready. Use strategy
+        <code>Recreate</code> (tear the old ready pod down first) plus a <code>nodeSelector</code> no
+        node satisfies:</p>
+      <pre><code># Make it genuinely unavailable: desired=1, available=0 -> unavailable=1
+kubectl -n app patch deploy/spring-boot --type merge -p '{
+  "spec": {
+    "strategy": {"type": "Recreate"},
+    "template": {"spec": {"nodeSelector": {"cires/induce-down": "nowhere"}}}
+  }
+}'
+# wait > 3m, observe KubeWorkloadDown fire and a triage row appear
+# (labels should name service=spring-boot, namespace=app)
+
+# REVERT (remove the impossible nodeSelector):
+kubectl -n app patch deploy/spring-boot --type json \
+  -p '[{"op":"remove","path":"/spec/template/spec/nodeSelector/cires~1induce-down"}]'</code></pre>
+      <p>An alternative real induction: point the deployment at a non-existent image tag
+        (<code>ImagePullBackOff</code> also yields available=0 with desired≥1). This is the exact path
+        verified end-to-end in commit <code>da8b9d6</code>. Full label-surgery explanation:
+        <a href="kubernetes-observability.html">K8s Observability</a>.</p>
+      <div class="callout warn">
+        <div class="callout-label">Always revert</div>
+        Leave the bed healthy. Remove the impossible nodeSelector (or fix the image tag) and confirm
+        the deployment goes available and the alert clears before you walk away.
+      </div>
+    </div>
+
+    <div class="scenario">
+      <h4>C. Drain3 log-template anomaly</h4>
+      <p>Generate a genuinely novel log pattern from the app (a new error template the miner hasn't
+        seen), so drain3 detects a novel/anomalous cluster and self-fires to <code>/webhook/drain3</code>.
+        This exercises the monitor-watching-its-own-logs path. Note the audit found drain3 self-fires
+        can currently produce duplicate rows (the fingerprint hashes volatile per-batch content) — if
+        you see repeats, that's the known <code>backend #1</code> issue, not your test going wrong.</p>
+    </div>
+
+    <h2 id="reading">4. Reading the dashboard</h2>
+    <p>
+      The <a href="dashboard-guide.html">dashboard guide</a> is the column-by-column reference; the
+      essentials for a tester:
+    </p>
+    <ul>
+      <li><strong>Verdicts:</strong> <code>ESCALATE</code> (real, emailed), <code>DISMISS</code>
+        (benign), <code>suppressed_duplicate</code> / <code>triage_suppressed</code> (a cheap-path gate
+        absorbed it — no GPU spent), <code>timeout_passthrough</code> (safety fallback). Most rows
+        being cheap is the system <em>working</em>, not failing.</li>
+      <li><strong>The detail view:</strong> click a row to expand. Read <code>human_cause</code> first
+        — that is the named diagnosis. The <code>evidence</code> below it is the supporting
+        metrics/logs/traces, each with a "View in Grafana/Loki/Jaeger" link to the real source.</li>
+      <li><strong>The judgment to make:</strong> did it name a <em>cause</em>, or just restate the
+        alert / dump metrics? A good verdict says what broke; the validators are meant to enforce
+        this, and a thin one should fall back to <code>diagnostic_steps</code>.</li>
+      <li><strong><code>rca_quality</code></strong> is the 4-axis rubric score. Heads-up: the audit
+        found it can be stale on some rows (snapshotted before the clamp/retry) — don't over-trust the
+        number on older rows until <code>backend #3</code> is fixed.</li>
+    </ul>
+
+    <h2 id="feedback">5. Giving feedback that actually trains the LLM</h2>
+    <p>
+      Every email and dashboard row links to <code>GET /dashboard/alert/{id}/rate</code>. Submitting it
+      writes a feedback row, and the next time the <strong>same alert family</strong> fires the
+      pipeline reads it back into the prompt. To make feedback that <em>changes future RCAs</em>:
+    </p>
+    <ul>
+      <li><strong>Fill in <code>actual_cause</code></strong> even when the verdict was right — this is
+        the highest-value field. It teaches the LLM the named cause for the family and lifts prose
+        quality next time, rather than letting it settle on boilerplate.</li>
+      <li><strong>Set <code>verdict_was_right=no</code></strong> when it's wrong — that puts the row in
+        the high-value subset that gets proactively injected with a "trust this HEAVILY" framing.</li>
+    </ul>
+    <div class="callout note">
+      <div class="callout-label">The family-match + 14-day TTL caveat</div>
+      Feedback is matched by <code>(alert_name, service)</code> family with a default
+      <strong>14-day</strong> lookback (<code>days=14</code>). So: (1) a correction on one family does
+      <em>not</em> carry over to a different alertname or service — if you test family X then expect it
+      to help family Y, it won't; (2) it ages out after 14 days. If a correction seems to "not stick",
+      check you're re-firing the <em>same</em> family within the window. Full mechanism:
+      <a href="feedback-loop.html">feedback-loop.html</a>.
+    </div>
+
+    <h2 id="troubleshoot">6. If nothing fires</h2>
+    <ul>
+      <li><strong>Used <code>--replicas=0</code>?</strong> That can't fire <code>KubeWorkloadDown</code>
+        (desired=0 → unavailable=0). Use the Recreate + nodeSelector trick in scenario B.</li>
+      <li><strong>Waited long enough?</strong> The rule has a "for" duration (&gt;3m) before it fires.</li>
+      <li><strong>GPU host asleep?</strong> Cold start delays the <em>verdict</em>, not the alert — the
+        row should still appear; the LLM result lands once the box is up and the model is loaded.</li>
+      <li><strong>Is the metrics pipeline actually scraping?</strong> Sanity check:
+        <code>curl -s 'observability-rca-newacct-monitoring:9090/api/v1/query?query=kube_deployment_status_replicas_unavailable' | jq '.data.result | length'</code>
+        should be &gt; 0. If KSM/SD ever regresses (the no-alert-outage class), this returns empty.</li>
+      <li>Cross-check the pipeline stages in <a href="platform-architecture-deep.html#whymap">the architecture "why" map</a> to see which gate may have absorbed your alert.</li>
+    </ul>
+
+  </main>
+</div>
+
+</body>
+</html>

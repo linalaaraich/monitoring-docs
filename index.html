@@ -121,6 +121,10 @@
   <a href="kubernetes-observability.html" class="navlink navlink-k8s">☸️ K8s Observability</a>
   <a href="audit-fix-methodology.html" class="navlink" style="color:var(--accent-orange); border-color:rgba(240,160,80,.4); background:rgba(240,160,80,.08);">🔁 Audit &amp; Fix Method</a>
   <a href="engineering-log.html" class="navlink" style="color:var(--accent-purple); border-color:rgba(176,126,232,.4); background:rgba(176,126,232,.08);">📓 Engineering Log</a>
+  <a href="platform-architecture-deep.html" class="navlink navlink-arch">🧭 Architecture (E2E)</a>
+  <a href="production-deployment-guide.html" class="navlink" style="color:var(--accent-green); border-color:rgba(107,207,127,.4); background:rgba(107,207,127,.08);">🏭 Production Deploy</a>
+  <a href="supervisor-pitch.html" class="navlink" style="color:var(--accent-yellow); border-color:rgba(224,208,96,.4); background:rgba(224,208,96,.08);">🎯 Supervisor Pitch</a>
+  <a href="test-and-onboarding.html" class="navlink" style="color:var(--accent-orange); border-color:rgba(240,160,80,.4); background:rgba(240,160,80,.08);">🧪 Test &amp; Onboarding</a>
   <a href="architecture.html" class="navlink navlink-arch">🏗️ Architecture</a>
   <a href="triage-service.html" class="navlink navlink-triage">🧠 Triage Service</a>
   <a href="system-explained.html" class="navlink" style="color:var(--accent-cyan); border-color:rgba(64,208,208,.4); background:rgba(64,208,208,.08);">🔬 System Explained</a>
@@ -146,6 +150,78 @@
 </div>
 
 <div class="grid">
+
+  <a href="platform-architecture-deep.html" class="card" style="border-color:rgba(78,168,222,.45); background:linear-gradient(180deg, rgba(78,168,222,.06), var(--card));">
+    <div class="card-header">
+      <div class="card-icon" style="background:rgba(78,168,222,.12);">🧭</div>
+      <div class="card-header-text">
+        <h2>Platform Architecture — End to End</h2>
+        <p>The whole pipeline as one narrative: alert sources (Grafana threshold rules, the generic <code>KubeWorkloadDown</code>, drain3 self-fires) → API Gateway + Lambda router → triage ingestion → the three cheap-path gates (dedup, Layer-2 suppression, recurrence-gate / SF-5) → MCP context gathering → LLM investigation (bounded-agency, validators, anti-hedge) → verdict (<code>human_cause</code> + evidence + env) → notify + dashboard + closed-loop feedback. Every decision gate, and <strong>why it exists</strong>. Links into the deep pages for mechanism; honest about the open audit gaps.</p>
+      </div>
+    </div>
+    <div class="card-footer">
+      <div class="card-tags">
+        <span class="tag tag-blue">end-to-end</span>
+        <span class="tag tag-green">decision gates</span>
+        <span class="tag tag-purple">MCP-only</span>
+      </div>
+      <div class="card-arrow">&rarr;</div>
+    </div>
+  </a>
+
+  <a href="production-deployment-guide.html" class="card" style="border-color:rgba(107,207,127,.45); background:linear-gradient(180deg, rgba(107,207,127,.06), var(--card));">
+    <div class="card-header">
+      <div class="card-icon" style="background:rgba(107,207,127,.12);">🏭</div>
+      <div class="card-header-text">
+        <h2>Production Deployment Guide — CIRES private cloud</h2>
+        <p>How to take the PoC to the real production target (the CIRES private cloud, <strong>not</strong> AWS): portable open-source swaps (Postfix not SES, MinIO not S3), the OTel-single-agent + Zabbix-integration model the NOC actually wants, secrets/TLS/RBAC hardening, HA/scaling/retention, and a brutally honest PoC→prod checklist that names the open P2 security items, the env-resolution gap, MCP auth, and SF-5 deprecation by ID. Concrete about what must change.</p>
+      </div>
+    </div>
+    <div class="card-footer">
+      <div class="card-tags">
+        <span class="tag tag-green">portable OSS</span>
+        <span class="tag tag-cyan">OTel + Zabbix</span>
+        <span class="tag tag-orange">PoC→prod checklist</span>
+      </div>
+      <div class="card-arrow">&rarr;</div>
+    </div>
+  </a>
+
+  <a href="supervisor-pitch.html" class="card" style="border-color:rgba(224,208,96,.45); background:linear-gradient(180deg, rgba(224,208,96,.06), var(--card));">
+    <div class="card-header">
+      <div class="card-icon" style="background:rgba(224,208,96,.12);">🎯</div>
+      <div class="card-header-text">
+        <h2>Supervisor Pitch — the case for greenlight</h2>
+        <p>The value story for transitioning to production: the problem (alert noise, slow human RCA, the monitor going blind), how the platform helps (cheap-path gates absorb noise, AI triage names root causes, self-monitoring), proof points from real work (the no-alert outage caught + closed by real induction, the GPU migration), a crisp 6-step demo flow (which URLs in order), and an honest Sprint 5 roadmap with risks named. No hype, no invented MTTR/noise numbers.</p>
+      </div>
+    </div>
+    <div class="card-footer">
+      <div class="card-tags">
+        <span class="tag" style="background:rgba(224,208,96,.1); color:#e0d060;">value story</span>
+        <span class="tag tag-blue">demo flow</span>
+        <span class="tag tag-green">honest roadmap</span>
+      </div>
+      <div class="card-arrow">&rarr;</div>
+    </div>
+  </a>
+
+  <a href="test-and-onboarding.html" class="card" style="border-color:rgba(240,160,80,.45); background:linear-gradient(180deg, rgba(240,160,80,.06), var(--card));">
+    <div class="card-header">
+      <div class="card-icon" style="background:rgba(240,160,80,.12);">🧪</div>
+      <div class="card-header-text">
+        <h2>Test &amp; Onboarding — for a teammate</h2>
+        <p>How a colleague stands the platform up and exercises it: prerequisites (tailnet, kubectl, GPU host), the real-induction scenarios (CPU stress; the <code>KubeWorkloadDown</code> Recreate + impossible-nodeSelector trick <strong>with revert</strong>; drain3 anomaly), how to read the dashboard and a verdict, how to give feedback that actually trains the LLM (the <code>actual_cause</code> field + the 14-day TTL + <code>(alert_name, service)</code> family-match caveat), and the hard rule: <strong>real induction only, no synthetic webhooks</strong>.</p>
+      </div>
+    </div>
+    <div class="card-footer">
+      <div class="card-tags">
+        <span class="tag tag-orange">onboarding</span>
+        <span class="tag tag-cyan">real-induction</span>
+        <span class="tag tag-purple">feedback that trains</span>
+      </div>
+      <div class="card-arrow">&rarr;</div>
+    </div>
+  </a>
 
   <a href="solution-brief.html" class="card" style="border-color:rgba(107,207,127,.45); background:linear-gradient(180deg, rgba(107,207,127,.06), var(--card));">
     <div class="card-header">
