@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Production Hand-off — Review Sheet (2026-06-04)</title>
+<style>
+  :root{ --ink:#1a2233; --soft:#475569; --muted:#6b7280; --line:#e2e8f0; --line2:#cbd5e1;
+         --blue:#1d4ed8; --green:#15803d; --amber:#b45309; --red:#b91c1c; --bg:#ffffff; --panel:#f8fafc; --panel2:#f1f5f9; }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{font-family:'Inter','Segoe UI',system-ui,sans-serif;color:var(--ink);background:var(--bg);line-height:1.6;font-size:15px;}
+  .wrap{max-width:920px;margin:0 auto;padding:48px 32px 80px;}
+  code,pre{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:.86em;}
+  code{background:var(--panel2);padding:1px 5px;border-radius:4px;color:#0f172a;}
+  pre{background:#0f172a;color:#e2e8f0;padding:14px 16px;border-radius:8px;overflow-x:auto;font-size:13px;line-height:1.5;margin:12px 0;}
+  pre code{background:none;color:inherit;padding:0;}
+  h1{font-size:29px;font-weight:800;letter-spacing:-.4px;line-height:1.2;margin-bottom:8px;}
+  h2{font-size:20px;font-weight:750;margin:34px 0 12px;padding-bottom:8px;border-bottom:2px solid var(--line);}
+  h3{font-size:15.5px;font-weight:700;margin:20px 0 8px;color:#0f172a;}
+  p{margin:10px 0;} ul,ol{margin:10px 0 10px 24px;} li{margin:5px 0;}
+  .eyebrow{font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--blue);margin-bottom:10px;}
+  .lead{font-size:16px;color:var(--soft);margin:14px 0 6px;}
+  .meta{font-size:13px;color:var(--muted);margin-top:6px;}
+  table{border-collapse:collapse;width:100%;margin:14px 0;font-size:13.5px;}
+  th,td{border:1px solid var(--line);padding:8px 11px;text-align:left;vertical-align:top;}
+  th{background:var(--panel2);font-weight:700;font-size:12.5px;}
+  td.num{text-align:right;font-variant-numeric:tabular-nums;}
+  tr:nth-child(even) td{background:var(--panel);}
+  .callout{border-left:4px solid var(--blue);background:var(--panel);padding:12px 16px;border-radius:0 8px 8px 0;margin:14px 0;}
+  .callout.green{border-color:var(--green);} .callout.amber{border-color:var(--amber);} .callout.red{border-color:var(--red);}
+  .callout .lbl{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;color:var(--blue);}
+  .callout.green .lbl{color:var(--green);} .callout.amber .lbl{color:var(--amber);} .callout.red .lbl{color:var(--red);}
+  .chk{list-style:none;margin-left:0;} .chk li{padding-left:26px;position:relative;}
+  .chk li::before{position:absolute;left:0;top:0;font-weight:700;}
+  .chk li.ok::before{content:"\2713";color:var(--green);} .chk li.todo::before{content:"\25CB";color:var(--amber);} .chk li.dec::before{content:"\2756";color:var(--blue);}
+  .commits code{font-size:12px;}
+  footer{margin-top:46px;padding-top:16px;border-top:1px solid var(--line);font-size:12.5px;color:var(--muted);}
+  @media print{ body{font-size:12px;} .wrap{padding:0;max-width:none;} pre{font-size:10.5px;} h2{page-break-after:avoid;} table,.callout{page-break-inside:avoid;} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">CIRES · AI Observability &amp; LLM-Triage Platform · Review Sheet</div>
+  <h1>Production Hand-off — Review for Tomorrow</h1>
+  <p class="lead">Everything done to make the platform deployable by the supervisor on her own infrastructure (NVIDIA L4 GPU host + their existing Kubernetes), plus the GPU answer and the few decisions left to you.</p>
+  <p class="meta">Session of 2026-06-04 (late evening). Companion: <a href="deployment-resource-spec.html">Deployment — Resource &amp; Dependency Spec</a> (the printable doc to give her).</p>
+
+  <div class="callout green">
+    <div class="lbl">Bottom line</div>
+    The Ansible is now a clean "just run it" bundle for her infra — GPU host installs from bare OS, inventory is a fill-in template, secrets go through Vault, and <b>our own live deployment was proven unchanged</b>. The resource/GPU/dependency document she asked for is written and printable. A handful of small decisions (below) are yours before you hand it over.
+  </div>
+
+  <h2>1. Her three questions — answered</h2>
+
+  <h3>Which GPU? → the L4 is a good fit ✓</h3>
+  <p>One L4 (24 GB) is enough — the platform uses a single GPU (no multi-card/NVLink). It has ample VRAM for the 14B model (~11 GB needed) and draws ¼ the power of our current A10G (72 W vs 300 W). The one trade-off: the L4's 300 GB/s memory bandwidth is half the A10G's, so per-investigation latency will be somewhat higher than our ~38 s median — fine for triage (180 s budget, not interactive). Minimum viable GPU is any NVIDIA card with ≥ 12 GB VRAM.</p>
+
+  <h3>How many resources? → measured from the live stack</h3>
+  <table>
+    <tr><th>Tier</th><th>GPU</th><th>vCPU</th><th>RAM</th><th>Disk</th></tr>
+    <tr><td>GPU / AI host</td><td>1× L4 (24 GB)</td><td class="num">4–8</td><td class="num">16 GB</td><td class="num">~80 GB</td></tr>
+    <tr><td>Observability backend host</td><td>—</td><td class="num">4</td><td class="num">8–16 GB</td><td class="num">100 GB SSD (retention-driven)</td></tr>
+    <tr><td>Per monitored k8s node</td><td>—</td><td class="num">+0.1</td><td class="num">+0.25 GB</td><td class="num">—</td></tr>
+  </table>
+  <p class="meta">Containers are light (GPU host ~0.8 GB total; the 13 GB model lives in VRAM, not RAM). Backend stack ~1 GB idle. Full breakdown + storage-sizing formula in the resource spec.</p>
+
+  <h3>The detailed document → delivered</h3>
+  <p><a href="deployment-resource-spec.html"><b>deployment-resource-spec.html</b></a> — printable: per-tier resources, the L4 analysis, every dependency + plugin + version, the secrets/Vault model, and the operator flow. This is the doc to hand her.</p>
+
+  <h2>2. What was done to the Ansible (so she can "just run it")</h2>
+  <p>An audit found the platform was wired to our AWS + Tailscale environment — on her infra, alerts would have fired into the void and the GPU bring-up wasn't even in Ansible. All of that is now closed, and <b>our live <code>newacct.yml</code> deploy is provably unchanged</b> (the 6 critical variables resolve identically — validated).</p>
+  <ul>
+    <li><b>GPU host installs from bare OS</b> — new <code>playbooks/gpu-host.yml</code>: NVIDIA driver → Docker → container toolkit → Ollama + model pull → triage stack.</li>
+    <li><b>Bring-your-own-cluster</b> — clean <code>inventory/example.yml</code> template (self-documenting header), no k3s bootstrap; points at her existing Kubernetes.</li>
+    <li><b>Secrets done right</b> — Ansible Vault (<code>inventory/group_vars/vault.example.yml</code>) + a <code>roles/preflight</code> check that fails the run if anything required is unset or left at <code>CHANGE_ME</code>. No weak defaults ship.</li>
+    <li><b>One <code>llm_model</code> knob</b> drives both the Ollama pull and the triage request (they had drifted: <code>:14b-instruct</code> vs <code>:14b</code>).</li>
+    <li><b>Cleanup</b> — legacy VM playbooks/inventories moved to <code>legacy/</code>; hardcoded <code>10.0.1.105</code> in the k8s manifest parameterised (+ fixed a latent sed bug); <code>requirements.yml</code> documents the helm/kubectl/rsync prerequisites.</li>
+    <li><b>Optional self-test</b> — <code>playbooks/otel-demo.yml</code> stands up a 22-service demo app so she can validate end-to-end (and induce a real fault) before wiring her own ML apps.</li>
+  </ul>
+  <p class="commits"><span class="meta">Commits: <code>1e715bf</code> (gpu bring-up) · <code>21bb7c6</code>/<code>91ec0bd</code>/<code>c53001c</code>/<code>6f7aebb</code> (decouple / preflight / manifest / legacy) · <code>d776d38</code> (model knob) · <code>bc81d0d</code> (docs). All pushed to <code>monitoring-project</code> + <code>monitoring-docs</code> main.</span></p>
+
+  <h2>3. Her operator flow — three commands</h2>
+  <pre><code># 1. copy + fill the inventory and the vault, then:
+ansible-playbook -i inventory/my-env.yml playbooks/monitoring.yml   -e @inventory/group_vars/vault.yml --ask-vault-pass   # backend
+ansible-playbook -i inventory/my-env.yml playbooks/gpu-host.yml     -e @… --ask-vault-pass                              # GPU/AI tier
+ansible-playbook -i inventory/my-env.yml playbooks/k8s-manifests.yml -e @… --ask-vault-pass                            # collection layer
+#  Do NOT run k3s.yml — she brings her own cluster.</code></pre>
+
+  <h2>4. Status — done vs. needs-a-live-run</h2>
+  <ul class="chk">
+    <li class="ok"><b>Validated:</b> all playbooks syntax-check; <code>example.yml</code> parses; the 6 live vars resolve unchanged on our inventory; preflight passes for real values and fails on placeholders.</li>
+    <li class="todo"><b>Needs a live run on her hardware:</b> the real <code>--check</code>/apply on her hosts — the NVIDIA driver on her specific L4 kernel and the end-to-end telemetry path can only be confirmed against her boxes. (We could not reach them.)</li>
+  </ul>
+
+  <h2>5. Decisions for you before hand-off</h2>
+  <ul class="chk">
+    <li class="dec"><b>NVIDIA driver branch</b> — default is <code>nvidia-driver-535-server</code>; confirm it suits her L4 + kernel, or override the one variable (e.g. <code>-e gpu_driver_package=nvidia-driver-550-server</code>).</li>
+    <li class="dec"><b>Image source</b> — the triage/MCP images on GHCR are anonymously public (she can pull with no credentials), or mirror them to your internal registry and set <code>image_registry</code>. Decide which her org's policy allows.</li>
+    <li class="dec"><b>Credential rotations (still only you can do)</b> — rotate the Gmail SMTP app-password (it appeared in earlier logs); decide the Grafana admin + any DB password she'll set in her Vault. The bundle now forces her to set her own, so nothing weak ships — but the existing live ones are yours to rotate.</li>
+    <li class="dec"><b>Enable AWS "Receive Billing Alerts"</b> — unrelated to her deploy, but still pending on our account so the $50 CloudWatch alarm can fire (the $800 AWS Budget already works).</li>
+  </ul>
+
+  <footer>
+    Review sheet generated 2026-06-04 late evening. Source of record: <code>/root/SESSION_HANDOFF.md</code> (late-evening entry). Hand to the supervisor: <a href="deployment-resource-spec.html">deployment-resource-spec.html</a> + the <code>monitoring-project</code> repo (start at <code>inventory/example.yml</code>).
+  </footer>
+
+</div>
+</body>
+</html>
