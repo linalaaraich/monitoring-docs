@@ -162,6 +162,88 @@ for:   3m
 
 <div class="note">The full per-issue audit → RCA → brainstorm → plan detail for the 2026-06-04 pass lives in the private <code>monitoring-audit-results</code> repo and the area docs (frontend / backend / observability / ansible / terraform / misc). Outcomes of this session are summarized on the <a href="kubernetes-observability.html">Kubernetes Observability</a> card.</div>
 
+<hr style="border:none;border-top:1px solid var(--border);margin:36px 0;">
+
+<h2>Verification technique deep dive — the SSR render harness</h2>
+<p>"Render the frontend, don't curl it" needs a concrete method that works <strong>without a browser</strong> (the audit ran on a headless host over SSH). The technique used this session is a <strong>server-side-render (SSR) reproduction harness</strong>: render each top-level React component with <code>react-dom/server</code> against the <em>real live payload</em>, and watch for a thrown exception. It is fully reproducible and is how the row-expand crash (C4) and several latent null-deref crashes were found.</p>
+
+<h3>Why this catches what curl cannot</h3>
+<p>A <code>curl</code> of <code>/dashboard</code> returns server-rendered HTML/JSON; it never <em>executes</em> the client React, so it cannot see: render-crashes from a payload-shape mismatch, dead <code>onClick</code>/<code>href</code> handlers, controls that look real but do nothing, or fabricated values shown as live. The crash class is specifically dangerous because React throws <em>synchronously inside render</em> — one unguarded <code>a.reason.split()</code> on a null field blanks the <strong>entire page</strong> (white screen), not just one row.</p>
+
+<h3>The harness, step by step (reproduce for any SSR/React page)</h3>
+<pre><code># 1. A tiny harness dir with the real deps (no app build needed):
+mkdir -p /tmp/jsxrepro &amp;&amp; cd /tmp/jsxrepro
+npm i react@18.3.1 react-dom @babel/core @babel/preset-react
+
+# 2. harness2.js: babel-transform the .jsx, then renderToString against a
+#    payload file. It mounts window.CIRES_* globals the component reads,
+#    exactly as the server injects them.
+#    Pseudostructure:
+#      global.window = { CIRES_ALERTS:[...], CIRES_LINKS:{...}, ... }
+#      const code = babel.transform(fs.readFileSync(component), {presets:['@babel/preset-react']})
+#      eval(code); ReactDOMServer.renderToString(React.createElement(Component, {a: payload}))
+#      -> prints "RENDER OK (NN KB)" or the thrown TypeError
+
+# 3. Pull the REAL payload from the live server (not a mock):
+curl -s http://observability-gpu-uswest2-newacct:8090/dashboard/alert/&lt;id&gt; \
+  | extract-the-window.CIRES_ALERT-json &gt; live-alert-detail.json
+
+# 4. Render against live + hand-built EDGE payloads:
+node /tmp/jsxrepro/harness2.js detail live-alert-detail.json     # happy path
+node /tmp/jsxrepro/harness2.js detail edge-reason-null.json      # null reason
+node /tmp/jsxrepro/harness2.js detail edge-no-tags.json          # missing tags
+node /tmp/jsxrepro/harness2.js detail edge-no-reasoning.json     # missing array
+node /tmp/jsxrepro/harness-expand.js edge-dash-reason-null.json  # ROW EXPANDED</code></pre>
+<div class="warn"><strong>The crucial nuance — render collapsed vs render expanded.</strong> The dashboard's row-expand crash (C4) renders <em>fine</em> in the default harness because rows start collapsed; the crash only fires when <code>setExpandedId</code> mounts <code>ExpandedDetail</code>. A separate harness (<code>harness-expand.js</code>) that forces the expanded state is what caught it. <strong>Lesson:</strong> the harness must exercise the same <em>interaction states</em> a user would — initial paint is not enough.</div>
+
+<h3>The payload-shape-mismatch bug class + the guard pattern</h3>
+<p>Every crash this session was the same root pattern: a component calls <code>.split</code>/<code>.slice</code>/<code>.length</code>/<code>.map</code> on a server field with no guard. They were "latent" only because today's server transform (<code>_v2_transform_row</code>) happens to always populate those fields — a single producer regression, a partial-refresh payload, or a new code path re-introduces the white screen. The contract lived only in the <em>producer</em>; the <em>consumer</em> had no defense-in-depth.</p>
+<pre><code>// BEFORE (crashes if a.reason is null):
+const parts = a.reason.split(/.../);
+
+// AFTER (guard at the consumer — the fix in commit 6045de3 / 919b5cb):
+const reason = a.reason || "";
+const parts  = reason.split(/.../);
+// ...and when empty, render an explicit "No cause recorded" callout
+// rather than silently blanking.</code></pre>
+<div class="note"><strong>Apply anywhere:</strong> guard at the consumer for any field that crosses a process boundary (server→client), even if the producer "always" sets it. Pair with the SSR harness fed deliberately-missing edge payloads so the guard is proven, not assumed.</div>
+
+<h3>Two more frontend robustness fixes worth copying</h3>
+<ul>
+<li><strong>Clipboard on insecure-origin HTTP.</strong> The dashboard is served over plain HTTP on the tailnet, where <code>navigator.clipboard</code> is <em>undefined</em> (the Clipboard API requires a secure context). The "Copy" buttons were doubly dead (no <code>onClick</code> AND no API). Fix: a shared <code>ciresCopy()</code> helper that tries <code>navigator.clipboard</code> and falls back to a hidden-textarea + <code>document.execCommand('copy')</code> for insecure origins (commit <code>919b5cb</code>). Reproduce-note: any internal tool served over HTTP needs this fallback.</li>
+<li><strong>Theme unification (two theme systems → one key).</strong> Light mode was stuck dark because two independent systems coexisted: the React wrapper hardcoded <code>data-theme="dark"</code> while the toggle persisted to <code>obs-rca-theme</code> and CSS was scoped to a different selector. Fix: a single source of truth — the React routes read the persisted <code>obs-rca-theme</code> and a shared head script mirrors it onto <code>&lt;html data-theme&gt;</code>, plus a <code>tokens.css</code> rule so the body bg tracks the active theme (commit <code>6045de3</code>). Reproduce-note: one persisted key, mirrored to the DOM attribute every render path reads — never two.</li>
+</ul>
+
+<h2>The MCP <code>/tools/*</code> route convention (a drift class to audit for)</h2>
+<p>The platform enforces an <strong>MCP-only data-access invariant</strong>: every data source the LLM sees must come through an MCP bridge — no direct DB/Prometheus/in-process reads. That is the hallucination firewall. A subtle drift bug this session: the deployed MCP image serves <strong><code>/tools/*</code> routes only</strong> (e.g. <code>/tools/query_instant</code>, <code>/tools/query_logs</code>, <code>/tools/find_traces</code>), but two consumers were still calling the old <em>bare</em> routes (<code>/query</code>, <code>/query_range</code>, <code>/traces</code>) which <strong>404 silently</strong>:</p>
+<table>
+<tr><th>Consumer</th><th>Was calling</th><th>Correct route + param rename</th></tr>
+<tr><td><code>bounded_agency.execute_tool</code> (the LLM's on-demand retry-query path — was entirely dead)</td><td><code>/query</code>, <code>/query_range</code>, <code>/traces</code></td><td><code>/tools/query_instant</code> (<code>expr</code>→<code>promql</code>), <code>/tools/query_logs</code> (<code>query</code>→<code>logql</code>, <code>lookback_seconds</code>→relative <code>start</code> like <code>"5m"</code>), <code>/tools/find_traces</code> (drop unsupported <code>min_duration_ms</code>)</td></tr>
+<tr><td><code>entity_baselines._query_prom_mcp</code> (every adaptive-baseline read was 404ing → falling back to non-authoritative)</td><td><code>/query?expr=</code>, read <code>data.result</code></td><td><code>/tools/query_instant?promql=</code>, read <code>result</code> at top level (the tool lifts it out of <code>data</code>)</td></tr>
+</table>
+<div class="warn"><strong>RCA + the audit pattern:</strong> <code>context.py</code> was migrated to <code>/tools/*</code> but two other callers weren't — classic <strong>partial migration drift</strong> across files (the same shape as IaC "rendered but not applied"). It was silent because a 404 just degrades to a fallback. <strong>Fix (commit <code>c328f5d</code>):</strong> route both callers through <code>/tools/*</code> with the right param names <em>and</em> add a regression test (<code>test_bounded_agency_external_mcp_routes</code>) asserting each tool hits the correct path — the gap existed because that branch had no coverage. <strong>Audit lesson:</strong> when you migrate a shared convention (route prefix, param name, label), grep <em>every</em> caller, not just the one in front of you, and pin the contract with a test so it can't drift back.</div>
+<p>A related semantics finding (not yet fixed, tracked): MCP tools <code>raise_for_status()</code>, so a bad-but-valid LLM query (malformed PromQL) surfaces as a bare 500 → the triage reads it as "source down" rather than "your query was wrong". The fix is to return a structured error envelope distinguishing 4xx (query fumble) from 5xx/conn-error (outage).</p>
+
+<h2>How environment SHOULD flow (the env-resolution gap)</h2>
+<p>The triage service resolves config via pydantic-settings (<code>app/config.py</code>) with a precedence order — env var &gt; compose env &gt; per-service map &gt; coded default. The audit found a real gap class worth documenting so other environments work: <strong>callers don't pass alert labels through to env resolution, and several defaults hardcode the live (prod-ish) account.</strong> Concretely, defaults like <code>triage_dashboard_url</code> and the <code>instance_hosts</code> IP→hostname map drifted to dead old-account hosts and were only corrected by editing the defaults (commit <code>df1f13f</code>), not by an env override the deploy actually sets.</p>
+<div class="note"><strong>How env should flow (apply to any multi-env deploy):</strong> (1) every environment-specific value is an env var with a <em>safe, override-required</em> default (fail loud, not a stale host); (2) the deploy (compose/helm) sets those env vars per environment — the code default is only a last resort; (3) dynamic per-alert facts (like which namespace/instance an alert came from) are carried as <em>alert labels</em> and resolved at request time, not baked into a static map. The current <code>instance_hosts</code> static map is the anti-pattern: it must be re-edited on every infra move. The portable shape is <code>INSTANCE_HOSTS</code> as a JSON env the deploy owns, with the static map as a fallback only.</div>
+
+<h2>drain3 dedup — normalising volatile tokens to a stable template identity</h2>
+<p>Drain3 self-fire alerts ("Novel log-template anomaly") never deduplicated: <strong>21 distinct fingerprints / 18 fires in one live day</strong>, each a fresh ~100s LLM investigation. Root cause: the fingerprint hashed the <em>raw</em> novel-template / anomalous-line text, and that text embeds the most volatile tokens in the payload — trace IDs, span IDs, entity IDs, timestamps, hex digests. So two batches of the <em>same</em> underlying anomaly hashed differently every time → never collapsed, never recurrence-gated.</p>
+<p><strong>Fix (commit <code>d56ce88</code>, <code>app/dedup.py</code>):</strong> normalise content to its <em>stable template identity</em> before hashing — mask the volatile token shapes with <code>&lt;*&gt;</code>, then hash. The same log template now masks to the same string across batches; a genuinely new template still produces a distinct digest.</p>
+<pre><code># _normalize_drain3_content masks, most-specific first, then squeezes:
+UUID  →  long-hex (16+)  →  0x-literals  →  ISO timestamps  →
+bare clock times  →  decimals/dotted  →  any remaining digit run   ... all → &lt;*&gt;
+# then collapse runs of "&lt;*&gt;:&lt;*&gt;" and whitespace.
+# CONSERVATISM SAFEGUARD: if nothing but wildcards/punctuation survives
+# (a pure-id line carries no stable identity), return "" so the caller
+# falls back to the service-scoped key instead of minting a spurious digest.
+# -> distinct anomalies are never merged; only volatile noise is collapsed.</code></pre>
+<p><strong>Plus a noise-suppression gate</strong> (<code>app/pipeline.py</code>): a self-fire with <em>no new templates</em> AND <code>anomaly_rate</code> below a floor (default 5%) is short-pathed to a cheap <code>drain3_noise_suppressed</code> row (<code>rca_quality=data_starved</code>, 0 ms, no LLM) instead of a ~100s hedged investigation. <strong>Any batch introducing a new template is always investigated</strong> — the gate only suppresses confirmed benign noise. Verified by inducing a real recurring benign pattern (collapses to one row) and a real new ERROR template (still investigated).</p>
+<div class="note"><strong>Apply to any dedup/fingerprint:</strong> hash the <em>stable identity</em>, never the raw text, when the text embeds high-cardinality tokens. Order the masking most-specific → least-specific (so a UUID isn't half-eaten by the bare-number rule), sort the normalized parts (ordering carries no meaning), and add a conservatism fallback so an over-masked line degrades to a coarser key rather than a false-unique digest.</div>
+
+<div class="note">Every fix referenced on this page is dated and indexed on the <a href="engineering-log.html">Engineering Log</a>; the k8s scrape + KSM + alert mechanism is documented end-to-end on the <a href="kubernetes-observability.html">Kubernetes Observability</a> page.</div>
+
 </div>
 </body>
 </html>

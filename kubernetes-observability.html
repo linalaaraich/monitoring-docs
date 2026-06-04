@@ -154,6 +154,145 @@ kubectl scale deploy/spring-boot --replicas=1   # restore</code></pre>
 
 <div class="note">Step-by-step runbooks for each of these fixes — including the exact drift checks and recovery commands — live on the <a href="audit-fix-methodology.html">Audit &amp; Fix Methodology</a> page.</div>
 
+<hr style="border:none;border-top:1px solid var(--border);margin:36px 0;">
+
+<h2>Deep dive — the mechanism, key by key</h2>
+<p>The summary above is the <em>what</em>. The rest of this page is the <em>why</em> and the <em>exactly how</em>, written so you can point an external Prometheus at <strong>any</strong> k3s/k8s cluster and add self-monitoring to <strong>any</strong> workload without re-deriving it. Every claim here is grounded in the live files cited.</p>
+
+<h3>A. The scrape topology: an off-cluster Prometheus reaching pods through the API server</h3>
+<p>The non-obvious design choice that everything else follows from: <strong>Prometheus does not live in the cluster.</strong> It runs as a Docker container on the monitoring VM, outside k3s, with no route to the pod network (k3s pod CIDR is not reachable from the VM's VPC subnet). So Prometheus cannot connect to a pod IP directly. Instead, every pod scrape is proxied through the kube-apiserver:</p>
+<pre><code>Prometheus (monitoring VM, non-root container)
+   │  HTTPS + bearer token, TCP :6443 only
+   ▼
+kube-apiserver  (k3s node)
+   │  /api/v1/namespaces/&lt;ns&gt;/pods/&lt;pod&gt;:&lt;port&gt;/proxy/&lt;metrics-path&gt;
+   ▼
+pod  (employees-backend :8080/actuator/prometheus, kong, otel-collector, KSM)</code></pre>
+<div class="note"><strong>Why this matters for reproducing it:</strong> the only network reachability you need from the Prometheus host to the cluster is <strong>TCP :6443</strong> (the API server). No pod-network peering, no VPN into the CNI, no NodePort-per-pod. The monitoring VM's security group opens 6443 to the monitoring SG <em>by design</em> for exactly this. If you are putting an external Prometheus on a cluster you don't control the CNI of, this proxy pattern is the path of least resistance.</div>
+
+<h4>The relabel chain that makes the proxy work (the load-bearing config)</h4>
+<p>Source: <code>roles/prometheus/templates/prometheus.yml.j2</code>, job <code>kubernetes-pods</code>, gated by <code>k3s_sd_enabled</code>. The <code>kubernetes_sd_configs: role: pod</code> block discovers every pod via the API server; the <code>relabel_configs</code> then do four critical rewrites. Read these in order — each line is doing real work:</p>
+<table>
+<tr><th>Relabel step</th><th>What it does &amp; why</th></tr>
+<tr><td><code>keep</code> on <code>__meta_kubernetes_pod_annotation_prometheus_io_scrape == "true"</code></td><td>Opt-in discovery. A pod is scraped <strong>only</strong> if it carries <code>prometheus.io/scrape: "true"</code>. This is why adding a new scrape target later needs no <code>prometheus.yml</code> change — you annotate the pod and SD finds it.</td></tr>
+<tr><td><code>drop</code> on <code>__meta_kubernetes_pod_phase =~ Pending|Succeeded|Failed|Unknown</code></td><td>Don't try to scrape pods that aren't Running — avoids noisy <code>up=0</code> on transient/terminal pods.</td></tr>
+<tr><td><strong>Rewrite <code>__metrics_path__</code></strong> to <code>/api/v1/namespaces/$1/pods/$2:$3/proxy$4</code> from <code>(namespace; pod_name; io_port; io_path)</code></td><td><strong>This is the whole trick.</strong> Instead of scraping <code>pod-ip:port/path</code>, the metrics <em>path</em> is rewritten to the API-server proxy URL for that pod. The port and path come from the pod's own <code>prometheus.io/port</code> + <code>prometheus.io/path</code> annotations.</td></tr>
+<tr><td><strong>Rewrite <code>__address__</code></strong> to <code>{{ k3s_host_ip }}:6443</code></td><td>Every target's network address is forced to the API server. Combined with the path rewrite, the actual HTTP request Prometheus makes is <code>https://&lt;k3s&gt;:6443/api/v1/namespaces/ns/pods/pod:8080/proxy/actuator/prometheus</code>.</td></tr>
+<tr><td><code>labelmap __meta_kubernetes_pod_label_(.+)</code> + explicit <code>namespace</code>/<code>pod</code>/<code>container</code> targets</td><td>Promotes pod labels to metric labels so the series are queryable by workload. <strong>Gotcha:</strong> this also writes a <code>namespace</code> label on every series — remember this for section D, it's the cause of the <code>exported_namespace</code> clobber.</td></tr>
+</table>
+
+<h4>The two TLS files and why <code>insecure_skip_verify: true</code> is set</h4>
+<p>Both the proxy job and the <code>k3s-kubelet-cadvisor</code> job authenticate to the API server / kubelet with:</p>
+<ul>
+<li><code>bearer_token_file: /etc/prometheus/k3s-token</code> — the <code>prometheus-scraper</code> ServiceAccount token.</li>
+<li><code>ca_file: /etc/prometheus/k3s-ca.crt</code> — the cluster CA, so Prometheus trusts the API server cert.</li>
+<li><code>insecure_skip_verify: true</code> — set because the k3s API server cert's SANs don't include the MagicDNS / tailnet name the monitoring VM dials it by (tracked follow-up in commit <code>bfa4b0b</code>: "k3s API cert lacks a tailnet tls-san"). All traffic is already inside the Tailscale tunnel, so skipping hostname verification is an acceptable PoC posture; the production-correct fix is to add the tailnet name as a <code>--tls-san</code> on the k3s server and drop the skip.</li>
+</ul>
+
+<h3>B. The ServiceAccount + long-lived token (the k8s ≥1.24 quirk)</h3>
+<p>Source: <code>manifests/prometheus-rbac/rbac.yaml</code> (SA + ClusterRole + binding) and <code>playbooks/k8s-manifests.yml</code> (mints the token, ships it). The audit's root cause of the whole outage was that this playbook had <strong>never been run on the new account</strong> — the SD job <em>definitions</em> were in <code>prometheus.yml</code>, but the token + CA files they reference did not exist on disk, so Prometheus logged <code>unable to read CA cert: open /etc/prometheus/k3s-ca.crt: no such file or directory</code> and silently dropped <em>both</em> scrape pools (0 active, 0 dropped targets — not even a failed scrape).</p>
+<div class="warn"><strong>The k8s ≥1.24 token gotcha (reproduce-anywhere):</strong> since Kubernetes 1.24, creating a ServiceAccount <strong>no longer auto-creates</strong> a Secret with a token. <code>kubectl create token</code> gives a <em>short-lived</em> token (expires, useless for a long-running scraper). To get a stable, long-lived token you must create a Secret of type <code>kubernetes.io/service-account-token</code> annotated <code>kubernetes.io/service-account.name: prometheus-scraper</code>; the token controller then populates its <code>.data.token</code> + <code>.data["ca.crt"]</code>. The playbook waits/retries for that field to be non-empty before decoding it. <strong>Pre-check before trusting it:</strong> <code>kubectl get secret prometheus-scraper-token -n observability -o jsonpath='{.data.token}'</code> must be non-empty.</div>
+
+<h4>Why the ClusterRole needs <code>pods/proxy</code> specifically</h4>
+<p>The ClusterRole grants <code>get,list,watch</code> on nodes, <code>nodes/proxy</code>, <code>nodes/metrics</code>, <code>pods</code>, <code>services</code>, <code>endpoints</code> — and (the fix in <code>bfa4b0b</code>) <strong><code>pods/proxy</code></strong>. The distinction is exact and easy to miss:</p>
+<ul>
+<li><code>pods</code> (get/list/watch) lets the SA <em>discover</em> pods — that's what makes SD find targets at all.</li>
+<li><code>pods/proxy</code> (get) lets the SA <em>route an HTTP request through the API server to a pod</em> — which is precisely what the <code>__metrics_path__</code>/<code>__address__</code> rewrite in section A does. Without it, discovery succeeds (targets appear) but every scrape returns <strong>403 Forbidden → <code>up=0</code></strong>. A confusing failure mode: the target shows up but is permanently "down".</li>
+</ul>
+<div class="note"><strong>Apply to another cluster:</strong> any time you scrape pods <em>through</em> the API-server proxy (rather than reaching pod IPs directly), the scraping identity needs <code>pods/proxy</code>. If you scrape pod IPs directly (Prometheus inside the cluster), you do <em>not</em> need it — <code>pods</code> alone suffices. The grant follows the network path.</div>
+
+<h4>Why the token file must be 0644 (not 0600)</h4>
+<p>The playbook ships <code>/etc/prometheus/k3s-token</code> + <code>k3s-ca.crt</code> as <code>root:root</code>. Originally mode <code>0600</code>. But Prometheus runs as a <strong>non-root user inside its container</strong> and bind-mounts <code>/etc/prometheus</code> read-only. A <code>0600</code> file owned by host-root is <strong>unreadable by the in-container non-root UID</strong> → Prometheus logs <code>unable to read authorization credentials</code> → kubelet/cAdvisor + pod scrapes fail. Changing the mode to <strong><code>0644</code></strong> makes the file world-readable so the container UID can read the bearer token.</p>
+<div class="warn"><strong>The security reasoning (so you can judge it for your own deploy):</strong> 0644 means any local user on the monitoring VM can read the bearer token. That is acceptable here because (a) the directory is host-root, (b) the VM is single-tenant, and (c) all API-server traffic is inside the Tailscale tunnel. On a multi-tenant host, the correct fix is to run the Prometheus container with a <code>user:</code> matching the file owner (or a shared group + <code>0640</code>), not to widen the file. The general lesson: <strong>file perms for bind-mounted secrets must match the in-container UID, not the host's intuition.</strong></div>
+
+<h3>C. kube-state-metrics — what it is and why it's a separate exporter</h3>
+<p>Source: <code>manifests/kube-state-metrics/kube-state-metrics.yaml</code> (KSM v2.13.0). Two different metric sources are easy to conflate:</p>
+<table>
+<tr><th>Source</th><th>Answers</th><th>Examples</th></tr>
+<tr><td>kubelet / cAdvisor</td><td>"how much is each running container <em>using</em>?"</td><td><code>container_cpu_usage_seconds_total</code>, <code>container_memory_working_set_bytes</code></td></tr>
+<tr><td><strong>kube-state-metrics</strong></td><td>"what is the cluster's <em>object state</em> — what <em>should</em> exist vs what does?"</td><td><code>kube_deployment_status_replicas_unavailable</code>, <code>kube_pod_status_phase</code>, <code>kube_pod_container_status_restarts_total</code></td></tr>
+</table>
+<p>KSM watches the API server and turns the state of Deployments/Pods/ReplicaSets/Nodes/etc. into gauges. It is the only source that can answer "is a workload <em>supposed</em> to have replicas it doesn't have" — i.e. the liveness signal. It was <strong>entirely absent</strong> on the new account (no role, chart, or manifest anywhere), which is why there was no "is anything down" signal at all.</p>
+<p>Design choices in the manifest worth copying:</p>
+<ul>
+<li><strong>Annotation-discovered, not a new scrape job.</strong> The Deployment's pod template carries <code>prometheus.io/scrape: "true"</code>, <code>prometheus.io/port: "8080"</code>, <code>prometheus.io/path: "/metrics"</code> — so the existing <code>kubernetes-pods</code> SD job picks it up with <strong>zero <code>prometheus.yml</code> changes</strong>. This is the same opt-in pattern from section A working for you.</li>
+<li><strong>Read-only ClusterRole</strong> (list/watch only, no write verbs) over the full object catalogue KSM v2 needs (configmaps, secrets metadata, nodes, pods, deployments, replicasets, jobs, HPAs, PDBs, ingresses, leases, …).</li>
+<li><strong>Locked-down securityContext:</strong> <code>runAsNonRoot</code>, UID 65534 (nobody), <code>readOnlyRootFilesystem</code>, <code>drop: [ALL]</code> capabilities — KSM only reads the API, so it needs no privileges.</li>
+<li><strong>Raw open-source manifest, no AWS coupling</strong> — image <code>registry.k8s.io/kube-state-metrics:v2.13.0</code> — matching the platform's private-cloud production target.</li>
+</ul>
+<div class="note"><strong>Apply to another cluster:</strong> deploy KSM once and annotate its pod for whatever discovery your Prometheus uses (annotation-based here; a <code>ServiceMonitor</code> if you run the Prometheus Operator). Every <code>kube_*</code> metric then exists fleet-wide. KSM is cluster-scoped, so one deployment covers all namespaces.</div>
+
+<h3>D. The generic <code>KubeWorkloadDown</code> alert — the label surgery explained</h3>
+<p>Source: <code>roles/grafana/templates/alertrules.yml.j2</code>. The full query in the rule is:</p>
+<pre><code>max by (namespace, service) (
+  label_replace(
+    label_replace(
+      kube_deployment_status_replicas_unavailable{exported_namespace!="kube-system"},
+      "namespace", "$1", "exported_namespace", "(.+)"
+    ),
+    "service", "$1", "deployment", "(.+)"
+  )
+) > 0
+for: 3m</code></pre>
+
+<h4>Why ONE generic rule beats per-service rules</h4>
+<p>The expression is over <em>all</em> deployments. Any deployment in any namespace (except kube-system) with an unavailable replica for 3 minutes fires. That means <strong>liveness coverage is automatic for every workload, present and future</strong> — deploy a new service tomorrow and it is covered the moment KSM sees its Deployment, with no rule to write. The alternative — an <code>EmployeesBackendDown</code>, a <code>KongDown</code>, etc. — is N rules to author, label-select correctly, and keep in sync as services come and go. One generic rule is strictly less to maintain and has no coverage gaps.</p>
+
+<h4>Why <code>exported_namespace</code>, not <code>namespace</code> (the label clobber)</h4>
+<p>This is the subtlest part. Recall from section A that the <code>kubernetes-pods</code> SD job writes a <code>namespace</code> label on every series it scrapes — set to the <strong>namespace of the pod being scraped</strong>, which for KSM is <code>observability</code> (where KSM runs). But KSM's <em>own</em> metrics already carry a <code>namespace</code> label naming the namespace of the object they describe (e.g. <code>app</code> for employees-backend). Prometheus cannot have two labels of the same name, so on collision it keeps the scrape-applied one and renames the metric's original to <strong><code>exported_namespace</code></strong> (Prometheus's standard <code>honor_labels: false</code> behaviour). Net result:</p>
+<ul>
+<li><code>namespace</code> = <code>observability</code> (where KSM's pod runs) — <strong>useless</strong> for naming the down workload.</li>
+<li><code>exported_namespace</code> = <code>app</code> (the real namespace of the broken deployment) — <strong>what you actually want.</strong></li>
+</ul>
+<p>So the filter and the label minting both key off <code>exported_namespace</code>. If you wrote <code>namespace!="kube-system"</code> you'd be filtering the wrong label and every KSM series would look like it lives in <code>observability</code>.</p>
+<div class="note"><strong>Reproduce-anywhere rule of thumb:</strong> whenever you scrape an exporter <em>through pod-annotation discovery</em> and that exporter emits its own <code>namespace</code>/<code>pod</code>/<code>job</code> labels, expect the scrape to clobber them into <code>exported_*</code>. Either query the <code>exported_*</code> labels (as here) or set <code>honor_labels: true</code> on that scrape job to keep the exporter's labels authoritative. For KSM specifically, honoring labels is the common alternative; this platform chose the <code>exported_*</code> path to avoid touching the shared SD job.</div>
+
+<h4>Why <code>label_replace</code> and not Grafana label templating</h4>
+<p>The alert needs the down workload's real <code>service</code> + <code>namespace</code> as <strong>alert labels</strong>, because the triage pipeline reads <code>affected_service</code> off the alert labels (without it, triage sees <code>service=unknown</code>). The instinct is to set them in the rule's <code>labels:</code> block with templating like <code>service: "{{ $labels.deployment }}"</code>. <strong>That does not work in Grafana.</strong> Grafana evaluates Go templating in a rule's <code>annotations:</code> block but <strong>not</strong> in its <code>labels:</code> block — labels must be literal or come from the query result. So the two real labels have to be <em>minted inside the PromQL</em>:</p>
+<ul>
+<li>The first <code>label_replace(..., "namespace", "$1", "exported_namespace", "(.+)")</code> copies <code>exported_namespace</code> into a clean <code>namespace</code> label.</li>
+<li>The second <code>label_replace(..., "service", "$1", "deployment", "(.+)")</code> copies KSM's <code>deployment</code> label into a <code>service</code> label (the name the rest of the platform routes on).</li>
+<li><code>max by (namespace, service)</code> then reduces to one series per workload carrying exactly those two labels. Grafana carries query-result labels onto the firing alert, so they land as real alert labels.</li>
+</ul>
+<div class="warn"><strong>Gotcha to internalise:</strong> "set it as an alert label via templating" is a reflex that silently fails in Grafana-managed alerting. If a label must be dynamic, it must be a label on the query result — i.e. <code>label_replace</code>/<code>label_join</code> in the expression, not templating in the <code>labels:</code> block. Annotations (the human-readable summary/description) <em>can</em> template, and this rule does: the <code>summary</code> uses <code>{{ $labels.namespace }}/{{ $labels.service }}</code>.</div>
+
+<h4><code>noDataState: Alerting</code> as a watchdog</h4>
+<p>Most threshold rules on this platform use <code>noDataState: OK</code> (a CPU rule shouldn't page just because a node briefly stopped reporting). <code>KubeWorkloadDown</code> deliberately uses <strong><code>noDataState: Alerting</code></strong>: if KSM itself disappears (crashes, gets deleted, SD breaks), the query returns no data — and for a liveness watchdog, "no data" should mean "alert", not "all clear". This closes the structural blind spot the audit found in the old <code>up == 0</code> rule, which could never fire for a target that was never discovered (empty vector → NoData → <code>OK</code> → silence). <em>The general principle:</em> liveness/absence rules want <code>noDataState: Alerting</code>; noisy threshold rules want <code>OK</code>. Choose per-rule, never uniformly.</p>
+
+<h3>E. Real-induction verification — and the trick to make a deployment genuinely unavailable</h3>
+<p>Per the real-induction-only invariant, the alert was verified by inducing a genuine breach, not by POSTing a synthetic webhook. There is a sharp gotcha here worth its own callout:</p>
+<div class="danger"><strong><code>kubectl scale deploy/X --replicas=0</code> will NOT fire this alert.</strong> The metric is <code>kube_deployment_status_replicas_unavailable</code> = <code>desired − available</code>. Scaling to 0 sets <em>desired = 0</em>, so unavailable = 0 — the deployment is intentionally empty, not "down". To make a deployment <strong>genuinely unavailable</strong> (desired ≥ 1 but available = 0) you must keep the desired count up while preventing the pod from becoming ready. Two reliable ways:</div>
+<pre><code># Trick: force the pods unschedulable while desired stays = 1, using
+# strategy Recreate (so the old ready pod is torn down first) + a
+# nodeSelector no node satisfies. desired=1, available=0 -> unavailable=1.
+kubectl -n app patch deploy/employees-backend --type merge -p '{
+  "spec": {
+    "strategy": {"type": "Recreate"},
+    "template": {"spec": {"nodeSelector": {"cires/induce-down": "nowhere"}}}
+  }
+}'
+# wait > 3m, observe KubeWorkloadDown fire with labels
+#   service=employees-backend namespace=app, then a triage rca_history row.
+
+# Revert (remove the impossible nodeSelector):
+kubectl -n app patch deploy/employees-backend --type json \
+  -p '[{"op":"remove","path":"/spec/template/spec/nodeSelector/cires~1induce-down"}]'</code></pre>
+<p>(An alternative real induction is to point the deployment at a non-existent image tag — <code>ImagePullBackOff</code> also yields available=0 with desired≥1.) The KSM commit (<code>da8b9d6</code>) verified exactly this end to end: the workload was made unavailable → <code>KubeWorkloadDown</code> fired → API Gateway → a triage <code>rca_history</code> row appeared (silent before the fix) with labels confirmed <code>service=spring-boot, namespace=app</code> → app reverted and healthy.</p>
+
+<h3>F. Reproduce-elsewhere checklist — point an external Prometheus at any k3s cluster</h3>
+<ol>
+<li><strong>Network:</strong> open TCP <code>:6443</code> from the Prometheus host to the API server. That's the only reachability you need (proxy pattern).</li>
+<li><strong>Identity:</strong> create a <code>prometheus-scraper</code> SA + a read-only ClusterRole with <code>get,list,watch</code> on pods/nodes/services/endpoints/nodes/proxy/nodes/metrics <strong>and <code>get</code> on <code>pods/proxy</code></strong>. Bind it.</li>
+<li><strong>Long-lived token (k8s ≥1.24):</strong> create a <code>kubernetes.io/service-account-token</code> Secret annotated with the SA name; wait for <code>.data.token</code> to populate; decode <code>token</code> + <code>ca.crt</code>.</li>
+<li><strong>Ship the files</strong> to the Prometheus host as mode that the <em>in-container UID</em> can read (0644 here, or match the container <code>user:</code>).</li>
+<li><strong>Configure two jobs:</strong> a kubelet/cAdvisor static job (<code>:10250/metrics/cadvisor</code>, https + bearer + CA) and a <code>kubernetes_sd_configs: role: pod</code> job with the four relabel rewrites (keep-on-annotation, drop non-Running, rewrite <code>__metrics_path__</code> to the proxy URL, force <code>__address__</code> to <code>&lt;api&gt;:6443</code>).</li>
+<li><strong>Annotate workloads</strong> you want scraped with <code>prometheus.io/scrape|port|path</code>. Done — they appear with no config change.</li>
+<li><strong>Deploy KSM</strong> (annotated) for object-state metrics, then add the generic <code>KubeWorkloadDown</code> rule (mind the <code>exported_namespace</code> clobber + <code>label_replace</code> + <code>noDataState: Alerting</code>).</li>
+<li><strong>Harden:</strong> add a loud guard that fails the playbook if the token/CA files are absent when SD is enabled (so this drift can never be silent again), and add the tailnet name as a k3s <code>--tls-san</code> to drop <code>insecure_skip_verify</code>.</li>
+</ol>
+
+<div class="note">This shipped 2026-06-04 (commits <code>bfa4b0b</code> + <code>da8b9d6</code>, monitoring-project). See the <a href="engineering-log.html">Engineering Log</a> for the full session changelog and the <a href="audit-fix-methodology.html">Audit &amp; Fix Methodology</a> page for the runbooks and verification technique.</div>
+
 </div>
 </body>
 </html>

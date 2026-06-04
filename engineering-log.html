@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Engineering Log / Changelog — CIRES Observability Platform</title>
+<style>
+  :root {
+    --bg: #0f1117; --card: #1a1d27; --card2: #1e2130; --border: #2a2d3a;
+    --text: #e0e0e0; --muted: #8890a0;
+    --accent-blue: #4ea8de; --accent-green: #6bcf7f; --accent-orange: #f0a050;
+    --accent-purple: #b07ee8; --accent-red: #e06070; --accent-cyan: #40d0d0;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Inter','Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); min-height:100vh; line-height:1.7; }
+  .topbar { display:flex; align-items:center; justify-content:space-between; padding:14px 32px; background:#13151e; border-bottom:1px solid var(--border); }
+  .topbar-left { display:flex; align-items:center; gap:16px; }
+  .back-link { color:var(--muted); text-decoration:none; font-size:13px; display:flex; align-items:center; gap:6px; transition:color .2s; }
+  .back-link:hover { color:var(--text); }
+  .topbar h1 { font-size:16px; font-weight:700; }
+  .wrap { padding:32px; max-width:1100px; margin:0 auto; }
+  h2 { font-size:22px; font-weight:800; margin:26px 0 14px; color:var(--accent-purple); letter-spacing:-.3px; }
+  h3 { font-size:16px; font-weight:700; margin:26px 0 10px; color:var(--accent-green); }
+  p { margin:8px 0; font-size:14px; color:var(--muted); }
+  ul, ol { margin:8px 0 8px 22px; }
+  li { font-size:13.5px; color:var(--muted); margin:6px 0; line-height:1.65; }
+  li strong { color:var(--text); }
+  a { color:var(--accent-blue); text-decoration:none; }
+  a:hover { text-decoration:underline; }
+  code { font-family:'JetBrains Mono','Fira Code',monospace; font-size:12px; background:rgba(78,168,222,.1); color:var(--accent-cyan); padding:2px 6px; border-radius:3px; }
+  .note { background:rgba(78,168,222,.06); border:1px solid rgba(78,168,222,.2); border-radius:8px; padding:14px 18px; margin:16px 0; font-size:13.5px; color:var(--muted); }
+  .note strong { color:var(--accent-blue); }
+  .entry { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:20px 24px; margin:18px 0; }
+  .entry-date { display:inline-block; background:var(--accent-purple); color:#13151e; font-size:12px; font-weight:700; padding:4px 12px; border-radius:12px; letter-spacing:.4px; margin-bottom:10px; }
+  table { width:100%; border-collapse:collapse; margin:14px 0; font-size:13px; }
+  th { text-align:left; padding:10px 14px; background:var(--card2); color:var(--accent-purple); font-weight:600; border:1px solid var(--border); }
+  td { padding:10px 14px; border:1px solid var(--border); color:var(--muted); vertical-align:top; }
+  td code { font-size:11.5px; }
+  .pill { display:inline-block; padding:2px 10px; border-radius:10px; font-size:11px; font-weight:600; margin-left:6px; vertical-align:middle; }
+  .pill-green { background:rgba(107,207,127,.12); color:var(--accent-green); border:1px solid rgba(107,207,127,.3); }
+  .pill-purple { background:rgba(176,126,232,.12); color:var(--accent-purple); border:1px solid rgba(176,126,232,.3); }
+  .tag { display:inline-block; font-size:11px; padding:1px 8px; border-radius:8px; background:rgba(120,130,150,.12); color:var(--muted); border:1px solid var(--border); margin-right:4px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-left">
+    <a href="index.html" class="back-link">&larr; Back to Index</a>
+    <span style="color:var(--border)">|</span>
+    <h1>📓 Engineering Log / Changelog</h1>
+  </div>
+  <div style="display:flex;gap:10px;align-items:center;">
+    <span class="pill pill-purple">Continuously updated</span>
+  </div>
+</div>
+
+<div class="wrap">
+
+<h2>What this is</h2>
+<p>A dated, append-only log of what shipped to the platform, newest first. Each entry is a one-liner plus a link to the deep study page that explains the logic and how to reproduce/apply it elsewhere. This is the front door for "what changed and where do I read about it" — keep appending to the top as work lands.</p>
+<div class="note"><strong>Convention for new entries:</strong> add a new <code>.entry</code> block at the top of the timeline with the date, the commit hash(es) + repo, a one-line summary, and a link to the study page that captures the mechanism. Depth lives on the linked page; this log stays scannable.</div>
+
+<h2>Timeline</h2>
+
+<div class="entry">
+  <span class="entry-date">2026-06-04</span>
+  <h3>Kubernetes restored as a metrics datasource + self-monitoring</h3>
+  <p><span class="tag">monitoring-project</span> <code>bfa4b0b</code>, <code>da8b9d6</code></p>
+  <ul>
+    <li><strong>k3s metrics scrape restored</strong> — provisioned the <code>prometheus-scraper</code> SA + long-lived token (never applied on the new account), granted <code>pods/proxy</code> (scrape via API-server proxy), shipped the token as <code>0644</code> for the non-root Prometheus container. → <a href="kubernetes-observability.html">K8s Observability §A–B</a></li>
+    <li><strong>kube-state-metrics deployed</strong> (was entirely absent) — annotation-discovered, read-only, locked-down securityContext. → <a href="kubernetes-observability.html">K8s Observability §C</a></li>
+    <li><strong>Generic <code>KubeWorkloadDown</code> alert</strong> — one rule covers every workload via <code>kube_deployment_status_replicas_unavailable</code>; <code>label_replace</code> mints real <code>service</code>/<code>namespace</code> labels from <code>exported_namespace</code>; <code>noDataState: Alerting</code> watchdog; routed to triage. Real-induction verified. → <a href="kubernetes-observability.html">K8s Observability §D–E</a></li>
+  </ul>
+</div>
+
+<div class="entry">
+  <span class="entry-date">2026-06-04</span>
+  <h3>Triage backend: drain3 dedup over-split + stale rca_quality</h3>
+  <p><span class="tag">monitoring-triage-service</span> <code>d56ce88</code></p>
+  <ul>
+    <li><strong>drain3 fingerprint stabilised</strong> — normalise volatile tokens (trace/span/entity IDs, timestamps, hex) to a stable template identity before hashing; same anomaly family now collapses, distinct templates still split. Plus a noise-suppression gate for low-rate/no-new-template self-fires. → <a href="audit-fix-methodology.html">Audit &amp; Fix Method — drain3 dedup</a></li>
+    <li><strong>rca_quality recompute</strong> — quality is recomputed from the FINAL decision (after clamp/strip) at persist time, fixing ~24% of rows stored stale-"actionable". → <a href="triage-service.html">Triage Service</a></li>
+  </ul>
+</div>
+
+<div class="entry">
+  <span class="entry-date">2026-06-04</span>
+  <h3>Triage frontend: render-crash guards, dead/misleading controls, light mode, KPI honesty</h3>
+  <p><span class="tag">monitoring-triage-service</span> <code>6045de3</code>, <code>919b5cb</code></p>
+  <ul>
+    <li><strong>Render-crash guards</strong> (C1–C4) — guard null <code>reason</code>/<code>tags</code>/<code>reasoning</code>; the row-expand click-crash that blanked the whole feed. Found via the SSR render harness. → <a href="audit-fix-methodology.html">Audit &amp; Fix Method — SSR harness</a></li>
+    <li><strong>Dead/misleading controls</strong> — evidence "View in" anchor now uses the real deep-link as href; expanded-row Grafana/Loki/Jaeger anchors wired; detail TopBar drops hardcoded fake stats.</li>
+    <li><strong>Light mode unified</strong> (two theme systems → one persisted key) + clipboard-on-HTTP fallback. <strong>KPI honesty</strong> — static cards relabelled (no longer claimed "computed live"); stale 541 → 581. → <a href="audit-fix-methodology.html">Audit &amp; Fix Method</a></li>
+  </ul>
+</div>
+
+<div class="entry">
+  <span class="entry-date">2026-06-04</span>
+  <h3>MCP route convention + config/env defaults</h3>
+  <p><span class="tag">monitoring-triage-service</span> <code>c328f5d</code>, <code>df1f13f</code></p>
+  <ul>
+    <li><strong>MCP <code>/tools/*</code> routing</strong> — <code>bounded_agency</code> + <code>entity_baselines</code> were calling bare routes that 404'd silently (LLM retry-query path + adaptive-baseline reads were dead); routed to <code>/tools/*</code> with correct param names, pinned by a regression test. → <a href="audit-fix-methodology.html">Audit &amp; Fix Method — MCP convention</a></li>
+    <li><strong>config defaults repointed</strong> — <code>triage_dashboard_url</code> + <code>instance_hosts</code> map off dead old-account hosts onto the new account. → <a href="audit-fix-methodology.html">Audit &amp; Fix Method — env flow</a></li>
+  </ul>
+</div>
+
+<div class="entry">
+  <span class="entry-date">2026-06-04</span>
+  <h3>Audit pass — 76 findings across 6 areas (analysis only)</h3>
+  <p><span class="tag">monitoring-audit-results</span> · <code>AUDIT_PLANS_2026-06-04/</code></p>
+  <ul>
+    <li>Full audit → RCA → brainstorm → plan for frontend (18), backend (12), observability (9), terraform (10), ansible (14), misc (13). Dominant theme: <strong>drift, not bad code</strong> — IaC correct in repo but never applied to the new account. The P0 bundle (this day's ships) closed the no-alert-on-app-down outage. → <a href="audit-fix-methodology.html">Audit &amp; Fix Methodology</a></li>
+  </ul>
+</div>
+
+<div class="note">Older history (Sprint 1–4, GPU migration, UEBA, the v2 dashboard cutover) lives on the <a href="sprint-history.html">Sprint History</a> and <a href="decisions-log.html">Decisions Log</a> pages. This engineering log starts at 2026-06-04 and grows forward.</div>
+
+</div>
+</body>
+</html>
