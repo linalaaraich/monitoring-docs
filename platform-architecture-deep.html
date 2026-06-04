@@ -334,11 +334,22 @@
       after the gates, before persistence; (DA-2, <code>17debbf</code>) the <code>has_named_cause</code>
       check previously false-allowed bare "because/due to", which could let an unsafe
       <code>systemctl restart</code> action pass the clamp — it now requires a concrete subject.
+      <br><strong>Caveat (2026-06-04 PM audit):</strong> the <code>rca_quality</code> recompute is
+      <em>forward-only</em> — ~279/1253 (22%) historical rows still carry the pre-fix value, so the
+      "actionable %" KPI is corrected for new decisions only until a one-shot backfill (reusing the
+      same recompute) is run. That backfill is in progress.
     </div>
-    <div class="callout warn">
-      <div class="callout-label">Known gap (audit backend #2)</div>
-      Still open: a data-starved verdict can still cost ~100–140 s of GPU before emitting
-      "cannot determine the root cause" — the planned fix is an early exit.
+    <div class="callout tip">
+      <div class="callout-label">Resolved 2026-06-04 PM (audit backend #2 + BE-B2)</div>
+      The data-starved verdict that previously cost ~100–140 s of GPU before emitting
+      "cannot determine the root cause" now <strong>short-circuits via an early-exit gate</strong>
+      that fires <em>after</em> all context-gather + anchor lookups (so it sees every groundable
+      signal) but <em>before</em> the LLM. <strong>Two correctness sub-fixes this session:</strong>
+      the gate's predicate is now keyed on <em>content emptiness</em> (a reachable-but-empty 200 is
+      starved) rather than source reachability, which never tripped; and a distinct
+      <em>MCP-outage fail-open</em> path (all pillars erroring) now <strong>escalates</strong> (raw-alert
+      email + an explicit <code>mcp_outage_escalated</code> row) instead of silently suppressing a
+      real alert during a transient MCP outage. Critical severity still bypasses both.
     </div>
 
     <h2 id="verdict">8. The verdict</h2>
