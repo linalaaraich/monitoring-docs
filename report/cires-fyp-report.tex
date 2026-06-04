@@ -703,11 +703,11 @@ FastAPI service, qwen2.5:14b on Ollama, dashboard, SMTP escalation \\
 \hline
 \textbf{Layer 1 --- Observability foundation} \\
 Prometheus, Loki, Jaeger, Grafana, OTel Collector, node-exporter,
-cAdvisor, Drain3 poller \\
+cAdvisor, kube-state-metrics, Drain3 poller \\
 \hline
 \textbf{Layer 0 --- Telemetry sources} \\
-Spring Boot (OTel agent), Kong (OTel plug-in), MySQL, k3s pods,
-host metrics \\
+Spring Boot (OTel agent), Kong (OTel plug-in), RDS MySQL, k3s pods
+and kubelet, host metrics \\
 \hline
 \end{tabular}
 \caption{Layered architecture.  Each layer consumes only the layer
@@ -782,9 +782,13 @@ distributes across three classes of host:
         Collector, cAdvisor, node-exporter.
   \item \textbf{Application host} (\texttt{observability-rca-k3s} on
         \texttt{us-east-1}, EC2 \texttt{t3.xlarge}).  Runs the
-        application workload (Spring Boot, Kong, MySQL, front-end) on
-        a single-node k3s cluster.  A node-exporter DaemonSet provides
-        host-level metrics from the k3s side.
+        application workload (Spring Boot, Kong, front-end) fronted by
+        Kong on a single-node k3s cluster, backed by an external RDS
+        MySQL instance.  All three observability signals are sourced
+        from Kubernetes: a node-exporter DaemonSet plus
+        kube-state-metrics and the kubelet/cAdvisor endpoints supply
+        metrics, and an OTel Collector DaemonSet ships pod logs and
+        traces off the cluster (see \S\ref{sec:k3s-migration}).
   \item \textbf{AI host} (\texttt{observability-gpu-uswest2},
         AWS EC2 \texttt{g5.xlarge} in \texttt{us-west-2}, NVIDIA
         A10G 24\,GB).  Runs the triage service, the five MCP
@@ -1052,14 +1056,37 @@ comprises:
 \end{itemize}
 
 \section{Epic 3 --- Kubernetes migration}
+\label{sec:k3s-migration}
 
 The application workload was moved from the application-VM Docker
 Compose into a single-node k3s cluster on
 \texttt{observability-rca-k3s}.  Helm charts were authored for the
-Spring Boot back-end, Kong, and the front-end.  The
+Spring Boot back-end, Kong, and the front-end; Kong fronts the
+employees-backend application as the cluster's API gateway, and the
+back-end persists to an external RDS MySQL instance.  The
 \texttt{xanmanning.k3s} Ansible Galaxy role provisions k3s as a
-\texttt{systemd} unit; a node-exporter DaemonSet provides host-level
-metrics from the k3s side.
+\texttt{systemd} unit.
+
+The migration unified all three observability signals onto a
+Kubernetes-native collection model.  \textbf{Metrics:} Prometheus
+scrapes the kubelet and its embedded cAdvisor for node, pod, and
+container resource metrics, the application pods' own
+\texttt{/metrics} endpoints, and \textbf{kube-state-metrics} for
+cluster object state (pod phase, deployment replica counts, restarts).
+A node-exporter DaemonSet still supplies host-level metrics from the
+k3s side.  \textbf{Logs:} an OpenTelemetry Collector DaemonSet tails
+pod logs off every node and pushes them to Loki, carrying the trace
+context so a log line can be correlated to its originating span.
+\textbf{Traces:} the same Collector receives OTLP spans from the
+Spring Boot OTel agent and the Kong OTel plug-in and exports them to
+Jaeger.
+
+Kube-state-metrics also closed a self-monitoring gap.  A single
+generic workload-down alert rule (firing when any tracked deployment's
+ready-replica count drops below its desired count) routes through the
+same Grafana \texttt{triage-webhook} contact point into the AI triage
+pipeline, so a crashed application pod is diagnosed by the same path as
+any other alert rather than requiring a bespoke probe per service.
 
 The monitoring stack stayed on Docker Compose.  Decision~D11
 records the rationale: the monitoring VM is operationally stable,
