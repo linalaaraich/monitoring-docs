@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CIRES AI Observability Platform — Deployment Resource &amp; Dependency Specification</title>
+<style>
+  :root{ --ink:#1a2233; --soft:#475569; --muted:#6b7280; --line:#e2e8f0; --line2:#cbd5e1;
+         --blue:#1d4ed8; --green:#15803d; --amber:#b45309; --red:#b91c1c; --bg:#ffffff; --panel:#f8fafc; --panel2:#f1f5f9; }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{font-family:'Inter','Segoe UI',system-ui,sans-serif;color:var(--ink);background:var(--bg);line-height:1.6;font-size:15px;}
+  .wrap{max-width:920px;margin:0 auto;padding:48px 32px 80px;}
+  code,pre{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:.86em;}
+  code{background:var(--panel2);padding:1px 5px;border-radius:4px;color:#0f172a;}
+  pre{background:#0f172a;color:#e2e8f0;padding:14px 16px;border-radius:8px;overflow-x:auto;font-size:13px;line-height:1.5;margin:12px 0;}
+  pre code{background:none;color:inherit;padding:0;}
+  h1{font-size:30px;font-weight:800;letter-spacing:-.4px;line-height:1.2;margin-bottom:8px;}
+  h2{font-size:21px;font-weight:750;margin:36px 0 12px;padding-bottom:8px;border-bottom:2px solid var(--line);}
+  h3{font-size:16px;font-weight:700;margin:22px 0 8px;color:#0f172a;}
+  p{margin:10px 0;}
+  ul,ol{margin:10px 0 10px 24px;}
+  li{margin:5px 0;}
+  .eyebrow{font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--blue);margin-bottom:10px;}
+  .lead{font-size:16px;color:var(--soft);margin:14px 0 6px;}
+  .meta{font-size:13px;color:var(--muted);margin-top:6px;}
+  table{border-collapse:collapse;width:100%;margin:14px 0;font-size:13.5px;}
+  th,td{border:1px solid var(--line);padding:8px 11px;text-align:left;vertical-align:top;}
+  th{background:var(--panel2);font-weight:700;font-size:12.5px;}
+  td.num{text-align:right;font-variant-numeric:tabular-nums;}
+  tr:nth-child(even) td{background:var(--panel);}
+  .callout{border-left:4px solid var(--blue);background:var(--panel);padding:12px 16px;border-radius:0 8px 8px 0;margin:14px 0;}
+  .callout.green{border-color:var(--green);} .callout.amber{border-color:var(--amber);} .callout.red{border-color:var(--red);}
+  .callout .lbl{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;}
+  .callout.green .lbl{color:var(--green);} .callout .lbl{color:var(--blue);} .callout.amber .lbl{color:var(--amber);} .callout.red .lbl{color:var(--red);}
+  .tag{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;}
+  .tag.rec{background:#dcfce7;color:#15803d;} .tag.min{background:#fef3c7;color:#b45309;} .tag.opt{background:#e0e7ff;color:#3730a3;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:14px 0;}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 18px;}
+  .panel h3{margin-top:0;}
+  .kv{font-size:13.5px;}.kv b{display:inline-block;min-width:120px;color:var(--soft);font-weight:600;}
+  footer{margin-top:48px;padding-top:16px;border-top:1px solid var(--line);font-size:12.5px;color:var(--muted);}
+  @media print{ body{font-size:12px;} .wrap{padding:0;max-width:none;} pre{font-size:10.5px;} h2{page-break-after:avoid;} table,.callout,.panel{page-break-inside:avoid;} }
+  @media(max-width:680px){ .grid2{grid-template-columns:1fr;} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">CIRES Technologies · AI Observability &amp; LLM-Triage Platform</div>
+  <h1>Deployment — Resource &amp; Dependency Specification</h1>
+  <p class="lead">Exactly what hardware, software, and external dependencies are required to deploy and run the platform — sized from live measurement of the running system, with a GPU recommendation for the L4.</p>
+  <p class="meta">Prepared for the production-deployment hand-off · 2026-06-04 · figures measured from the live running stack, not estimated.</p>
+
+  <div class="callout">
+    <div class="lbl">What this platform is (one paragraph)</div>
+    A self-hosted pipeline that turns monitoring alerts into <b>written root-cause analyses</b> with zero alert reaching a human until the AI has investigated it. An alert (from Grafana / your k8s) hits a triage service, which gathers evidence from Prometheus, Loki (logs), Jaeger (traces) and a log-anomaly engine through read-only "MCP" bridges, then a locally-hosted LLM (Ollama) writes the diagnosis and either escalates with the cause or dismisses noise. Everything runs on <b>your own infrastructure</b> — no data leaves your network, no external API. It watches whatever you point it at: your ML apps on GPU instances and your existing Kubernetes workloads.
+  </div>
+
+  <h2>1. Topology — three tiers</h2>
+  <p>The platform deploys as three independent tiers. The AI tier needs a GPU; the others do not. Tiers communicate over plain TCP on your network — co-locate or separate them as your capacity dictates.</p>
+  <table>
+    <tr><th>Tier</th><th>What runs there</th><th>GPU?</th><th>Where it can live</th></tr>
+    <tr><td><b>A · AI / triage</b></td><td>Ollama + the LLM model, the triage service, 5 MCP bridge containers, 1 OTel collector, GPU-metrics exporter</td><td><b>Yes</b></td><td>Your GPU instance (e.g. the L4 box)</td></tr>
+    <tr><td><b>B · Observability backend</b></td><td>Prometheus, Loki, Jaeger, Grafana, node/cAdvisor exporters</td><td>No</td><td>A CPU VM (can co-locate on the GPU box if it has spare CPU/RAM)</td></tr>
+    <tr><td><b>C · Collection (on your targets)</b></td><td>OTel collector DaemonSet + kube-state-metrics + a read-only Prometheus scraper on your k8s; an OTel collector on your ML/GPU app hosts</td><td>No</td><td>Inside your Kubernetes + on your monitored hosts</td></tr>
+  </table>
+  <p class="meta">Tiers A and B are what the Ansible stands up. Tier C is the thin agent layer the Ansible points at <i>your</i> cluster and hosts so the platform can see them.</p>
+
+  <h2>2. Hardware resources (measured)</h2>
+  <p>All figures below are measured from the live system under a real workload, then a production headroom recommendation is given. "Measured idle/light" is the actual current footprint; "Recommended" adds margin for real ingest volume and concurrent alert bursts.</p>
+
+  <h3>Tier A — GPU / AI host</h3>
+  <table>
+    <tr><th>Resource</th><th>Measured (live)</th><th>Minimum</th><th>Recommended</th><th>Notes</th></tr>
+    <tr><td>GPU</td><td>1× NVIDIA A10G (23 GB)</td><td>1× NVIDIA ≥12 GB VRAM</td><td><b>1× NVIDIA L4 (24 GB)</b></td><td>14B model ≈ 11 GB VRAM; 24 GB leaves headroom (see §4)</td></tr>
+    <tr><td>vCPU</td><td class="num">4 (≈3% idle)</td><td class="num">4</td><td class="num">4–8</td><td>CPU only feeds the GPU; inference is GPU-bound</td></tr>
+    <tr><td>System RAM</td><td class="num">1.6 / 16 GB used</td><td class="num">8 GB</td><td class="num">16 GB</td><td>Containers total ≈ 0.8 GB; model lives in VRAM, not RAM</td></tr>
+    <tr><td>Disk (SSD)</td><td class="num">68 GB used</td><td class="num">40 GB</td><td class="num">80–100 GB</td><td>Model 13 GB + images ≈ 3 GB + RCA history DB + OS/logs</td></tr>
+  </table>
+  <p class="meta">Container RAM measured: triage 75 MB · each MCP ≈ 38 MB · OTel collector 83 MB · DCGM GPU-exporter 402 MB · node-exporter 10 MB. The model (13 GB on disk) is loaded into <b>GPU VRAM</b> during inference, so it does not consume system RAM.</p>
+
+  <h3>Tier B — Observability backend host</h3>
+  <table>
+    <tr><th>Resource</th><th>Measured (live)</th><th>Minimum</th><th>Recommended</th><th>Notes</th></tr>
+    <tr><td>vCPU</td><td class="num">2</td><td class="num">2</td><td class="num">4</td><td>Prometheus rule-eval + Loki/Jaeger query under real load</td></tr>
+    <tr><td>System RAM</td><td class="num">1.2 / 8 GB used</td><td class="num">4 GB</td><td class="num">8–16 GB</td><td>Stack ≈ 1 GB idle; scales with active Prometheus series</td></tr>
+    <tr><td>Disk (SSD)</td><td class="num">6 GB used</td><td class="num">50 GB</td><td class="num">100 GB+ (separate data volume)</td><td>Retention-driven — see the sizing formula below</td></tr>
+  </table>
+  <p class="meta">Container RAM measured: jaeger 346 MB · prometheus 206 MB · grafana 166 MB · loki 141 MB · OTel collector 89 MB · cAdvisor 48 MB · node-exporter 10 MB (≈ 1.0 GB total at light load).</p>
+  <div class="callout amber">
+    <div class="lbl">Storage sizing (Tier B is the only tier whose disk grows)</div>
+    Plan the data volume by retention × ingest, not by a fixed number:
+    <ul>
+      <li><b>Prometheus:</b> ≈ <code>active_series ÷ scrape_interval × 1.5 bytes × retention</code>. Example: 100k series @ 15 s, 15-day retention ≈ <b>~12 GB</b>.</li>
+      <li><b>Loki:</b> ≈ <code>daily_raw_log_GB × 0.15 (compression) × retention_days</code>. Example: 5 GB/day raw, 15 days ≈ <b>~11 GB</b>.</li>
+      <li><b>Jaeger (Badger):</b> trace-volume driven; budget ≈ Loki's order of magnitude for similar app traffic.</li>
+    </ul>
+    A <b>100 GB</b> SSD comfortably holds 15–30 days of moderate production telemetry. Mount it as a separate volume so the OS disk can't fill.
+  </div>
+
+  <h3>Tier C — overhead added to your monitored infra (negligible)</h3>
+  <table>
+    <tr><th>Component</th><th>Per</th><th>CPU request</th><th>RAM request</th></tr>
+    <tr><td>OTel collector (DaemonSet)</td><td>k8s node</td><td class="num">100m</td><td class="num">256 Mi</td></tr>
+    <tr><td>kube-state-metrics</td><td>cluster (1×)</td><td class="num">10m</td><td class="num">32 Mi</td></tr>
+    <tr><td>Prometheus scraper SA + RBAC</td><td>cluster (1×)</td><td class="num">—</td><td class="num">— (no pod)</td></tr>
+    <tr><td>OTel collector (host agent)</td><td>ML/GPU app host</td><td class="num">~100m</td><td class="num">~128 Mi</td></tr>
+  </table>
+
+  <h2>3. Total footprint at a glance</h2>
+  <table>
+    <tr><th>Deployment shape</th><th>GPU</th><th>vCPU</th><th>RAM</th><th>Disk</th></tr>
+    <tr><td><b>Recommended (A + B on separate hosts)</b></td><td>1× L4 (24 GB)</td><td class="num">4–8 (GPU) + 4 (backend)</td><td class="num">16 GB (GPU) + 8–16 GB (backend)</td><td class="num">80 GB + 100 GB</td></tr>
+    <tr><td><b>Compact (A + B co-located on the L4 box)</b></td><td>1× L4 (24 GB)</td><td class="num">8</td><td class="num">24–32 GB</td><td class="num">150 GB</td></tr>
+    <tr><td>Per monitored k8s node (Tier C)</td><td>—</td><td class="num">+0.1</td><td class="num">+0.25 GB</td><td class="num">—</td></tr>
+  </table>
+
+  <h2>4. GPU recommendation — the L4 is a good fit ✓</h2>
+  <p>The platform runs <code>qwen2.5:14b-instruct</code> (quantised, ≈ 13 GB on disk, ≈ 11 GB resident in VRAM with working context) as the primary model, with <code>qwen2.5:7b-instruct</code> as a lightweight fallback. The workload is <b>bursty, single-stream, non-interactive</b> — one alert investigation at a time, not a chat service.</p>
+  <table>
+    <tr><th></th><th>NVIDIA L4 (your option)</th><th>NVIDIA A10G (current)</th></tr>
+    <tr><td>VRAM</td><td>24 GB GDDR6</td><td>23 GB GDDR6</td></tr>
+    <tr><td>Memory bandwidth</td><td>300 GB/s</td><td>600 GB/s</td></tr>
+    <tr><td>Architecture</td><td>Ada Lovelace (FP8 capable)</td><td>Ampere</td></tr>
+    <tr><td>Power (TDP)</td><td><b>72 W</b></td><td>300 W</td></tr>
+    <tr><td>Fits the 14B model?</td><td>✓ comfortably (24 GB ≫ 11 GB)</td><td>✓</td></tr>
+  </table>
+  <div class="callout green">
+    <div class="lbl">Verdict: yes, deploy on the L4</div>
+    The L4 has <b>ample VRAM</b> for the 14B model (24 GB vs the ~11 GB needed — room for larger context windows or running 7B + 14B side by side) and is dramatically more <b>power-efficient</b> (72 W vs 300 W). The one trade-off: LLM token generation is memory-bandwidth-bound, and the L4's 300 GB/s is half the A10G's 600 GB/s, so <b>per-investigation latency will be somewhat higher</b> than our current ~38 s median. For a <i>triage</i> workload this is fine — the pipeline budgets 180 s per investigation and alerts are not real-time. If lower latency is ever required, the 7B model on the L4 is very fast, or a higher-bandwidth card (A10/L40S/A100) trades cost and power for speed.
+  </div>
+  <p><b>Minimum viable GPU:</b> any NVIDIA card with ≥ 12 GB VRAM runs the 14B model; ≥ 8 GB runs the 7B. The L4's 24 GB is generous and recommended. <b>One L4 is sufficient</b> — the platform uses a single GPU; it does not need multiple cards or NVLink.</p>
+
+  <h2>5. Software dependencies &amp; plugins</h2>
+
+  <h3>5.1 Control machine (where you run the Ansible)</h3>
+  <table>
+    <tr><th>Dependency</th><th>Version</th><th>Why</th></tr>
+    <tr><td>ansible-core</td><td>≥ 2.15</td><td>Runs the playbooks</td></tr>
+    <tr><td>Ansible collections</td><td>community.docker, kubernetes.core, community.general</td><td>Docker/compose modules, k8s/helm modules (pinned in <code>requirements.yml</code>)</td></tr>
+    <tr><td>Helm</td><td>≥ 3.x</td><td>Deploys the k8s-side collection components</td></tr>
+    <tr><td>kubectl + kubeconfig</td><td>matching your cluster</td><td>Applies the Tier-C manifests to your k8s</td></tr>
+    <tr><td>SSH access</td><td>—</td><td>Key-based, sudo on the target hosts</td></tr>
+  </table>
+
+  <h3>5.2 Target hosts (installed automatically by the Ansible)</h3>
+  <div class="grid2">
+    <div class="panel">
+      <h3>Tier A — GPU host</h3>
+      <ul>
+        <li><b>NVIDIA GPU driver</b> (≥ 535 for L4/Ada)</li>
+        <li><b>NVIDIA Container Toolkit</b> (so Docker sees the GPU)</li>
+        <li><b>Docker Engine</b> + compose plugin</li>
+        <li><b>Ollama</b> (host service) + model pull <code>qwen2.5:14b</code> (+ <code>:7b</code>)</li>
+        <li>Containers (pulled): triage-service, 5× MCP bridge, OTel collector <code>contrib:0.120.0</code>, DCGM GPU exporter, node-exporter</li>
+      </ul>
+    </div>
+    <div class="panel">
+      <h3>Tier B — backend host</h3>
+      <ul>
+        <li><b>Docker Engine</b> + compose plugin</li>
+        <li>Containers: Prometheus, Loki, Jaeger (v2), Grafana, OTel collector, cAdvisor, node-exporter</li>
+        <li>Grafana provisioning: Prometheus + Loki + Jaeger datasources (with trace↔log↔metric correlation), alert rules, contact points — no paid panel plugins required</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>5.3 Container images</h3>
+  <p>Application images are published to a container registry (currently GitHub Container Registry, <code>ghcr.io</code>). For your deployment you can either pull from that registry or host them in your own (e.g. Harbor / your internal registry) — the image references are a single configurable variable. Sizes (measured): triage-service 338 MB · each MCP bridge 266 MB · OTel collector 397 MB · DCGM exporter 487 MB. Third-party images (Prometheus, Loki, Jaeger, Grafana, Ollama) are pulled from their public upstreams.</p>
+
+  <h2>6. External services &amp; prerequisites you provide</h2>
+  <table>
+    <tr><th>Item</th><th>Required?</th><th>Notes</th></tr>
+    <tr><td>Kubernetes cluster + kubeconfig</td><td><span class="tag rec">required</span></td><td>The workloads you want monitored; the Ansible adds the read-only collection layer</td></tr>
+    <tr><td>SMTP server / relay</td><td><span class="tag rec">required for email escalation</span></td><td>Any SMTP (internal Postfix recommended for on-prem); the platform sends the RCA emails through it</td></tr>
+    <tr><td>App database (MySQL/Postgres)</td><td><span class="tag opt">only if monitoring the sample app</span></td><td>Your own ML apps bring their own datastores; not required by the platform itself (it uses a local SQLite for its RCA history)</td></tr>
+    <tr><td>TLS / ingress</td><td><span class="tag opt">optional</span></td><td>Dashboards are HTTP on the private network by default; front with your own ingress/TLS if exposing</td></tr>
+    <tr><td>Secrets you set at deploy time</td><td><span class="tag rec">required</span></td><td>Grafana admin password, any DB password, SMTP credentials — supplied as variables, never shipped as defaults (see §7)</td></tr>
+  </table>
+
+  <h2>7. Secrets &amp; configuration you must set</h2>
+  <p>There are <b>no usable default credentials</b> — every weak default was removed, and a <b>preflight check fails the run</b> if anything required is left unset or at a <code>CHANGE_ME</code> placeholder. You provide two kinds of values:</p>
+  <p><b>(a) Non-secret environment values</b> — in your inventory (copy <code>inventory/example.yml</code> → <code>inventory/my-env.yml</code> and fill in):</p>
+  <pre><code># per host
+monitoring_vm_ip:          "&lt;backend-host-ip&gt;"      # reachable IP of the backend
+gpu_host_ip:               "&lt;gpu-host-ip&gt;"          # reachable IP of the GPU host
+k3s_host_ip:               "&lt;your-k8s-api-endpoint&gt;"# for Prometheus discovery
+grafana_external_url:      "http://&lt;backend-host&gt;:3000"
+triage_service_webhook_url:"http://&lt;gpu-host-ip&gt;:8090/webhook/grafana"
+smtp_username:             "alerts@your-org"
+smtp_from:                 "alerts@your-org"
+alert_email_to:            "oncall@your-org"
+llm_model:                 "qwen2.5:14b"             # or qwen2.5:7b for speed
+image_registry:            "ghcr.io/linalaaraich"    # or your own mirror</code></pre>
+  <p><b>(b) Secrets</b> — in an Ansible-Vault file (copy <code>inventory/group_vars/vault.example.yml</code> → <code>vault.yml</code>, fill, then <code>ansible-vault encrypt</code>):</p>
+  <pre><code>vault_grafana_admin_password: "&lt;your-strong-password&gt;"
+vault_smtp_password:          "&lt;your-smtp-app-password&gt;"</code></pre>
+
+  <h2>8. How the deploy runs (operator flow)</h2>
+  <p>Control machine needs: <code>ansible</code>, <code>kubectl</code> (pointed at your cluster), <code>helm</code>, <code>rsync</code>; then <code>ansible-galaxy install -r requirements.yml</code>.</p>
+  <ol>
+    <li>Copy <code>inventory/example.yml</code> → <code>inventory/my-env.yml</code>, fill in your host IPs + kubeconfig context. Copy <code>inventory/group_vars/vault.example.yml</code> → <code>vault.yml</code>, fill secrets, <code>ansible-vault encrypt</code> it.</li>
+    <li><b>Backend (Tier B):</b> <code>ansible-playbook -i inventory/my-env.yml playbooks/monitoring.yml -e @inventory/group_vars/vault.yml --ask-vault-pass</code> — Prometheus/Loki/Jaeger/Grafana. (A preflight check stops you here if anything required is unset.)</li>
+    <li><b>GPU/AI (Tier A):</b> <code>ansible-playbook -i inventory/my-env.yml playbooks/gpu-host.yml -e @… --ask-vault-pass</code> — installs NVIDIA driver, Docker, container toolkit, Ollama + pulls the model, then the triage stack. <span class="tag min">note</span> a fresh driver install needs one reboot then re-run.</li>
+    <li><b>Collection (Tier C):</b> <code>ansible-playbook -i inventory/my-env.yml playbooks/k8s-manifests.yml -e @… --ask-vault-pass</code> — applies the OTel DaemonSet + kube-state-metrics + scraper RBAC to <i>your</i> cluster via your kubeconfig. <b>Do not run <code>k3s.yml</code></b> — that bootstraps a new cluster; you bring your own.</li>
+    <li>Point your Grafana alerting at <code>triage_service_webhook_url</code>; instrument your ML apps to send OTLP to the collector endpoint. (Optional: <code>playbooks/otel-demo.yml</code> stands up a 22-service demo app to validate the whole platform end-to-end — including inducing a real fault — before wiring your own.)</li>
+  </ol>
+  <div class="callout">
+    <div class="lbl">Verification baked in</div>
+    Every tier has a health check; after deploy you confirm: GPU visible to Ollama (<code>nvidia-smi</code> + a model query), the triage dashboard reachable, traces/logs/metrics arriving in Grafana, and an induced test alert producing a written RCA. Section <i>9</i> below lists the exact checks.
+  </div>
+
+  <h2>9. Acceptance checks after deploy</h2>
+  <ul>
+    <li><b>GPU:</b> <code>nvidia-smi</code> shows the card; <code>docker run --gpus all</code> sees it; <code>ollama run qwen2.5:14b "ping"</code> returns on the GPU.</li>
+    <li><b>Backend:</b> Grafana loads; Prometheus, Loki, Jaeger datasources all green.</li>
+    <li><b>Collection:</b> your k8s pods appear as Prometheus targets (<code>up=1</code>); pod logs appear in Loki; app traces appear in Jaeger.</li>
+    <li><b>End-to-end:</b> induce a real fault (e.g. scale a deployment to an unavailable state) → an alert fires → the triage service emails a written root-cause analysis and records it on the dashboard.</li>
+  </ul>
+
+  <footer>
+    CIRES Technologies · AI Observability &amp; LLM-Triage Platform · resource figures measured from the live deployment on 2026-06-04.
+    Step-by-step operator flow: §8 above + the self-documenting header of <code>inventory/example.yml</code> in the Ansible repo. Companion documents: <i>Production Deployment Guide</i> (hardening + portability), <i>Platform Architecture (deep)</i> (how every tier works).
+    <br><b>Status:</b> the deployment automation described in §7–§8 is <b>delivered</b> — full GPU-host bring-up is codified (<code>playbooks/gpu-host.yml</code>: NVIDIA driver + toolkit + Ollama + model pull + triage stack), the inventory is parameterised (<code>inventory/example.yml</code>), secrets are externalised to Ansible Vault with a preflight guard, and the bring-your-own-Kubernetes path is wired. Hand-off ready.
+  </footer>
+
+</div>
+</body>
+</html>
