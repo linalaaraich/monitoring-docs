@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kubernetes Observability &amp; Self-Monitoring — CIRES Observability Platform</title>
+<style>
+  :root {
+    --bg: #0f1117; --card: #1a1d27; --card2: #1e2130; --border: #2a2d3a;
+    --text: #e0e0e0; --muted: #8890a0;
+    --accent-blue: #4ea8de; --accent-green: #6bcf7f; --accent-orange: #f0a050;
+    --accent-purple: #b07ee8; --accent-red: #e06070; --accent-cyan: #40d0d0;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Inter','Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); min-height:100vh; line-height:1.7; }
+  .topbar { display:flex; align-items:center; justify-content:space-between; padding:14px 32px; background:#13151e; border-bottom:1px solid var(--border); }
+  .topbar-left { display:flex; align-items:center; gap:16px; }
+  .back-link { color:var(--muted); text-decoration:none; font-size:13px; display:flex; align-items:center; gap:6px; transition:color .2s; }
+  .back-link:hover { color:var(--text); }
+  .topbar h1 { font-size:16px; font-weight:700; }
+  .wrap { padding:32px; max-width:1100px; margin:0 auto; }
+  h2 { font-size:22px; font-weight:800; margin:26px 0 14px; color:var(--accent-cyan); letter-spacing:-.3px; }
+  h3 { font-size:16px; font-weight:700; margin:26px 0 10px; color:var(--accent-green); }
+  h4 { font-size:14px; font-weight:700; margin:18px 0 8px; color:var(--accent-orange); }
+  p { margin:8px 0; font-size:14px; color:var(--muted); }
+  ul, ol { margin:8px 0 8px 22px; }
+  li { font-size:13.5px; color:var(--muted); margin:5px 0; line-height:1.65; }
+  li strong { color:var(--text); }
+  a { color:var(--accent-blue); text-decoration:none; }
+  a:hover { text-decoration:underline; }
+  code { font-family:'JetBrains Mono','Fira Code',monospace; font-size:12px; background:rgba(78,168,222,.1); color:var(--accent-cyan); padding:2px 6px; border-radius:3px; }
+  pre { background:#13151e; border:1px solid var(--border); border-radius:8px; padding:16px; overflow-x:auto; margin:12px 0; }
+  pre code { background:none; padding:0; color:var(--text); font-size:12.5px; line-height:1.65; }
+  .note { background:rgba(78,168,222,.06); border:1px solid rgba(78,168,222,.2); border-radius:8px; padding:14px 18px; margin:16px 0; font-size:13.5px; color:var(--muted); }
+  .note strong { color:var(--accent-blue); }
+  .warn { background:rgba(240,160,80,.06); border:1px solid rgba(240,160,80,.2); }
+  .warn strong { color:var(--accent-orange); }
+  .danger { background:rgba(224,96,112,.06); border:1px solid rgba(224,96,112,.2); }
+  .danger strong { color:var(--accent-red); }
+  .ok { background:rgba(107,207,127,.06); border:1px solid rgba(107,207,127,.2); }
+  .ok strong { color:var(--accent-green); }
+  table { width:100%; border-collapse:collapse; margin:14px 0; font-size:13px; }
+  th { text-align:left; padding:10px 14px; background:var(--card); color:var(--accent-cyan); font-weight:600; border:1px solid var(--border); }
+  td { padding:10px 14px; border:1px solid var(--border); color:var(--muted); vertical-align:top; }
+  td code { font-size:11.5px; }
+  .pill { display:inline-block; padding:2px 10px; border-radius:10px; font-size:11px; font-weight:600; margin-left:6px; vertical-align:middle; }
+  .pill-green { background:rgba(107,207,127,.12); color:var(--accent-green); border:1px solid rgba(107,207,127,.3); }
+  .pill-cyan { background:rgba(64,208,208,.12); color:var(--accent-cyan); border:1px solid rgba(64,208,208,.3); }
+  .pillar-cards { display:flex; gap:16px; margin:18px 0 8px; flex-wrap:wrap; }
+  .pillar-card { flex:1; min-width:220px; border:1px solid var(--border); border-radius:10px; padding:16px; background:var(--card); }
+  .pillar-card h3 { font-size:13px; font-weight:700; margin:0 0 8px; text-transform:uppercase; letter-spacing:.5px; }
+  .pillar-card ul { list-style:none; font-size:12px; color:var(--muted); margin-left:0; }
+  .pillar-card ul li { padding:2px 0; }
+  .pillar-card ul li::before { content:'→ '; color:var(--muted); }
+  .pillar-card.p-metrics h3 { color:var(--accent-blue); }
+  .pillar-card.p-logs h3 { color:var(--accent-green); }
+  .pillar-card.p-traces h3 { color:var(--accent-orange); }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-left">
+    <a href="index.html" class="back-link">&larr; Back to Index</a>
+    <span style="color:var(--border)">|</span>
+    <h1>☸️ Kubernetes Observability &amp; Self-Monitoring</h1>
+  </div>
+  <div style="display:flex;gap:10px;align-items:center;">
+    <span class="pill pill-green">SHIPPED 2026-06-04</span>
+    <span class="pill pill-cyan">k3s as metrics datasource</span>
+  </div>
+</div>
+
+<div class="wrap">
+
+<h2>The cluster now reports its own health — metrics, logs, and traces</h2>
+<p>The application workload (<code>employees-backend</code> / Spring Boot, MySQL, the Kong API gateway, the in-cluster OTel Collector) runs on a single-node <strong>k3s</strong> cluster. Logs (OTel filelog → Loki) and distributed traces (OTel → Jaeger) already flowed out of that cluster. The missing leg was <strong>metrics</strong>: Prometheus was supposed to scrape the kubelet/cAdvisor and per-pod actuator targets, but on the new AWS account the service-discovery credentials were never provisioned, so it discovered zero pod targets and there was no <code>up</code> series for any in-cluster service. The platform was effectively <em>blind to its own apps' health</em>.</p>
+
+<p>This session closed that gap. Kubernetes is now a first-class metrics datasource, completing the metrics + logs + traces triad for the cluster, and a single generic alert gives liveness coverage for every service.</p>
+
+<div class="pillar-cards">
+  <div class="pillar-card p-metrics">
+    <h3>Metrics (newly restored)</h3>
+    <ul>
+      <li>kubelet + cAdvisor per-pod metrics</li>
+      <li>pod actuator targets via <code>prometheus-scraper</code> SA through the k3s API proxy</li>
+      <li>kube-state-metrics: deployment / replica / pod-phase / restart-count</li>
+    </ul>
+  </div>
+  <div class="pillar-card p-logs">
+    <h3>Logs (already live)</h3>
+    <ul>
+      <li>OTel Collector DaemonSet, filelog receiver</li>
+      <li>pod + Kong logs (with <code>trace_id</code>) → Loki</li>
+    </ul>
+  </div>
+  <div class="pillar-card p-traces">
+    <h3>Traces (already live)</h3>
+    <ul>
+      <li>OTel Java Agent → OTel Collector :4317</li>
+      <li>Kong OTel plugin → OTel Collector :4318</li>
+      <li>OTel Collector → Jaeger</li>
+    </ul>
+  </div>
+</div>
+
+<h2>What shipped (2026-06-04)</h2>
+
+<h3>1. k3s restored as a metrics datasource <span class="pill pill-green">commit bfa4b0b</span></h3>
+<p>Two IaC bugs made the k8s scrape path unable to work at all, plus one piece of state that was never applied to the new account:</p>
+<ul>
+<li><strong>Provisioned the <code>prometheus-scraper</code> ServiceAccount + long-lived token.</strong> The repo declared the service-discovery jobs, but <code>k8s-manifests.yml --tags prometheus</code> had never been run on the new account, so the SA, the token Secret, and the <code>/etc/prometheus/{k3s-token,k3s-ca.crt}</code> files on the monitoring VM did not exist. Prometheus dropped both the <code>k3s-kubelet-cadvisor</code> and <code>kubernetes-pods</code> scrape pools silently → zero targets.</li>
+<li><strong>Fixed the ClusterRole RBAC — added <code>pods/proxy</code>.</strong> The <code>kubernetes-pods</code> job scrapes pods <em>through</em> the k3s API-server proxy, which requires <code>get</code> on <code>pods/proxy</code>. Without it every pod scrape returned 403 Forbidden (<code>up=0</code>).</li>
+<li><strong>Fixed the token file permissions — 0644, not 0600/root.</strong> The playbook shipped the SA token as mode 0600 owned by root, but Prometheus runs as a <em>non-root</em> user inside its container → "unable to read authorization credentials" → kubelet/cAdvisor + pod scrapes failed.</li>
+</ul>
+<p>Result, verified live on account <code>321556173045</code>: <code>k3s-kubelet-cadvisor</code> is up; <code>kubernetes-pods</code> discovers and scrapes <code>employees-backend</code> (Spring Boot), Kong, and the in-cluster OTel Collector → <code>up=1</code>. <code>up==0</code> is now a real liveness signal these targets were previously invisible to.</p>
+
+<h3>2. kube-state-metrics deployed <span class="pill pill-green">previously absent</span></h3>
+<p>kube-state-metrics (KSM) — the standard exporter of the cluster's own object state — did not exist anywhere in the repo or the cluster before this session. A new annotation-discovered manifest (<code>manifests/kube-state-metrics/</code>, KSM v2.x, SA bound to a read-only ClusterRole over deployments/pods/replicasets/nodes, pod annotated <code>prometheus.io/scrape=true</code> <code>prometheus.io/port=8080</code>) is now deployed and picked up by the existing <code>kubernetes-pods</code> SD job with no <code>prometheus.yml</code> change. This unlocks deployment-readiness, pod-phase, and restart-count metrics — and the strongest k8s liveness alerts.</p>
+<div class="note"><strong>Production portability:</strong> KSM is shipped as a raw open-source manifest (no AWS coupling), matching the platform's annotation-driven discovery and the CIRES private-cloud production target.</div>
+
+<h3>3. Generic <code>KubeWorkloadDown</code> alert routed to triage <span class="pill pill-green">self-monitoring</span></h3>
+<p>One KSM-driven rule gives liveness coverage for <em>any</em> service, with no per-service rules to maintain:</p>
+<pre><code>expr: max by (exported_namespace, deployment) (
+        kube_deployment_status_replicas_unavailable{exported_namespace!="kube-system"}
+      ) > 0
+for:  3m</code></pre>
+<p>When any deployment has unavailable replica(s) for 3 minutes, the alert fires with <code>exported_namespace</code> + <code>deployment</code> labels identifying which one, and routes to the triage webhook for AI root-cause analysis. No more "the platform is blind to its own apps' health" — scale a deployment to zero and a triage alert follows. (Source: <code>roles/grafana/templates/alertrules.yml.j2</code>.)</p>
+
+<h2>How to verify (real induction, not synthetic)</h2>
+<p>Per the real-induction-only invariant, confirm by inducing a genuine breach rather than POSTing a synthetic webhook:</p>
+<pre><code># Confirm k8s targets are up
+curl -s monitoring-vm:9090/api/v1/targets | jq '.data.activeTargets[]
+  | select(.labels.job=="kubernetes-pods" or .labels.job=="k3s-kubelet-cadvisor")
+  | {job:.labels.job, pod:.labels.pod, health:.health}'
+
+# Confirm KSM series exist
+curl -s 'monitoring-vm:9090/api/v1/query?query=kube_deployment_status_replicas_unavailable' | jq '.data.result | length'
+
+# Induce a real workload-down breach -> expect a triage alert
+kubectl scale deploy/spring-boot --replicas=0
+# ...wait > 3m, observe KubeWorkloadDown fire and a row appear in the triage dashboard
+kubectl scale deploy/spring-boot --replicas=1   # restore</code></pre>
+
+<h2>Where it lives</h2>
+<table>
+<tr><th>Concern</th><th>File / object</th></tr>
+<tr><td>SD job definitions (kubelet/cAdvisor, pods)</td><td><code>roles/prometheus/templates/prometheus.yml.j2</code></td></tr>
+<tr><td>Scraper SA + ClusterRole (+ <code>pods/proxy</code>) + token Secret</td><td><code>manifests/prometheus-rbac/rbac.yaml</code></td></tr>
+<tr><td>Cert/token shipping to monitoring VM (0644)</td><td><code>playbooks/k8s-manifests.yml --tags prometheus</code></td></tr>
+<tr><td>kube-state-metrics deployment</td><td><code>manifests/kube-state-metrics/kube-state-metrics.yaml</code></td></tr>
+<tr><td>Generic workload-down alert</td><td><code>roles/grafana/templates/alertrules.yml.j2</code> (<code>KubeWorkloadDown</code>)</td></tr>
+</table>
+
+<div class="note">Step-by-step runbooks for each of these fixes — including the exact drift checks and recovery commands — live on the <a href="audit-fix-methodology.html">Audit &amp; Fix Methodology</a> page.</div>
+
+</div>
+</body>
+</html>

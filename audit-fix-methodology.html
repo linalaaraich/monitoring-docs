@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Audit &amp; Fix Methodology — CIRES Observability Platform</title>
+<style>
+  :root {
+    --bg: #0f1117; --card: #1a1d27; --card2: #1e2130; --border: #2a2d3a;
+    --text: #e0e0e0; --muted: #8890a0;
+    --accent-blue: #4ea8de; --accent-green: #6bcf7f; --accent-orange: #f0a050;
+    --accent-purple: #b07ee8; --accent-red: #e06070; --accent-cyan: #40d0d0;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Inter','Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); min-height:100vh; line-height:1.7; }
+  .topbar { display:flex; align-items:center; justify-content:space-between; padding:14px 32px; background:#13151e; border-bottom:1px solid var(--border); }
+  .topbar-left { display:flex; align-items:center; gap:16px; }
+  .back-link { color:var(--muted); text-decoration:none; font-size:13px; display:flex; align-items:center; gap:6px; transition:color .2s; }
+  .back-link:hover { color:var(--text); }
+  .topbar h1 { font-size:16px; font-weight:700; }
+  .wrap { padding:32px; max-width:1100px; margin:0 auto; }
+  h2 { font-size:22px; font-weight:800; margin:28px 0 14px; color:var(--accent-orange); letter-spacing:-.3px; }
+  h3 { font-size:16px; font-weight:700; margin:26px 0 10px; color:var(--accent-green); }
+  h4 { font-size:14px; font-weight:700; margin:18px 0 8px; color:var(--accent-cyan); }
+  p { margin:8px 0; font-size:14px; color:var(--muted); }
+  ul, ol { margin:8px 0 8px 22px; }
+  li { font-size:13.5px; color:var(--muted); margin:5px 0; line-height:1.65; }
+  li strong { color:var(--text); }
+  a { color:var(--accent-blue); text-decoration:none; }
+  a:hover { text-decoration:underline; }
+  code { font-family:'JetBrains Mono','Fira Code',monospace; font-size:12px; background:rgba(78,168,222,.1); color:var(--accent-cyan); padding:2px 6px; border-radius:3px; }
+  pre { background:#13151e; border:1px solid var(--border); border-radius:8px; padding:16px; overflow-x:auto; margin:12px 0; }
+  pre code { background:none; padding:0; color:var(--text); font-size:12.5px; line-height:1.65; }
+  .note { background:rgba(78,168,222,.06); border:1px solid rgba(78,168,222,.2); border-radius:8px; padding:14px 18px; margin:16px 0; font-size:13.5px; color:var(--muted); }
+  .note strong { color:var(--accent-blue); }
+  .warn { background:rgba(240,160,80,.06); border:1px solid rgba(240,160,80,.2); }
+  .warn strong { color:var(--accent-orange); }
+  .danger { background:rgba(224,96,112,.06); border:1px solid rgba(224,96,112,.2); }
+  .danger strong { color:var(--accent-red); }
+  .ok { background:rgba(107,207,127,.06); border:1px solid rgba(107,207,127,.2); }
+  .ok strong { color:var(--accent-green); }
+  table { width:100%; border-collapse:collapse; margin:14px 0; font-size:13px; }
+  th { text-align:left; padding:10px 14px; background:var(--card); color:var(--accent-orange); font-weight:600; border:1px solid var(--border); }
+  td { padding:10px 14px; border:1px solid var(--border); color:var(--muted); vertical-align:top; }
+  td code { font-size:11.5px; }
+  .step { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:20px 24px; margin:18px 0; position:relative; }
+  .step-num { position:absolute; top:-12px; left:20px; background:var(--accent-orange); color:#13151e; font-size:12px; font-weight:700; padding:4px 10px; border-radius:12px; letter-spacing:.4px; }
+  .step h3 { margin-top:6px; }
+  .pill { display:inline-block; padding:2px 10px; border-radius:10px; font-size:11px; font-weight:600; margin-left:6px; vertical-align:middle; }
+  .pill-green { background:rgba(107,207,127,.12); color:var(--accent-green); border:1px solid rgba(107,207,127,.3); }
+  .pill-orange { background:rgba(240,160,80,.12); color:var(--accent-orange); border:1px solid rgba(240,160,80,.3); }
+  .pill-red { background:rgba(224,96,112,.12); color:var(--accent-red); border:1px solid rgba(224,96,112,.3); }
+  .loop { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin:16px 0; }
+  .loop-step { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:10px 16px; font-size:13px; font-weight:600; color:var(--text); }
+  .loop-arrow { color:var(--muted); font-size:18px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-left">
+    <a href="index.html" class="back-link">&larr; Back to Index</a>
+    <span style="color:var(--border)">|</span>
+    <h1>🔁 Audit &amp; Fix Methodology</h1>
+  </div>
+  <div style="display:flex;gap:10px;align-items:center;">
+    <span class="pill pill-orange">Methodology</span>
+    <span class="pill pill-green">Runbooks</span>
+  </div>
+</div>
+
+<div class="wrap">
+
+<h2>How we find and fix what's wrong — reproducibly</h2>
+<p>This page captures the working method behind the platform's quality work so the next operator (future Lina, a teammate, a reviewer) can repeat it. It is the process companion to the per-area audit docs and the <a href="kubernetes-observability.html">Kubernetes Observability</a> page. Use it before any non-trivial change.</p>
+
+<div class="note"><strong>Default workflow:</strong> for all non-trivial work, <em>audit first</em> — never fix-first. Skip the cycle only for typo-level changes.</div>
+
+<h2>The audit → RCA → brainstorm → fix → re-audit loop</h2>
+<div class="loop">
+  <span class="loop-step">1. Audit</span><span class="loop-arrow">→</span>
+  <span class="loop-step">2. RCA</span><span class="loop-arrow">→</span>
+  <span class="loop-step">3. Brainstorm</span><span class="loop-arrow">→</span>
+  <span class="loop-step">4. Fix</span><span class="loop-arrow">→</span>
+  <span class="loop-step">5. Re-audit</span><span class="loop-arrow">↺</span>
+</div>
+<ol>
+<li><strong>Audit</strong> — enumerate issues per area (frontend / backend / observability / ansible / terraform / misc). Each issue gets a severity (P0/P1/P2) and a finding ID. Synthesize into a master plan with an execution order. The dominant lesson from 2026-06-04: most damage came from <em>drift</em>, not bad code.</li>
+<li><strong>RCA</strong> — for each finding, isolate the single root cause, not just the symptom. Confirm against live state (e.g. <code>ls /etc/prometheus/</code>, <code>kubectl get sa,secret</code>), not just the repo.</li>
+<li><strong>Brainstorm</strong> — list 2–3 candidate fixes with pros/cons before committing. Prefer the designed path, idempotent tasks, and production-portable open-source over AWS-coupled or one-off scripts.</li>
+<li><strong>Fix</strong> — implement the chosen option <em>and</em> apply it to live where the issue was drift. Add a loud guard where a silent dependency caused the failure.</li>
+<li><strong>Re-audit</strong> — verify by real induction, then loop. Re-run the audit check that found the issue and confirm it now passes.</li>
+</ol>
+<div class="note"><strong>Cadence:</strong> test each epic story individually as it ships (incremental). Run a <em>full</em> audit only at a milestone end, not continuously during the build phase.</div>
+
+<h2>The two IaC dimensions: code-safe AND applied-to-live</h2>
+<p>Every infrastructure finding must be graded on <strong>two independent axes</strong>. A clean <code>--syntax-check</code> / <code>terraform plan</code> proves only the first. The platform's worst outages came from IaC that was correct in the repo but <em>never applied</em> to the new account — invisible to any code-only audit.</p>
+<table>
+<tr><th>Dimension</th><th>What it checks</th><th>How to verify</th></tr>
+<tr><td><strong>Code-safe</strong></td><td>Syntax, schema, plan validity — the declared desired state is correct</td><td><code>ansible-playbook --syntax-check</code>; <code>terraform validate &amp;&amp; terraform plan</code></td></tr>
+<tr><td><strong>Applied-to-live / drift</strong></td><td>Whether the declared state is actually realized on the live account/cluster</td><td>Inspect live: <code>ls</code> on the host, <code>kubectl get</code>, <code>aws ... describe</code>, query <code>/api/v1/targets</code>. Compare to repo.</td></tr>
+</table>
+<div class="warn"><strong>Drift is silent.</strong> Examples found 2026-06-04: prometheus k8s SD jobs declared but token/CA never shipped; kube-state-metrics declared nowhere; an EventBridge rule ENABLED in Terraform state but DISABLED in live AWS (and <code>plan</code> blind to it); two applied-but-uncommitted <code>.tf</code> files. Always ask: <em>is it in the repo? is it on the box?</em></div>
+
+<h2>Verification: render the frontend, don't curl it</h2>
+<p>A <code>curl</code> audit fetches server-rendered HTML/JSON — it cannot see client-side bugs in a React SPA. Several real user-facing failures (row-expand crash on null <code>reason</code>, light-mode stuck dark, dead "View in" anchors, hardcoded TopBar stats overriding live numbers) were invisible to curl and only surfaced by <strong>actually rendering the page in a browser</strong> and exercising it.</p>
+<ul>
+<li>Open the page in a browser (or headless render), interact with it: expand rows, click copy buttons, toggle theme, follow evidence links.</li>
+<li>Watch the console for unguarded dereferences (<code>a.reason.split</code>, <code>a.tags</code>, <code>a.reasoning</code>) — one producer regression = white screen.</li>
+<li>Confirm displayed numbers are <em>live</em>, not hardcoded (e.g. test-count tile, uptime/open-alerts in the TopBar).</li>
+</ul>
+<div class="note"><strong>For backend / alerting,</strong> verify by <em>real induction</em>, never a synthetic <code>/webhook/grafana</code> POST: induce a genuine breach so the MCP bridges see real data (the hallucination-firewall / MCP-only invariant).</div>
+
+<h2>Concrete runbooks (2026-06-04 high-value fixes)</h2>
+
+<div class="step">
+<span class="step-num">RUNBOOK 1</span>
+<h3>Restore k8s metrics scraping</h3>
+<p><strong>Symptom:</strong> Grafana shows no-data for in-cluster services; no <code>up</code> series for <code>employees-backend</code> / Kong; Prometheus logs <code>unable to read CA cert</code> or <code>unable to read authorization credentials</code>.</p>
+<p><strong>Drift check (is it on the box?):</strong></p>
+<pre><code>ls /etc/prometheus/            # expect k3s-token + k3s-ca.crt, NOT just prometheus.yml
+kubectl get sa,secret -n observability | grep prometheus-scraper
+curl -s monitoring-vm:9090/api/v1/targets | jq '[.data.activeTargets[]
+  | select(.labels.job|test("kubernetes-pods|k3s-kubelet"))] | length'</code></pre>
+<p><strong>Fix:</strong></p>
+<ol>
+<li>Ensure the ClusterRole grants <code>pods/proxy</code> (the <code>kubernetes-pods</code> job scrapes through the API proxy; without it every scrape is 403) — in <code>manifests/prometheus-rbac/rbac.yaml</code>.</li>
+<li>Ensure the token is shipped to the monitoring VM as mode <strong>0644</strong> (Prometheus runs non-root inside its container; 0600/root is unreadable).</li>
+<li>Apply the designed path: <code>ansible-playbook -i inventory/newacct.yml playbooks/k8s-manifests.yml --tags prometheus --check --diff</code> (dry-run first), then without <code>--check</code>. This mints the <code>prometheus-scraper</code> SA + long-lived token Secret, decodes token+CA, ships them to <code>/etc/prometheus/</code>, and POSTs <code>/-/reload</code>.</li>
+<li>Pre-check the k8s ≥1.24 token quirk: <code>kubectl get secret prometheus-scraper-token -n observability -o jsonpath='{.data.token}'</code> must be non-empty (the manifest carries a legacy <code>service-account-token</code>-typed Secret to handle this).</li>
+</ol>
+<p><strong>Re-audit:</strong> re-run the targets query above → kubelet/cAdvisor + pod targets show <code>health: up</code>. Recommended hardening: add a <code>stat</code>-based guard in the <code>prometheus</code> role that fails loudly if the two TLS files are absent when <code>k3s_sd_enabled</code>, so this drift can never be silent again.</p>
+</div>
+
+<div class="step">
+<span class="step-num">RUNBOOK 2</span>
+<h3>Deploy kube-state-metrics</h3>
+<p><strong>Symptom:</strong> no deployment / replica / pod-phase / restart-count metrics; cannot alert on "deployment has 0 ready replicas" or CrashLoopBackOff. <code>grep -rI kube-state-metrics</code> returns nothing.</p>
+<p><strong>Fix:</strong></p>
+<ol>
+<li>Add <code>manifests/kube-state-metrics/kube-state-metrics.yaml</code>: KSM v2.x Deployment + SA bound to a read-only ClusterRole over deployments/pods/replicasets/nodes + Service.</li>
+<li>Annotate the pod <code>prometheus.io/scrape="true"</code>, <code>prometheus.io/port="8080"</code> so the existing <code>kubernetes-pods</code> SD job discovers it with <strong>no <code>prometheus.yml</code> change</strong> (matches the platform's annotation-driven discovery; open-source, fits the private-cloud prod target).</li>
+<li><code>kubectl apply -f manifests/kube-state-metrics/</code> and wire it into <code>k8s-manifests.yml</code>.</li>
+</ol>
+<p><strong>Re-audit:</strong> <code>curl -s 'monitoring-vm:9090/api/v1/query?query=kube_deployment_status_replicas_unavailable' | jq '.data.result | length'</code> &gt; 0.</p>
+</div>
+
+<div class="step">
+<span class="step-num">RUNBOOK 3</span>
+<h3>Add a generic workload-down alert</h3>
+<p><strong>Goal:</strong> liveness coverage for ANY service with no per-service rules. Depends on Runbooks 1 &amp; 2.</p>
+<p><strong>Fix:</strong> add to <code>roles/grafana/templates/alertrules.yml.j2</code>:</p>
+<pre><code>title: KubeWorkloadDown
+expr:  max by (exported_namespace, deployment) (
+         kube_deployment_status_replicas_unavailable{exported_namespace!="kube-system"}
+       ) > 0
+for:   3m
+# route to the triage webhook contact point; for liveness rules prefer
+# noDataState: Alerting (not OK) so a never-discovered target still fires</code></pre>
+<p><strong>Re-audit (real induction):</strong> <code>kubectl scale deploy/spring-boot --replicas=0</code> → after &gt;3m expect <code>KubeWorkloadDown</code> to fire and a triage row to appear, with <code>exported_namespace</code>+<code>deployment</code> labels naming the workload. Restore with <code>--replicas=1</code>.</p>
+</div>
+
+<div class="note">The full per-issue audit → RCA → brainstorm → plan detail for the 2026-06-04 pass lives in the private <code>monitoring-audit-results</code> repo and the area docs (frontend / backend / observability / ansible / terraform / misc). Outcomes of this session are summarized on the <a href="kubernetes-observability.html">Kubernetes Observability</a> card.</div>
+
+</div>
+</body>
+</html>

@@ -369,6 +369,7 @@
       <ul>
         <li>Prometheus scrapes all EC2 instances</li>
         <li>node_exporter, cAdvisor, Kong, Spring Actuator</li>
+        <li>k3s as a datasource: kubelet/cAdvisor + pod actuator targets (via <code>prometheus-scraper</code> SA), kube-state-metrics</li>
         <li>Grafana Alerting evaluates alert rules</li>
       </ul>
     </div>

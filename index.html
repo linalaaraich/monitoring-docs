@@ -118,6 +118,8 @@
   <a href="solution-brief.html" class="navlink" style="color:var(--accent-green); border-color:rgba(107,207,127,.4); background:rgba(107,207,127,.08);">📣 Solution Brief</a>
   <a href="sprint-history.html" class="navlink" style="color:var(--accent-yellow); border-color:rgba(224,208,96,.4); background:rgba(224,208,96,.08);">📅 Sprint History</a>
   <a href="hallucination-firewall.html" class="navlink" style="color:var(--accent-red); border-color:rgba(224,96,112,.4); background:rgba(224,96,112,.08);">🛡️ Hallucination Firewall</a>
+  <a href="kubernetes-observability.html" class="navlink navlink-k8s">☸️ K8s Observability</a>
+  <a href="audit-fix-methodology.html" class="navlink" style="color:var(--accent-orange); border-color:rgba(240,160,80,.4); background:rgba(240,160,80,.08);">🔁 Audit &amp; Fix Method</a>
   <a href="architecture.html" class="navlink navlink-arch">🏗️ Architecture</a>
   <a href="triage-service.html" class="navlink navlink-triage">🧠 Triage Service</a>
   <a href="system-explained.html" class="navlink" style="color:var(--accent-cyan); border-color:rgba(64,208,208,.4); background:rgba(64,208,208,.08);">🔬 System Explained</a>
@@ -211,6 +213,42 @@
         <span class="tag tag-orange">Epic 2</span>
         <span class="tag tag-green">SHIPPED 2026-06-03</span>
         <span class="tag tag-purple">proactive + tool</span>
+      </div>
+      <div class="card-arrow">&rarr;</div>
+    </div>
+  </a>
+
+  <a href="kubernetes-observability.html" class="card" style="border-color:rgba(64,208,208,.45); background:linear-gradient(180deg, rgba(64,208,208,.06), var(--card));">
+    <div class="card-header">
+      <div class="card-icon" style="background:rgba(64,208,208,.12);">☸️</div>
+      <div class="card-header-text">
+        <h2>Kubernetes Observability &amp; Self-Monitoring — SHIPPED 2026-06-04</h2>
+        <p>The k3s cluster is now a first-class <strong>metrics</strong> datasource, joining the logs (OTel→Loki) and traces (OTel→Jaeger) that already flowed from it — a unified metrics+logs+traces view of the cluster. This session provisioned the <code>prometheus-scraper</code> ServiceAccount + long-lived token (never applied on the new account), fixed the RBAC (<code>pods/proxy</code>) and token file perms (0644 for the non-root Prometheus container), and <strong>deployed kube-state-metrics</strong> (previously entirely absent). A single generic <code>KubeWorkloadDown</code> alert (KSM-driven, <code>kube_deployment_status_replicas_unavailable&gt;0</code>) routes to triage, giving liveness coverage for ANY service with no per-service rules. Commit <code>bfa4b0b</code> (monitoring-project).</p>
+      </div>
+    </div>
+    <div class="card-footer">
+      <div class="card-tags">
+        <span class="tag tag-cyan">k3s metrics</span>
+        <span class="tag tag-green">kube-state-metrics</span>
+        <span class="tag tag-purple">generic workload-down</span>
+      </div>
+      <div class="card-arrow">&rarr;</div>
+    </div>
+  </a>
+
+  <a href="audit-fix-methodology.html" class="card" style="border-color:rgba(240,160,80,.45); background:linear-gradient(180deg, rgba(240,160,80,.06), var(--card));">
+    <div class="card-header">
+      <div class="card-icon" style="background:rgba(240,160,80,.12);">🔁</div>
+      <div class="card-header-text">
+        <h2>Audit &amp; Fix Methodology — reproducible loop + runbooks</h2>
+        <p>How we find and fix what's wrong: the <strong>audit → RCA → brainstorm → fix → re-audit</strong> loop, the discipline of checking <strong>two IaC dimensions</strong> (code-safe AND applied-to-live / drift — the dominant failure mode here), and the <strong>render-the-frontend</strong> (not curl) verification approach that catches client-side bugs a curl audit can't see. Includes concrete runbooks for the high-value 2026-06-04 fixes: restore k8s metrics scraping, deploy kube-state-metrics, add a generic workload-down alert. Use this before any non-trivial change.</p>
+      </div>
+    </div>
+    <div class="card-footer">
+      <div class="card-tags">
+        <span class="tag tag-orange">Methodology</span>
+        <span class="tag tag-green">Runbooks</span>
+        <span class="tag tag-red">Drift-aware</span>
       </div>
       <div class="card-arrow">&rarr;</div>
     </div>
