@@ -280,7 +280,7 @@
 <p>The biggest new surface in the project. Composed of:</p>
 
 <ul>
-  <li><strong>5 MCP servers</strong> (<code>monitoring-mcp-servers/</code>) — <code>prometheus-mcp:8091</code>, <code>loki-mcp:8092</code>, <code>jaeger-mcp:8093</code>, <code>rca-history-mcp:8094</code>, <code>deploy-events-mcp:8095</code>. Each speaks JSON-RPC and exposes 3–4 tools over a Prometheus-style <code>/metrics</code> endpoint.</li>
+  <li><strong>5 MCP servers</strong> (<code>monitoring-mcp-servers/</code>) — <code>prometheus-mcp:8091</code>, <code>loki-mcp:8092</code>, <code>jaeger-mcp:8093</code>, <code>drain3-mcp:8094</code>, <code>rca-history-mcp:8095</code>. Each speaks JSON-RPC and exposes 3–4 tools over a Prometheus-style <code>/metrics</code> endpoint.</li>
   <li><strong>FastAPI triage service</strong> (<code>monitoring-triage-service/</code>) — webhook receivers (Grafana + Drain3), async pipeline, structured-output LLM call via Ollama, dedup + suppression, dashboard at <code>/dashboard</code>, SMTP escalation.</li>
   <li><strong>Cross-pillar correlation</strong> — context.py fans out to three MCPs in parallel before the LLM call, building one pre-gathered evidence pack the LLM consumes.</li>
   <li><strong>Drain3 log-template clustering</strong> — runs server-side over Loki, surfaces novel templates as a fourth signal alongside metrics / logs / traces.</li>

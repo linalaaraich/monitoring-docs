@@ -155,7 +155,7 @@
     Read-back goes through the MCP-only data-access invariant. The
     proactive-injection path is a pre-LLM pipeline read (not the LLM
     reading the DB directly); the tool path goes through the rca-history
-    MCP at port 8094 on the GPU host. There is no direct DB read from
+    MCP at port 8095 on the GPU host. There is no direct DB read from
     the LLM at any point. See
     <a href="hallucination-firewall.html">the Hallucination Firewall page</a>
     for the broader invariant.
@@ -262,7 +262,7 @@ operators wrote here, prefer their judgement.</code></pre>
     <tr><td>Tool name</td><td><code>rca_history.list_feedback</code></td></tr>
     <tr><td>Args schema</td><td><code>RCAHistoryListFeedbackArgs(alert_name, service?, days=14, limit=20)</code></td></tr>
     <tr><td>Registration</td><td><code>app/bounded_agency.py:_TOOL_SCHEMAS</code> (alongside the existing 4 tools)</td></tr>
-    <tr><td>Routed to</td><td><code>GET /tools/list_feedback</code> on the rca-history MCP (port 8094 on the GPU host)</td></tr>
+    <tr><td>Routed to</td><td><code>GET /tools/list_feedback</code> on the rca-history MCP (port 8095 on the GPU host)</td></tr>
     <tr><td>MCP endpoint</td><td>monitoring-mcp-bridges commit <code>5c690f4</code></td></tr>
     <tr><td>Returns</td><td>Recent feedback rows for the requested alert family, including verdict/action overrides, actual_cause, tags, notes, rater, ts</td></tr>
   </tbody>
@@ -305,7 +305,7 @@ operators wrote here, prefer their judgement.</code></pre>
 
   [T3]  Optional: LLM uses its single bounded-agency call to
         invoke rca_history.list_feedback for a wider view
-        -> rca-history MCP :8094 -> GET /tools/list_feedback
+        -> rca-history MCP :8095 -> GET /tools/list_feedback
         -> returns recent feedback rows for the family
         -> LLM revises and emits final decision</div>
 
@@ -356,7 +356,7 @@ operators wrote here, prefer their judgement.</code></pre>
   <li>Prompt block formatter: <code>app/llm_client.py:393</code> (<code>_format_corrective_feedback_block</code>)</li>
   <li>Tool registration: <code>app/bounded_agency.py</code> (<code>rca_history.list_feedback</code> entry in <code>_TOOL_SCHEMAS</code>)</li>
   <li>Store query: <code>app/rca_store.py:897</code> (<code>get_high_value_feedback_for_family</code>)</li>
-  <li>MCP endpoint: <code>GET /tools/list_feedback</code> on rca-history MCP, port 8094 (monitoring-mcp-bridges, commit <code>5c690f4</code>)</li>
+  <li>MCP endpoint: <code>GET /tools/list_feedback</code> on rca-history MCP, port 8095 (monitoring-mcp-bridges, commit <code>5c690f4</code>)</li>
   <li>Collection UI: <code>app/main.py:4462</code> (<code>GET /dashboard/alert/{id}/rate</code>); submit at <code>app/main.py:347</code> (<code>POST /feedback/rate/{id}</code>)</li>
   <li>Feedback schema: <code>app/rca_store.py:209</code> (7-column extension shipped under SF-7, <code>10ebd4e</code>)</li>
   <li>Test coverage: <code>tests/test_list_feedback_tool.py</code> (parse + execute + MCP routing)</li>

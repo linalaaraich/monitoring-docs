@@ -141,7 +141,7 @@
         </div>
       </div>
       <p class="repo-desc">The five MCP bridge servers — every datum the LLM sees passes through here. Each server is a small Python process exposing 3–4 tools over JSON-RPC, with a Prometheus-style <code>/metrics</code> endpoint for self-observability.</p>
-      <p class="repo-detail"><strong>Bridges:</strong> <code>prometheus-mcp:8091</code>, <code>loki-mcp:8092</code>, <code>jaeger-mcp:8093</code>, <code>rca-history-mcp:8094</code>, <code>deploy-events-mcp:8095</code>. <strong>Invariant:</strong> the MCP-only data-access rule lives here in spirit — see <a href="hallucination-firewall.html#invariant">hallucination-firewall.html § MCP-only invariant</a>.</p>
+      <p class="repo-detail"><strong>Bridges:</strong> <code>prometheus-mcp:8091</code>, <code>loki-mcp:8092</code>, <code>jaeger-mcp:8093</code>, <code>drain3-mcp:8094</code>, <code>rca-history-mcp:8095</code>. <strong>Invariant:</strong> the MCP-only data-access rule lives here in spirit — see <a href="hallucination-firewall.html#invariant">hallucination-firewall.html § MCP-only invariant</a>.</p>
     </div>
 
     <div class="repo">
