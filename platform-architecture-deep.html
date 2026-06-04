@@ -338,10 +338,11 @@
       after the gates, before persistence; (DA-2, <code>17debbf</code>) the <code>has_named_cause</code>
       check previously false-allowed bare "because/due to", which could let an unsafe
       <code>systemctl restart</code> action pass the clamp — it now requires a concrete subject.
-      <br><strong>Caveat (2026-06-04 PM audit):</strong> the <code>rca_quality</code> recompute is
-      <em>forward-only</em> — ~279/1253 (22%) historical rows still carry the pre-fix value, so the
-      "actionable %" KPI is corrected for new decisions only until a one-shot backfill (reusing the
-      same recompute) is run. That backfill is in progress.
+      <br><strong>Resolved (2026-06-04 PM):</strong> the <code>rca_quality</code> recompute was
+      <em>forward-only</em>, so a one-shot idempotent backfill was run against the live DB. It
+      corrected <strong>only 2 stale rows</strong> — the audit's "~22%" estimate was a large
+      overcount; the forward-fix had already kept the live history near-consistent. The
+      "actionable %" KPI now reads true.
     </div>
     <div class="callout tip">
       <div class="callout-label">Resolved 2026-06-04 PM (audit backend #2 + BE-B2)</div>
