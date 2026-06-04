@@ -65,6 +65,36 @@
 
 <div class="entry">
   <span class="entry-date">2026-06-04</span>
+  <h3>Strategic operator artifacts — E2E architecture, prod deploy, supervisor pitch, test/onboarding</h3>
+  <p><span class="tag">monitoring-docs</span> <code>0f46d0d</code></p>
+  <ul>
+    <li>Four operator-facing study pages shipped: an <strong>end-to-end platform architecture deep-dive</strong> (alert → gates → MCP → LLM → verdict, with the honesty callouts), a <strong>PoC → production deployment guide</strong> (security/HA/portability checklist for the CIRES private cloud), a <strong>supervisor pitch</strong> (greenlight ask with risks stated plainly), and a <strong>test &amp; onboarding guide</strong>. → <a href="platform-architecture-deep.html">Platform Architecture Deep-Dive</a>, <a href="production-deployment-guide.html">Production Deployment Guide</a>, <a href="supervisor-pitch.html">Supervisor Pitch</a>, <a href="test-and-onboarding.html">Test &amp; Onboarding</a></li>
+  </ul>
+</div>
+
+<div class="entry">
+  <span class="entry-date">2026-06-04</span>
+  <h3>RDS deletion protection + final snapshot (I-10)</h3>
+  <p><span class="tag">monitoring-terraform</span> · applied to live</p>
+  <ul>
+    <li><strong>App DB durability hardened</strong> — RDS now carries <code>deletion_protection=true</code> + a final snapshot on destroy (was <code>skip_final_snapshot=true</code>, putting the 116k-row <code>app_db</code> one <code>destroy</code>/replace away from loss). Applied to the live account. → <a href="production-deployment-guide.html#hardening">Production Deployment Guide — hardening</a></li>
+  </ul>
+</div>
+
+<div class="entry">
+  <span class="entry-date">2026-06-04</span>
+  <h3>Triage backend: env-from-labels, DA-2 named-cause, MCP error semantics; SF-5 deprecated</h3>
+  <p><span class="tag">monitoring-triage-service</span> <code>fa50c6c</code>, <code>17debbf</code>, <code>82f719c</code></p>
+  <ul>
+    <li><strong>env resolved from alert labels</strong> (<code>fa50c6c</code>) — the hardcoded "prod" default is gone; env is resolved from the alert labels in the pipeline and the dashboard renders the stored env, falling back to "unknown" rather than silently claiming prod. → <a href="audit-fix-methodology.html">Audit &amp; Fix Method — env flow</a></li>
+    <li><strong>DA-2 named-cause tightened</strong> (<code>17debbf</code>) — <code>has_named_cause</code> now requires a concrete subject, so an unsafe action can no longer pass the clamp on a bare "because/due to" connective. → <a href="platform-architecture-deep.html#llm">Platform Architecture §7</a></li>
+    <li><strong>MCP error semantics</strong> (<code>82f719c</code>) — query rejection (4xx, the LLM's fumble) is now distinguished from source unavailability (5xx/conn-error, a real outage); a bad query is no longer mislabelled "source down". → <a href="audit-fix-methodology.html">Audit &amp; Fix Method — MCP semantics</a></li>
+    <li><strong>SF-5 deprecated</strong> (audit #4) — the spike-shelved path was structurally unreachable (120 s window inside the 300 s dedup window; zero rows ever written). Default flag flipped off; code + tests retained. → <a href="platform-architecture-deep.html#cheap">Platform Architecture §5</a></li>
+  </ul>
+</div>
+
+<div class="entry">
+  <span class="entry-date">2026-06-04</span>
   <h3>Kubernetes restored as a metrics datasource + self-monitoring</h3>
   <p><span class="tag">monitoring-project</span> <code>bfa4b0b</code>, <code>da8b9d6</code></p>
   <ul>

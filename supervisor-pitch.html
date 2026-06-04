@@ -232,10 +232,13 @@
         question, not solved by the code.</li>
       <li><strong>Security is not hardened.</strong> Prom/Loki/Jaeger are unauthenticated and open in
         the PoC; MCP bridges have no auth. These are must-fixes before production (P2 items).</li>
-      <li><strong>Some internal paths are imperfect.</strong> SF-5 is dead and should be deprecated;
-        <code>rca_quality</code> can be stale; <code>has_named_cause</code> needs tightening; the
-        env-resolution chain needs confirming across all CIRES environments. All are tracked and
-        scoped — see the <a href="production-deployment-guide.html#checklist">checklist</a>.</li>
+      <li><strong>A batch of internal correctness gaps was closed 2026-06-04.</strong> The dead SF-5
+        spike path is now <em>deprecated</em>; <code>rca_quality</code> is recomputed after the clamp
+        (no longer stale); <code>has_named_cause</code> (DA-2) now requires a concrete subject;
+        MCP errors distinguish a bad query (4xx) from a real outage (5xx); and env is resolved from
+        alert labels instead of hardcoded "prod". What remains open is the security hardening and the
+        infra items (autoshutoff policy, GPU host under Ansible) — all tracked and scoped, see the
+        <a href="production-deployment-guide.html#checklist">checklist</a>.</li>
       <li><strong>No production noise/MTTR measurement yet.</strong> That is exactly what the pilot is
         for; we will not quote a number we haven't measured.</li>
     </ul>

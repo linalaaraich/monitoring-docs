@@ -267,14 +267,16 @@
       For opted-in flappy alerts (US-5.8), a per-rule hysteresis: suppress fires 1–4, then
       <strong>force-escalate</strong> fire 5 — a sustained pattern is real even if each instance looks
       benign. Critical-severity alerts are explicitly never gated. The SF-5 "spike-shelved" path was
-      intended to shelve very short spikes here.
+      intended to shelve very short spikes here, but is deprecated (see below).
     </p>
-    <div class="callout warn">
-      <div class="callout-label">Honesty note (audit backend #4)</div>
-      SF-5 <code>spike_shelved</code> is currently <strong>structurally unreachable</strong>: its 120 s
-      window sits inside the 300 s dedup window, so the dedup gate always fires first. The audit
-      recommends <strong>deprecating</strong> the dead path (or reordering it ahead of dedup). Listed
-      here so the narrative reflects reality, not the design intent.
+    <div class="callout tip">
+      <div class="callout-label">Deprecated 2026-06-04 (audit backend #4)</div>
+      SF-5 <code>spike_shelved</code> was <strong>structurally unreachable</strong>: its 120 s window
+      sits inside the 300 s dedup window, so the dedup gate always fired first and SF-5 never saw a
+      fire (zero <code>spike_shelved</code> rows ever written). Rather than a standing bug, the path is
+      now <strong>deprecated</strong> — the default flag is flipped off (safe deprecation: code + unit
+      tests retained should a future redesign make a spike gate reachable). The recurrence-gate (US-5.8)
+      plus dedup remain the canonical noise absorbers.
     </div>
 
     <h2 id="mcp">6. MCP context gathering</h2>
@@ -296,11 +298,13 @@
       writing one new bridge — the prompt and the LLM never change. See
       <a href="hallucination-firewall.html">hallucination-firewall.html</a>.
     </div>
-    <div class="callout warn">
-      <div class="callout-label">Known gap (audit misc)</div>
-      The MCP <code>/tools/*</code> handlers currently <code>raise_for_status()</code> on any non-200,
-      so a malformed LLM query (a 4xx) surfaces to the model as "source down" — conflating an LLM
-      fumble with a real outage. The fix distinguishes 4xx (fumble) from 5xx/conn-error (outage).
+    <div class="callout tip">
+      <div class="callout-label">Resolved 2026-06-04 (audit misc)</div>
+      The MCP <code>/tools/*</code> handlers previously <code>raise_for_status()</code>'d on any non-200,
+      so a malformed LLM query (a 4xx) surfaced to the model as "source down" — conflating an LLM
+      fumble with a real outage. <strong>Fixed</strong> (<code>82f719c</code>): query rejection (4xx)
+      is now distinguished from source unavailability (5xx/conn-error), so a bad query is no longer
+      mislabelled "source down".
     </div>
 
     <h2 id="llm">7. LLM investigation</h2>
@@ -323,13 +327,18 @@
       <li><strong>Anti-hedge retry:</strong> a <code>data_starved</code> first pass triggers one more
         run with an escalated anti-hedge prompt before persisting — but only if budget remains.</li>
     </ul>
+    <div class="callout tip">
+      <div class="callout-label">Resolved 2026-06-04 (audit backend #3; DA-2)</div>
+      Two of these are now <strong>fixed</strong>: (#3, <code>d56ce88</code>) <code>rca_quality</code> was
+      snapshotted before the clamp/retry on ~24% of rows — it is now recomputed from the final decision
+      after the gates, before persistence; (DA-2, <code>17debbf</code>) the <code>has_named_cause</code>
+      check previously false-allowed bare "because/due to", which could let an unsafe
+      <code>systemctl restart</code> action pass the clamp — it now requires a concrete subject.
+    </div>
     <div class="callout warn">
-      <div class="callout-label">Known gaps (audit backend #2, #3; DA-2)</div>
-      Three honesty notes: (1) a data-starved verdict can still cost ~100–140 s of GPU before emitting
-      "cannot determine the root cause" — the fix is an early exit; (2) <code>rca_quality</code> was
-      snapshotted before the clamp/retry on ~24% of rows, so it must be recomputed after the gates;
-      (3) the <code>has_named_cause</code> check false-allows bare "because/due to", which can let an
-      unsafe <code>systemctl restart</code> action pass the clamp — it needs tightening.
+      <div class="callout-label">Known gap (audit backend #2)</div>
+      Still open: a data-starved verdict can still cost ~100–140 s of GPU before emitting
+      "cannot determine the root cause" — the planned fix is an early exit.
     </div>
 
     <h2 id="verdict">8. The verdict</h2>

@@ -83,6 +83,9 @@
   .sev { display:inline-block; padding:1px 7px; border-radius:4px; font-size:11px; font-weight:700; margin-right:6px; }
   .sev.p2 { background:rgba(240,160,80,.12); color:var(--accent-orange); border:1px solid rgba(240,160,80,.3); }
   .sev.must { background:rgba(224,96,112,.12); color:var(--accent-red); border:1px solid rgba(224,96,112,.3); }
+  .sev.done { background:rgba(107,207,127,.12); color:var(--accent-green); border:1px solid rgba(107,207,127,.3); }
+  .check li.done::before { content:"✓"; color:var(--accent-green); }
+  .check li.done { color:var(--muted); }
 </style>
 </head>
 <body>
@@ -211,7 +214,7 @@
         <tr><td>Secrets</td><td>SMTP creds / tokens in env / files</td><td>A real secret store (Vault, or the CIRES standard) with rotation; no secrets in compose or repo.</td></tr>
         <tr><td>TLS</td><td>Mostly plaintext over the tailnet</td><td>TLS on all inter-service hops that leave the host; internal CA per CIRES policy.</td></tr>
         <tr><td>IAM / privilege</td><td><span class="sev p2">P2 I-3</span> Lambda <code>ec2:Stop/StartInstances</code> on <code>Resource:"*"</code></td><td>N/A on-prem if EventBridge autoshutoff is dropped; otherwise scope by tag condition. Apply least-privilege to whatever orchestration replaces it.</td></tr>
-        <tr><td>App DB durability</td><td><span class="sev p2">P2 I-10</span> RDS <code>skip_final_snapshot=true</code>, no deletion protection (116k-row <code>app_db</code> at risk)</td><td>Enable deletion protection + backups on the production DB; never destroy-without-snapshot.</td></tr>
+        <tr><td>App DB durability</td><td><span class="sev done">RESOLVED 2026-06-04 · I-10</span> RDS now has <code>deletion_protection=true</code> + final snapshot, applied to live (was <code>skip_final_snapshot=true</code>, 116k-row <code>app_db</code> at risk)</td><td>Carry the same protection to the production DB; never destroy-without-snapshot. Apply backups per CIRES retention policy.</td></tr>
         <tr><td>k3s pods/proxy RBAC</td><td>Scraper SA fixed during the 2026-06-04 work</td><td>Carry the same least-privilege scraper SA pattern to the prod cluster; do not broaden.</td></tr>
       </tbody>
     </table>
@@ -262,7 +265,7 @@
     <ul class="check">
       <li><span class="sev must">SEC</span> Authenticate + network-scope Prom/Loki/Jaeger/Grafana (P2 I-4) — no unauthenticated UIs or APIs.</li>
       <li><span class="sev must">SEC</span> Add MCP bridge auth so only the triage service can call <code>/tools/*</code>.</li>
-      <li><span class="sev must">DATA</span> Enable DB deletion protection + backups (P2 I-10).</li>
+      <li class="done"><span class="sev done">DATA · DONE 2026-06-04</span> RDS deletion protection + final snapshot enabled and applied to live (I-10). Carry the pattern to the prod DB; add backups per CIRES retention.</li>
       <li><span class="sev must">HA</span> Move <code>rca_history</code> off per-instance SQLite to the shared DB if running &gt;1 triage replica.</li>
       <li><span class="sev must">REPRO</span> Bring the GPU/AI host under Ansible (A-3); kill hand-managed compose.</li>
       <li><span class="sev must">REPRO</span> Apply-and-verify every IaC change by real induction (no "in repo = live").</li>
@@ -273,13 +276,14 @@
       <li>API Gateway + Lambda → internal reverse proxy; drop EventBridge autoshutoff on owned GPU.</li>
       <li>Add a <strong>Zabbix MCP bridge</strong>; demote Prometheus to PoC-only; deploy the OTel single host-agent for logs/traces.</li>
     </ul>
-    <h4>Multi-tenancy / correctness gaps to close</h4>
+    <h4>Multi-tenancy / correctness gaps — resolved 2026-06-04</h4>
+    <p>This batch of correctness gaps was closed this session; carry the behaviour forward into production rather than re-litigating it:</p>
     <ul class="check">
-      <li>Resolve the <strong>env-resolution gap</strong>: confirm the precedence chain (<a href="triage-service.html#env-resolution">triage §5.3</a>) correctly tags prod vs non-prod across all CIRES environments before relying on per-env routing/filtering.</li>
-      <li>Tighten <code>has_named_cause</code> (DA-2) so unsafe actions cannot pass the clamp on bare "because/due to".</li>
-      <li>Distinguish MCP 4xx (LLM fumble) from 5xx/conn-error (real outage) so a bad query is not mislabelled "source down".</li>
-      <li><strong>Deprecate SF-5</strong> spike-shelved (structurally unreachable dead path).</li>
-      <li>Recompute <code>rca_quality</code> after clamp/retry (stale on ~24% of PoC rows).</li>
+      <li class="done"><strong>env-resolution</strong> (<code>fa50c6c</code>) — env is now resolved from alert labels in the pipeline (the hardcoded "prod" default is gone); the dashboard renders the stored env, falling back to "unknown" rather than silently claiming prod. Still validate the precedence chain (<a href="triage-service.html#env-resolution">triage §5.3</a>) per environment before relying on per-env routing.</li>
+      <li class="done"><code>has_named_cause</code> (DA-2, <code>17debbf</code>) — now requires a concrete subject, so unsafe actions can no longer pass the clamp on a bare "because/due to" connective.</li>
+      <li class="done">MCP error semantics (<code>82f719c</code>) — query rejection (4xx) is now distinguished from source unavailability (5xx/conn-error), so a bad query is no longer mislabelled "source down".</li>
+      <li class="done"><strong>SF-5</strong> spike-shelved — <strong>deprecated</strong> (default flag off): the path was structurally unreachable (its 120 s window sits inside the 300 s dedup window) and never fired. Code + tests retained for a possible future redesign.</li>
+      <li class="done"><code>rca_quality</code> (<code>d56ce88</code>) — now recomputed from the final decision after clamp/retry, before persistence (was stale on ~24% of PoC rows).</li>
     </ul>
     <div class="callout tip">
       <div class="callout-label">Sequencing</div>
