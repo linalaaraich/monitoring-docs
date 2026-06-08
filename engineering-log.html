@@ -64,6 +64,28 @@
 <h2>Timeline</h2>
 
 <div class="entry">
+  <span class="entry-date">2026-06-08</span>
+  <h3>G2 per-container log naming → Docker service discovery (recreate-stable)</h3>
+  <p><span class="tag">monitoring-project</span> <code>bb176be</code></p>
+  <ul>
+    <li>The GPU host's OTel collector named each container's Loki <code>service_name</code> stream from a container-id→name map captured <em>once at ansible apply time</em> and templated into per-id OTTL rules. Docker IDs change on every recreate (image pull, <code>compose up</code>, OOM-restart-with-recreate), so a recreated container's new id matched no rule and its logs silently collapsed into the <code>gpu-stack</code> catch-all until the next apply — the fragile stopgap the 2026-06-04 audit flagged.</li>
+    <li><strong>Fix:</strong> OTel-native Docker service discovery. The contrib collector's <code>docker_observer</code> extension watches the daemon event stream and, via <code>receiver_creator</code>, spins up a filelog receiver per running container that tails its json-log and stamps <code>service.name</code> from the <strong>live</strong> container name. On recreate the observer rediscovers the new id within <code>cache_sync_interval</code> — no stale fallback, no apply needed. Stream names are identical to before (the container name), so the drain3 per-service miners + BE-B3 infra exclusion are unaffected.</li>
+    <li>Required bumping the (logs-only) collector <code>0.120.0 → 0.145.0</code>: the observer's <code>include_all_containers</code> flag — which emits a port-less endpoint per container — only landed in 0.145.0, and our <code>ai-*</code>/<code>mcp-*</code> containers publish no host ports, so older observers discover <em>zero</em> of them. Rule <code>type == "container" &amp;&amp; port == 0</code> selects exactly one filelog per container. Config validated with <code>otelcol-contrib validate</code> against 0.145.0 + 0.153.0 (fails on 0.120.0, documenting the floor).</li>
+    <li><span class="caveat" style="color:#c98a00">⚠ Honesty caveat:</span> ships <strong>gated</strong> behind <code>triage_stack_apply</code>; the live discovery behaviour is <strong>pending real-induction acceptance</strong> on the GPU host (no local docker to runtime-test — only static config validation was possible). Rollback = revert the image tag to 0.120.0. Security note: <code>docker_observer</code> needs the docker socket (mounted read-only); front it with a docker-socket-proxy in production (EPIC15). → <a href="system-explained.html">System Explained</a></li>
+  </ul>
+</div>
+
+<div class="entry">
+  <span class="entry-date">2026-06-05</span>
+  <h3>S5-DRN-01 — 3-tier hierarchical Drain3 thresholds (component → application → system)</h3>
+  <p><span class="tag">monitoring-triage-service</span> <code>ba3eeae</code></p>
+  <ul>
+    <li>Drain3 now evaluates three scopes independently each batch instead of one global anomaly rate: <strong>component</strong> (per-service, 0.25 / 30 lines) catches one service being weird even when globally diluted; <strong>application</strong> (per-namespace aggregate, 0.15 / 60) catches whole-app drift no single component crosses, at <code>high</code> severity; <strong>system</strong> (global, unchanged) catches broad elevation. Apps group via <code>drain3_app_map</code> → k8s namespace label → service-name fallback. Each (tier, scope) has its own cooldown + a per-tier cap so one incident can't storm. Webhook carries <code>tier</code>+<code>scope</code>; the RCA lede is tier-aware. 11 new deterministic unit tests (692 total).</li>
+    <li><span class="caveat" style="color:#c98a00">⚠ Honesty caveat:</span> tier logic is proven by unit tests, but a live flagd induction on the warmed otel-demo bed fired <strong>0 drain3 anomalies</strong> — correct behaviour, not a bug: drain3 has learned essentially every template (<code>recent_rate</code> ≈ 0.0008) and flagd faults are <em>behavioural</em> (error-rate/latency over gRPC), not novel-log-emitting. A real component/app fire needs a genuinely novel template (new exception/stack-trace), which real incidents produce. → <a href="system-explained.html">System Explained</a></li>
+  </ul>
+</div>
+
+<div class="entry">
   <span class="entry-date">2026-06-04</span>
   <h3>Strategic operator artifacts — E2E architecture, prod deploy, supervisor pitch, test/onboarding</h3>
   <p><span class="tag">monitoring-docs</span> <code>0f46d0d</code></p>

@@ -310,13 +310,14 @@
 <ul>
   <li><strong>k3s host:</strong> an OTel collector DaemonSet (one pod per node) with a <code>filelog</code> receiver tailing <code>/var/log/pods/*</code> - covers every pod plus node logs in one mechanism.</li>
   <li><strong>monitoring VM:</strong> the existing central collector now also self-monitors with a <code>filelog</code> receiver on its own host log dirs.</li>
-  <li><strong>GPU host:</strong> a new OTel collector container declared in <code>/opt/triage/docker-compose.gpu.yml</code> (config at <code>otel-config.yaml</code>) tails the Docker JSON-log files for the triage service, the 5 MCP containers, and the Ollama systemd unit; ships via OTLP to Loki's native OTLP ingest endpoint on the monitoring VM.</li>
+  <li><strong>GPU host:</strong> a new OTel collector container declared in <code>/opt/triage/docker-compose.gpu.yml</code> (config at <code>otel-config.yaml</code>) tails the Docker JSON-log files for the triage service, the MCP containers, and the Ollama systemd unit; ships via OTLP to Loki's native OTLP ingest endpoint on the monitoring VM. As of <strong>2026-06-08 (G2)</strong> the per-container <code>service_name</code> is resolved by <strong>Docker service discovery</strong> (the <code>docker_observer</code> extension + <code>receiver_creator</code>) rather than a map captured at ansible apply time, so each container keeps its own named stream across recreates instead of collapsing into a <code>gpu-stack</code> catch-all when its container id changes. (Requires collector ≥ 0.145.0 for the observer's <code>include_all_containers</code> flag — our AI-stack containers publish no host ports.)</li>
 </ul>
 <p>
-  Net result: Loki now sees <strong>5 distinct
-  <code>service_name</code> values</strong> -
-  <code>coredns</code>, <code>gpu-stack</code>, <code>host-syslog</code>,
-  <code>monitoring-vm</code>, <code>employees-backend</code> - up from 1
+  Net result: Loki sees a <strong>named <code>service_name</code> stream per
+  source</strong> - <code>coredns</code>, <code>host-syslog</code>,
+  <code>monitoring-vm</code>, <code>employees-backend</code>, the Ollama unit,
+  and one stream per GPU-host container
+  (<code>ai-triage-service</code>, <code>ai-mcp-*</code>, …) - up from 1
   (<code>employees-backend</code> only, previously labelled
   <code>spring-boot</code> before the WS-1 rename on 2026-06-04) before
   the Phase 2 work. The triage-service Loki MCP can now answer log
