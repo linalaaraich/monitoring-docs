@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EPIC15 — Production Hardening Design — CIRES Observability Platform</title>
+<style>
+  :root {
+    --bg: #0f1117; --bg-soft: #13151e; --card: #1a1d27; --card-alt: #1e2230;
+    --border: #2a2d3a; --border-hi: #3a3f52; --text: #e4e6ee; --text-soft: #c0c5d0;
+    --muted: #8890a0; --accent-blue: #4ea8de; --accent-green: #6bcf7f;
+    --accent-orange: #f0a050; --accent-purple: #b07ee8; --accent-red: #e06070;
+    --accent-cyan: #40d0d0; --accent-yellow: #e0d060;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { font-family:'Inter','Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); line-height:1.65; font-size:15px; -webkit-font-smoothing:antialiased; }
+  code, pre, .mono { font-family:'JetBrains Mono','Fira Code',ui-monospace,monospace; font-size:0.88em; }
+
+  .topnav { display:flex; align-items:center; gap:12px; padding:14px 40px; background:var(--bg-soft); border-bottom:1px solid var(--border); flex-wrap:wrap; }
+  .topnav span.nav-label { color:var(--muted); font-size:13px; font-weight:600; margin-right:4px; }
+  .navlink { display:inline-flex; align-items:center; gap:6px; padding:7px 14px; border-radius:8px; font-size:13px; font-weight:600; text-decoration:none; border:1px solid; transition:background .2s, transform .15s; }
+  .navlink:hover { transform:translateY(-1px); }
+  .navlink-home { color:var(--text); border-color:var(--border); background:var(--card); }
+  .navlink-home:hover { background:var(--card-alt); }
+
+  .hero { padding:56px 40px 40px; border-bottom:1px solid var(--border); background:linear-gradient(180deg, #13151e 0%, var(--bg) 100%); }
+  .hero .inner { max-width:1080px; margin:0 auto; }
+  .hero .eyebrow { font-size:11px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:var(--accent-red); margin-bottom:12px; }
+  .hero h1 { font-size:38px; font-weight:800; letter-spacing:-.5px; margin-bottom:14px; line-height:1.2; }
+  .hero h1 span.accent { color:var(--accent-red); }
+  .hero p.lead { font-size:16px; color:var(--text-soft); max-width:840px; line-height:1.7; margin-bottom:20px; }
+  .hero .pill-row { display:flex; gap:8px; flex-wrap:wrap; }
+  .pill { font-size:11px; font-weight:600; padding:4px 10px; border-radius:12px; border:1px solid; letter-spacing:.2px; }
+  .pill.blue { color:var(--accent-blue); border-color:rgba(78,168,222,.35); background:rgba(78,168,222,.08); }
+  .pill.green { color:var(--accent-green); border-color:rgba(107,207,127,.35); background:rgba(107,207,127,.08); }
+  .pill.orange { color:var(--accent-orange); border-color:rgba(240,160,80,.35); background:rgba(240,160,80,.08); }
+  .pill.red { color:var(--accent-red); border-color:rgba(224,96,112,.35); background:rgba(224,96,112,.08); }
+  .pill.purple { color:var(--accent-purple); border-color:rgba(176,126,232,.35); background:rgba(176,126,232,.08); }
+
+  .layout { max-width:1080px; margin:0 auto; padding:32px 40px 80px; display:grid; grid-template-columns: 250px 1fr; gap:40px; }
+  @media (max-width: 900px) { .layout { grid-template-columns:1fr; } .toc-sidebar { position:static; } }
+  .toc-sidebar { position:sticky; top:20px; align-self:start; font-size:13px; }
+  .toc-sidebar h4 { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--muted); margin-bottom:10px; }
+  .toc-sidebar ol { list-style:none; padding:0; }
+  .toc-sidebar li { margin-bottom:4px; }
+  .toc-sidebar a { color:var(--text-soft); text-decoration:none; border-bottom:1px dashed transparent; }
+  .toc-sidebar a:hover { color:var(--accent-red); border-bottom-color:var(--accent-red); }
+
+  .content h2 { font-size:26px; font-weight:700; margin:48px 0 16px; letter-spacing:-.3px; scroll-margin-top:24px; padding-bottom:8px; border-bottom:1px solid var(--border); }
+  .content h2:first-child { margin-top:0; }
+  .content h3 { font-size:18px; font-weight:700; margin:28px 0 10px; color:var(--text); scroll-margin-top:24px; }
+  .content h4 { font-size:14px; font-weight:700; margin:20px 0 6px; color:var(--text); }
+  .content p { margin-bottom:14px; color:var(--text-soft); }
+  .content p strong { color:var(--text); font-weight:600; }
+  .content ul, .content ol { margin:8px 0 16px 24px; color:var(--text-soft); }
+  .content li { margin-bottom:6px; }
+  .content code { background:var(--card); border:1px solid var(--border); padding:1px 6px; border-radius:4px; font-size:0.85em; color:var(--accent-cyan); }
+  .content pre { background:var(--card); border:1px solid var(--border); padding:14px 16px; border-radius:8px; margin:12px 0 18px; overflow-x:auto; line-height:1.5; }
+  .content pre code { background:none; border:none; padding:0; color:var(--text); font-size:0.85em; }
+  .content a { color:var(--accent-green); text-decoration:none; border-bottom:1px dashed rgba(107,207,127,.35); }
+  .content a:hover { border-bottom-style:solid; }
+
+  .callout { border-left:3px solid; border-radius:0 8px 8px 0; padding:14px 18px; margin:16px 0; background:var(--card); }
+  .callout.note { border-color:var(--accent-blue); }
+  .callout.tip { border-color:var(--accent-green); }
+  .callout.warn { border-color:var(--accent-orange); }
+  .callout.danger { border-color:var(--accent-red); }
+  .callout-label { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; margin-bottom:6px; }
+  .callout.note .callout-label { color:var(--accent-blue); }
+  .callout.tip .callout-label { color:var(--accent-green); }
+  .callout.warn .callout-label { color:var(--accent-orange); }
+  .callout.danger .callout-label { color:var(--accent-red); }
+
+  table { width:100%; border-collapse:collapse; margin:12px 0 20px; font-size:13px; }
+  table th, table td { padding:10px 14px; border-bottom:1px solid var(--border); text-align:left; vertical-align:top; }
+  table th { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--muted); background:var(--card); }
+  table tr:hover td { background:var(--card-alt); }
+
+  .sev { display:inline-block; padding:1px 7px; border-radius:4px; font-size:11px; font-weight:700; white-space:nowrap; }
+  .sev.crit { background:rgba(224,96,112,.12); color:var(--accent-red); border:1px solid rgba(224,96,112,.3); }
+  .sev.high { background:rgba(240,160,80,.12); color:var(--accent-orange); border:1px solid rgba(240,160,80,.3); }
+  .sev.med  { background:rgba(224,208,96,.12); color:var(--accent-yellow); border:1px solid rgba(224,208,96,.3); }
+  .sev.ok   { background:rgba(107,207,127,.12); color:var(--accent-green); border:1px solid rgba(107,207,127,.3); }
+  .own { display:inline-block; padding:1px 7px; border-radius:4px; font-size:11px; font-weight:700; white-space:nowrap; }
+  .own.lina { background:rgba(176,126,232,.12); color:var(--accent-purple); border:1px solid rgba(176,126,232,.3); }
+  .own.code { background:rgba(78,168,222,.12); color:var(--accent-blue); border:1px solid rgba(78,168,222,.3); }
+  .own.design { background:rgba(64,208,208,.12); color:var(--accent-cyan); border:1px solid rgba(64,208,208,.3); }
+  .item-head { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:28px 0 8px; }
+  .item-head h3 { margin:0; }
+</style>
+</head>
+<body>
+
+<nav class="topnav">
+  <span class="nav-label">CIRES Observability Platform</span>
+  <a href="index.html" class="navlink navlink-home">🏠 Home</a>
+  <a href="production-deployment-guide.html" class="navlink" style="color:var(--accent-green); border-color:rgba(107,207,127,.4); background:rgba(107,207,127,.08);">🚀 Prod Deployment Guide</a>
+  <a href="platform-architecture-deep.html" class="navlink" style="color:var(--accent-blue); border-color:rgba(78,168,222,.4); background:rgba(78,168,222,.08);">🧭 Architecture (E2E)</a>
+  <a href="hallucination-firewall.html" class="navlink" style="color:var(--accent-red); border-color:rgba(224,96,112,.4); background:rgba(224,96,112,.08);">🛡️ Firewall</a>
+  <a href="engineering-log.html" class="navlink" style="color:var(--accent-orange); border-color:rgba(240,160,80,.4); background:rgba(240,160,80,.08);">📓 Engineering Log</a>
+</nav>
+
+<section class="hero">
+  <div class="inner">
+    <div class="eyebrow">Sprint 5 · EPIC15 · DESIGN FOR REVIEW — not yet implemented</div>
+    <h1>EPIC15 — Production <span class="accent">Hardening Design</span></h1>
+    <p class="lead">
+      The grounded engineering design for closing the platform's security gaps before the CIRES
+      private-cloud production transition. This is a <strong>design doc for review</strong> — nothing
+      here is implemented yet. Every claim is anchored to a real <code>file:line</code> from a
+      2026-06-08 reconnaissance of the live repos, scoped to the <strong>private-cloud</strong>
+      target (AWS is the throwaway PoC bed). It complements the
+      <a href="production-deployment-guide.html">Production Deployment Guide</a> narrative with the
+      per-item designs, an owner/effort decision matrix, and an acceptance test for each fix.
+    </p>
+    <div class="pill-row">
+      <span class="pill red">auth on the wire</span>
+      <span class="pill orange">secrets &amp; rotations</span>
+      <span class="pill blue">image supply chain</span>
+      <span class="pill purple">encryption at rest</span>
+      <span class="pill green">acceptance tests</span>
+    </div>
+  </div>
+</section>
+
+<div class="layout">
+  <aside class="toc-sidebar">
+    <h4>On this page</h4>
+    <ol>
+      <li><a href="#scope">1. Scope &amp; trust model</a></li>
+      <li><a href="#matrix">2. Decision matrix</a></li>
+      <li><a href="#wire">3. Auth on the wire</a></li>
+      <li><a href="#secrets">4. Secrets &amp; rotations</a></li>
+      <li><a href="#supply">5. Image supply chain</a></li>
+      <li><a href="#rest">6. Encryption at rest / transit</a></li>
+      <li><a href="#order">7. Order &amp; acceptance</a></li>
+    </ol>
+  </aside>
+
+  <main class="content">
+
+    <h2 id="scope">1. Scope &amp; trust model</h2>
+    <p>
+      EPIC15 absorbs the P2 security backlog surfaced across the deep audits (SEC-S1…S-10). The
+      destination changes every recommendation: <strong>production is the CIRES private cloud</strong>,
+      an on-prem estate the supervisor deploys herself via Ansible onto her own NVIDIA L4 GPU host +
+      existing k8s. AWS (account <code>321556173045</code>) is a dev/PoC bed and is treated as
+      throwaway — so AWS-native fixes (KMS, RDS encryption) are framed as "do it right in the
+      private-cloud build" rather than "churn the dev bed."
+    </p>
+    <p>The hardening splits cleanly along three trust boundaries:</p>
+    <ul>
+      <li><strong>Ingress edge</strong> — Grafana → <code>/webhook/grafana</code>. Today fronted in the
+      AWS PoC by API Gateway (implicit auth boundary); on-prem there is <em>no</em> API Gateway, so the
+      webhook needs app-level auth + TLS.</li>
+      <li><strong>The AI stack's internal mesh</strong> — triage ⇄ 5 MCP bridges ⇄ Ollama, on the
+      <code>ai-stack</code> docker network / tailnet. Network-isolated today (security groups confirmed
+      tight), but <em>zero</em> application auth — defense-in-depth is missing.</li>
+      <li><strong>Data &amp; supply chain at rest</strong> — container image provenance, secrets on
+      disk, and storage encryption.</li>
+    </ul>
+    <div class="callout tip">
+      <div class="callout-label">What is already strong — do not re-do</div>
+      The Terraform <strong>security groups are well-hardened</strong> (<code>provisioning-newacct/security-groups.tf</code>):
+      no <code>0.0.0.0/0</code> ingress on any data port; SSH restricted to the operator IP
+      <code>/32</code>; k3s SSH is tailnet-only; Grafana/Prometheus/Loki/Jaeger UIs closed to the
+      public (<code>public_ui_cidrs = []</code>); RDS <code>3306</code> reachable only from the k3s SG,
+      in private subnets, <code>publicly_accessible = false</code>. The network perimeter is good — the
+      gaps are <em>application auth</em> and <em>at-rest</em>, not the firewall. The
+      <a href="hallucination-firewall.html">MCP-only data boundary</a> also remains intact and is a
+      security property, not just a correctness one.
+    </div>
+
+    <h2 id="matrix">2. Decision matrix</h2>
+    <p>
+      Severity is exposure-given-network-isolation (the SGs already gate the blast radius).
+      <span class="own lina">LINA</span> = a credential rotation only Lina can perform;
+      <span class="own code">CODE</span> = implementable + unit-testable now, no live secret needed;
+      <span class="own design">DESIGN</span> = needs a private-cloud design decision before code.
+    </p>
+    <table>
+      <thead><tr><th>ID</th><th>Item</th><th>Current state (evidence)</th><th>Sev</th><th>Owner</th></tr></thead>
+      <tbody>
+        <tr><td>S3 / O-9</td><td>Webhook auth (<code>/webhook/grafana</code>, <code>/webhook/drain3</code>)</td><td>Open, no auth — <code>triage main.py:250,262</code></td><td><span class="sev high">HIGH</span></td><td><span class="own code">CODE</span> + <span class="own design">DESIGN</span></td></tr>
+        <tr><td>S2</td><td>Triage ⇄ MCP service auth</td><td>Open <code>/tools/*</code>, no token — <code>context.py:481</code>, all MCP <code>main.py</code></td><td><span class="sev med">MED</span></td><td><span class="own code">CODE</span></td></tr>
+        <tr><td>S-6</td><td>Ollama auth</td><td><code>0.0.0.0:11434</code>, no auth/TLS — <code>roles/ollama/tasks/main.yml:67</code></td><td><span class="sev med">MED</span></td><td><span class="own design">DESIGN</span></td></tr>
+        <tr><td>SEC-S1</td><td>Grafana admin password</td><td>Weak baseline live host_var — <code>inventory/newacct.yml:40,58</code>; preflight accepts weak</td><td><span class="sev high">HIGH</span></td><td><span class="own lina">LINA</span> + <span class="own code">CODE</span></td></tr>
+        <tr><td>S4</td><td>MySQL password</td><td>Weak hardcoded, no guard — <code>group_vars/application.yml:30</code></td><td><span class="sev high">HIGH</span></td><td><span class="own lina">LINA</span> + <span class="own code">CODE</span></td></tr>
+        <tr><td>S4b</td><td>Triage Grafana-API password</td><td>Default <code>"admin"</code>, no guard — <code>roles/triage_stack/defaults/main.yml:46</code></td><td><span class="sev med">MED</span></td><td><span class="own code">CODE</span></td></tr>
+        <tr><td>SEC-TF</td><td>RDS master password on disk</td><td>Plaintext in <code>terraform.tfvars:44</code> (gitignored ✓, not in git history)</td><td><span class="sev high">HIGH</span></td><td><span class="own lina">LINA</span> + <span class="own code">CODE</span></td></tr>
+        <tr><td>S5</td><td>Image digest-pinning</td><td>5 GHCR images on <code>:main</code>; <code>grafana:latest</code> — compose + <code>roles/grafana/defaults/main.yml:2</code></td><td><span class="sev med">MED</span></td><td><span class="own code">CODE</span></td></tr>
+        <tr><td>S-10</td><td>Encryption at rest (RDS / EBS / S3)</td><td>None set — <code>rds.tf</code>, <code>ec2.tf</code>, <code>s3-cloudfront.tf</code></td><td><span class="sev med">MED</span> (PoC)</td><td><span class="own design">DESIGN</span></td></tr>
+      </tbody>
+    </table>
+
+    <h2 id="wire">3. Auth on the wire</h2>
+    <p>
+      The recon's headline finding: <strong>every hop in the AI stack is unauthenticated</strong>.
+      That is tolerable only because the security groups isolate the network — but a single
+      mis-scoped SG, a tailnet node compromise, or a future public ingress turns "open on a private
+      net" into "open." EPIC15 adds defense-in-depth so auth does not depend solely on the firewall.
+    </p>
+
+    <div class="item-head"><span class="sev high">HIGH</span><h3>S3 / O-9 — Webhook authentication</h3></div>
+    <p>
+      <strong>Current:</strong> <code>app/main.py:250</code> <code>webhook_grafana()</code> and
+      <code>:262</code> <code>webhook_drain3()</code> take a payload and run — no dependency, no header
+      check. In the AWS PoC the only thing in front is API Gateway; on-prem that boundary disappears.
+    </p>
+    <p><strong>Design</strong> (two complementary mechanisms, both reusing the existing
+      controller-env-secret + preflight pattern that already works for SMTP):</p>
+    <ul>
+      <li><strong>Grafana → triage:</strong> Grafana's <code>webhook</code> receiver natively supports
+      auth in the contact-point <code>settings</code> block — <code>username</code>+<code>password</code>
+      (HTTP Basic) or <code>authorization_scheme: Bearer</code> + <code>authorization_credentials</code>.
+      Add a bearer token to <code>roles/grafana/templates/contactpoints.yml.j2</code> rendered from a
+      vault/env secret. The triage service validates it with a FastAPI dependency
+      (<code>Depends(require_webhook_token)</code>) — constant-time compare against
+      <code>settings.webhook_token</code>.</li>
+      <li><strong>drain3 self-webhook:</strong> the drain3 analyzer POSTs to <code>/webhook/drain3</code>
+      from inside the same stack. Give it an <strong>HMAC-SHA256 signature</strong> over the body with
+      a shared secret (<code>X-CIRES-Signature</code>), since it is our own code on both ends — stronger
+      than a static bearer and no Grafana-config dependency.</li>
+      <li><strong>TLS:</strong> FastAPI runs plain HTTP. On-prem, terminate TLS at the existing
+      reverse proxy (Kong/nginx/Caddy) in front of <code>:8090</code> — the same place the prod
+      deployment guide already routes internal traffic.</li>
+    </ul>
+    <p><strong>Rollout safety (must not dark the live alert path):</strong> ship the validator with a
+      <code>webhook_auth_enforced</code> flag defaulting to <em>warn-only</em> (log + accept unsigned)
+      for one deploy cycle, flip to enforce once Grafana is confirmed sending the token. Preflight
+      asserts the secret is present before enforce mode.</p>
+    <p><strong>Acceptance:</strong> unit tests for accept-valid / reject-missing / reject-wrong /
+      reject-tampered-HMAC; live — a real Grafana alert still triages end-to-end with the token, and a
+      <code>curl</code> without the token gets <code>401</code>.</p>
+
+    <div class="item-head"><span class="sev med">MED</span><h3>S2 — Triage ⇄ MCP service auth</h3></div>
+    <p>
+      <strong>Current:</strong> <code>context.py:481</code> calls MCP <code>/tools/*</code> over plain
+      HTTP with no auth header; every MCP <code>main.py</code> serves <code>/tools/*</code> with no
+      <code>Depends</code>/auth. Confirmed open across all five bridges.
+    </p>
+    <p><strong>Design:</strong> a single shared <strong>service token</strong> (env
+      <code>MCP_SERVICE_TOKEN</code>) injected into the triage client and each MCP server. The client
+      adds <code>Authorization: Bearer</code>; each MCP validates via a shared
+      <code>require_service_token</code> dependency (factor it into a tiny module imported by all five,
+      mirroring the existing shared <code>install_error_handlers</code>). Health endpoints stay open
+      for container healthchecks. Per-service tokens are a later refinement — a single rotatable token
+      closes the gap with minimal surface. Keep it on the <code>ai-stack</code> network; this is
+      defense-in-depth on top of the existing isolation, not a replacement for it.</p>
+    <p><strong>Acceptance:</strong> unit test each MCP returns <code>401</code> without the token and
+      <code>200</code> with it; integration — triage still resolves Prometheus/Loki/Jaeger context with
+      the token wired; healthcheck still green.</p>
+
+    <div class="item-head"><span class="sev med">MED</span><h3>S-6 — Ollama auth <span class="own design">DESIGN</span></h3></div>
+    <p>
+      <strong>Current:</strong> Ollama is a host systemd unit bound <code>0.0.0.0:11434</code>
+      (<code>roles/ollama/tasks/main.yml:67</code>) with no auth, no TLS, no proxy. The SG restricts
+      <code>11434</code> to the VPC CIDR + tailnet, so it is not internet-open — but any tailnet node or
+      VPC host can call it, and Ollama has <em>no native auth</em>.
+    </p>
+    <p><strong>Design decision needed:</strong> Ollama can't authenticate itself, so the options are:</p>
+    <ul>
+      <li><strong>(A, recommended) Reverse-proxy + token:</strong> bind Ollama to <code>127.0.0.1</code>,
+      put Caddy/nginx on <code>11434</code> requiring <code>Authorization: Bearer</code>; the triage
+      <code>llm_client</code> sends it (extend the httpx client at <code>llm_client.py:482</code>). Adds
+      TLS for free.</li>
+      <li><strong>(B) Network-only:</strong> accept the current SG isolation as sufficient for the PoC,
+      bind to the tailnet interface only, document the residual risk. Cheapest; no app change.</li>
+    </ul>
+    <p>Recommend <strong>A for the private-cloud prod build</strong> (no AWS SG safety net on-prem), B
+      acceptable as the documented PoC interim. <strong>Lina's call</strong> on whether to build the
+      proxy now or defer to the prod cutover.</p>
+
+    <h2 id="secrets">4. Secrets &amp; rotations</h2>
+    <p>
+      The pattern to standardise on already exists and works: the SMTP password is supplied via
+      controller-env (<code>roles/triage_stack/defaults/main.yml:81</code>) with a hard preflight
+      assert (<code>tasks/main.yml:64</code>), and the main Grafana SMTP password is vault + env-fallback
+      with a placeholder-rejecting preflight (<code>roles/preflight/tasks/main.yml:64</code>). Three
+      secrets do <em>not</em> yet follow it.
+    </p>
+
+    <div class="item-head"><span class="sev high">HIGH</span><h3>SEC-S1 — Grafana admin password <span class="own lina">LINA</span></h3></div>
+    <p>
+      <strong>Current:</strong> a live host_var at <code>inventory/newacct.yml:40,58</code> set to a
+      weak baseline; the preflight (<code>roles/preflight/tasks/main.yml:48</code>) rejects
+      <code>CHANGE_ME*</code> placeholders but <em>accepts</em> weak common values. <strong>Rotation is
+      Lina-only</strong> (she holds the vault + the live Grafana).
+    </p>
+    <p><strong>Plan:</strong> (LINA) generate a strong password, store as
+      <code>vault_grafana_admin_password</code> in the ansible-vault, drop the host_var override.
+      (CODE) tighten the preflight to also reject a small denylist of weak values
+      (<code>admin</code>, <code>password</code>, &lt; 12 chars) so a weak value can't silently ship.</p>
+
+    <div class="item-head"><span class="sev high">HIGH</span><h3>S4 — MySQL password <span class="own lina">LINA</span></h3></div>
+    <p>
+      <strong>Current:</strong> a weak value hardcoded in version-controlled
+      <code>inventory/group_vars/application.yml:30</code>, no preflight guard, no vault path. (This is
+      the React/Spring app's DB — part of the app-under-observation, not the AI stack.)
+    </p>
+    <p><strong>Plan:</strong> (CODE) move to <code>vault_mysql_password</code> + a preflight assert
+      mirroring SMTP; (LINA) set the strong value in vault and rotate the live DB user. Note: the
+      RDS-side master password (below) is a <em>separate</em> secret.</p>
+
+    <div class="item-head"><span class="sev high">HIGH</span><h3>SEC-TF — RDS master password on disk <span class="own lina">LINA</span></h3></div>
+    <p>
+      <strong>Current:</strong> plaintext at <code>provisioning-newacct/terraform.tfvars:44</code>. The
+      file <strong>is gitignored</strong> (verified) so it is <em>not</em> in git history — the exposure
+      is a cleartext secret sitting on the controller disk, not a repo leak. The variable is already
+      <code>sensitive = true</code> (<code>variables.tf:153</code>).
+    </p>
+    <p><strong>Plan:</strong> (CODE) supply it via <code>TF_VAR_db_password</code> from an env/secret
+      file exactly as the Tailscale auth key is already handled (<code>terraform.tfvars</code> comments
+      show that pattern at lines 60–64); remove the plaintext line. (LINA) rotate the RDS master
+      password and store the new value in the secret source. Tracks alongside the standing Lina-only
+      rotations (Gmail SMTP app-password).</p>
+
+    <div class="item-head"><span class="sev med">MED</span><h3>S4b — Triage Grafana-API password <span class="own code">CODE</span></h3></div>
+    <p>
+      <strong>Current:</strong> default <code>"admin"</code> at
+      <code>roles/triage_stack/defaults/main.yml:46</code>, rendered into <code>env.j2:34</code> +
+      compose, no guard. Used by the startup backfill's Basic-auth to the Grafana API.
+    </p>
+    <p><strong>Plan:</strong> (CODE) source from vault/controller-env + preflight assert; it should
+      track whatever <code>grafana_admin_password</code> becomes (same credential). Fully doable without
+      Lina once SEC-S1's vault var exists.</p>
+
+    <h2 id="supply">5. Image supply chain — digest pinning (S5)</h2>
+    <p>
+      <strong>Current:</strong> five first-party GHCR images pull the <strong>moving <code>:main</code>
+      tag</strong> (triage + the four MCP servers + rca-history), defaulted in
+      <code>roles/triage_stack/defaults/main.yml:33-34</code>; the monitoring-VM compose pulls
+      <strong><code>grafana/grafana:latest</code></strong> (<code>roles/grafana/defaults/main.yml:2</code>).
+      Moving tags mean a redeploy can silently pull a different image than what was tested — non-reproducible
+      and a supply-chain foothold. All <em>upstream</em> images (node-exporter, KSM, dcgm, the otel
+      collector now at <code>0.145.0</code>) are already version-pinned. ✓
+    </p>
+    <p><strong>Design:</strong></p>
+    <ul>
+      <li>Pin the five GHCR images to immutable <code>@sha256:</code> digests. CI already builds on
+      <code>main</code> push — have the workflow emit the pushed digest and write it to an ansible var
+      (<code>triage_image_digest</code>, <code>mcp_image_digest</code>) / the <code>.env</code>; compose
+      references <code>image@sha256:…</code>. A documented "promote" step updates the digest var
+      deliberately, so deploys are reproducible and an upstream <code>:main</code> can't drift in.</li>
+      <li>Pin <code>grafana:latest</code> → a concrete <code>grafana/grafana:11.x.y</code>.</li>
+      <li>Folds into the same change as the <a href="engineering-log.html">G2</a> collector pin
+      (<code>0.145.0</code>) — keep one "pinned images" doctrine across compose + manifests.</li>
+    </ul>
+    <p><strong>Acceptance:</strong> <code>--check --diff</code> shows the digest rendered; a redeploy
+      pulls the exact digest; <code>docker inspect</code> on the host confirms the running image digest
+      matches the pinned one.</p>
+
+    <h2 id="rest">6. Encryption at rest / in transit (S-10)</h2>
+    <p>
+      <strong>Current (AWS PoC):</strong> RDS <code>storage_encrypted</code> unset
+      (<code>rds.tf</code>); EC2 root volumes have no <code>encrypted = true</code> on
+      <code>root_block_device</code> (<code>ec2.tf</code>, all three hosts); S3 has no explicit
+      server-side-encryption config (<code>s3-cloudfront.tf</code>). CloudFront already enforces
+      <code>redirect-to-https</code> ✓.
+    </p>
+    <div class="callout warn">
+      <div class="callout-label">Why this is DESIGN, not a quick terraform apply</div>
+      Toggling <code>storage_encrypted</code> on an <em>existing</em> RDS instance is not in-place — it
+      requires a snapshot → encrypted-restore. Encrypting existing EBS roots requires instance
+      recreate. On a throwaway AWS dev bed that churn buys little. The honest call: <strong>do not churn
+      the PoC</strong>; instead <strong>provision encrypted from day one in the private-cloud build</strong>.
+    </div>
+    <p><strong>Private-cloud design (the real target):</strong></p>
+    <ul>
+      <li><strong>Block storage:</strong> LUKS / dm-crypt on the volumes backing the DB and the
+      RCA-history SQLite + drain3 state — host-level at-rest encryption, no cloud KMS needed.</li>
+      <li><strong>Object storage:</strong> MinIO with server-side encryption enabled for backups/artifacts
+      (replaces S3; see the <a href="production-deployment-guide.html">prod guide</a> swap table).</li>
+      <li><strong>DB:</strong> self-managed MySQL/MariaDB (or Postgres) on an encrypted volume; TLS for
+      client connections.</li>
+      <li><strong>In transit:</strong> terminate TLS at the reverse proxy for every externally-reachable
+      surface (Grafana, the webhook, MCP if ever exposed); internal mesh stays on the isolated network.</li>
+    </ul>
+    <p><strong>Optional cheap PoC win:</strong> if the AWS bed is rebuilt for any reason, add
+      <code>storage_encrypted = true</code> + <code>root_block_device { encrypted = true }</code> +
+      an <code>aws_s3_bucket_server_side_encryption_configuration</code> at that point — free with the
+      AWS-managed key, zero ongoing cost.</p>
+
+    <h2 id="order">7. Implementation order &amp; acceptance</h2>
+    <p>Recommended sequence — code-doable + high-value first, Lina-only rotations interleaved, design
+      decisions last:</p>
+    <ol>
+      <li><strong>S3/O-9 webhook auth</strong> (CODE+DESIGN) — highest exposure (the one ingress edge);
+      warn-then-enforce rollout. <em>This is the "Friday hardening overdue since 2026-05-01" item.</em></li>
+      <li><strong>S5 digest-pinning</strong> (CODE) — pure IaC, no secret, low risk; lock down the
+      supply chain and fold in the G2 collector pin.</li>
+      <li><strong>S2 MCP service token</strong> (CODE) — shared dependency across the five bridges.</li>
+      <li><strong>Secrets to vault + preflight</strong> (CODE for the scaffolding: S4b, S4 var, SEC-TF
+      env-var supply, preflight weak-value denylist).</li>
+      <li><strong>Lina-only rotations</strong> (LINA, can happen in parallel): Grafana admin (SEC-S1),
+      MySQL (S4), RDS master (SEC-TF), + the standing Gmail SMTP app-password rotation.</li>
+      <li><strong>S-6 Ollama proxy</strong> (DESIGN→CODE) — pending Lina's now-vs-cutover call.</li>
+      <li><strong>S-10 encryption-at-rest</strong> (DESIGN) — built into the private-cloud provisioning,
+      not retrofitted onto the AWS bed.</li>
+    </ol>
+    <div class="callout note">
+      <div class="callout-label">Non-negotiables carried from the platform invariants</div>
+      Every new secret ships vault/env-sourced with a preflight assert (no weak defaults reach live);
+      no change may break the live <code>inventory/newacct.yml</code> deploy or dark the Grafana→triage
+      alert path (hence warn-then-enforce); the MCP-only data boundary is preserved; and each fix lands
+      with a real-induction acceptance, not just a unit test.
+    </div>
+    <div class="callout tip">
+      <div class="callout-label">Status</div>
+      Design only — awaiting Lina's review and her steer on (a) Ollama proxy now vs at cutover, and
+      (b) whether to start implementation at item 1 (webhook auth) or item 2 (digest-pin). Recon basis:
+      2026-06-08, repos <code>monitoring-triage-service</code>, <code>monitoring-mcp-servers</code>,
+      <code>monitoring-project</code>, <code>provisioning-newacct</code>.
+    </div>
+
+  </main>
+</div>
+
+</body>
+</html>
