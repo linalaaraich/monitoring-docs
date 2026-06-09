@@ -359,9 +359,18 @@
   First check: fingerprint-window dedup via <code>DedupManager.check()</code>
   (<span class="file-ref">dedup.py:42</span>). Keyed on Grafana's stable
   fingerprint, window is <code>settings.dedup_window_seconds</code> (default 600).
-  Second+ fire of the same fingerprint within the window → persist a
-  <code>triage_decision=suppressed_duplicate</code> record linking to the prior
-  RCA and short-circuit. No LLM work.
+  Second+ fire of the same fingerprint within the window → registered as a
+  <strong>recurrence of the existing incident</strong>
+  (<code>RCAStore.record_recurrence()</code> bumps the incident entity's
+  <code>fire_count</code> + <code>last_seen</code>) and short-circuits. No LLM work.
+</p>
+<p class="note">
+  <strong>2026-06-09 (alert-quality audit, RC-4):</strong> this used to persist a
+  standalone <code>suppressed_duplicate</code> row reading "Duplicate fire … See
+  prior RCA &lt;id&gt;". That "see prior" stub was scrapped — a recurrence now
+  lives ON the original alert: its detail page shows "fired N times" sourced from
+  the incident entity, and the <code>/dashboard/incidents</code> page rolls every
+  fingerprint into one row with fire-count + duration. No clutter row in the feed.
 </p>
 <p>
   Second check: Layer-2 pre-LLM suppression
@@ -781,7 +790,8 @@
   so employees-backend's templates don't blend with kong's. Key methods:
 </p>
 <ul>
-  <li><code>analyze(log_line, service="_unknown")</code> — routes to the per-service miner (lazily creates one if not yet seen). Counters tracked per-service in <code>_lines_per_service</code> + <code>_anomalies_per_service</code>.</li>
+  <li><code>analyze(log_line, service="_unknown")</code> — routes to the per-service miner (lazily creates one if not yet seen). Counters tracked per-service in <code>_lines_per_service</code> + <code>_anomalies_per_service</code>. <strong>Drops at the boundary</strong> (no miner, no anomaly) any line whose service is on the BE-B3 infra denylist <em>or</em> whose body is empty (<code>is_empty_log_body()</code>).</li>
+  <li class="note"><strong>BE-B3 source exclusion + 2026-06-09 (RC-1):</strong> <code>is_excluded_service()</code> keeps the observability stack's OWN logs out of the miners — they emit high-cardinality/rotating content that looks "novel" every batch. The denylist (<code>config.py drain3_excluded_services</code>) covers grafana/loki/prometheus/the OTel collector/MCP bridges/exporters AND, after the 2026-06-09 alert-quality audit, the host/infra streams that were the <em>dominant</em> noise source: <code>monitoring-vm</code> + <code>jaeger</code> (Jaeger's embedded BadgerDB compaction INFO + the collector's batch-processor self-noise), <code>ollama</code>, <code>coredns</code>, <code>host-syslog</code>, <code>gpu-stack</code>, <code>drain3</code>, <code>dcgm-exporter</code>. <code>is_empty_log_body()</code> additionally drops blank lines and JSON-wrapped empty bodies (<code>{"body":"\n"}</code>) that were being mined as templates. Monitored apps (which run on k3s, never on these hosts) are unaffected.</li>
   <li><code>annotate_lines(lines, service="_unknown")</code> — batch-mode prefix for the LLM prompt. All lines in a batch attribute to one service.</li>
   <li><code>get_stats(service=None)</code> — without arg returns aggregate (across all services) plus per-service breakdown; with arg returns just that service's miner stats. Backs <code>/drain3/stats?service=</code>.</li>
   <li><code>_get_or_create_miner(service)</code> — lazy per-service instantiation.</li>

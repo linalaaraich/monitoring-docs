@@ -64,6 +64,20 @@
 <h2>Timeline</h2>
 
 <div class="entry">
+  <span class="entry-date">2026-06-09</span>
+  <h3>Alert-quality collapse — drain3 infra-noise, honest quality tags, recurrence-not-"see-prior"</h3>
+  <p><span class="tag">monitoring-triage-service</span> <code>21677b1</code> · <span class="tag">monitoring-audit-results</span> <code>2026-06-09-alert-quality-collapse.md</code></p>
+  <ul>
+    <li><strong>Symptom (Lina):</strong> every alert over the weekend gave nothing — each was either a "see prior" duplicate or an RCA hedging "cannot determine the root cause / insufficient data." <strong>Evidence (live DB, 7d):</strong> 108 of 137 investigates (78%) were hedges; <strong>91 were <code>Drain3AnomalyDetected</code></strong>; 62 of the hedges were mis-tagged <code>rca_quality=actionable</code>. Audit → RCA → brainstorm → fix → re-audit cycle.</li>
+    <li><strong>RC-1 (the source, ~91 hedges).</strong> The Drain3 BE-B3 source-exclusion denylist exact-matched service names, so the observability stack's OWN logs streamed into the miners and looked "novel" every batch: <em>Jaeger's embedded BadgerDB compaction INFO</em> (<code>badger … LOG Compact</code>), the <em>OTel collector's batch-processor self-noise</em>, even <em>empty <code>{"body":"\n"}</code> records</em>. They ship under <code>service=monitoring-vm</code> / <code>jaeger</code> — neither matched by the bare <code>monitoring</code> bucket. <strong>Fix:</strong> added <code>monitoring-vm, jaeger, ollama, coredns, host-syslog, gpu-stack, drain3, dcgm-exporter</code> to the denylist + a new <code>is_empty_log_body()</code> guard in <code>DrainAnalyzer.analyze()</code> (drops raw blanks AND JSON-wrapped empty bodies before any miner is touched).</li>
+    <li><strong>RC-3 (the mislabel, 62 rows).</strong> <code>_classify_rca_quality</code> was called with <code>decision.rca</code> but <em>not</em> <code>decision.human_cause</code> — where the hedge actually lives ("Insufficient data to determine root cause…") — and its hedge patterns omitted "evidence"/"additional investigation". So a hedge slipped through as <code>actionable</code>, escaping the data-starved retry + Stage-E quarantine and showing on the dashboard as a good RCA. <strong>Fix:</strong> the classifier now scans <code>human_cause</code> and reuses the validator's authoritative <code>_BANNED_PHRASE_PATTERNS</code> as the single source of truth (no more classifier/validator drift).</li>
+    <li><strong>RC-4 ("see prior" → recurrence).</strong> Lina asked to scrap the standalone <code>suppressed_duplicate</code> row that read "Duplicate fire … See prior RCA &lt;id&gt;". A duplicate now registers a <strong>recurrence on the existing incident</strong> (<code>RCAStore.record_recurrence</code> bumps <code>fire_count</code>+<code>last_seen</code>) with <strong>no stub feed row</strong>; the alert's detail page shows "fired N times" sourced from the incident entity, so the history lives ON the same alert.</li>
+    <li><strong>RC-2 (honest verdict).</strong> The drain3 prompt playbook gained an explicit benign-noise exit — routine compaction/healthcheck/INFO novelty is named "Benign infrastructure log noise — &lt;what&gt; (routine, not an incident)" rather than hedged. The prompt now states plainly that a Drain3 alert ALWAYS carries its own evidence (the templates), so "insufficient data" is never the right answer.</li>
+    <li>+34 regression tests (<code>test_alert_quality_2026_06_09.py</code>); suite <strong>726 green</strong>. → <a href="system-explained.html">System Explained</a></li>
+  </ul>
+</div>
+
+<div class="entry">
   <span class="entry-date">2026-06-08</span>
   <h3>G2 per-container log naming → Docker service discovery (recreate-stable)</h3>
   <p><span class="tag">monitoring-project</span> <code>bb176be</code></p>
