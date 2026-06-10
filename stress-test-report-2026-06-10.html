@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Extensive Stress Test &amp; Injected-vs-Detected — 2026-06-10 — CIRES Observability Platform</title>
+<style>
+  :root {
+    --bg: #0f1117; --card: #1a1d27; --card2: #1e2130; --border: #2a2d3a;
+    --text: #e0e0e0; --muted: #8890a0;
+    --accent-blue: #4ea8de; --accent-green: #6bcf7f; --accent-orange: #f0a050;
+    --accent-purple: #b07ee8; --accent-red: #e06070; --accent-cyan: #40d0d0;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Inter','Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); min-height:100vh; line-height:1.7; }
+  .topbar { display:flex; align-items:center; justify-content:space-between; padding:14px 32px; background:#13151e; border-bottom:1px solid var(--border); }
+  .topbar-left { display:flex; align-items:center; gap:16px; }
+  .back-link { color:var(--muted); text-decoration:none; font-size:13px; display:flex; align-items:center; gap:6px; transition:color .2s; }
+  .back-link:hover { color:var(--text); }
+  .topbar h1 { font-size:16px; font-weight:700; }
+  .wrap { padding:32px; max-width:1100px; margin:0 auto; }
+  h2 { font-size:22px; font-weight:800; margin:30px 0 14px; color:var(--accent-purple); letter-spacing:-.3px; }
+  h3 { font-size:16px; font-weight:700; margin:24px 0 10px; color:var(--accent-green); }
+  p { margin:8px 0; font-size:14px; color:var(--muted); }
+  ul, ol { margin:8px 0 8px 22px; }
+  li { font-size:13.5px; color:var(--muted); margin:6px 0; line-height:1.65; }
+  li strong { color:var(--text); }
+  a { color:var(--accent-blue); text-decoration:none; }
+  a:hover { text-decoration:underline; }
+  code { font-family:'JetBrains Mono','Fira Code',monospace; font-size:12px; background:rgba(78,168,222,.1); color:var(--accent-cyan); padding:2px 6px; border-radius:3px; }
+  .note { background:rgba(78,168,222,.06); border:1px solid rgba(78,168,222,.2); border-radius:8px; padding:14px 18px; margin:16px 0; font-size:13.5px; color:var(--muted); }
+  .note strong { color:var(--accent-blue); }
+  .warn { background:rgba(224,96,112,.06); border:1px solid rgba(224,96,112,.25); border-radius:8px; padding:14px 18px; margin:16px 0; font-size:13.5px; color:var(--muted); }
+  .warn strong { color:var(--accent-red); }
+  .quote { background:rgba(107,207,127,.06); border-left:3px solid var(--accent-green); border-radius:4px; padding:10px 16px; margin:10px 0; font-size:13px; color:var(--text); font-style:italic; }
+  .entry { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:20px 24px; margin:18px 0; }
+  .entry-date { display:inline-block; background:var(--accent-orange); color:#13151e; font-size:12px; font-weight:700; padding:4px 12px; border-radius:12px; letter-spacing:.4px; margin-bottom:10px; }
+  table { width:100%; border-collapse:collapse; margin:14px 0; font-size:13px; }
+  th { text-align:left; padding:10px 14px; background:var(--card2); color:var(--accent-purple); font-weight:600; border:1px solid var(--border); }
+  td { padding:10px 14px; border:1px solid var(--border); color:var(--muted); vertical-align:top; }
+  td code { font-size:11.5px; }
+  .pill { display:inline-block; padding:2px 10px; border-radius:10px; font-size:11px; font-weight:600; margin-left:6px; vertical-align:middle; }
+  .pill-green { background:rgba(107,207,127,.12); color:var(--accent-green); border:1px solid rgba(107,207,127,.3); }
+  .pill-orange { background:rgba(240,160,80,.12); color:var(--accent-orange); border:1px solid rgba(240,160,80,.3); }
+  .pill-red { background:rgba(224,96,112,.12); color:var(--accent-red); border:1px solid rgba(224,96,112,.3); }
+  .pass { color:var(--accent-green); font-weight:700; }
+  .miss { color:var(--accent-red); font-weight:700; }
+  .nuance { color:var(--accent-orange); font-weight:700; }
+  .tag { display:inline-block; font-size:11px; padding:1px 8px; border-radius:8px; background:rgba(120,130,150,.12); color:var(--muted); border:1px solid var(--border); margin-right:4px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-left">
+    <a href="index.html" class="back-link">&larr; Back to Index</a>
+    <span style="color:var(--border)">|</span>
+    <h1>🧪 Extensive Stress Test &amp; Injected-vs-Detected</h1>
+  </div>
+  <div style="display:flex;gap:10px;align-items:center;">
+    <span class="pill pill-orange">2026-06-10</span>
+  </div>
+</div>
+
+<div class="wrap">
+
+<h2>What this is</h2>
+<p>
+  Lina asked for an <strong>extensive</strong> stress test that would trigger <em>both</em>
+  alert paths — Grafana metric/k8s alerts <em>and</em> drain3 log anomalies — and drive the
+  pipeline all the way to a real <strong>email</strong>. This is a live
+  <strong>real-induction</strong> pass (no synthetic webhook POSTs): I injected eight genuine
+  faults on the monitored systems and recorded, fault-by-fault, what the system actually
+  detected. The headline section below is the <a href="#matrix">injected-vs-detected
+  matrix</a> — the ground truth (what I broke) against what the platform caught.
+</p>
+<div class="note">
+  <strong>Environment.</strong> Triage service + 5 MCP bridges + Ollama (qwen2.5:14b) on the
+  GPU host; monitored systems = the k3s otel-demo bed (Astronomy Shop, ~22 services, loadgen
+  live) + the 3-host fleet. Faults applied only to the otel-demo <em>test-bed</em> (flagd
+  feature flags + a deployment patch) and the k3s test-bed host (CPU) — never the GPU "crown
+  jewel" or the observability backends. All faults were reverted and the bed restored
+  (<code>ad 1/1</code>, all flags off, no lingering stress) at the end.
+</div>
+
+<h2 id="matrix">★ Injected faults vs. what the system detected</h2>
+<p>Eight real faults, injected ~12:20Z. "Ground truth" = what I actually broke. The rest is
+   what the platform did with no hints.</p>
+<table>
+  <tr>
+    <th>Fault I injected (ground truth)</th>
+    <th>Grafana alert</th>
+    <th>drain3</th>
+    <th>LLM verdict / RCA</th>
+    <th>Email</th>
+  </tr>
+  <tr>
+    <td><code>productCatalogFailure</code> flag → real <code>Product Catalog Fail</code> errors</td>
+    <td>— (error-rate stayed below the fire threshold)</td>
+    <td class="pass">✅ SYSTEM-tier novel-template anomaly</td>
+    <td class="pass">ESCALATE, <code>actionable</code> — <em>named</em> the novel error template and tied it to a regression/deploy</td>
+    <td class="pass">✅ SENT</td>
+  </tr>
+  <tr>
+    <td><code>cartFailure</code>, <code>adFailure</code>, <code>kafkaQueueProblems</code>, <code>recommendationCacheFailure</code>, <code>paymentFailure=100%</code> flags</td>
+    <td>— (folded into platform-wide error noise)</td>
+    <td class="pass">✅ folded into the same SYSTEM-tier fire (many services at once → tier escalation)</td>
+    <td class="pass">same decision (system-tier anomaly across the platform)</td>
+    <td class="nuance">one email for the family</td>
+  </tr>
+  <tr>
+    <td><code>ad</code> deployment patched unschedulable → real replica deficit (<code>0/1</code>)</td>
+    <td class="pass">✅ <code>KubeWorkloadReplicasDeficit</code> + <code>KubeWorkloadDown</code> (both critical)</td>
+    <td>—</td>
+    <td class="miss">INCONCLUSIVE→escalate, <code>data_starved</code> — <em>hedged</em> "Cannot determine / insufficient evidence"</td>
+    <td class="miss">❌ NOT SENT — shelved-in-disguise</td>
+  </tr>
+  <tr>
+    <td>Node CPU stress — 4 cores pinned on the k3s test-bed host (load avg ≈ 7.5)</td>
+    <td class="pass">✅ <code>MediumCpuUsage</code> + <code>CriticalCpuUsage</code></td>
+    <td>—</td>
+    <td>recurrence-gated / dedup-absorbed (by design)</td>
+    <td class="pass">correctly none (low-sev noise control)</td>
+  </tr>
+</table>
+
+<h3>Reading the matrix</h3>
+<ul>
+  <li><span class="pass">Both alert paths fired on real faults.</span> Grafana raised 3 alerts (1 CPU + 2 critical k8s); drain3 raised a SYSTEM-tier anomaly off genuinely-novel error logs.</li>
+  <li><span class="pass">The drain3 path produced a named cause AND emailed.</span> Its stored evidence quoted my actual injected line — <code>"Error: … Product Catalog Fail Feature Flag Enabled"</code> — and the LLM named the cause (deploy regression / novel template), not a hedge. The email subject was <code>[prod] [observability] [ESCALATE] Novel log-template anomaly</code>. Ground truth = detection.</li>
+  <li><span class="pass">Noise control held.</span> The CPU breach was recurrence-gated + dedup-absorbed — no spam — exactly as designed for low-severity flappers.</li>
+  <li><span class="miss">One real miss:</span> the two <em>critical</em> k8s workload-down alerts fired in Grafana and reached triage, but the LLM had no Kubernetes-state evidence to explain <em>why</em> <code>ad</code> was down, so it hedged, and the anti-noise "shelved-in-disguise" gate suppressed the email. <strong>A genuinely-down critical service did not page.</strong> Root-caused and fixed below.</li>
+</ul>
+
+<h2>MCP data planes — verified serving live data</h2>
+<p>Per the MCP-only invariant, every datum the LLM sees must arrive through a bridge. I hit
+   each one live during the test (the exact <code>/tools/*</code> path the pipeline uses):</p>
+<table>
+  <tr><th>Data plane</th><th>Bridge</th><th>Live result</th></tr>
+  <tr><td>Metrics</td><td><code>prometheus-mcp:8091</code></td><td class="pass">✅ <code>up</code> matrix + full k8s labels</td></tr>
+  <tr><td>Logs</td><td><code>loki-mcp:8092</code></td><td class="pass">✅ 200 + live log lines</td></tr>
+  <tr><td>Traces</td><td><code>jaeger-mcp:8093</code></td><td class="pass">✅ real traces (span counts, durations, ops)</td></tr>
+  <tr><td>Templates</td><td><code>drain3-mcp:8094</code></td><td class="pass">✅ healthy, triage reachable</td></tr>
+  <tr><td>History</td><td><code>rca-history-mcp:8095</code></td><td class="pass">✅ healthy, DB reachable</td></tr>
+</table>
+<p>And the data demonstrably <em>reaches the model</em>: the ESCALATE decision's stored
+   <code>evidence</code> contained the real injected log line, proving the chain
+   bridge → context → LLM holds end-to-end.</p>
+
+<h2>Root cause of the one miss</h2>
+<div class="entry">
+  <span class="entry-date">Why critical KubeWorkloadDown didn't page</span>
+  <ul>
+    <li>The "why is <code>ad</code> down" answer lives in <strong>Kubernetes state</strong> (kube-state-metrics replica counts, pod phase / scheduling) — not in app metrics, app logs, or traces.</li>
+    <li>The pipeline's default Prometheus query for an alert is service-scoped (<code>{job=~".*ad.*"}</code>), which matches <em>no</em> series for a kube workload alert → the LLM saw an empty context and hedged "cannot determine".</li>
+    <li>A second, subtler bug: the alert arrives from Grafana labelled <code>severity: critical</code>, but the small model often omits <code>severity</code> in its JSON, so the <em>decision</em> defaulted to <code>warning</code> — silently downgrading a critical and letting the anti-noise gates (recurrence gate, shelved-in-disguise) treat it as suppressible noise.</li>
+    <li>Net effect: hedge + downgrade + anti-noise gate = a critical incident with no email.</li>
+  </ul>
+</div>
+
+<h2>The fix (code-complete, committed)</h2>
+<p>Three changes in <code>monitoring-triage-service</code> (committed to <code>main</code>;
+   774 tests green incl. new cases):</p>
+<table>
+  <tr><th>#</th><th>Change</th><th>File</th><th>Effect</th></tr>
+  <tr>
+    <td>1</td><td>k8s-state evidence for <code>Kube*</code> alerts</td><td><code>context.py</code></td>
+    <td>Query kube-state-metrics (desired/available/unavailable replicas, pod phase, last-terminated reason) instead of the empty service-job match → the LLM gets real evidence and can name the cause (0/N available, pod Pending/unschedulable, OOMKilled).</td>
+  </tr>
+  <tr>
+    <td>2</td><td>Severity floor = alert's Grafana severity</td><td><code>llm_client.py</code></td>
+    <td>Clamp the decision severity up to the alert's authoritative Grafana label, so a small-model omission can no longer downgrade a critical to warning.</td>
+  </tr>
+  <tr>
+    <td>3</td><td>Critical/high bypass the shelved-in-disguise gate</td><td><code>pipeline.py</code></td>
+    <td>A critical/high alert pages even when the RCA is thin — silence on a critical is worse than a low-confidence email. Low-severity noise is still shelved (regression-tested).</td>
+  </tr>
+</table>
+<div class="warn">
+  <strong>Honesty / status.</strong> The fix is committed and unit-tested, but at the time of
+  writing it has <em>not</em> yet been verified post-deploy on the live GPU host — the deploy
+  + a real re-induction of <code>KubeWorkloadDown</code> (to confirm the critical email
+  actually fires with a named cause) is being handled separately to avoid two agents driving
+  the live triage container at once. This page will be updated with the post-deploy
+  re-induction result. <em>Do not read the fix as proven-live yet.</em>
+</div>
+
+<h2>Overall verdict</h2>
+<div class="note">
+  <strong>Both alert paths work and at least one real email fired during the test.</strong>
+  The platform fired Grafana metric + critical-k8s alerts and a drain3 log anomaly on real
+  faults; the drain3 path produced a named, evidence-grounded RCA and sent an email; all 5
+  MCP bridges served live data into the model; and low-severity CPU noise was correctly
+  suppressed. The one real gap — critical k8s workload-down not paging because the LLM lacked
+  Kubernetes-state evidence — was root-caused and fixed in code (pending live re-induction).
+</div>
+
+<p style="margin-top:18px;">See also: the
+  <a href="stress-test-report-2026-06-09.html">2026-06-09 stress &amp; functional report</a>,
+  the <a href="engineering-log.html">engineering log</a>, and the audit trail under
+  <code>monitoring-audit-results/audits/</code>.</p>
+
+</div>
+</body>
+</html>

@@ -169,6 +169,24 @@
     </div>
   </a>
 
+  <a href="stress-test-report-2026-06-10.html" class="card" style="border-color:rgba(240,160,80,.45); background:linear-gradient(180deg, rgba(240,160,80,.07), var(--card));">
+    <div class="card-header">
+      <div class="card-icon" style="background:rgba(240,160,80,.14);">🧪</div>
+      <div class="card-header-text">
+        <h2>★ Extensive Stress Test &amp; Injected-vs-Detected — 2026-06-10</h2>
+        <p>Eight real faults injected to trigger <strong>both</strong> alert paths and a real email. Headline = the <strong>injected-vs-detected matrix</strong> (ground truth vs what the platform caught): drain3 named a novel-template cause and <strong>emailed</strong>; Grafana fired 3 alerts (CPU + 2 critical k8s); all 5 MCP bridges served live data. Surfaced one real miss — critical <code>KubeWorkloadDown</code> didn't page (no k8s-state evidence) — now root-caused and fixed in code (pending live re-induction).</p>
+      </div>
+    </div>
+    <div class="card-footer">
+      <div class="card-tags">
+        <span class="tag tag-orange">test report</span>
+        <span class="tag tag-green">real induction</span>
+        <span class="tag tag-red">gap found + fixed</span>
+      </div>
+      <div class="card-arrow">&rarr;</div>
+    </div>
+  </a>
+
   <a href="stress-test-report-2026-06-09.html" class="card" style="border-color:rgba(240,160,80,.45); background:linear-gradient(180deg, rgba(240,160,80,.07), var(--card));">
     <div class="card-header">
       <div class="card-icon" style="background:rgba(240,160,80,.14);">🧪</div>
