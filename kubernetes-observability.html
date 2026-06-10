@@ -127,6 +127,32 @@
 for:  3m</code></pre>
 <p>When any deployment has unavailable replica(s) for 3 minutes, the alert fires with <code>exported_namespace</code> + <code>deployment</code> labels identifying which one, and routes to the triage webhook for AI root-cause analysis. No more "the platform is blind to its own apps' health" — scale a deployment to zero and a triage alert follows. (Source: <code>roles/grafana/templates/alertrules.yml.j2</code>.)</p>
 
+<h2>What shipped (2026-06-10) — demo-app metrics + crash-loop coverage</h2>
+
+<h3>1. otel-demo OTLP metrics wired into Prometheus <span class="pill pill-green">commit e8fffd3</span></h3>
+<p>The in-cluster OTel Collector had only <code>traces</code> + <code>logs</code> pipelines, so the 22 Astronomy Shop services' OTLP <em>metrics</em> hit :4318 and were <strong>silently discarded</strong> — the Sprint-5 bed was 2/3-signal, Prometheus had zero demo app metrics, and a behavioral flagd fault could never fire a metric alert (2026-06-09 audit O-2, P1). The fix adds a <code>metrics</code> pipeline terminating in a <code>prometheus</code> <strong>pull</strong> exporter on :8889, plus a dedicated <code>otel-demo-app-metrics</code> scrape job routed through the same k3s API-server pod proxy as every other in-cluster scrape (section A below).</p>
+<ul>
+<li><strong>Why pull, not <code>prometheusremotewrite</code>:</strong> the monitoring-VM Prometheus runs <em>without</em> <code>--web.enable-remote-write-receiver</code>, and flipping that flag means recreating the container (stack restart). A pull target also stays auditable as <code>up{job="otel-demo-app-metrics"}</code>.</li>
+<li><strong>Label semantics:</strong> the exporter mints <code>job=&lt;service.name&gt;</code> / <code>instance=&lt;service.instance.id&gt;</code> per the OTLP→Prometheus compat spec; the scrape job sets <code>honor_labels: true</code> so they survive relabeling. So demo metrics are queried as <code>{job="checkout"}</code>, <code>{job="frontend"}</code>, … — only the scrape meta-metrics (<code>up</code>, <code>scrape_*</code>) carry <code>job="otel-demo-app-metrics"</code>. Don't be fooled by the meta-job looking "empty".</li>
+<li><strong>Cardinality, measured not guessed:</strong> head series 28,147 → ~32.6k after first scrapes (~3.5k samples/scrape across all services) on the t3.large. <em>No keep-list filter applied, deliberately</em> — full RED + runtime metrics are worth more for RCA than the ~4.5k saved series. Revisit with a <code>filter</code>/<code>keep</code> processor if <code>prometheus_tsdb_head_series</code> approaches ~150k.</li>
+</ul>
+<p>Verified live: 16+ demo services report series (<code>checkout</code> has 411 duration/request series; <code>frontend</code> shows the load-generator's ~0.9 req/s via <code>rate(http_server_duration_milliseconds_count[5m])</code>).</p>
+
+<h3>2. <code>PodCrashLooping</code> — the fast-loop blind spot closed <span class="pill pill-green">commit c6dbf81</span></h3>
+<p>The <code>accounting</code> pod (otel-demo) OOMKilled every ~17–19 min for days (exit 137, 120Mi limit, 420+ restarts) with <strong>zero alerts</strong>: each crash self-healed in seconds, so <code>KubeWorkloadDown</code>'s <code>for: 3m</code> gate never saw 3 continuous minutes of unavailability, and the pod-resource rules are hard-scoped to the <code>app|rental</code> namespaces. The new rule keys on the restart <em>rate</em> itself, which a crash loop cannot hide:</p>
+<pre><code>expr: max by (namespace, pod, service) (label_replace(… 3× …,
+        increase(kube_pod_container_status_restarts_total{exported_namespace!="kube-system"}[1h])
+      )) > 1
+for:  5m        # noDataState: OK</code></pre>
+<ul>
+<li><strong>Window sizing:</strong> <code>[1h]</code> so even a slow-burn loop (~3 restarts/h) trips it; <code>for: 5m</code> rides out a single legitimate restart spike. Trade-off documented in the template: after the loop is fixed, the alert takes up to the [1h] tail to clear (or clears via staleness when the pod is replaced).</li>
+<li><strong>Label surgery:</strong> same <code>exported_*</code> → real-name <code>label_replace</code> trick as <code>KubeWorkloadDown</code> (section D below) — KSM's labels arrive prefixed because the scrape goes through the API-server proxy with <code>honor_labels</code> off for KSM; the rule re-mints <code>namespace/pod/service</code> so triage gets a real affected service.</li>
+<li><strong>Proven on a live breach, not a unit test:</strong> the rule was hot-reloaded while the real accounting OOM loop was running → fired → flowed Grafana → API GW → triage (decision <code>29a05711</code>, <code>affected_service=accounting</code>). Only then was the workload fixed (limit 120Mi → 256Mi, commit <code>4c1cc5b</code> — upstream flink default is known-hungry) and the pod went <code>Running 0 restarts</code>.</li>
+</ul>
+
+<h3>3. First fireable latency SLO + honest dormant rules <span class="pill pill-green">same commit</span></h3>
+<p><strong><code>HighDemoFrontendP95Latency</code></strong> (<code>histogram_quantile(0.95, …http_server_duration_milliseconds_bucket{job="frontend"}…) &gt; 1000ms</code>, <code>for: 2m</code>) rides the new demo metrics + the load-generator's 24/7 traffic — the first latency rule on this bed with a real signal behind it, and the one a behavioral flagd fault (e.g. <code>adHighCpu</code>) can actually trip. <strong><code>HighP95Latency</code></strong> (spring-boot sees only excluded <code>/actuator</code> probe traffic) and <strong><code>HighKongP95Latency</code></strong> (the demo bypasses Kong via its own frontend-proxy) are <em>kept deliberately</em> — they're production-relevant on the CIRES private cloud where real traffic exists — but are now explicitly marked <span style="color:#c98a00">DORMANT ON THE PoC BED</span> in the template with <code>noDataState: OK</code>, so they sit <code>inactive/health=ok</code> instead of erroring or false-alerting. Do <em>not</em> "fix" them by setting <code>noDataState: Alerting</code>.</p>
+
 <h2>How to verify (real induction, not synthetic)</h2>
 <p>Per the real-induction-only invariant, confirm by inducing a genuine breach rather than POSTing a synthetic webhook:</p>
 <pre><code># Confirm k8s targets are up
@@ -150,6 +176,9 @@ kubectl scale deploy/spring-boot --replicas=1   # restore</code></pre>
 <tr><td>Cert/token shipping to monitoring VM (0644)</td><td><code>playbooks/k8s-manifests.yml --tags prometheus</code></td></tr>
 <tr><td>kube-state-metrics deployment</td><td><code>manifests/kube-state-metrics/kube-state-metrics.yaml</code></td></tr>
 <tr><td>Generic workload-down alert</td><td><code>roles/grafana/templates/alertrules.yml.j2</code> (<code>KubeWorkloadDown</code>)</td></tr>
+<tr><td>Demo-app metrics pipeline + <code>prometheus</code> exporter :8889 (2026-06-10)</td><td><code>manifests/otel-collector/configmap.yaml</code> (+ <code>daemonset.yaml</code>/<code>service.yaml</code> port)</td></tr>
+<tr><td><code>otel-demo-app-metrics</code> scrape job (<code>honor_labels</code>)</td><td><code>roles/prometheus/templates/prometheus.yml.j2</code></td></tr>
+<tr><td>Crash-loop alert + demo latency SLO + dormant-rule annotations</td><td><code>roles/grafana/templates/alertrules.yml.j2</code> (<code>PodCrashLooping</code>, <code>HighDemoFrontendP95Latency</code>)</td></tr>
 </table>
 
 <div class="note">Step-by-step runbooks for each of these fixes — including the exact drift checks and recovery commands — live on the <a href="audit-fix-methodology.html">Audit &amp; Fix Methodology</a> page.</div>

@@ -372,6 +372,20 @@
   the incident entity, and the <code>/dashboard/incidents</code> page rolls every
   fingerprint into one row with fire-count + duration. No clutter row in the feed.
 </p>
+<p class="note">
+  <strong>2026-06-10 (F-2):</strong> the incident <code>fire_count</code>
+  reconciliation moved from the detail handler into the <em>shared</em>
+  <code>_v2_transform_row</code>, fed by one bulk
+  <code>get_fire_counts_for_fingerprints()</code> query per page render (MAX
+  semantics — never lowers the slab count). Feed, detail, and the incidents page
+  now report the same "fired N times" for the same alert; previously the feed
+  undercounted dedup-absorbed recurrences (e.g. 21 vs the true 24). Historical
+  <code>suppressed_duplicate</code> rows (pre-RC-4) render as
+  "Recurrence (suppressed)" with a <code>recurrence-suppressed</code> tag, and
+  every <code>/dashboard/incidents</code> row click-throughs to its alert detail
+  via <code>latest_decision_id</code> (id-prefix fallback covers rows older than
+  the feed's 15-day scan).
+</p>
 <p>
   Second check: Layer-2 pre-LLM suppression
   (<span class="file-ref">pipeline.py:90</span> calling
