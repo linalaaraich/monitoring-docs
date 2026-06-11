@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Project Assessment — exemplars, archetypes & where the platform really stands · 2026-06-11</title>
+<style>
+  :root { --bg:#13151e; --card:#1a1d29; --border:#2a2e3f; --text:#e8eaf2; --muted:#9aa3b8;
+    --accent-purple:#b07ee8; --accent-cyan:#5bc8d8; --accent-green:#6fd388; --accent-orange:#f0a050; --accent-red:#e06070; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; line-height:1.6; }
+  .wrap { max-width:880px; margin:0 auto; padding:40px 20px 80px; }
+  h1 { font-size:26px; margin:0 0 6px; } h2 { font-size:20px; color:var(--accent-purple); margin-top:36px; }
+  h3 { font-size:16px; color:var(--accent-cyan); margin-top:24px; }
+  .sub { color:var(--muted); font-size:14px; margin-bottom:28px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:18px 22px; margin:16px 0; }
+  .good { border-left:3px solid var(--accent-green); } .gap { border-left:3px solid var(--accent-orange); }
+  .verdict { border-left:3px solid var(--accent-purple); background:linear-gradient(180deg, rgba(176,126,232,.07), var(--card)); }
+  code { background:#11131b; border:1px solid var(--border); border-radius:4px; padding:1px 6px; font-size:13px; }
+  .muted { color:var(--muted); } ul { padding-left:22px; } li { margin:7px 0; }
+  a { color:var(--accent-cyan); }
+</style>
+</head>
+<body><div class="wrap">
+
+<h1>Project assessment — the exemplar system, and where the platform really stands</h1>
+<p class="sub">Written 2026-06-11 at Lina's request, the day of the final internship presentation. Opinion + evidence, no changes implemented. Two parts: a review of the exemplar/archetype machinery, then an honest assessment of the whole project given where its application is today.</p>
+
+<h2>Part 1 — Exemplars &amp; archetypes: good design, mid maturity</h2>
+
+<div class="card good">
+<h3 style="margin-top:0">What is genuinely good</h3>
+<ul>
+<li><strong>The idea is right and rare.</strong> 16 archetypes + a default, each a worked example of a <em>shape of incident</em> (OOM loop, gateway-vs-upstream latency attribution, cascade kill-chain, synthetic blip, cert pre-failure…) injected into the prompt as a template. Few-shot-by-archetype is exactly how you get a 14B model to write like a senior SRE — and the "structural, not factual" rendering intent (teach the shape, not the numbers) is the correct instinct.</li>
+<li><strong>Selection is principled.</strong> Scoring gates on an alertname regex, then weights service match (0.40), deployment type (0.30), signal (0.20), severity (0.10) — a sane relevance model, with a penalty when a service list exists but doesn't include the alert's service.</li>
+<li><strong>The default exemplar is the unsung hero.</strong> Even with no archetype match, the model gets "lead with a NAMED cause, cite signals as support, rank cheap-and-reversible actions first" — that default shape is responsible for a lot of the platform's prose quality.</li>
+<li><strong>Meta-archetypes exist</strong> (bounded-agency-resolves-inconclusive, closed-loop-feedback-override) — teaching the model how to use the <em>pipeline's own mechanisms</em>, not just diagnose. Clever and unusual.</li>
+</ul>
+</div>
+
+<div class="card gap">
+<h3 style="margin-top:0">The gaps — why it does not yet "guarantee best results"</h3>
+<ul>
+<li><strong>1. Coverage drift — the library tracks last month's alert taxonomy.</strong> The flagship rules of the past 48 hours — <code>KubeWorkloadDown</code> and <code>KubeWorkloadReplicasDeficit</code>, the ones that went 12/12 in the final tests — match <em>no archetype regex at all</em> and fall to the generic default. Same for <code>HighDemoFrontendP95Latency</code>. <code>PodCrashLooping</code> only got its archetype yesterday, mid-firefight. The library has no mechanism that forces it to keep up: <em>a coverage check (every live rule title must match ≥1 archetype or be consciously assigned to default) belongs in CI.</em></li>
+<li><strong>2. "Structural, not factual" is an intent, not a guarantee — proven live.</strong> Yesterday a real verdict cited the exemplar's example number ("128Mi memory limit") instead of the evidence's real one (4Mi). A numeral guard was added after, but the stronger fix is <em>numberless exemplars</em>: replace every digit in archetype text with placeholders (<code>&lt;N&gt;Mi</code>, <code>&lt;X&gt;%</code>) so there is nothing to leak.</li>
+<li><strong>3. Selection failures are silent.</strong> The <code>oom-crashloop-restart</code> archetype was gated out for all 22 demo services for a full day because <code>deployment_type</code> resolved "unknown" — and nothing surfaced it. Which exemplar matched (and its score) is logged nowhere and <strong>persisted nowhere</strong>: there is no <code>exemplar_id</code> column on decisions. That means the central question — <em>"which archetypes actually improve RCA quality?"</em> — is currently unanswerable. For a platform whose whole culture is measured honesty, the exemplar layer is the one part flying blind.</li>
+<li><strong>4. Tie-breaking by YAML list order</strong> ("placed after crashloop-bad-config so on ties the established one wins") is an invisible contract someone will break by reordering the file.</li>
+<li><strong>5. A few archetypes are stale fiction.</strong> <code>adaptive-threshold-noop</code> describes adaptive rules that were converted to static thresholds on 2026-06-03; <code>synthetic-blip-dismiss</code> predates the real-induction-only philosophy. Harmless today, but a library of examples the system can no longer produce erodes trust in the rest.</li>
+</ul>
+<p class="muted">If you do only two things later: (a) persist <code>exemplar_id</code> + score on every decision and put per-archetype quality on the Stats page; (b) add the missing workload-down / unschedulable-pending archetypes — yesterday's five-iteration saga would likely have been two with one.</p>
+</div>
+
+<h2>Part 2 — The project, honestly, given where it is</h2>
+
+<div class="card good">
+<h3 style="margin-top:0">What you should be proud of (and say out loud today)</h3>
+<ul>
+<li><strong>The architecture made the right bets, and they were validated the hard way.</strong> The MCP-only hallucination firewall turned out to be the project's identity: it makes every figure traceable, it caught real bypasses, and it doubles as the portability seam toward Zabbix/anything. The "deterministic code does arithmetic, the LLM does narrative" thesis was re-proven this very week — every hard win of the last 48 hours (digest, kube-state summary, context-window fix) came from moving work <em>out</em> of the model into code.</li>
+<li><strong>Honesty as a feature is real, not a slogan.</strong> Quality tags, quarantine, confidence clamps, "needs review" — the platform would rather admit ignorance than fabricate. That is rarer in AIOps products than anyone admits.</li>
+<li><strong>Engineering hygiene far beyond a PoC's pay grade:</strong> 800+ tests in CI, everything in Terraform/Ansible with vault+preflight, a 3-command BYO deploy a non-author can run, continuous study-grade docs, and a testing culture of <em>real induced faults only</em>. Most internships produce a demo; this produced an operable system with an audit trail.</li>
+<li><strong>The numbers are honest and good:</strong> ~38 s median to a written RCA, noise gates absorbing dozens of repeats with zero spam, 12/12 named causes in the final verification rounds.</li>
+</ul>
+</div>
+
+<div class="card gap">
+<h3 style="margin-top:0">Where it actually stands — and what it has not yet proven</h3>
+<ul>
+<li><strong>It is validated on a bed, not in a battlefield.</strong> The 22-service Astronomy Shop + one small CRUD app prove the chain works end-to-end. They do not prove behavior under production diversity: hundreds of services, messy legacy logs, humans disagreeing with verdicts, alert storms from real network events. The PoC's biggest unknown is not technical — it's <em>scale-truth</em>.</li>
+<li><strong>The 14B model is the ceiling, and the system knows it.</strong> It reliably <em>confirms</em> well-presented evidence; it does not <em>discover</em>. This week showed both: 0.95 named causes when code pre-digested the evidence, and stubborn hedging whenever it had to interpret raw data. The platform's real IP is everything around the model — which also means the model is swappable upward the day a better small model exists.</li>
+<li><strong>Known operational gaps, all documented:</strong> no HA story (single GPU host, single observability VM); the escalation-side cooldown gap (a sustained critical re-pages per pod — 20 emails in 37 min, measured); the severity clamp is floor-only; the feedback loop exists but has too few ratings to learn from yet; and the evaluation loop (systematic RCA-accuracy scoring over time) is manual audits, not a metric.</li>
+<li><strong>The bus factor is the honest risk.</strong> The system was designed by one person directing an AI pair at high speed. The docs and Ansible mitigate this seriously — but production needs a named operational owner and a few weeks of co-running.</li>
+</ul>
+</div>
+
+<div class="card verdict">
+<h3 style="margin-top:0">The one-paragraph verdict</h3>
+<p>This is a genuinely well-architected platform with engineering hygiene that most production teams would envy, built in four months by one person who made two correct strategic bets early — provenance-firewalled AI and deterministic-first design — and then proved them with real faults rather than slides. What it has <em>not</em> yet proven is behavior at production scale and under human ownership, and its exemplar layer — the most leverage-per-line part of the prompt system — is the one component without a measurement loop. The right next step is exactly what the supervisor proposes: a shadow-mode deployment on the private cloud beside the NOC, 2–3 real services, weekly accuracy scoring through the feedback loop, EPIC15 hardening as it goes. If those weeks go well, this stops being a PoC and becomes a product. It deserves that chance.</p>
+</div>
+
+<p class="muted">Sources: <code>app/exemplars/library.yaml</code> (16 archetypes + default) and the scorer in <code>app/exemplars/__init__.py</code>, the live rule set (24 provisioned rules), this week's engineering-log entries and audit records (<code>monitoring-audit-results</code>), and the live decision history. No changes were implemented for this review.</p>
+
+</div></body>
+</html>
