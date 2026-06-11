@@ -67,6 +67,12 @@
 <li><span class="note">N4</span> The drain3 → deploy-bridge call passes an empty <code>namespace=</code> (drain3 alerts carry no namespace label) — works, but should pass the emitter's namespace when the analyzer knows it.</li>
 </ul>
 
+<h2>Same-day cycle outcome</h2>
+<ul>
+<li><strong>N1 + N2 + N4 fixed and deployed</strong> (triage <code>6acebf3</code>, 829 tests): verdict tokens humanized (0 leaks live), the "actionable" tag suppressed on dismissals, drain3 alerts now carry a namespace hint for the deploy bridge. N3 documented as a known timing class.</li>
+<li><strong>Cycle-2 re-audit finding (documented trade-off, deliberately not tuned pre-presentation):</strong> the "criticals never Layer-2 suppress" rule means a flapping critical (six TargetDown scrape blips in 5 min during the battery's churn) re-investigates every fire — each honestly dismissed at 0.40, no emails, but ~6 GPU passes. Design note: scope the bypass to fresh-outage shapes (e.g. allow suppression when the prior dismissal was a same-fingerprint blip minutes ago), post-presentation.</li>
+<li>Transition-window decisions during revert were sane: KubeWorkloadDown 0.90 ("pod encountered an 'Error' during startup and remains Pending"), PodCrashLooping 0.85 naming a misconfiguration — which is exactly what the fault was.</li>
+</ul>
 <p class="sub">Bed state at close: spring-boot 1/1 on the original secretKeyRef spec (verified per-ReplicaSet), app API 200, stress ended, all otel-demo pods untouched throughout. Follow-up fixes: see the engineering log entry for the same-day cycle.</p>
 
 </div></body>
