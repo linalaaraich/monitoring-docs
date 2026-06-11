@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prod-Mimic Test Report — 2026-06-11 · multi-app, multi-env real inductions</title>
+<style>
+  :root { --bg:#13151e; --card:#1a1d29; --border:#2a2e3f; --text:#e8eaf2; --muted:#9aa3b8;
+    --green:#6fd388; --orange:#f0a050; --purple:#b07ee8; --cyan:#5bc8d8; --red:#e06070; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; line-height:1.6; }
+  .wrap { max-width:960px; margin:0 auto; padding:40px 20px 80px; }
+  h1 { font-size:25px; margin:0 0 6px; } h2 { font-size:19px; color:var(--purple); margin-top:34px; }
+  .sub { color:var(--muted); font-size:14px; margin-bottom:24px; }
+  table { width:100%; border-collapse:collapse; margin:14px 0; font-size:13px; }
+  th { text-align:left; padding:9px 12px; background:#1e2130; color:var(--purple); border:1px solid var(--border); }
+  td { padding:9px 12px; border:1px solid var(--border); color:var(--muted); vertical-align:top; }
+  td b, td strong { color:var(--text); }
+  code { background:#11131b; border:1px solid var(--border); border-radius:4px; padding:1px 5px; font-size:12px; color:var(--cyan); }
+  .pass { color:var(--green); font-weight:700; } .note { color:var(--orange); font-weight:700; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:16px 20px; margin:14px 0; }
+  .q { border-left:3px solid var(--cyan); font-style:italic; color:var(--text); }
+  ul { padding-left:22px; } li { margin:6px 0; color:var(--muted); } li strong { color:var(--text); }
+</style>
+</head>
+<body><div class="wrap">
+
+<h1>Prod-mimic test report — different apps, different environments</h1>
+<p class="sub">2026-06-11, 17:40–17:57 UTC. Goal (Lina): test the platform the way production would exercise it — multiple applications, multiple environments, real faults only. Method: every fault below was genuinely induced on the live bed and reverted; no synthetic webhooks. Format: <strong>what was done</strong> (exact action + time) vs <strong>what the system concluded</strong> (verbatim). The platform under test ran the full presentation-day build (six MCP bridges, fabricated-RCA guards, env tags, display names).</p>
+
+<h2>The battery</h2>
+<table>
+<tr><th>Test</th><th>What was done (ground truth)</th><th>What the system concluded (verbatim)</th><th>Grade</th></tr>
+<tr>
+<td><b>I1 — infra env</b><br>noise control</td>
+<td><code>stress-ng --cpu 4 --timeout 360s</code> on the k3s host at <b>17:40:46</b> (a real CPU saturation, the chronic-flapper scenario).</td>
+<td><code>ef21205e</code> MediumCpuUsage · service k3s-node · <b>env infra</b> · <code>recurrence_gated_pre_llm</code> — recognised as the known flapper, <b>no LLM spend, no email</b>. Bonus cascade: the stress starved a scrape → TargetDown (critical) fired and was <b>dismissed at 0.40</b>: <span class="q">"Brief scrape blip on the monitoring VM — it missed two checks then recovered on its own. No real outage."</span></td>
+<td class="pass">PASS</td>
+</tr>
+<tr>
+<td><b>P1 — employee app, env prod</b><br>critical outage</td>
+<td><b>17:41:16</b>: <code>spring-boot</code> (namespace <code>app</code>) made truly unschedulable (strategy Recreate + impossible nodeSelector) — the workload was genuinely DOWN for 6 minutes. Reverted 17:47:29.</td>
+<td><code>8d69858a</code> KubeWorkloadDown · <b>critical · env prod · 0.95</b>: <span class="q">"The spring-boot workload is unavailable because its pod is in Pending status and cannot be scheduled."</span> + Deficit twin at 0.95. Emails: <code>[prod] [employee] [ESCALATE]</code> ×2 within 90 s of the rule firing. Correct mechanism (scheduling, <b>no OOM contamination</b>), correct env, correct display tenant.</td>
+<td class="pass">PASS</td>
+</tr>
+<tr>
+<td><b>P2 — employee app, env prod</b><br>bad deploy (canary shape)</td>
+<td><b>17:50:52</b>: a real bad rollout — <code>SPRING_DATASOURCE_PASSWORD=wrong-password-test</code> set on the deployment. RollingUpdate kept the old pod serving while the new pod crash-failed on DB auth — the classic "deploy broke the canary" scenario. Reverted 17:54:45; exact original secretKeyRef restored and verified at ReplicaSet level; app API 200.</td>
+<td><code>beca5cdb</code> <b>Drain3AnomalyDetected · service spring-boot (the real emitter, not the synthetic drain3 label) · env prod · 0.75 actionable</b>: <span class="q">"Spring Boot application failed to start because of an error creating the 'entityManagerFactory' bean — access denied for user 'appuser'."</span> RCA names the credential failure with the live DB IP (<code>'appuser'@'10.0.1.152'</code>) — the cause quoted from the novel log line, exactly as the morning's fix wave demands. The <b>deploy bridge was invoked</b> (<code>recent_deploys?service=spring-boot</code>, 200) and tracked the rollout lineage correctly. Deficit twin fired at 0.95 during the rollout window.</td>
+<td class="pass">PASS</td>
+</tr>
+</table>
+
+<h2>Scorecard against the morning's fixes</h2>
+<ul>
+<li><strong>Fix C live-proven:</strong> the drain3 fire carried <code>affected_service=spring-boot</code> — the cross-reference queried a real service; env resolved <code>prod</code>, not unknown.</li>
+<li><strong>Fixes A/B live-proven:</strong> the cause is a quote of the decisive novel line (entityManagerFactory / access denied) — no deploy story, no template slots, no exemplar echo.</li>
+<li><strong>Fix F live-proven:</strong> the deploy bridge answered during a real investigation and its rollout lineage matched reality (it watched the bad rollout AND the revert happen, with prior-ReplicaSet ages).</li>
+<li><strong>Env/naming/notification stack:</strong> three different envs appeared correctly in one 15-minute window — <code>infra</code> (gated quietly), <code>prod</code> (paged loudly), with <code>[prod] [employee]</code> email prefixes and the light template.</li>
+<li><strong>Noise economics:</strong> 6 alerts entered, 2 investigations were free (gated/dismiss-cheap), 4 emails went out — all four genuinely page-worthy criticals on a real prod-app outage.</li>
+</ul>
+
+<h2>Observations feeding the next audit-RCA cycle</h2>
+<ul>
+<li><span class="note">N1</span> Services page leaks raw <code>see_previous_rca:&lt;uuid&gt;</code> tokens in the "By verdict" column (9 occurrences) — internal enum reaching the operator surface.</li>
+<li><span class="note">N2</span> Quality-tag semantics on dismissals: TargetDown's dismiss verdict carries <code>rca_quality=actionable</code> — the tag grades prose quality, but reading "actionable" on a dismissal confuses operators.</li>
+<li><span class="note">N3</span> A stale-window refire artifact: <code>041f2e68</code> (KubeWorkloadDown 0.40) investigated a window that predates its evidence — known timing class (alert re-fired right at the P1-revert/P2-start boundary). Honest low confidence; acceptable, documented.</li>
+<li><span class="note">N4</span> The drain3 → deploy-bridge call passes an empty <code>namespace=</code> (drain3 alerts carry no namespace label) — works, but should pass the emitter's namespace when the analyzer knows it.</li>
+</ul>
+
+<p class="sub">Bed state at close: spring-boot 1/1 on the original secretKeyRef spec (verified per-ReplicaSet), app API 200, stress ended, all otel-demo pods untouched throughout. Follow-up fixes: see the engineering log entry for the same-day cycle.</p>
+
+</div></body>
+</html>
