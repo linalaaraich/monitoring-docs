@@ -293,14 +293,17 @@ docker compose up -d --force-recreate triage-service</code></pre>
 <h2>Known gaps / followups</h2>
 
 <div class="callout warn">
-  <div class="callout-label">Not yet pipelined</div>
+  <div class="callout-label">Resolved — pipelined since</div>
   <p style="margin:0">
-    The five MCP servers (<code>prometheus</code>, <code>loki</code>,
-    <code>jaeger</code>, <code>drain3</code>, <code>rca-history</code>)
-    are still built locally under the <code>cires/mcp-*:${IMAGE_TAG}</code>
-    convention. They'll each get their own <code>build-push.yml</code>
-    once their repos stabilise — same workflow template as this one, with
-    the repo name swapped in.
+    The MCP servers were originally built locally under the
+    <code>cires/mcp-*:${IMAGE_TAG}</code> convention. This gap is closed:
+    <code>monitoring-mcp-servers</code> now has its own matrix
+    <code>build-push.yml</code> (same workflow template as this one) that
+    builds all <strong>six</strong> images to GHCR — <code>mcp-prometheus</code>,
+    <code>mcp-loki</code>, <code>mcp-jaeger</code>, <code>mcp-drain3</code>,
+    <code>mcp-rca-history</code>, and <code>mcp-deploy</code> (added
+    2026-06-11) — with a paths filter so a change to one MCP rebuilds only
+    that MCP.
   </p>
 </div>
 

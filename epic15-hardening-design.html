@@ -154,7 +154,7 @@
       <li><strong>Ingress edge</strong> — Grafana → <code>/webhook/grafana</code>. Today fronted in the
       AWS PoC by API Gateway (implicit auth boundary); on-prem there is <em>no</em> API Gateway, so the
       webhook needs app-level auth + TLS.</li>
-      <li><strong>The AI stack's internal mesh</strong> — triage ⇄ 5 MCP bridges ⇄ Ollama, on the
+      <li><strong>The AI stack's internal mesh</strong> — triage ⇄ 6 MCP bridges ⇄ Ollama, on the
       <code>ai-stack</code> docker network / tailnet. Network-isolated today (security groups confirmed
       tight), but <em>zero</em> application auth — defense-in-depth is missing.</li>
       <li><strong>Data &amp; supply chain at rest</strong> — container image provenance, secrets on
@@ -238,7 +238,7 @@
     <p>
       <strong>Current:</strong> <code>context.py:481</code> calls MCP <code>/tools/*</code> over plain
       HTTP with no auth header; every MCP <code>main.py</code> serves <code>/tools/*</code> with no
-      <code>Depends</code>/auth. Confirmed open across all five bridges.
+      <code>Depends</code>/auth. Confirmed open across all five bridges at review time (a sixth, <code>deploy-mcp :8096</code>, joined 2026-06-11 under the same open contract).
     </p>
     <p><strong>Design:</strong> a single shared <strong>service token</strong> (env
       <code>MCP_SERVICE_TOKEN</code>) injected into the triage client and each MCP server. The client
@@ -390,7 +390,7 @@
       warn-then-enforce rollout. <em>This is the "Friday hardening overdue since 2026-05-01" item.</em></li>
       <li><strong>S5 digest-pinning</strong> (CODE) — pure IaC, no secret, low risk; lock down the
       supply chain and fold in the G2 collector pin.</li>
-      <li><strong>S2 MCP service token</strong> (CODE) — shared dependency across the five bridges.</li>
+      <li><strong>S2 MCP service token</strong> (CODE) — shared dependency across the six bridges.</li>
       <li><strong>Secrets to vault + preflight</strong> (CODE for the scaffolding: S4b, S4 var, SEC-TF
       env-var supply, preflight weak-value denylist).</li>
       <li><strong>Lina-only rotations</strong> (LINA, can happen in parallel): Grafana admin (SEC-S1),

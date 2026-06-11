@@ -204,10 +204,10 @@
   <thead><tr><th>Repo</th><th>Scope</th></tr></thead>
   <tbody>
     <tr><td><code>monitoring-triage-service</code></td><td>This doc. FastAPI pipeline, LLM client, MCPs consumers, dashboard.</td></tr>
-    <tr><td><code>monitoring-mcp-servers</code></td><td>5 MCP HTTP bridges: prometheus-mcp, loki-mcp, jaeger-mcp, drain3-mcp, rca-history-mcp.</td></tr>
+    <tr><td><code>monitoring-mcp-servers</code></td><td>6 MCP HTTP bridges: prometheus-mcp, loki-mcp, jaeger-mcp, drain3-mcp, rca-history-mcp, deploy-mcp (added 2026-06-11 — rollout events derived from kube-state-metrics).</td></tr>
     <tr><td><code>monitoring-project</code></td><td>Ansible — Grafana/Prometheus/Loki/Jaeger/OTel config, alert rules, contact points.</td></tr>
     <tr><td><code>provisioning-monitoring-infra</code></td><td>Terraform — the AWS EC2s + security groups that host the observability stack.</td></tr>
-    <tr><td><code>monitoring-triage-service</code> (compose dir <code>/opt/triage/</code> on <code>observability-gpu-uswest2-newacct</code>; previously <code>~/cires-ai/</code> on adolin-wsl)</td><td>Docker-compose for the GPU AI stack: 6 bridge containers (triage + 5 MCPs) via <code>triage-stack.service</code> systemd unit. Ollama itself runs as host systemd (not in compose; bridge containers reach it via <code>host.docker.internal:11434</code>). Image rolls operator-triggered - no Watchtower or polling daemon. See <a href="decisions-log.html#d24">D24</a>.</td></tr>
+    <tr><td><code>monitoring-triage-service</code> (compose dir <code>/opt/triage/</code> on <code>observability-gpu-uswest2-newacct</code>; previously <code>~/cires-ai/</code> on adolin-wsl)</td><td>Docker-compose for the GPU AI stack: 7 containers (triage + 6 MCPs) via <code>triage-stack.service</code> systemd unit. Ollama itself runs as host systemd (not in compose; bridge containers reach it via <code>host.docker.internal:11434</code>). Image rolls operator-triggered - no Watchtower or polling daemon. See <a href="decisions-log.html#d24">D24</a>.</td></tr>
     <tr><td><code>monitoring-docs</code></td><td>You are here.</td></tr>
     <tr><td><code>monitoring-load-tests</code> + <code>monitoring-chaos-tests</code></td><td>Load generators + chaos scenarios.</td></tr>
   </tbody>
@@ -262,8 +262,9 @@
   │  │ jaeger-mcp     :8093 │◀──┤                      │                 │
   │  │ drain3-mcp     :8094 │◀──┤                      │                 │
   │  │ rca-history    :8095 │◀──┤                      │                 │
+  │  │ deploy-mcp     :8096 │◀──┤                      │                 │
   │  └──────────────────────┘   └──────────────────────┘                 │
-  │  (all 6 containers under triage-stack.service systemd unit)          │
+  │  (all 7 containers under triage-stack.service systemd unit)          │
   │                                                                      │
   │  Webhook ingress: Grafana → API GW → Lambda → instance (private IP)  │
   │  Compose dir: /opt/triage/  · Ollama models in /usr/share/ollama     │
@@ -984,6 +985,7 @@
   <tr><td>JAEGER_MCP_URL</td><td>http://jaeger-mcp:8093</td></tr>
   <tr><td>DRAIN3_MCP_URL</td><td>http://drain3-mcp:8094</td></tr>
   <tr><td>RCA_HISTORY_MCP_URL</td><td>http://rca-history-mcp:8095</td></tr>
+  <tr><td>DEPLOY_MCP_URL</td><td>http://deploy-mcp:8096 — rollouts derived from kube-state-metrics (added 2026-06-11)</td></tr>
   <tr><td>LOKI_API_URL</td><td>Direct Loki — ONLY for drain3 bg ingestion (bulk)</td></tr>
 </tbody></table>
 

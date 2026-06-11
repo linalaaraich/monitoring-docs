@@ -47,6 +47,7 @@
 <li><strong>5. A few archetypes are stale fiction.</strong> <code>adaptive-threshold-noop</code> describes adaptive rules that were converted to static thresholds on 2026-06-03; <code>synthetic-blip-dismiss</code> predates the real-induction-only philosophy. Harmless today, but a library of examples the system can no longer produce erodes trust in the rest.</li>
 </ul>
 <p class="muted">If you do only two things later: (a) persist <code>exemplar_id</code> + score on every decision and put per-archetype quality on the Stats page; (b) add the missing workload-down / unschedulable-pending archetypes — yesterday's five-iteration saga would likely have been two with one.</p>
+<p class="muted"><strong>Addendum (same day):</strong> this review's top finding was confirmed in production hours after it was written — a live drain3 fire shipped a fabricated deploy-regression RCA copied near-verbatim from the <code>drain3-novelty-post-deploy</code> exemplar (unfilled "N minutes"/"cluster #N" slots, 0.85/actionable), and was killed end-to-end the same day in fix waves A–F, including a sixth MCP bridge (<code>deploy-mcp :8096</code>) that finally makes deploy claims groundable. See the <a href="engineering-log.html">engineering log, 2026-06-11</a>.</p>
 </div>
 
 <h2>Part 2 — The project, honestly, given where it is</h2>

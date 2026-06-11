@@ -178,7 +178,7 @@
       <td><strong>GPU host (us-west-2)</strong></td>
       <td><code>observability-gpu-uswest2-newacct</code></td>
       <td>100.114.76.43</td>
-      <td><strong>Primary AI runner.</strong> EC2 <code>g5.xlarge</code> (A10G 24 GB VRAM), EIP <code>35.164.128.201</code>. Hosts <code>ai-triage-service:8090</code>, 5 MCP containers on 8091-8095, Ollama as a host systemd service (not in compose; bridge containers reach it via <code>host.docker.internal:11434</code>), plus <code>drain-queue.service</code>, <code>triage-stack.service</code>, and <code>retention-cleanup.timer</code>. Webhook ingress is via API Gateway -&gt; Lambda -&gt; SQS, not direct. Public SSH closed (Tailscale SSH + SSM only). See <a href="decisions-log.html#d24">D24</a>.</td>
+      <td><strong>Primary AI runner.</strong> EC2 <code>g5.xlarge</code> (A10G 24 GB VRAM), EIP <code>35.164.128.201</code>. Hosts <code>ai-triage-service:8090</code>, 6 MCP containers on 8091-8096, Ollama as a host systemd service (not in compose; bridge containers reach it via <code>host.docker.internal:11434</code>), plus <code>drain-queue.service</code>, <code>triage-stack.service</code>, and <code>retention-cleanup.timer</code>. Webhook ingress is via API Gateway -&gt; Lambda -&gt; SQS, not direct. Public SSH closed (Tailscale SSH + SSM only). See <a href="decisions-log.html#d24">D24</a>.</td>
     </tr>
     <tr>
       <td>Laptop (Windows host)</td>

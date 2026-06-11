@@ -314,7 +314,7 @@
     The diagrams below are the original Sprint-2 intent. The <strong>live</strong> layout has diverged in two important ways that matter for any operator touching this system:
   </p>
   <ul style="margin:0 0 10px 20px;color:#c0c5d0;line-height:1.7;">
-    <li><strong>AI stack (Ollama + 5 MCP servers + triage) on a dedicated AWS GPU host in us-west-2 since 2026-05-21 (carbon-copy provisioned in new account 321556173045 on 2026-06-02).</strong> EC2 <code>g5.xlarge</code> with an A10G GPU (24 GB VRAM), Tailscale hostname <code>observability-gpu-uswest2-newacct</code>, public EIP <code>35.164.128.201</code>. <code>qwen2.5:14b-instruct</code> as primary model with <code>qwen2.5:7b-instruct</code> as fallback. Phase 2 smoke test: ~38 s end-to-end (prior 7b/laptop baseline was median ~5 min). Ollama runs as a host systemd service (not in the compose stack); the 6 bridge containers reach it via <code>host.docker.internal:11434</code>. Compose dir on the instance: <code>/opt/triage/</code>. Cost defenses (updated 2026-06-04): the GPU host now runs <strong>24/7 by decision</strong> — the Lambda idle-autoshutoff is disabled (the EventBridge idle rule is <code>state=DISABLED</code>), traded for predictable latency. The headline guard is an <strong>AWS Budgets monthly budget ($800/mo</strong>, alerting at 80%/100% actual + 100% forecast). Note the older <code>$50/mo</code> CloudWatch <code>EstimatedCharges</code> alarm is <em>blind</em> until Lina enables Billing → "Receive Billing Alerts" (a console/root-only preference) — Budgets does not need that flag, which is why it is the primary guard. The laptop GTX 1060 + 7b runner is retained as rollback fallback. See <a href="decisions-log.html#d24">D24</a>.</li>
+    <li><strong>AI stack (Ollama + 6 MCP servers + triage) on a dedicated AWS GPU host in us-west-2 since 2026-05-21 (carbon-copy provisioned in new account 321556173045 on 2026-06-02).</strong> EC2 <code>g5.xlarge</code> with an A10G GPU (24 GB VRAM), Tailscale hostname <code>observability-gpu-uswest2-newacct</code>, public EIP <code>35.164.128.201</code>. <code>qwen2.5:14b-instruct</code> as primary model with <code>qwen2.5:7b-instruct</code> as fallback. Phase 2 smoke test: ~38 s end-to-end (prior 7b/laptop baseline was median ~5 min). Ollama runs as a host systemd service (not in the compose stack); the 7 bridge containers (triage + 6 MCPs, <code>deploy-mcp :8096</code> added 2026-06-11) reach it via <code>host.docker.internal:11434</code>. Compose dir on the instance: <code>/opt/triage/</code>. Cost defenses (updated 2026-06-04): the GPU host now runs <strong>24/7 by decision</strong> — the Lambda idle-autoshutoff is disabled (the EventBridge idle rule is <code>state=DISABLED</code>), traded for predictable latency. The headline guard is an <strong>AWS Budgets monthly budget ($800/mo</strong>, alerting at 80%/100% actual + 100% forecast). Note the older <code>$50/mo</code> CloudWatch <code>EstimatedCharges</code> alarm is <em>blind</em> until Lina enables Billing → "Receive Billing Alerts" (a console/root-only preference) — Budgets does not need that flag, which is why it is the primary guard. The laptop GTX 1060 + 7b runner is retained as rollback fallback. See <a href="decisions-log.html#d24">D24</a>.</li>
     <li><strong>Tailscale is the control + data plane spanning us-east-1 + us-west-2.</strong> Grafana on <code>observability-rca-newacct-monitoring</code> POSTs webhooks to the us-west-2 API Gateway <code>https://p2j9dqjh3h.execute-api.us-west-2.amazonaws.com/webhook/grafana</code> (Lambda router with IP allowlist), which forwards to the triage container on the GPU host's private IP. Triage's MCP bridges reach back to Prometheus / Loki / Jaeger at <code>observability-rca-newacct-monitoring</code> in us-east-1 via Tailscale MagicDNS - no VPC peering, no public internet. Public SSH on k3s + the GPU host is closed; <code>monitoring-vm</code> SSH is scoped to the operator's <code>/32</code>; tailnet is the always-available fallback. Full setup in the <a href="tailscale-guide.html" style="color:#6bcf7f">Tailscale guide</a>.</li>
   </ul>
   <p style="margin:0;color:#8890a0;font-size:12.5px;">
@@ -330,7 +330,7 @@
       <tr style="border-top:1px solid var(--border)"><td style="padding:8px 12px"><code>claude-controller</code></td><td style="padding:8px 12px;color:var(--muted)">cloud shell</td><td style="padding:8px 12px">ansible control, orchestration</td><td style="padding:8px 12px;color:var(--muted)">tailnet only</td></tr>
       <tr style="border-top:1px solid var(--border)"><td style="padding:8px 12px"><code>observability-rca-newacct-monitoring</code></td><td style="padding:8px 12px;color:var(--muted)">EC2 (EIP 52.201.92.19)</td><td style="padding:8px 12px">Prometheus · Loki · Jaeger · Grafana (unified alerting) · OTel</td><td style="padding:8px 12px;color:var(--muted)">tailnet + public</td></tr>
       <tr style="border-top:1px solid var(--border)"><td style="padding:8px 12px"><code>observability-rca-newacct-k3s</code></td><td style="padding:8px 12px;color:var(--muted)">EC2 (EIP 184.73.21.123)</td><td style="padding:8px 12px">k3s cluster: Spring Boot · MySQL · Kong</td><td style="padding:8px 12px;color:var(--muted)">tailnet + public Kong NodePort :30080 only - public SSH closed</td></tr>
-      <tr style="border-top:1px solid var(--border)"><td style="padding:8px 12px"><code>observability-gpu-uswest2-newacct</code></td><td style="padding:8px 12px;color:var(--muted)">AWS us-west-2 g5.xlarge · A10G 24 GB · EIP 35.164.128.201 · tailnet 100.114.76.43</td><td style="padding:8px 12px">Triage service · Ollama (host systemd) · 5 MCP bridges via <code>triage-stack.service</code> · qwen2.5:14b primary / 7b fallback</td><td style="padding:8px 12px;color:var(--muted)">tailnet + API Gateway (Lambda IP-allowlisted)</td></tr>
+      <tr style="border-top:1px solid var(--border)"><td style="padding:8px 12px"><code>observability-gpu-uswest2-newacct</code></td><td style="padding:8px 12px;color:var(--muted)">AWS us-west-2 g5.xlarge · A10G 24 GB · EIP 35.164.128.201 · tailnet 100.114.76.43</td><td style="padding:8px 12px">Triage service · Ollama (host systemd) · 6 MCP bridges via <code>triage-stack.service</code> · qwen2.5:14b primary / 7b fallback</td><td style="padding:8px 12px;color:var(--muted)">tailnet + API Gateway (Lambda IP-allowlisted)</td></tr>
       <tr style="border-top:1px solid var(--border)"><td style="padding:8px 12px"><code>adolin-wsl</code></td><td style="padding:8px 12px;color:var(--muted)">Lina's laptop (WSL2)</td><td style="padding:8px 12px">Rollback fallback for the AI triage stack (no longer primary since 2026-05-21)</td><td style="padding:8px 12px;color:var(--muted)">tailnet only</td></tr>
     </tbody>
   </table>
@@ -671,7 +671,7 @@
       </div>
       <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid var(--border);border-radius:8px;background:var(--card);font-size:12px;">
         <span class="flow-type mcp">MCP</span>
-        <span>Ollama → MCP Bridges (:8091-8095) → Prometheus / Loki / Jaeger / Drain3 / History</span>
+        <span>Ollama → MCP Bridges (:8091-8096) → Prometheus / Loki / Jaeger / Drain3 / History / Deploy</span>
       </div>
       <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid var(--border);border-radius:8px;background:var(--card);font-size:12px;">
         <span class="flow-type email">EMAIL</span>
@@ -795,9 +795,9 @@
         <td>df-13</td>
         <td><span class="flow-type mcp">MCP</span></td>
         <td>Ollama (AI/LLM VM)</td>
-        <td>MCP Bridges :8091-8095 (AI/LLM VM)</td>
+        <td>MCP Bridges :8091-8096 (AI/LLM VM)</td>
         <td>MCP tool calls</td>
-        <td>LLM autonomously queries Prometheus, Loki, Jaeger, Drain3, and RCA History via MCP bridges</td>
+        <td>LLM autonomously queries Prometheus, Loki, Jaeger, Drain3, RCA History, and Deploy events via MCP bridges</td>
       </tr>
       <tr>
         <td>df-14</td>
@@ -1225,9 +1225,9 @@ const archData = {
         "id": "df-13",
         "type": "mcp",
         "from": "Ollama (AI/LLM VM)",
-        "to": "MCP Bridges (AI/LLM VM:8091-8095)",
+        "to": "MCP Bridges (AI/LLM VM:8091-8096)",
         "protocol": "MCP tool calls",
-        "description": "LLM autonomously queries Prometheus, Loki, Jaeger, Drain3, and RCA History via MCP bridges"
+        "description": "LLM autonomously queries Prometheus, Loki, Jaeger, Drain3, RCA History, and Deploy events via MCP bridges"
       },
       {
         "id": "df-14",

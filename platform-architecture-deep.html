@@ -144,7 +144,7 @@
       <strong>observability half</strong> (Prometheus metrics, Loki logs, Jaeger traces,
       Drain3 log-template anomalies) watches the <code>react / employees-backend / MySQL</code>
       workload running on k3s. The <strong>AI half</strong> (the FastAPI triage service +
-      Ollama + five MCP bridges) lives on a dedicated AWS <code>g5.xlarge</code> GPU host
+      Ollama + six MCP bridges) lives on a dedicated AWS <code>g5.xlarge</code> GPU host
       (<code>observability-gpu-uswest2-newacct</code>, A10G) in us-west-2, attached over
       Tailscale. An alert is the unit of work that travels between them.
     </p>

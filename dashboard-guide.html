@@ -425,7 +425,7 @@
   <dd>Root-cause analysis — the LLM's narrative explaining why the alert fired.</dd>
 
   <dt>MCP</dt>
-  <dd>Model Context Protocol — the contract by which the triage service queries Prometheus, Loki, Jaeger, Drain3, and rca-history. Each pillar runs as its own server (5 MCPs total, all containerized on the laptop).</dd>
+  <dd>Model Context Protocol — the contract by which the triage service queries Prometheus, Loki, Jaeger, Drain3, rca-history, and (since 2026-06-11) deploy/rollout events. Each pillar runs as its own server (6 MCPs total, all containerized on the GPU host).</dd>
 
   <dt>p95 / p99</dt>
   <dd>The 95th / 99th percentile of a latency distribution over a window. <code>histogram_quantile(0.95, ...)</code> in PromQL.</dd>

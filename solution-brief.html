@@ -210,7 +210,7 @@
 
 <p><strong>Problem.</strong> The operational gap that motivated this work, surfaced in Sprint-0 field research: production incidents were being discovered <em>after the fact</em> — by clients or during retrospective log review — rather than by the monitoring system itself. Per-alert investigation cost was high and uniform regardless of whether an alert was a real incident, a flake, or a known recurrent pattern.</p>
 
-<p><strong>What it does.</strong> The CIRES Observability Platform is a two-layer response. The foundation: a conventional open-source observability stack (Prometheus / Loki / Jaeger / Grafana on AWS, Ansible-deployable). The differentiator: an <strong>AI triage service</strong> on top that, for every Grafana webhook, gathers cross-pillar context through five MCP servers, picks the closest of 14 RCA archetypes, asks a local LLM (<code>qwen2.5:7b-instruct</code> on Ollama) for a cause-first analysis, runs three validators, and emits <code>ESCALATE</code> (email the on-call) or <code>DISMISS</code> (record the reason and move on). Operators can override either way; their feedback flows back into the suppression and exemplar layers.</p>
+<p><strong>What it does.</strong> The CIRES Observability Platform is a two-layer response. The foundation: a conventional open-source observability stack (Prometheus / Loki / Jaeger / Grafana on AWS, Ansible-deployable). The differentiator: an <strong>AI triage service</strong> on top that, for every Grafana webhook, gathers cross-pillar context through six MCP servers, picks the closest of 14 RCA archetypes, asks a local LLM (<code>qwen2.5:7b-instruct</code> on Ollama) for a cause-first analysis, runs three validators, and emits <code>ESCALATE</code> (email the on-call) or <code>DISMISS</code> (record the reason and move on). Operators can override either way; their feedback flows back into the suppression and exemplar layers.</p>
 
 <p><strong>Scope of this brief.</strong> This is a <strong>proof of concept</strong>, built and validated on a local test bed - a sample <code>react-springboot-mysql</code> application (Spring Boot + Kong + MySQL + React) plus an additional co-located test application - running on a lab AWS environment. Inference moved on 2026-05-21 from a Tailscale-attached laptop (GTX 1060 + <code>qwen2.5:7b</code>, which ran the platform for the first 28 days) to a dedicated AWS <code>g5.xlarge</code> in us-west-2 (A10G GPU + <code>qwen2.5:14b-instruct</code> primary), reached over Tailscale at <code>observability-gpu-uswest2-newacct</code> (carbon-copy provisioned in new account 321556173045 on 2026-06-02); the laptop is retained as rollback fallback. <strong>Intended deployment target: CIRES Technologies (Tanger Med) production, contingent on the greenlight this brief supports.</strong> Alert volumes, latencies, and load shapes discussed below describe the test bed, not CIRES production - see <a href="#architecture-review">§7.6</a> for an honest read on how the architecture would scale.</p>
 
@@ -232,8 +232,9 @@
 
 <p>
 <strong>What we built:</strong> a single FastAPI service (<code>monitoring-triage-service</code>)
-that ingests webhooks, talks to five MCP servers (one each for Prometheus,
-Loki, Jaeger, the RCA history DB, and a deployment-events stub) over JSON-RPC,
+that ingests webhooks, talks to six MCP servers (one each for Prometheus,
+Loki, Jaeger, Drain3 log-template anomalies, the RCA history DB, and — since
+2026-06-11 — deploy/rollout events derived from kube-state-metrics) over JSON-RPC,
 calls a local LLM via Ollama, persists decisions to SQLite, exposes a
 self-hosted dashboard, and emits 27 Prometheus metrics for its own
 observability. Around 9,500 lines of Python plus ~1,800 lines of declarative
@@ -1608,7 +1609,7 @@ Then open the page at <a href="#pitch">§1</a>.
     <tr>
       <td>3–8</td>
       <td><a href="#what">§2 What we built</a> + <a href="#shape">§3 Shape of the system</a></td>
-      <td>Skim the diagram in §3. Name the five MCP servers and the local LLM. Land the line: <strong>"every data source the LLM ever sees flows through an MCP bridge — that's the hallucination firewall."</strong></td>
+      <td>Skim the diagram in §3. Name the six MCP servers and the local LLM. Land the line: <strong>"every data source the LLM ever sees flows through an MCP bridge — that's the hallucination firewall."</strong></td>
       <td>Skip the file-tree detail; that's in <code>repository-map.html</code>.</td>
     </tr>
     <tr>
@@ -1962,7 +1963,7 @@ Bigger pieces that need design or new data sources. Track as
     <tr>
       <td><strong>SF-9</strong></td>
       <td>Kubernetes / Rancher as a 6th MCP data source</td>
-      <td>New <code>k8s_mcp</code> server exposing pod metadata, deployment events, namespace ownership, container restarts, recent rollout history. Unblocks SF-10 + SF-11. Roughly mirrors the existing 5 MCPs but proxies to the k3s API + Rancher API. ~1 week.</td>
+      <td>New <code>k8s_mcp</code> server exposing pod metadata, deployment events, namespace ownership, container restarts, recent rollout history. Unblocks SF-10 + SF-11. Roughly mirrors the existing six MCPs but proxies to the k3s API + Rancher API. ~1 week. <em>Partially delivered 2026-06-11: the rollout-history slice shipped as <code>deploy-mcp :8096</code> (derived from kube-state-metrics, no new cluster access); the k3s/Rancher-API remainder is still future work.</em></td>
     </tr>
     <tr>
       <td><strong>SF-10</strong></td>

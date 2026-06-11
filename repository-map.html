@@ -140,8 +140,8 @@
           <span class="repo-tag t-app">AI · bridges</span>
         </div>
       </div>
-      <p class="repo-desc">The five MCP bridge servers — every datum the LLM sees passes through here. Each server is a small Python process exposing 3–4 tools over JSON-RPC, with a Prometheus-style <code>/metrics</code> endpoint for self-observability.</p>
-      <p class="repo-detail"><strong>Bridges:</strong> <code>prometheus-mcp:8091</code>, <code>loki-mcp:8092</code>, <code>jaeger-mcp:8093</code>, <code>drain3-mcp:8094</code>, <code>rca-history-mcp:8095</code>. <strong>Invariant:</strong> the MCP-only data-access rule lives here in spirit — see <a href="hallucination-firewall.html#invariant">hallucination-firewall.html § MCP-only invariant</a>.</p>
+      <p class="repo-desc">The six MCP bridge servers — every datum the LLM sees passes through here. Each server is a small Python process exposing 3–4 tools over JSON-RPC, with a Prometheus-style <code>/metrics</code> endpoint for self-observability.</p>
+      <p class="repo-detail"><strong>Bridges:</strong> <code>prometheus-mcp:8091</code>, <code>loki-mcp:8092</code>, <code>jaeger-mcp:8093</code>, <code>drain3-mcp:8094</code>, <code>rca-history-mcp:8095</code>, <code>deploy-mcp:8096</code> (added 2026-06-11 — rollout events derived from kube-state-metrics). <strong>Invariant:</strong> the MCP-only data-access rule lives here in spirit — see <a href="hallucination-firewall.html#invariant">hallucination-firewall.html § MCP-only invariant</a>.</p>
     </div>
 
     <div class="repo">
@@ -204,7 +204,7 @@
     </thead>
     <tbody>
       <tr><td>Layer 3 — AI triage</td><td><code>monitoring-triage-service</code></td><td>FastAPI service, pipeline, validators, dashboard, exemplars</td></tr>
-      <tr><td>Layer 2 — MCP bridges</td><td><code>monitoring-mcp-servers</code></td><td>Five MCP servers + their JSON-RPC tools</td></tr>
+      <tr><td>Layer 2 — MCP bridges</td><td><code>monitoring-mcp-servers</code></td><td>Six MCP servers + their JSON-RPC tools</td></tr>
       <tr><td>Layer 1 — Observability foundation</td><td><code>monitoring-project</code></td><td>Ansible roles, Grafana templates, k3s bootstrap, chaos harness</td></tr>
       <tr><td>Layer 0 — Cloud infra</td><td><code>provisioning-monitoring-infra</code></td><td>Terraform: VPC, EC2, RDS, S3, IAM, security groups</td></tr>
       <tr><td>Cross-cutting · docs</td><td><code>monitoring-docs</code></td><td>This site</td></tr>

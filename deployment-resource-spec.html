@@ -60,7 +60,7 @@
   <p>The platform deploys as three independent tiers. The AI tier needs a GPU; the others do not. Tiers communicate over plain TCP on your network — co-locate or separate them as your capacity dictates.</p>
   <table>
     <tr><th>Tier</th><th>What runs there</th><th>GPU?</th><th>Where it can live</th></tr>
-    <tr><td><b>A · AI / triage</b></td><td>Ollama + the LLM model, the triage service, 5 MCP bridge containers, 1 OTel collector, GPU-metrics exporter</td><td><b>Yes</b></td><td>Your GPU instance (e.g. the L4 box)</td></tr>
+    <tr><td><b>A · AI / triage</b></td><td>Ollama + the LLM model, the triage service, 6 MCP bridge containers, 1 OTel collector, GPU-metrics exporter</td><td><b>Yes</b></td><td>Your GPU instance (e.g. the L4 box)</td></tr>
     <tr><td><b>B · Observability backend</b></td><td>Prometheus, Loki, Jaeger, Grafana, node/cAdvisor exporters</td><td>No</td><td>A CPU VM (can co-locate on the GPU box if it has spare CPU/RAM)</td></tr>
     <tr><td><b>C · Collection (on your targets)</b></td><td>OTel collector DaemonSet + kube-state-metrics + a read-only Prometheus scraper on your k8s; an OTel collector on your ML/GPU app hosts</td><td>No</td><td>Inside your Kubernetes + on your monitored hosts</td></tr>
   </table>

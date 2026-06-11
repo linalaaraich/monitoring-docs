@@ -213,6 +213,19 @@
   such bypasses in the production code; closing them is the
   Sprint-3 Epic-4 scope.</p>
 
+  <p><strong>The bridge set behind the invariant is six</strong> (as of
+  2026-06-11): <code>prometheus-mcp :8091</code>, <code>loki-mcp :8092</code>,
+  <code>jaeger-mcp :8093</code>, <code>drain3-mcp :8094</code>,
+  <code>rca-history-mcp :8095</code>, and <code>deploy-mcp :8096</code>.
+  The sixth was added the day a fabricated "most recent deploy introduced
+  a regression" RCA demonstrated the invariant's corollary: a claim with
+  <em>no data source behind it</em> is unfalsifiable, which is its own
+  hallucination vector. <code>deploy-mcp</code> derives rollout events
+  from kube-state-metrics series already in Prometheus, so deploy claims
+  are now groundable in both directions — cite a real rollout, or rule
+  deploys out ("no deploys in window"). See the
+  <a href="engineering-log.html">engineering log, 2026-06-11</a>.</p>
+
   <h3 class="sub">Three bypasses caught by the 0b215ef3 forensic analysis — all closed</h3>
 
   <table>
