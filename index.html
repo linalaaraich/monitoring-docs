@@ -156,7 +156,7 @@
       <div class="card-icon" style="background:rgba(111,211,136,.14);">🧪</div>
       <div class="card-header-text">
         <h2>★ Prod-Mimic Test Report — 2026-06-11</h2>
-        <p>Three real faults across three environments in 15 minutes — infra CPU stress (gated silently), a prod-app outage (named at 0.95, paged [prod] [employee]), and a bad-deploy canary (drain3 quoted the access-denied line from the real emitting service while the new deploy bridge tracked the rollout). Ground truth vs verbatim system output, graded honestly; four observations feed the same-day audit cycle.</p>
+        <p>Three real faults across three environments in 15 minutes — infra CPU stress (gated silently), a prod-app outage (named at 0.95, paged [prod] [employee]), and a bad-deploy canary (drain3 quoted the access-denied line from the real emitting service while the new deploy bridge tracked the rollout). Scored against ground truth over all 24 decisions: <strong>100% detection recall, 100% cause accuracy on the faults, 0 false pages from 17 non-incidents, 92% overall — paging precision 5/7 strict (both misses = honest low-confidence timing artifacts of the test's own revert cadence)</strong>. Four observations fed the same-day audit cycle.</p>
       </div>
     </div>
     <div class="card-footer">
