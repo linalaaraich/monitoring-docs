@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CIRES AI Observability Platform — Solution Architecture &amp; Design Choices</title>
+<style>
+  :root{ --ink:#1a2233; --soft:#475569; --muted:#6b7280; --line:#e2e8f0; --line2:#cbd5e1;
+         --blue:#1d4ed8; --green:#15803d; --amber:#b45309; --red:#b91c1c; --bg:#ffffff; --panel:#f8fafc; --panel2:#f1f5f9; }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{font-family:'Inter','Segoe UI',system-ui,sans-serif;color:var(--ink);background:var(--bg);line-height:1.6;font-size:15px;}
+  .wrap{max-width:920px;margin:0 auto;padding:48px 32px 80px;}
+  code,pre{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:.86em;}
+  code{background:var(--panel2);padding:1px 5px;border-radius:4px;color:#0f172a;}
+  pre{background:#0f172a;color:#e2e8f0;padding:14px 16px;border-radius:8px;overflow-x:auto;font-size:13px;line-height:1.5;margin:12px 0;}
+  pre code{background:none;color:inherit;padding:0;}
+  h1{font-size:30px;font-weight:800;letter-spacing:-.4px;line-height:1.2;margin-bottom:8px;}
+  h2{font-size:21px;font-weight:750;margin:36px 0 12px;padding-bottom:8px;border-bottom:2px solid var(--line);}
+  h3{font-size:16px;font-weight:700;margin:22px 0 8px;color:#0f172a;}
+  p{margin:10px 0;}
+  ul,ol{margin:10px 0 10px 24px;}
+  li{margin:5px 0;}
+  .eyebrow{font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--blue);margin-bottom:10px;}
+  .lead{font-size:16px;color:var(--soft);margin:14px 0 6px;}
+  .meta{font-size:13px;color:var(--muted);margin-top:6px;}
+  table{border-collapse:collapse;width:100%;margin:14px 0;font-size:13.5px;}
+  th,td{border:1px solid var(--line);padding:8px 11px;text-align:left;vertical-align:top;}
+  th{background:var(--panel2);font-weight:700;font-size:12.5px;}
+  td.num{text-align:right;font-variant-numeric:tabular-nums;}
+  tr:nth-child(even) td{background:var(--panel);}
+  .callout{border-left:4px solid var(--blue);background:var(--panel);padding:12px 16px;border-radius:0 8px 8px 0;margin:14px 0;}
+  .callout.green{border-color:var(--green);} .callout.amber{border-color:var(--amber);} .callout.red{border-color:var(--red);}
+  .callout .lbl{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;}
+  .callout.green .lbl{color:var(--green);} .callout .lbl{color:var(--blue);} .callout.amber .lbl{color:var(--amber);} .callout.red .lbl{color:var(--red);}
+  .tag{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;}
+  .tag.rec{background:#dcfce7;color:#15803d;} .tag.min{background:#fef3c7;color:#b45309;} .tag.opt{background:#e0e7ff;color:#3730a3;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:14px 0;}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 18px;}
+  .panel h3{margin-top:0;}
+  .kv{font-size:13.5px;}.kv b{display:inline-block;min-width:120px;color:var(--soft);font-weight:600;}
+  footer{margin-top:48px;padding-top:16px;border-top:1px solid var(--line);font-size:12.5px;color:var(--muted);}
+  @media print{ body{font-size:12px;} .wrap{padding:0;max-width:none;} pre{font-size:10.5px;} h2{page-break-after:avoid;} table,.callout,.panel{page-break-inside:avoid;} }
+  @media(max-width:680px){ .grid2{grid-template-columns:1fr;} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">CIRES Technologies · AI Observability &amp; LLM-Triage Platform</div>
+  <h1>Solution Architecture &amp; Design Choices</h1>
+  <p class="lead">What the platform is, how it is built, and why each major design decision was made — for review ahead of the production deployment.</p>
+  <p class="meta">Prepared for the supervisor · 2026-06-12 · companion to the <a href="deployment-resource-spec.html">Resource &amp; Dependency Specification</a> and <a href="architecture-deep-dive.html">Architecture Deep-Dive</a> (file-level detail).</p>
+
+  <div class="callout">
+    <div class="lbl">The solution in one paragraph</div>
+    Alerts never reach a human raw. Every alert from the monitoring stack is intercepted by an AI triage service that <b>investigates first</b>: it pulls metrics, logs, traces, log-anomaly context, alert history and recent deployments through read-only bridges, has a <b>locally hosted LLM</b> write a root-cause analysis, and only then either pages the operator with a <b>named cause</b> ("the ad workload's pod cannot be scheduled") or dismisses the noise — with every dismissal recorded and auditable. No data leaves the network; no external AI API is involved.
+  </div>
+
+  <h2>1. Architecture — three layers on three hosts</h2>
+  <table>
+    <tr><th style="width:170px">Layer</th><th>Components</th><th>Host</th></tr>
+    <tr><td><b>Observability base</b></td><td>Prometheus (metrics), Loki (logs), Jaeger (traces), Grafana (24 alert rules + dashboards), OpenTelemetry collectors routing all three signals from every workload</td><td>monitoring VM (4 vCPU / 16 GB)</td></tr>
+    <tr><td><b>Workloads watched</b></td><td>Kubernetes cluster: business apps + a 22-service microservice bed (OpenTelemetry Demo) used for realistic fault injection</td><td>k8s node(s)</td></tr>
+    <tr><td><b>AI triage tier</b></td><td>Triage service (FastAPI + operator dashboard), 6 read-only MCP bridges, log-anomaly engine (drain3), Ollama running <code>qwen2.5:14b</code></td><td>GPU host (1× 24 GB GPU — L4 validated)</td></tr>
+  </table>
+  <p>The tiers talk over plain TCP and are deployed by <b>three Ansible commands</b> (<code>monitoring.yml</code> → <code>gpu-host.yml</code> → <code>k8s-manifests.yml</code>); a bring-your-own-cluster bundle exists for deployment on CIRES infrastructure. All images are CI-built and pulled from GHCR.</p>
+
+  <h2>2. The path of one alert</h2>
+  <ol>
+    <li>Grafana evaluates a rule (or the log-anomaly engine detects a novel error pattern) and fires a webhook to the triage service.</li>
+    <li><b>Noise gates run first, before any GPU cost</b>: duplicate-fire dedup, repeat-alert suppression, recurrence gating for known flappers (details in §3.4).</li>
+    <li>If the alert survives, the service gathers a <b>correlated evidence picture</b> — metrics, logs, traces, k8s state, alert history, recent deployments — exclusively through the 6 MCP bridges.</li>
+    <li>The local LLM writes the RCA: verdict (escalate / dismiss), confidence, a one-sentence human-readable cause, cited evidence.</li>
+    <li>Validators check the output (see §3.3); ungrounded claims are blocked or demoted.</li>
+    <li>On escalate: <b>one</b> email per incident, leading with the cause, naming all co-fired alerts. On dismiss: no email, full record kept.</li>
+    <li>Every decision lands in the dashboard with its evidence trail, incident history, and a feedback form the operator can use to correct the system.</li>
+  </ol>
+  <p class="meta">Median time from alert fire to emailed RCA: <b>~38 s</b>.</p>
+
+  <h2>3. Design choices and why</h2>
+
+  <h3>3.1 Local LLM, not a cloud API</h3>
+  <p>All telemetry (logs can contain credentials, internal hostnames, customer data) stays on-premises; there is no per-token cost, no rate-limit dependency, and no internet egress requirement. A 14-billion-parameter model (~11 GB VRAM) is sufficient because the prompt engineering does the heavy lifting: the model receives pre-gathered, pre-structured evidence and a tight output contract, not an open-ended question. Validated on an NVIDIA L4 (24 GB).</p>
+
+  <h3>3.2 MCP-only data access — the hallucination firewall</h3>
+  <p>The LLM can <b>only</b> see data that arrives through six read-only HTTP bridges (Prometheus, Loki, Jaeger, drain3, RCA-history, deploy-events). It has no database handle, no direct Prometheus access, no shell. This makes every claim in an RCA <b>traceable to a bridge response</b> — and a CI lint fails the build if any code path bypasses a bridge. When a bridge is down the system fails open (escalates rather than silently suppressing).</p>
+
+  <h3>3.3 Evidence-first validation — trust is earned per decision</h3>
+  <ul>
+    <li>An "actionable" verdict with <b>zero corroborating evidence</b> is automatically demoted to needs-review with capped confidence.</li>
+    <li>"A recent deployment caused this" is <b>forbidden</b> unless the deploy bridge actually returned a rollout in the window — and an empty answer becomes a grounded negative ("no deploys in 2 h — regression ruled out").</li>
+    <li>Log-anomaly RCAs must <b>quote the actual novel log line</b> they blame.</li>
+    <li>Reusable RCA templates ("exemplars") are only injected when they genuinely fit the alert (score gate) — a weak match falls back to a neutral structure rather than dragging the diagnosis toward a wrong shape.</li>
+    <li>Banned-phrase detection catches hedging ("cannot determine the root cause") and triggers a bounded retry that digs deeper before the system is allowed to give up.</li>
+  </ul>
+
+  <h3>3.4 Layered noise control — one notification per incident</h3>
+  <p>Five complementary layers, each cheap-to-expensive in order, each with a documented escape hatch so a real outage always pages:</p>
+  <table>
+    <tr><th style="width:210px">Layer</th><th>What it stops</th><th>Safety valve</th></tr>
+    <tr><td>Fingerprint dedup</td><td>Identical re-fires within minutes</td><td>Recorded as incident recurrences, visible on the alert's history</td></tr>
+    <tr><td>Repeat-alert suppression</td><td>Re-investigating something just dismissed</td><td>Criticals exempt unless flapping (below)</td></tr>
+    <tr><td>Recurrence gate</td><td>Known-flappy rules burning GPU on every fire</td><td>Opt-in per rule; repeated dismissals force-escalate to a human</td></tr>
+    <tr><td>Critical-flap suppression</td><td>A flapping critical (e.g. scrape blips) re-investigated 67× in 36 h</td><td>Only after 3 honest dismissals; every 4th fire still fully investigated; any escalate breaks the streak</td></tr>
+    <tr><td>Co-fire consolidation</td><td>2–3 emails when one root cause fires several alert types (workload down + replica deficit + crash-looping)</td><td>One email naming <b>all</b> contributors; every alert keeps its own investigated record; a different service never groups</td></tr>
+  </table>
+
+  <h3>3.5 Novelty-based log anomaly detection</h3>
+  <p>The drain3 engine learns the log-template vocabulary of every service and fires on <b>novel</b> patterns, not volume — a new stack trace fires; a noisy-but-known access log never does. Three tiers (per-component, per-application, system-wide) catch both "one service went weird" and "the whole app drifted". The platform's own infrastructure logs are excluded at ingest so the system cannot alert on itself.</p>
+
+  <h3>3.6 Incident-centric data model</h3>
+  <p>Fires are grouped into <b>incidents</b> by fingerprint: the dashboard shows one row per incident with fire count and full history, not one row per fire. Operator feedback attaches to decisions and feeds back into future investigations (prior-verdict coherence), with quarantine for decisions proven wrong so they cannot poison later prompts.</p>
+
+  <h3>3.7 Everything as code, everything tested against reality</h3>
+  <ul>
+    <li><b>904 automated tests</b> + CI gates: the MCP-only invariant lint, a frontend compile gate, image build blocked until green.</li>
+    <li><b>Real-induction testing only</b>: verification means breaking something real (kill a pod, flood an API, push a bad deploy) and checking the system's written diagnosis against the known ground truth — never synthetic webhook payloads. Cumulative scored battery: <b>recall 7/7 outages caught, correct cause 51/52 decisions</b>.</li>
+    <li><b>Audit cadence</b>: every feature is audited against the live system (rendered pages, not HTTP 200s; applied infrastructure, not just correct code) — drift between repo and reality is treated as a bug class of its own.</li>
+  </ul>
+
+  <h2>4. Production path</h2>
+  <p>AWS is the proof-of-concept bed only. Every component is portable open-source (no AWS managed-service lock-in in the data path), so the private-cloud build is a re-run of the same Ansible against CIRES hosts. Hardening before production exposure, in order: webhook authentication, image digest pinning, MCP service tokens, secrets to Ansible Vault (scaffolding already in place), at-rest encryption provisioned natively in the private-cloud build. Long-term integration target: a single OTel host agent per machine plus the existing NOC Zabbix for metrics — no exporter sprawl.</p>
+
+  <div class="callout green">
+    <div class="lbl">Bottom line</div>
+    The architecture is three replaceable layers joined by two contracts: <b>all signals flow through OpenTelemetry</b> into the base, and <b>all AI reads flow through MCP bridges</b> out of it. Everything else — model, alert rules, noise thresholds, even the LLM host — can be swapped without touching the other layers. The design bets on grounding over model size: a small local model, given verified evidence and refused permission to guess, outperforms an unconstrained large one for this job.
+  </div>
+
+  <footer>CIRES Technologies — AI Observability Platform · Solution Architecture &amp; Design Choices · 2026-06-12. Figures are measured from the live system. Deeper material: <a href="architecture-deep-dive.html">Architecture Deep-Dive</a> (file:line grounded), <a href="hallucination-firewall.html">Hallucination Firewall</a>, <a href="epic15-hardening-design.html">EPIC15 Hardening Design</a>, <a href="prod-mimic-test-report-2026-06-11.html">Scored Test Battery</a>.</footer>
+
+</div>
+</body>
+</html>
