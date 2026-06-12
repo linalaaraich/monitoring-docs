@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Architecture Deep-Dive — CIRES Observability Platform</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --bg-soft: #13151e;
+    --card: #1a1d27;
+    --card-alt: #1e2230;
+    --border: #2a2d3a;
+    --border-hi: #3a3f52;
+    --text: #e4e6ee;
+    --text-soft: #c0c5d0;
+    --muted: #8890a0;
+    --accent-blue: #4ea8de;
+    --accent-green: #6bcf7f;
+    --accent-orange: #f0a050;
+    --accent-purple: #b07ee8;
+    --accent-red: #e06070;
+    --accent-cyan: #40d0d0;
+    --accent-yellow: #e0d060;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { font-family:'Inter','Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); line-height:1.65; font-size:15px; -webkit-font-smoothing:antialiased; }
+  code, pre, .mono { font-family:'JetBrains Mono','Fira Code',ui-monospace,monospace; font-size:0.88em; }
+
+  .topnav { display:flex; align-items:center; gap:12px; padding:14px 40px; background:var(--bg-soft); border-bottom:1px solid var(--border); flex-wrap:wrap; }
+  .topnav span.nav-label { color:var(--muted); font-size:13px; font-weight:600; margin-right:4px; }
+  .navlink { display:inline-flex; align-items:center; gap:6px; padding:7px 14px; border-radius:8px; font-size:13px; font-weight:600; text-decoration:none; border:1px solid; transition:background .2s, transform .15s; }
+  .navlink:hover { transform:translateY(-1px); }
+  .navlink-home { color:var(--text); border-color:var(--border); background:var(--card); }
+  .navlink-arch { color:var(--accent-blue); border-color:rgba(78,168,222,.4); background:rgba(78,168,222,.08); }
+  .navlink-triage { color:var(--accent-purple); border-color:rgba(176,126,232,.4); background:rgba(176,126,232,.12); }
+
+  .hero { padding:56px 40px 40px; border-bottom:1px solid var(--border); background:linear-gradient(180deg, #13151e 0%, var(--bg) 100%); }
+  .hero .inner { max-width:1080px; margin:0 auto; }
+  .hero .eyebrow { font-size:11px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:var(--accent-cyan); margin-bottom:12px; }
+  .hero h1 { font-size:38px; font-weight:800; letter-spacing:-.5px; margin-bottom:14px; line-height:1.2; }
+  .hero h1 span.accent { color:var(--accent-cyan); }
+  .hero p.lead { font-size:16px; color:var(--text-soft); max-width:820px; line-height:1.7; margin-bottom:20px; }
+  .hero .pill-row { display:flex; gap:8px; flex-wrap:wrap; }
+  .pill { font-size:11px; font-weight:600; padding:4px 10px; border-radius:12px; border:1px solid; letter-spacing:.2px; }
+  .pill.cyan { color:var(--accent-cyan); border-color:rgba(64,208,208,.35); background:rgba(64,208,208,.08); }
+  .pill.purple { color:var(--accent-purple); border-color:rgba(176,126,232,.35); background:rgba(176,126,232,.08); }
+  .pill.orange { color:var(--accent-orange); border-color:rgba(240,160,80,.35); background:rgba(240,160,80,.08); }
+  .pill.green { color:var(--accent-green); border-color:rgba(107,207,127,.35); background:rgba(107,207,127,.08); }
+
+  .layout { max-width:1080px; margin:0 auto; padding:32px 40px 80px; display:grid; grid-template-columns: 250px 1fr; gap:40px; }
+  @media (max-width: 900px) { .layout { grid-template-columns:1fr; } .toc-sidebar { position:static; } }
+  .toc-sidebar { position:sticky; top:20px; align-self:start; font-size:13px; max-height:calc(100vh - 40px); overflow-y:auto; }
+  .toc-sidebar h4 { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--muted); margin-bottom:10px; }
+  .toc-sidebar ol { list-style:none; padding:0; }
+  .toc-sidebar li { margin-bottom:4px; }
+  .toc-sidebar a { color:var(--text-soft); text-decoration:none; border-bottom:1px dashed transparent; }
+  .toc-sidebar a:hover { color:var(--accent-cyan); border-bottom-color:var(--accent-cyan); }
+  .toc-sidebar li.sub { padding-left:14px; font-size:12px; }
+  .toc-sidebar li.sub a { color:var(--muted); }
+
+  .content h2 { font-size:26px; font-weight:700; margin:48px 0 16px; letter-spacing:-.3px; scroll-margin-top:24px; padding-bottom:8px; border-bottom:1px solid var(--border); }
+  .content h2:first-child { margin-top:0; }
+  .content h3 { font-size:18px; font-weight:700; margin:28px 0 10px; color:var(--text); scroll-margin-top:24px; }
+  .content h4 { font-size:14px; font-weight:700; margin:20px 0 6px; color:var(--text); }
+  .content p { margin-bottom:14px; color:var(--text-soft); }
+  .content p strong { color:var(--text); font-weight:600; }
+  .content ul, .content ol { margin:8px 0 16px 24px; color:var(--text-soft); }
+  .content li { margin-bottom:6px; }
+  .content code { background:var(--card); border:1px solid var(--border); padding:1px 6px; border-radius:4px; font-size:0.85em; color:var(--accent-cyan); }
+  .content pre { background:var(--card); border:1px solid var(--border); padding:14px 16px; border-radius:8px; margin:12px 0 18px; overflow-x:auto; line-height:1.5; }
+  .content pre code { background:none; border:none; padding:0; color:var(--text); font-size:0.85em; }
+  .content a { color:var(--accent-blue); text-decoration:none; border-bottom:1px dashed rgba(78,168,222,.35); }
+  .content a:hover { border-bottom-style:solid; }
+
+  .callout { border-left:3px solid; border-radius:0 8px 8px 0; padding:14px 18px; margin:16px 0; background:var(--card); }
+  .callout.note { border-color:var(--accent-blue); }
+  .callout.tip { border-color:var(--accent-green); }
+  .callout.warn { border-color:var(--accent-orange); }
+  .callout.why { border-color:var(--accent-purple); background:linear-gradient(90deg, rgba(176,126,232,.06), var(--card)); }
+  .callout-label { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; margin-bottom:6px; }
+  .callout.note .callout-label { color:var(--accent-blue); }
+  .callout.tip .callout-label { color:var(--accent-green); }
+  .callout.warn .callout-label { color:var(--accent-orange); }
+  .callout.why .callout-label { color:var(--accent-purple); }
+
+  table { width:100%; border-collapse:collapse; margin:12px 0 20px; font-size:13px; }
+  table th, table td { padding:10px 14px; border-bottom:1px solid var(--border); text-align:left; vertical-align:top; }
+  table th { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--muted); background:var(--card); }
+  table tr:hover td { background:var(--card-alt); }
+
+  .ascii { background:var(--card); border:1px solid var(--border); padding:20px; border-radius:8px; font-family:monospace; font-size:11px; line-height:1.4; white-space:pre; overflow-x:auto; color:var(--text); }
+
+  .kv-table { width:100%; }
+  .kv-table td { font-size:12px; padding:6px 10px; }
+  .kv-table td:first-child { font-weight:600; color:var(--text); width:220px; font-family:monospace; font-size:12px; }
+
+  .file-ref { font-family:monospace; font-size:0.88em; padding:1px 6px; border-radius:3px; background:rgba(78,168,222,.08); color:var(--accent-blue); border:1px solid rgba(78,168,222,.25); }
+  .layer-tag { display:inline-block; font-size:10px; font-weight:700; letter-spacing:.5px; text-transform:uppercase; padding:2px 8px; border-radius:10px; margin-left:8px; vertical-align:middle; }
+  .layer-tag.l1 { color:var(--accent-orange); border:1px solid rgba(240,160,80,.4); background:rgba(240,160,80,.08); }
+  .layer-tag.l2 { color:var(--accent-cyan); border:1px solid rgba(64,208,208,.4); background:rgba(64,208,208,.08); }
+  .layer-tag.l3 { color:var(--accent-purple); border:1px solid rgba(176,126,232,.4); background:rgba(176,126,232,.08); }
+</style>
+</head>
+<body>
+
+<nav class="topnav">
+  <span class="nav-label">CIRES Observability Platform</span>
+  <a href="index.html" class="navlink navlink-home">🏠 Home</a>
+  <a href="system-explained.html" class="navlink" style="color:var(--accent-cyan); border-color:rgba(64,208,208,.4); background:rgba(64,208,208,.08);">🔬 System Explained</a>
+  <a href="architecture.html" class="navlink navlink-arch">🏗️ Architecture</a>
+  <a href="triage-service.html" class="navlink navlink-triage">🧠 Triage Service</a>
+  <a href="hallucination-firewall.html" class="navlink" style="color:var(--accent-red); border-color:rgba(224,96,112,.4); background:rgba(224,96,112,.08);">🛡️ Firewall</a>
+  <a href="decisions-log.html" class="navlink" style="color:var(--accent-orange); border-color:rgba(240,160,80,.4); background:rgba(240,160,80,.08);">📝 Decisions Log</a>
+</nav>
+
+<section class="hero">
+  <div class="inner">
+    <div class="eyebrow">The canonical "how the whole thing works — and why" reference</div>
+    <h1>Architecture <span class="accent">Deep-Dive</span></h1>
+    <p class="lead">
+      Every layer, every component, how a single byte of telemetry travels from
+      an application all the way to an email in an operator's inbox — and the
+      reasoning behind each design decision. This is the page to read
+      end-to-end once. After it you should be able to explain any part of the
+      platform: the observability socle, the three layers (Detection → Triage →
+      AI-RCA), the six MCP bridges, the local LLM, the exemplar system, the
+      honesty machinery, and the infrastructure it all runs on. Everything here
+      is grounded in the real code with <code>file:line</code> references — nothing
+      is aspirational.
+    </p>
+    <div class="pill-row">
+      <span class="pill cyan">Reference-grade</span>
+      <span class="pill purple">Whole-system</span>
+      <span class="pill orange">Design rationale</span>
+      <span class="pill green">Grounded in code</span>
+    </div>
+  </div>
+</section>
+
+<main class="layout">
+
+<aside class="toc-sidebar">
+  <h4>CONTENTS</h4>
+  <ol>
+    <li><a href="#big-picture">1. The big picture</a></li>
+    <li class="sub"><a href="#three-layers">1.1 Three layers + socle</a></li>
+    <li class="sub"><a href="#e2e-flow">1.2 End-to-end data flow</a></li>
+    <li class="sub"><a href="#hosts">1.3 Real hosts &amp; ports</a></li>
+    <li><a href="#socle">2. Observability foundation</a></li>
+    <li class="sub"><a href="#why-otel">2.1 Why OpenTelemetry</a></li>
+    <li class="sub"><a href="#prometheus">2.2 Prometheus topology</a></li>
+    <li class="sub"><a href="#loki">2.3 Loki</a></li>
+    <li class="sub"><a href="#jaeger">2.4 Jaeger &amp; naming</a></li>
+    <li class="sub"><a href="#demo-bed">2.5 The otel-demo bed</a></li>
+    <li><a href="#detection">3. Layer 1 — Detection</a></li>
+    <li class="sub"><a href="#alert-families">3.1 Grafana alert families</a></li>
+    <li class="sub"><a href="#drain3">3.2 Drain3 3-tier novelty</a></li>
+    <li><a href="#triage">4. Layer 2 — Triage pipeline</a></li>
+    <li class="sub"><a href="#lifecycle">4.1 The full lifecycle</a></li>
+    <li class="sub"><a href="#noise-concepts">4.2 The four noise concepts</a></li>
+    <li class="sub"><a href="#cheap-path">4.3 The cheap path</a></li>
+    <li><a href="#firewall">5. The hallucination firewall</a></li>
+    <li><a href="#ai-rca">6. Layer 3 — AI-RCA</a></li>
+    <li class="sub"><a href="#the-llm">6.1 The local LLM</a></li>
+    <li class="sub"><a href="#prompt">6.2 Prompt construction</a></li>
+    <li class="sub"><a href="#validator">6.3 Response validator</a></li>
+    <li class="sub"><a href="#bounded-agency">6.4 Bounded agency</a></li>
+    <li><a href="#exemplars">7. The exemplar system</a></li>
+    <li><a href="#honesty">8. Quality &amp; honesty</a></li>
+    <li><a href="#data-model">9. State &amp; data model</a></li>
+    <li><a href="#infra">10. Infrastructure &amp; deployment</a></li>
+    <li><a href="#principles">11. Design principles</a></li>
+  </ol>
+</aside>
+
+<div class="content">
+
+<h2 id="big-picture">1. The big picture</h2>
+
+<p>
+The platform answers one question that traditional monitoring never quite does:
+<strong>when an alert fires, what is the actual root cause, and is it worth waking
+someone for?</strong> A Prometheus rule can tell you CPU is at 94% — it cannot tell
+you <em>why</em>, and it cannot tell you that this particular spike is the third
+identical flap in ten minutes and not worth a page. The platform layers an
+AI reasoning stage on top of conventional observability to produce a
+named root cause with supporting evidence, while a thick stack of deterministic
+gates keeps the expensive AI from ever seeing noise.
+</p>
+
+<h3 id="three-layers">1.1 Three layers on an observability socle</h3>
+
+<p>
+Conceptually the system is three layers sitting on a shared telemetry foundation
+(the "socle"). Each layer has a different job and a different failure mode it
+guards against.
+</p>
+
+<table>
+  <thead><tr><th>Layer</th><th>Job</th><th>Built from</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Socle</strong></td><td>Collect every metric, log, and trace through a single agent</td><td>OpenTelemetry Collector → Prometheus / Loki / Jaeger</td></tr>
+    <tr><td><strong>Layer 1 — Detection</strong> <span class="layer-tag l1">detect</span></td><td>Notice that something is wrong, by threshold <em>and</em> by novelty</td><td>Grafana alert rules + Drain3 3-tier log-novelty</td></tr>
+    <tr><td><strong>Layer 2 — Triage</strong> <span class="layer-tag l2">filter</span></td><td>Deduplicate, suppress, gather correlated evidence, decide what reaches the GPU</td><td>The triage pipeline (<span class="file-ref">pipeline.py</span>) + 6 MCP bridges</td></tr>
+    <tr><td><strong>Layer 3 — AI-RCA</strong> <span class="layer-tag l3">explain</span></td><td>Read the correlated picture and narrate a grounded root cause</td><td>Local LLM (qwen2.5:14b) + response validator + exemplars</td></tr>
+  </tbody>
+</table>
+
+<div class="callout why">
+  <div class="callout-label">Why this design — a layered funnel</div>
+  Each layer is cheaper and more numerous than the one above it. Thousands of
+  raw samples become a handful of alerts (Layer 1); most alerts are deduplicated
+  or suppressed by deterministic code before any AI runs (Layer 2); only the
+  survivors — genuinely novel, un-suppressed incidents — reach the GPU (Layer 3).
+  The expensive, fallible component (the LLM) sits at the narrow end of the
+  funnel and only ever <em>narrates</em> a picture that deterministic code has
+  already assembled and verified. This is the recurring through-line of the whole
+  platform: <strong>deterministic-first, AI-last</strong>.
+</div>
+
+<h3 id="e2e-flow">1.2 The end-to-end data-flow diagram</h3>
+
+<p>
+Here is the complete path of a fault, from the application emitting a signal to
+an operator reading a root-cause email. Read it top to bottom.
+</p>
+
+<div class="ascii">
+  APPLICATIONS (k3s pods: employees-backend, kong-gateway, otel-demo 22 svcs)
+        │  OTLP (traces+logs+metrics)        stdout logs (/var/log/pods)
+        ▼
+  ┌──────────────────────────────────────────────────────────────────┐
+  │   OpenTelemetry Collector  — DaemonSet, ns observability          │
+  │   contrib 0.120.0 · OTLP gRPC 4317 / HTTP 4318 · prom-exp :8889   │
+  │   pipelines:  traces ─┐   logs ─┐   metrics ─┐                    │
+  └───────────────────────┼─────────┼───────────┼────────────────────┘
+            traces 4317   │  logs 3100/push      │ pull :8889
+                          ▼         ▼             ▼
+                      ┌────────┐ ┌──────┐   ┌────────────┐
+                      │ Jaeger │ │ Loki │   │ Prometheus │   ◄── scrapes:
+                      │ :16686 │ │:3100 │   │   :9090    │      cAdvisor,
+                      └───┬────┘ └──┬───┘   └─────┬──────┘      kube-state,
+                          │         │             │             node_exporter,
+                          │         │             │             k3s API proxy
+                          │         │             ▼
+                          │         │      ┌───────────────────────────────┐
+                          │         │      │ Grafana unified alerting      │  L1
+                          │         │      │ (rule families, §3.1)         │  DETECT
+                          │         │      └──────────────┬────────────────┘
+                          │         │                     │ webhook (firing)
+                          │    ┌────┴──────┐              │
+                          │    │  Drain3   │ self-webhook │   AWS API Gateway
+                          │    │ 3-tier    │──────────────┤   → Lambda autoshut
+                          │    │ novelty   │ Drain3Anomaly│   → triage :8090
+                          │    └───────────┘  Detected    │
+                          │                                ▼
+  ════════════════════════╪════════════════════════════════════════════  GPU host
+                          │      ┌──────────────────────────────────────┐ (g5.xlarge
+                          │      │   TRIAGE PIPELINE  (pipeline.py)      │  us-west-2)
+                          │      │                                       │  L2 FILTER
+                          │      │   webhook → _process_alert            │
+                          │      │     1. dedup (fingerprint window)     │
+                          │      │     2. Layer-2 suppression            │
+                          │      │     3. recurrence gate (pre-LLM)      │
+                          │      │     ── cheap rows exit here ──┐       │
+                          │      │     4. context.gather() ──────┼───────┼──┐
+                          │      │     5. drain3 annotate        │       │  │ MCP-only
+                          │      │     6. metric interpreter     │       │  │ (read-only)
+                          │      │     7. exemplar select+gate   │       │  ▼
+                          │      │     8. LLM investigate ───────┼──► 6 MCP BRIDGES
+                          │      │     9. response validator     │     prometheus :8091
+                          │      │    10. retry / bounded agency │     loki       :8092
+                          │      │    11. demotions / quarantine │     jaeger     :8093
+                          │      │    12. notify + persist       │     drain3     :8094
+                          │      └───────────┬───────────────────┘     rca-history:8095
+                          │                  │                         deploy     :8096
+                          │                  ▼                              │
+                          │      ┌──────────────────────────┐              │
+                          └─────►│  Ollama  qwen2.5:14b      │  L3 EXPLAIN  │
+                                 │  (7b fallback) num_ctx 32k│◄─────────────┘
+                                 └────────────┬─────────────┘
+                                              │ grounded RCA JSON
+                                              ▼
+                            ┌─────────────────────────────────────┐
+                            │  notifier.py        rca_store.py     │
+                            │  SMTP escalation    SQLite (RDS/file)│
+                            │  email + dashboard  incidents table  │
+                            └─────────────────────────────────────┘
+</div>
+
+<p>
+Two things are worth internalising from this picture. First, <strong>everything the
+LLM ever sees passes through one of the six MCP bridges</strong> — there is no arrow
+from the LLM directly to Prometheus or Loki. Second, <strong>most alerts never reach
+the LLM at all</strong>: stages 1–3 (and several more, §4.3) write a cheap database row
+and return before any GPU work happens.
+</p>
+
+<h3 id="hosts">1.3 The real hosts and ports</h3>
+
+<p>
+The current proof-of-concept runs on three AWS EC2 hosts joined by a Tailscale
+tailnet (addressed by MagicDNS, never raw IPs). This topology is a <em>dev/test
+bed</em>; the production target is the CIRES private cloud (see §10).
+</p>
+
+<table>
+  <thead><tr><th>Host</th><th>Type / region</th><th>Runs</th></tr></thead>
+  <tbody>
+    <tr><td><code>…-monitoring</code></td><td>t3.large · us-east-1</td><td>Prometheus :9090, Loki :3100, Jaeger :16686 (UI; :14269 metrics; :4317 OTLP), Grafana :3000, Alertmanager — docker-compose</td></tr>
+    <tr><td><code>…-k3s</code></td><td>t3.xlarge · us-east-1</td><td>k3s: employees spring-boot (DB = RDS MySQL <code>app_db</code>), Kong, otel-demo Astronomy Shop (ns <code>otel-demo</code>). API :6443, kubelet :10250</td></tr>
+    <tr><td><code>…-gpu-uswest2</code></td><td>g5.xlarge (A10G) · us-west-2</td><td>AI tier: <code>ai-triage-service</code> :8090, <code>ai-mcp-*</code> bridges :8091–:8096 (docker-internal), Ollama systemd :11434. Tailnet 100.114.76.43</td></tr>
+    <tr><td>RDS</td><td>MySQL 8.0 db.t3.micro · us-east-1</td><td>Application DB for the employees service (schema <code>app_db</code>)</td></tr>
+  </tbody>
+</table>
+
+<div class="callout note">
+  <div class="callout-label">Note — webhook path</div>
+  Grafana does not POST directly to the GPU host. The firing webhook goes through
+  an AWS API Gateway (<code>…execute-api.us-west-2.amazonaws.com/webhook/grafana</code>)
+  fronting a Lambda autoshutoff, which forwards to <code>triage :8090</code>. The
+  individual MCP containers (:8091–:8096) bind only inside the GPU host's docker
+  network; Prometheus sees them aggregated as <code>triage_mcp_*</code> metrics on :8090,
+  never scraping them directly.
+</div>

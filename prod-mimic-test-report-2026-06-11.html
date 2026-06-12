@@ -127,6 +127,15 @@
 </table>
 <p class="sub"><b>What this proves:</b> the flagship rules now select their real archetypes (not the generic default — finding #1); every decision records WHICH archetype it used (<code>exemplar_id</code> — finding #3, the layer is no longer blind); causes are correct + named; and the noise/escalate split held (4 genuine critical pages, 1 correct benign dismiss). Battery KPI: detection 2/2, cause accuracy 5/5, paging precision <b>4/4 (0 false pages)</b>, archetype selection 5/5.</p>
 
+<h2>SG — archetype score-gate verification (2026-06-12)</h2>
+<p class="sub">Design change (Lina): an archetype is only injected as a "match this structure" template when it genuinely FITS (score ≥ 0.25); a bare-alertname match falls back to the neutral default so a poor fit can never drag the RCA toward a wrong shape — the worst exhaustion source for the on-call engineer. Verified: strong fits untouched, weak fits gated (unit-proven).</p>
+<table>
+<tr><th>Check</th><th>Result</th></tr>
+<tr><td>Strong fit preserved (real ad-down induction)</td><td class="pass">KubeWorkloadDown/Deficit → <code>workload-replica-deficit</code> at <b>score 1.1</b> (≫ 0.25 floor) — archetype kept, cause named correctly (0.85/0.92 actionable). No regression.</td></tr>
+<tr><td>Weak fit rejected (unit)</td><td class="pass">A bare-alertname match (HighP95Latency, no service/signal/deployment context, score 0.10) → neutral <code>generic-sre-shape</code> default, not the weak archetype.</td></tr>
+<tr><td>Engineer impact</td><td class="pass">Closes the confidently-wrong force-fit path while keeping every genuine fit. Cause always comes from evidence regardless — the gate only decides whether a SHAPE template is trustworthy enough to show.</td></tr>
+</table>
+
 <h2>Same-day cycle outcome</h2>
 <ul>
 <li><strong>N1 + N2 + N4 fixed and deployed</strong> (triage <code>6acebf3</code>, 829 tests): verdict tokens humanized (0 leaks live), the "actionable" tag suppressed on dismissals, drain3 alerts now carry a namespace hint for the deploy bridge. N3 documented as a known timing class.</li>
