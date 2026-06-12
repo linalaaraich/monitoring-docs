@@ -325,3 +325,758 @@ bed</em>; the production target is the CIRES private cloud (see §10).
   network; Prometheus sees them aggregated as <code>triage_mcp_*</code> metrics on :8090,
   never scraping them directly.
 </div>
+
+<h2 id="socle">2. The observability foundation (the socle)</h2>
+
+<p>
+Before any AI can reason about a fault, the fault has to be <em>visible</em> in
+telemetry. The socle is the three-pillar collection layer — metrics, logs,
+traces — fed by a single agent.
+</p>
+
+<h3 id="why-otel">2.1 Why OpenTelemetry as the single agent</h3>
+
+<div class="callout why">
+  <div class="callout-label">Why this design — one agent, three signals</div>
+  The platform standardises on a single <strong>OpenTelemetry Collector</strong> rather
+  than one exporter per backend (Promtail for logs, a tracing agent, node-exporter
+  sidecars, etc.). One agent means one thing to deploy, one place where
+  <code>service.name</code> and Kubernetes attributes are stamped, and — critically — a
+  <strong>vendor-neutral seam</strong>. The collector's pipelines fan out to Jaeger, Loki,
+  and Prometheus today, but swapping any backend is a config edit, not a re-instrumentation.
+  This directly serves the production story: CIRES's NOC runs Zabbix for metrics and
+  is wary of per-host exporters, so a single OTel host-agent that can later feed
+  Zabbix is the future pitch, not Prometheus-forever.
+</div>
+
+<p>
+The collector runs as a <strong>DaemonSet</strong> in the <code>observability</code> namespace
+(<code>otel/opentelemetry-collector-contrib:0.120.0</code>) on every k3s node, plus a
+VM-mode collector for the monitoring host. It listens on OTLP gRPC :4317 and HTTP
+:4318, exposes a Prometheus pull exporter on :8889, and runs three pipelines
+(<span class="file-ref">manifests/otel-collector/configmap.yaml:194-207</span>):
+</p>
+
+<ul>
+  <li><strong>traces</strong>: OTLP in → k8sattributes, resource, batch → <code>otlp/traces</code> to Jaeger at <code>${MONITORING_VM_IP}:4317</code>.</li>
+  <li><strong>logs</strong>: filelog (tails <code>/var/log/pods</code>) + OTLP → k8sattributes, resource, <code>transform/service_name</code>, loki-labels, batch → Loki push at <code>:3100/loki/api/v1/push</code>.</li>
+  <li><strong>metrics</strong>: OTLP in → k8sattributes, resource, batch → Prometheus pull exporter on <code>0.0.0.0:8889</code> (shipped O-2, 2026-06-10).</li>
+</ul>
+
+<h3 id="prometheus">2.2 Prometheus scrape topology</h3>
+
+<p>
+Prometheus (15s scrape, 15d retention) pulls from three distinct layers. The
+non-obvious one is how it reaches pods inside k3s without pod-network reachability.
+</p>
+
+<ol>
+  <li><strong>Static monitoring-VM targets</strong> — cAdvisor :8081, node-exporter :9100, Prometheus :9090, Grafana :3000, Loki :3100, Jaeger :14269, the collector :8888.</li>
+  <li><strong>GPU self-monitoring</strong> over the tailnet (100.114.76.43, no security-group change) — <code>ai-triage-service</code> :8090 (which aggregates <code>triage_*</code>, <code>ollama_*</code>, <code>drain3_*</code>, <code>triage_mcp_*</code>), GPU node-exporter :9100, DCGM exporter :9400.</li>
+  <li><strong>k3s discovery</strong> (<span class="file-ref">prometheus.yml.j2:32-147</span>) — the interesting layer, below.</li>
+</ol>
+
+<h4>cAdvisor vs. kube-state-metrics — two different questions</h4>
+
+<p>
+These are frequently confused. They answer different questions and both are needed:
+</p>
+
+<ul>
+  <li><strong>cAdvisor</strong> (scraped from the kubelet at <code>{k3s_host_ip}:10250/metrics/cadvisor</code>, https + bearer token) gives <strong>per-container resource usage</strong> — <code>container_memory_working_set_bytes</code>, CPU, etc. This is what the <code>PodHighMemoryUsage</code> / <code>PodHighCpuUsage</code> rules read. It answers "<em>how much is this container using?</em>"</li>
+  <li><strong>kube-state-metrics (KSM)</strong> (discovered via the <code>prometheus.io/scrape</code> annotation) gives <strong>object-state</strong> — <code>kube_deployment_status_replicas_unavailable</code>, <code>kube_pod_container_status_restarts_total</code>, <code>kube_replicaset_created</code>. This is what the <code>KubeWorkloadDown</code> / <code>PodCrashLooping</code> rules read, and what the <em>deploy bridge</em> mines for rollout events. It answers "<em>what does Kubernetes think the desired vs. actual state is?</em>"</li>
+</ul>
+
+<h4>The k3s API-server proxy trick</h4>
+
+<div class="callout note">
+  <div class="callout-label">Note — scraping pods without pod-network access</div>
+  The <code>kubernetes-pods</code> and <code>otel-demo-app-metrics</code> jobs use
+  <code>kubernetes_sd_configs role:pod</code> but rewrite <code>__metrics_path__</code> to
+  <code>/api/v1/namespaces/&lt;ns&gt;/pods/&lt;pod&gt;:&lt;port&gt;/proxy&lt;path&gt;</code> and set
+  <code>__address__</code> to <code>{k3s_host_ip}:6443</code> — i.e. <strong>every pod scrape is
+  proxied through the k3s API server</strong>. The monitoring VM only needs TCP :6443 to
+  the k3s node; it never needs to route into the pod network. The in-cluster
+  collector's :8889 exporter (carrying the otel-demo metrics) is scraped this way
+  with <code>honor_labels: true</code> so each demo service surfaces as its own
+  <code>job=&lt;service.name&gt;</code>.
+</div>
+
+<h3 id="loki">2.3 Loki</h3>
+
+<p>
+Loki receives logs pushed by the collector's logs pipeline. The crucial concept
+is the <strong>stream label</strong>. The collector's <code>transform/service_name</code> processor
+sets <code>service_name = k8s_container_name</code> (special-casing Kong to
+<code>service_name="kong"</code> for <code>namespace="network",container="proxy"</code>), and
+<code>attributes/loki-labels</code> promotes <code>service_name</code> / namespace / pod into Loki
+stream labels (<span class="file-ref">configmap.yaml:112-134</span>). That is why the
+triage service can query <code>{service_name="&lt;service&gt;"}</code> to pull exactly the logs
+for the alerting service. The loki-mcp bridge hard-caps any query at 50 lines.
+</p>
+
+<h3 id="jaeger">2.4 Jaeger and the service-naming problem</h3>
+
+<p>
+Jaeger stores the traces the collector forwards. The subtle, real-world wrinkle
+here is that <strong>the same logical service can carry different names across the
+three pillars</strong>, because <code>OTEL_SERVICE_NAME</code> and the k8s container label
+don't always agree. The employees app appears as both <code>employees-backend</code>
+<em>and</em> <code>spring-boot</code>; Kong as <code>kong</code> and <code>kong-gateway</code>. This
+dual-identity (tracked as design-debt G6) is deliberately <em>not</em> aliased away
+in the collector.
+</p>
+
+<div class="callout warn">
+  <div class="callout-label">Where the naming is reconciled</div>
+  Rather than rewrite telemetry, the triage service maps alert-label service names
+  to the canonical name Jaeger indexes at query time:
+  <code>trace_service_name</code> (<span class="file-ref">v2_mappings.py:256-259</span>)
+  turns <code>spring-boot → employees-backend</code> and <code>kong → kong-gateway</code> so
+  Jaeger deep links and trace queries hit a service that actually exists. The
+  operator-facing display name (<code>employee-spring-backend</code>) is a third,
+  display-only rendering (<code>DISPLAY_SERVICE</code>). Three name spaces, reconciled at
+  the edges — the underlying streams keep their original tokens.
+</div>
+
+<h3 id="demo-bed">2.5 The otel-demo microservice bed</h3>
+
+<p>
+A single service is a poor test bed for an AIOps platform — real incidents are
+about <em>cascades</em> across services. The platform deploys the OpenTelemetry
+Demo (the "Astronomy Shop", Helm chart 0.40.9) in the <code>otel-demo</code> namespace
+as a 22-service distributed application. Every bundled backend (its own collector,
+Jaeger, Prometheus, Grafana, OpenSearch) is <strong>disabled</strong> — all components
+point at the platform's collector FQDN
+(<code>otel-collector.observability.svc.cluster.local</code>), so the demo drives real
+traces, logs, and metrics through the one production pipeline. It is the bed for
+3-tier Drain3, for real-induction testing (via flagd fault injection), and for the
+downstream-latency exemplars.
+</p>
+
+<h2 id="detection">3. Layer 1 — Detection <span class="layer-tag l1">detect</span></h2>
+
+<p>
+Detection has two complementary engines. Grafana alert rules catch the
+<strong>known-bad</strong> — thresholds someone thought to encode. Drain3 catches the
+<strong>never-before-seen</strong> — log shapes no rule anticipated. You need both: a
+threshold rule cannot fire on a brand-new exception type, and a novelty detector
+cannot tell you CPU crossed 95%.
+</p>
+
+<h3 id="alert-families">3.1 Grafana alert rule families</h3>
+
+<p>
+Rules are Grafana-provisioned unified alerting, generated from
+<span class="file-ref">roles/grafana/templates/alertrules.yml.j2</span>. They fall into
+five families:
+</p>
+
+<table>
+  <thead><tr><th>Family</th><th>Representative rules</th><th>Expression shape</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Resource saturation</strong></td><td><code>MediumCpuUsage</code> &gt;80%, <code>High/CriticalCpuUsage</code> &gt;85/95%, memory + disk equivalents, <code>DiskFillingUp</code></td><td><code>100 - avg by(instance)(rate(node_cpu_seconds_total{mode="idle"}[5m]))*100</code>; <code>predict_linear()</code> for the trend rule</td></tr>
+    <tr><td><strong>Workload-down</strong></td><td><code>KubeWorkloadDown</code>, <code>KubeWorkloadReplicasDeficit</code></td><td><code>kube_deployment_status_replicas_unavailable &gt; 0</code>; double <code>label_replace</code> to mint real <code>namespace</code>/<code>service</code> labels</td></tr>
+    <tr><td><strong>Crashloop</strong></td><td><code>PodCrashLooping</code> (O-3, 2026-06-10)</td><td><code>increase(kube_pod_container_status_restarts_total[1h]) &gt; 1</code>, for 5m</td></tr>
+    <tr><td><strong>Latency SLO</strong></td><td><code>HighDemoFrontendP95Latency</code> (the live one), <code>HighP95Latency</code>, <code>HighKongP95Latency</code> (dormant on the PoC)</td><td><code>histogram_quantile(0.95, …_bucket[5m]) * 1000 &gt; 1000</code> ms</td></tr>
+    <tr><td><strong>Target-down</strong></td><td><code>TargetDown</code>, <code>OTelCollectorDown</code>, <code>LokiIngestionRateLow</code></td><td><code>up == 0</code> / <code>up{…} &lt; 1</code></td></tr>
+  </tbody>
+</table>
+
+<div class="callout note">
+  <div class="callout-label">Note — dormant vs. live rules, and a known regression</div>
+  Several latency rules are deliberately dormant on the PoC bed because the synthetic
+  load only hits <code>/actuator</code> (stripped, so the refId is empty → NoData → OK);
+  they are prod-relevant and kept warm. The resource rules are currently <strong>static
+  thresholds</strong>, a temporary regression from the adaptive (<code>or vector()</code>)
+  version that hit a label-loss bug on 2026-06-02. Only <code>MediumCpuUsage</code> carries
+  a live recurrence-gate annotation (<code>pre_llm=4,llm_dismiss=10,window=2h</code>).
+</div>
+
+<h3 id="drain3">3.2 Drain3 — 3-tier log-novelty detection</h3>
+
+<p>
+Drain3 is an online log-template miner. It reads a stream of log lines and groups
+them into <em>templates</em> (e.g. <code>"User &lt;*&gt; logged in from &lt;*&gt;"</code>). The
+platform runs <strong>one miner per service</strong>
+(<span class="file-ref">drain_analyzer.py:269-282</span>), each persisted to
+<code>{service}.bin</code>, so spring-boot templates never blend with Kong or frontend
+ones and every service is judged against its own history.
+</p>
+
+<p>
+A line is flagged anomalous when its template is <strong>brand new</strong>
+(<code>cluster_created</code> / <code>cluster_template_changed</code>) <strong>or rare</strong>
+(<code>match_count &lt; threshold</code>) — <span class="file-ref">drain_analyzer.py:330,339</span>.
+</p>
+
+<div class="callout why">
+  <div class="callout-label">Why this design — novelty ≠ volume</div>
+  The signal is a new or rare log <em>shape</em>, regardless of how many lines are
+  flowing. A million identical "request served 200 OK" lines is not anomalous; a
+  single never-seen <code>NullPointerException</code> stack frame is. This is exactly
+  the failure mode threshold rules miss — you cannot write a Prometheus rule for an
+  exception that hasn't been invented yet. Drain3 surfaces emergent failure modes,
+  then self-fires a synthetic <code>Drain3AnomalyDetected</code> webhook into the same
+  triage pipeline as any Grafana alert.
+</div>
+
+<h4>The three tiers: component → application → system</h4>
+
+<p>
+Each batch of logs is evaluated independently at three scopes
+(<span class="file-ref">drain_analyzer.py:632-698</span>), with <em>broader scope =
+lower bar</em> because a novelty visible across a whole application is more
+significant than one in a single component:
+</p>
+
+<table>
+  <thead><tr><th>Tier</th><th>Scope</th><th>Threshold</th><th>Catches</th></tr></thead>
+  <tbody>
+    <tr><td><strong>component</strong></td><td>one service</td><td>0.25</td><td>a single service emitting a novel template</td></tr>
+    <tr><td><strong>application</strong></td><td>all services in a k8s namespace (so otel-demo aggregates)</td><td>0.15</td><td>novelty spread across an app's services — a cascade</td></tr>
+    <tr><td><strong>system</strong></td><td>everything</td><td>0.10</td><td>platform-wide novelty</td></tr>
+  </tbody>
+</table>
+
+<p>
+A double-fire guard skips an application tier whose only component already fired
+at the component tier (a pure duplicate); multi-component apps still fire both.
+Each tier is rate-capped per batch and has its own cooldown, so a noisy component
+never starves a system-level alert. Two boundary filters keep the miners honest:
+<strong>source exclusion</strong> (observability/infra services and <code>*-exporter</code> never
+enter a miner — pure string logic, no data reads, preserving the MCP-only
+invariant) and an <strong>empty-body guard</strong> (blank/empty-<code>body</code> OTel envelopes
+were minting a fake "novel template" every batch; now dropped from both numerator
+and denominator).
+</p>
+
+<h2 id="triage">4. Layer 2 — The triage pipeline <span class="layer-tag l2">filter</span></h2>
+
+<p>
+This is the heart of the platform: <span class="file-ref">app/pipeline.py</span>, an
+ordered async lifecycle that takes a webhook and produces (eventually) a persisted
+decision. Most alerts exit early through a cheap path; a minority run the full
+gather-and-narrate sequence. The ordering is load-bearing — the cheap gates run
+<em>before</em> any GPU work, and the fail-safe gates (MCP-outage) run before the
+quiet-suppression gates so an outage is never mistaken for "nothing's wrong".
+</p>
+
+<h3 id="lifecycle">4.1 The full ordered lifecycle</h3>
+
+<p>
+Entry is <code>process_grafana_webhook</code> (<span class="file-ref">pipeline.py:237</span>)
+or <code>process_drain3_webhook</code> (<span class="file-ref">:249</span>, which synthesizes a
+tier-aware <code>GrafanaAlert</code> from Drain3 anomaly data and content-hashes a
+fingerprint). Both call <code>_process_alert</code> (<span class="file-ref">:396</span>) per
+alert. The ordered stages:
+</p>
+
+<div class="ascii">
+ webhook
+   │
+   ▼ _process_alert  (pipeline.py:396)
+ ┌─────────────────────────────────────────────────────────────────────────┐
+ │ STAGE 1   Dedup / fingerprint window      (:405)   ── dup → record       │  cheap
+ │           family_dedup_key + dedup.check          recurrence, NO new row │  path
+ │ STAGE 1b  Layer-2 pre-LLM suppression     (:456)   ── recent DISMISS for │  exits
+ │           same (alert,service) within 10m         (alert,svc) → replay   │  here
+ │ STAGE 1c  Recurrence gate (pre-LLM)       (:485)   ── under fire thresh   │  (no
+ │                                                    → cheap gated row      │  GPU)
+ ├─────────────────────────────────────────────────────────────────────────┤
+ │  (pipeline timeout wrapper, 300s → _investigate_and_act  :589)           │
+ │ STAGE 3   Context gather  ctx=context.gather(alert)  (:710)              │
+ │           3 parallel MCP (prom/loki/jaeger) + deep-trace + deploy bridge │
+ │ STAGE 4   Drain3 annotate lines           (:712)                         │
+ │ STAGE 5   History + correlation (±5min), quote prior data_starved (:745) │
+ │ STAGE 6   Metric interpreter + behavioral baseline   (:797)             │
+ │           DA-3 prior-decision (30m) + Phase-6 operator feedback (14d)    │
+ │ STAGE 5.9 MCP-outage fail-OPEN  (:892)  ── all pillars errored →         │  fail
+ │                                            escalate raw, NOT suppress     │  safe
+ │ STAGE 6.0 Data-starved early-exit (:953) ── all signals empty → quiet    │  cheap
+ │                                            row (criticals bypass)         │  exit
+ ├─────────────────────────────────────────────────────────────────────────┤
+ │ STAGE 7   exemplar select + SCORE-GATE  →  LLM.investigate()  (:1020)    │  GPU
+ │ STAGE 8   response_validator.validate    (:1033)                         │
+ │ STAGE 9   empty-action template fallback (:1056)                         │
+ │ STAGE 10  quality classify → retry / bounded-agency  (:1073)            │
+ │ STAGE 11  override gate, post-LLM recurrence gate, F-4 clamp, DA-2 strip │
+ │ STAGE 12  demotions (empty-evidence, no-trace) + Stage-E quarantine      │
+ │ STAGE 13  notify (escalate→email) + persist + dedup link + incident      │
+ └─────────────────────────────────────────────────────────────────────────┘
+</div>
+
+<p>
+The expensive part is one <code>asyncio.gather</code> of the three pillar fetches
+(<span class="file-ref">context.py:558-564</span>) — Prometheus :8091, Loki :8092,
+Jaeger :8093 — run in parallel, plus two conditional extra calls:
+</p>
+
+<ul>
+  <li><strong>Deep trace</strong> (<span class="file-ref">context.py:596-617</span>): for latency/error alerts on a service whose slowest trace exceeds 200ms, one extra <code>get_trace</code> call. The result is PII-sanitized (masks <code>db.statement</code> literals, <code>http.target</code> IDs), then ranked and slimmed to the top-15 spans so the slowest downstream span survives the character cap. This is the "keystone evidence" for latency RCAs — it lets the LLM name <em>which span</em> is slow, not just that p95 is high.</li>
+  <li><strong>Deploy bridge</strong> (<span class="file-ref">context.py:619-633</span>): for kube-workload and Drain3 alerts, one call to deploy-mcp :8096 over a 2h window. A rollout just before the alert is a cause candidate; an <em>empty</em> list explicitly rules deploy-regression <em>out</em> — a grounded negative, not silence.</li>
+</ul>
+
+<p>
+After gathering, the deterministic <strong>metric interpreter</strong>
+(<span class="file-ref">metric_interpreter.py</span>) computes — never the LLM — the
+observed value, unit (ms/percent/bytes/sec…), threshold and direction, the signed
+delta and delta-percent, and the deployment family (k8s/docker-vm/systemd). It
+renders a one-liner like <code>"CPU busy = 94.4% — 9.4pp above the 80% threshold"</code>
+that the LLM is told to cite verbatim, not re-derive.
+</p>
+
+<div class="callout why">
+  <div class="callout-label">Why this design — code does arithmetic, the LLM only narrates</div>
+  Every number an operator might act on — the observed value, the delta, the
+  fire count, the dedup decision — is computed by deterministic Python and handed
+  to the model as a fact to quote. The LLM is forbidden from doing arithmetic or
+  inventing figures (the prompt and validator both enforce this). The model's
+  <em>only</em> job is to read the assembled, correlated picture and write the
+  causal narrative — "the accounting pod is OOM-looping because its 120Mi limit is
+  below working set, evidenced by exit-137 and 420 restarts". A language model is
+  unreliable at math and reliable at prose; the architecture plays to that, not
+  against it.
+</div>
+
+<h3 id="noise-concepts">4.2 Four different noise concepts (do not confuse them)</h3>
+
+<table>
+  <thead><tr><th>Mechanism</th><th>Where</th><th>What it is</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Dedup</strong></td><td><span class="file-ref">dedup.py</span></td><td>In-memory sliding window (~600s) keyed on fingerprint/family. Collapses identical re-fires. Writes <em>no</em> feed row — it bumps the incident's <code>fire_count</code> instead.</td></tr>
+    <tr><td><strong>Recurrence gate</strong></td><td><span class="file-ref">recurrence_gate.py</span></td><td>Per-rule opt-in (Grafana annotation), DB-backed, ~2h window. Pre-LLM caps the first N fires (cheap rows); post-LLM force-escalates after M LLM dismisses. Criticals bypass.</td></tr>
+    <tr><td><strong>Layer-2 suppression</strong></td><td><code>_check_suppression</code> <span class="file-ref">:555</span></td><td>Replays a recent DISMISS for the same <code>(alert_name, service)</code> within 10m to skip the GPU. Criticals never suppress.</td></tr>
+    <tr><td><strong>Incident entity</strong></td><td><span class="file-ref">rca_store.py:85</span></td><td>One persistent row per distinct fingerprint, carrying <code>fire_count</code> / <code>last_seen</code>. "The same flapping rule firing 40 times is ONE incident, not 40 feed rows." Dedup recurrences bump it.</td></tr>
+  </tbody>
+</table>
+
+<p>
+The mental model: <strong>dedup</strong> is short and textual (same thing, right now);
+the <strong>recurrence gate</strong> is long and policy-driven (this rule flaps, throttle
+it but escalate if it persists); <strong>suppression</strong> replays a recent human-or-AI
+dismissal; the <strong>incident entity</strong> is the durable "this is one ongoing thing"
+record that the dashboard renders as "fired N times".
+</p>
+
+<h3 id="cheap-path">4.3 The cheap-path economics</h3>
+
+<p>
+Everything that short-circuits <em>before</em> <code>LLM.investigate()</code> writes a
+lightweight row and returns, never touching the GPU: the Drain3 noise gate → dedup
+→ Layer-2 suppression → recurrence pre-LLM gate → MCP-outage fail-open →
+data-starved early-exit gate. In real-induction testing the platform paged on 7
+genuine faults out of dozens of fires with zero false pages from 28 non-incidents
+— the bulk of that filtering is deterministic code, not the model. The GPU is the
+scarcest, most expensive, most fallible resource in the system; the entire Layer 2
+exists to make sure it only ever runs on something worth a real root-cause analysis.
+</p>
+
+<h2 id="firewall">5. The hallucination firewall</h2>
+
+<p>
+This is the platform's central safety invariant and arguably its most important
+design idea: <strong>every piece of data the LLM ever sees must arrive through a
+read-only MCP bridge.</strong> No direct database reads, no in-process Prometheus
+client, no querying Loki's HTTP API from the pipeline. Six bridges, one per data
+source, each a small read-only FastAPI app:
+</p>
+
+<table>
+  <thead><tr><th>Bridge</th><th>Port</th><th>Wraps</th><th>Key read-only tools</th></tr></thead>
+  <tbody>
+    <tr><td>prometheus-mcp</td><td>:8091</td><td>Prometheus HTTP API (:9090)</td><td><code>query_instant</code>, <code>query_range</code>, <code>get_alerts</code>, <code>get_targets</code></td></tr>
+    <tr><td>loki-mcp</td><td>:8092</td><td>Loki HTTP API (:3100)</td><td><code>query_logs</code> (50-line cap), <code>get_label_values</code>, <code>get_log_volume</code></td></tr>
+    <tr><td>jaeger-mcp</td><td>:8093</td><td>Jaeger HTTP API (:16686)</td><td><code>find_traces</code>, <code>get_trace</code>, <code>get_services</code>, <code>get_operations</code></td></tr>
+    <tr><td>drain3-mcp</td><td>:8094</td><td>the triage service's <code>/drain3/stats</code> (:8090)</td><td><code>get_clusters</code>, <code>get_anomaly_rate</code>, <code>match_log</code>, <code>get_baseline_info</code></td></tr>
+    <tr><td>rca-history-mcp</td><td>:8095</td><td>the SQLite RCA store (shared volume)</td><td><code>get_recent_rcas</code>, <code>search_rcas</code>, <code>get_similar_decisions</code>, <code>get_alert_frequency</code>, <code>list_feedback</code>, <code>list_exemplars</code></td></tr>
+    <tr><td>deploy-mcp</td><td>:8096</td><td>kube-state-metrics series in Prometheus (:9090)</td><td><code>recent_deploys</code>, <code>last_deploy</code></td></tr>
+  </tbody>
+</table>
+
+<div class="callout why">
+  <div class="callout-label">Why this design — provenance is the point</div>
+  An LLM will happily invent a plausible service name, a metric value, or a deploy
+  that never happened. The firewall makes that structurally impossible: if a figure
+  appears in an RCA, it came through a bridge, and the bridge call is logged — so
+  <strong>every number is traceable to a real query</strong>. This was not theoretical.
+  Incident <code>0b215ef3</code> saw the model fabricate a service that did not exist; the
+  firewall plus the validator's parrot/placeholder guards are the direct response.
+  The deploy-mcp bridge itself was born this way: until 2026-06-11 the platform had
+  <em>no</em> deploy data source, so the validator <em>rejected any deploy-as-cause
+  claim</em> as ungrounded. The fix was not to loosen the validator — it was to build
+  a bridge so the claim could be grounded.
+</div>
+
+<h4>How the invariant is enforced</h4>
+
+<p>
+The CI lint <span class="file-ref">scripts/check_mcp_invariant.py</span> (run by
+<span class="file-ref">.github/workflows/ci.yml</span> on every push) gates builds. It
+is regex-based and fails the build on: any direct observability port
+(<code>:9090</code>/<code>:3100</code>/<code>:16686</code>) or <code>/api/v1/query</code> path in
+<code>app/</code>; <code>import aiosqlite</code> outside the store; the Grafana datasource-proxy
+bypass on :3000; and ungated loads of the blocklist/exemplar YAML. A handful of
+boundary files (config, the Drain3 input path, boot-time backfill) are explicitly
+allow-listed. The bridges' shared error layer reinforces it: an upstream 4xx maps
+to HTTP 422 ("your query was bad") and a 5xx/unreachable to 502 ("source outage"),
+so the triage client can tell a bad query from a dead source — which is what makes
+the MCP-outage fail-open in the pipeline correct.
+</p>
+
+<div class="callout tip">
+  <div class="callout-label">Bonus — the firewall is also a portability seam</div>
+  Because the pipeline only ever speaks the bridge's small read-only vocabulary, the
+  backend behind any bridge can be swapped without touching the reasoning code.
+  Point loki-mcp at a different log store, or deploy-mcp at a real CD system instead
+  of kube-state-metrics, and the LLM never knows. The safety boundary doubles as the
+  vendor-neutral boundary.
+</div>
+
+<h2 id="ai-rca">6. Layer 3 — AI-RCA <span class="layer-tag l3">explain</span></h2>
+
+<h3 id="the-llm">6.1 The local LLM</h3>
+
+<p>
+The reasoning model is <strong>qwen2.5:14b</strong> (primary) with <strong>qwen2.5:7b</strong> as a
+fallback, served by <strong>Ollama</strong> as a host systemd service (:11434) on the GPU
+host's A10G. The call is a single <code>/api/chat</code> POST, <code>temperature=0</code>,
+<code>num_ctx=32768</code>, with <code>format=&lt;response schema&gt;</code> so the model's output is
+structured at decode time (<span class="file-ref">llm_client.py:1288,1269</span>). A
+circuit breaker plus two retries with backoff guards transient failures; a 4xx is
+non-retriable and does not trip the breaker.
+</p>
+
+<div class="callout note">
+  <div class="callout-label">Note — the in-code default vs. production</div>
+  The Python default in <span class="file-ref">config.py:7</span> is
+  <code>llama3.1:8b</code>; the <code>qwen2.5:14b</code> primary / <code>7b</code> fallback is set
+  via <code>OLLAMA_MODEL</code> in <code>docker-compose.gpu.yml</code> for the GPU deployment.
+  So "14b/7b" is the production fact, not the bare code default.
+</div>
+
+<div class="callout why">
+  <div class="callout-label">Why this design — a local model, not a frontier API</div>
+  Three reasons. <strong>Sovereignty</strong>: CIRES telemetry — internal service names,
+  log contents, infrastructure shape — never leaves the org's hardware. <strong>Cost</strong>:
+  a self-hosted model has no per-token bill, which matters when the pipeline runs on
+  every survivor alert indefinitely. <strong>Replaceability</strong>: because the model only
+  ever narrates a pre-assembled, validated picture (it does no arithmetic and reaches
+  no data except through the firewall), it is a swappable component — a better local
+  model drops in with a config change. The architecture deliberately does not depend
+  on any one model's cleverness; it depends on the scaffolding around it.
+</div>
+
+<h3 id="prompt">6.2 Prompt construction</h3>
+
+<p>
+The prompt (<code>_build_prompt</code>, <span class="file-ref">llm_client.py:860</span>) is
+assembled from deterministic blocks in a fixed order. The system prompt carries the
+cause-first quality rules (name a mechanism in the first sentence; never let "value
+above threshold" be the conclusion; remediation-only actions; correlation must be
+explained) plus three few-shot examples and the output schema. The user message
+stacks:
+</p>
+
+<ul>
+  <li><strong>Alert details</strong> + the exact metric that fired (PromQL + observed value, skipping the boolean threshold step).</li>
+  <li><strong>Metric-interpreter facts</strong> — the deterministic one-liner, "cite verbatim, do not re-derive".</li>
+  <li><strong>Correlated-picture framing</strong> — the "ALL THREE correlated signals … reconcile them" preamble plus the neighboring-alerts block (±5 min). This is the instruction to investigate metrics, logs, <em>and</em> traces together.</li>
+  <li><strong>DA-3 prior-decision</strong> block and <strong>Phase-6 corrective-feedback</strong> block (operator overrides on similar past alerts).</li>
+  <li><strong>Exemplar</strong> — the selected archetype rendered as a structural template (§7), with an explicit numeral guard: never copy the exemplar's numbers.</li>
+  <li><strong>Deploy block</strong> (rollouts in the window, or the explicit "no deploys" negative), <strong>metrics</strong> (capped 6000 chars), <strong>anomalous-log primary block</strong>, <strong>traces</strong>, and the <strong>deep-trace span breakdown</strong> ("keystone evidence for latency").</li>
+</ul>
+
+<p>
+The output's <code>reason</code> field is an <strong>investigation log</strong>: 3–6 numbered
+steps in the form <em>"1. checked X → found Y"</em> with concrete numbers; when a
+deep-trace breakdown is present, one step must cite the slowest span. This makes the
+model's reasoning auditable — an operator can see <em>how</em> it reached the cause,
+not just the cause.
+</p>
+
+<h3 id="validator">6.3 The response validator</h3>
+
+<p>
+Between the LLM and persistence, <span class="file-ref">response_validator.py</span>
+scans the decision and either mutates it (stripping bad actions) or flags it for
+retry. The guards:
+</p>
+
+<table>
+  <thead><tr><th>Guard</th><th>Rejects</th></tr></thead>
+  <tbody>
+    <tr><td>Banned-phrase scan</td><td>hedges: "insufficient data", "no metrics/logs/traces", "cannot determine", "needs further investigation"</td></tr>
+    <tr><td>human_cause formula guard</td><td>PromQL or <code>metric{…}=value</code> in the operator-facing prose (it must be plain English)</td></tr>
+    <tr><td>Template-slot guard</td><td>unfilled exemplar slots: "N minutes", "cluster #N", "HH:MM", "v&lt;X.Y.Z&gt;", "{service}" — proof of copy-paste</td></tr>
+    <tr><td>Ungrounded-deploy guard</td><td>a deploy/rollout-as-cause claim unless the decision's own evidence contains a deploy token (the deploy bridge is the only legitimate source)</td></tr>
+    <tr><td>Parrot/placeholder scan</td><td>literal <code>service=X</code>, <code>service={{SERVICE_NAME}}</code> — the 0b215ef3 failure class</td></tr>
+    <tr><td>Numeral guard</td><td>copied exemplar numbers (prompt instruction + template-slot guard)</td></tr>
+    <tr><td>Vague-action / investigation-only scan</td><td>read-only "kubectl get/describe" commands with no actual remediation verb</td></tr>
+    <tr><td>Architecture-mismatch scan</td><td>commands from the wrong deployment family (docker command for a k8s service)</td></tr>
+  </tbody>
+</table>
+
+<p>
+A <strong>severity floor</strong> (in <code>llm_client.investigate</code>) prevents the model
+from downgrading below the Grafana label's severity. Confidence <strong>demotions</strong>
+live in the pipeline, not the validator, and run at persist time:
+</p>
+
+<ul>
+  <li><strong>Empty-evidence demotion</strong> (<span class="file-ref">pipeline.py:1542</span>): actionable + confidence &gt;0.5 + zero corroborating evidence → cap at 0.5, retag <code>needs_review</code>.</li>
+  <li><strong>No-trace demotion</strong> (<span class="file-ref">:1559</span>): a confident latency/error RCA on a traced service that returned no traces → cap at 0.6, <code>needs_review</code>.</li>
+  <li><strong>F-4 clamp</strong> (<span class="file-ref">:1381</span>): a surface-only/hedge pattern, data-starved quality, or template-sourced actions → cap confidence ≤0.4 and replace the action list with read-only <code>diagnostic_steps</code>.</li>
+</ul>
+
+<h3 id="bounded-agency">6.4 Bounded agency — the data-starved retry</h3>
+
+<p>
+When the first pass is thin — data-starved, a banned-phrase hit, a thin
+INCONCLUSIVE/ESCALATE at low confidence, or a latency alert on a traced service
+with no traces — the pipeline gives the model <strong>exactly one</strong> extra MCP call
+(<span class="file-ref">bounded_agency.py</span>). The model may request <em>one</em>
+whitelisted tool (<code>prometheus.query</code>, <code>loki.query_range</code>,
+<code>jaeger.get_traces</code>, <code>rca_history.similar/list_exemplars/get_exemplar/list_feedback</code>);
+the request is Pydantic-validated, executed at temperature 0, and re-prompted with
+the result. Crash-loop alerts skip the model's tool-pick entirely — the platform
+auto-issues a fixed three-family kube-state query and digests it into plain-English
+facts plus a ready verdict the model only confirms (the 14b repeatedly failed to
+compose the query itself).
+</p>
+
+<div class="callout why">
+  <div class="callout-label">Why this design — agency, but bounded</div>
+  A full autonomous-agent loop is exactly the kind of unbounded, hard-to-audit,
+  expensive behaviour the platform is built to avoid. But a model that hits a missing
+  signal and simply hedges is useless. The compromise: <strong>one</strong> extra, whitelisted,
+  validated, deterministic call — enough to resolve "I couldn't see X" into "I checked
+  X and found Y", and no more. The governing principle is <em>investigate all three
+  signals, never guess past a missing pillar</em>: if a pillar is genuinely empty, the
+  honest output is INCONCLUSIVE, not a fabricated cause.
+</div>
+
+<h2 id="exemplars">7. The exemplar / archetype system</h2>
+
+<p>
+An exemplar is a <strong>worked example of a good RCA's shape</strong> — not a fact, not a
+rule. The library (<span class="file-ref">app/exemplars/library.yaml</span>) holds 17
+archetypes plus one neutral default (<code>generic-sre-shape</code>): OOM-loops,
+upstream-latency attribution, crash-loop-bad-config, workload-replica-deficit,
+TLS-cert pre-expiry, a synthetic-blip <em>dismiss</em> archetype, the
+closed-loop-override sentinel, and more.
+</p>
+
+<h3>How selection works</h3>
+
+<p>
+Selection (<span class="file-ref">app/exemplars/__init__.py</span>) is two-stage —
+a regex gate, then additive scoring:
+</p>
+
+<ol>
+  <li><strong>alertname regex gate</strong> — if the archetype's compiled pattern doesn't match the alert name, it scores 0 and is skipped entirely (<span class="file-ref">:99-101</span>).</li>
+  <li><strong>additive scoring</strong> (<span class="file-ref">:103-119</span>) — base 0.10 for the name match; <code>+0.40</code> service match (<code>-0.15</code> if a service set is named but excludes this one); <code>+0.30</code> deployment-type; <code>+0.20</code> signal; <code>+0.10</code> severity.</li>
+  <li><strong>tie-break</strong> — highest score wins; ties broken by an explicit integer <code>priority</code>, then by lower id, so selection is fully deterministic and independent of YAML order.</li>
+  <li><strong>SCORE-GATE</strong> (<span class="file-ref">:160-182</span>) — if the best score is below <code>exemplar_min_fit_score</code> (default <strong>0.25</strong>), the weak match is discarded and the <strong>neutral default</strong> is used instead, with score 0.</li>
+</ol>
+
+<div class="callout why">
+  <div class="callout-label">Why this design — calibration, not a taxonomy</div>
+  The exemplar is framed in the prompt as a <em>structural template</em>: "match this
+  RCA STRUCTURE… It is NOT a source of facts. THIS alert's facts come from the
+  gathered context above. If your evidence diverges from the archetype, say so and
+  reason from your own evidence." The cause <strong>always</strong> comes from evidence; the
+  archetype only decides whether a trustworthy <em>shape</em> is worth showing. The
+  score-gate is the discipline that makes this safe: a weak fit (only the alert name
+  matched) would <em>drag</em> the RCA toward the wrong shape, so a weak fit is not shown
+  at all — it falls to the neutral "name the mechanism, don't restate the alert"
+  default. Combined with the numeral guard (a real bug: a crash-loop RCA once cited
+  the exemplar's example "128Mi" instead of the real 4Mi) and the validator's
+  template-slot guard, the system gets the <em>benefit</em> of worked examples without
+  letting the model force-fit one. This is "earned influence" — an archetype only
+  steers the output if it genuinely fits.
+</div>
+
+<p>
+The selected <code>exemplar_id</code> and its <code>exemplar_score</code> are stamped onto the
+decision and persisted (<span class="file-ref">pipeline.py:1643-1644</span>) so the
+dashboard can later answer "which archetypes actually help". A coverage CI guard
+(<span class="file-ref">tests/test_exemplar_coverage.py</span>) asserts every live
+Grafana rule either matches a real archetype's regex or is an explicit, recorded
+waiver — so falling to the default becomes a conscious choice, never silent drift.
+Exemplars are kept in their own YAML, deliberately <em>not</em> mixed into the
+empirical RCA history, so they never contaminate the dashboard or the precision/recall
+metrics.
+</p>
+
+<h2 id="honesty">8. Quality &amp; honesty mechanisms</h2>
+
+<p>
+The platform treats <strong>honesty as a feature</strong>: an "I don't know" that is
+correct is worth more than a confident guess that is wrong. Several mechanisms
+enforce this.
+</p>
+
+<h4>Quality tags</h4>
+
+<p>
+Every persisted decision carries a quality tag, classified deterministically by
+<code>_classify_rca_quality</code> (<span class="file-ref">rca_store.py:138-206</span>),
+most-severe-wins:
+</p>
+
+<ul>
+  <li><strong>needs_review</strong> — no actions <em>and</em> no evidence: may sound confident but is unactionable; surface to a human.</li>
+  <li><strong>data_starved</strong> — hedge phrases present (matched against the validator's <em>same</em> banned-phrase list, so the classifier and validator can never drift) or empty narrative.</li>
+  <li><strong>actionable</strong> — everything else.</li>
+</ul>
+
+<h4>Quarantine</h4>
+
+<p>
+A row that still hedges or parrots after both LLM passes is written with
+<code>excluded_from_lookup=1</code> (Stage E, <span class="file-ref">pipeline.py:1582-1610</span>).
+Quarantined rows are <strong>hidden from every LLM-context lookup</strong> (the DA-3
+prior-decision, similar-decisions, high-value-feedback queries all filter
+<code>COALESCE(excluded_from_lookup,0)=0</code>) so a bad row can never be quoted back to
+the model and reinforce the hedge — but they remain fully visible to operators on
+the dashboard and in audits. The quarantine is LLM-context-only, by design.
+</p>
+
+<h4>The closed-loop feedback</h4>
+
+<p>
+Operator feedback flows back into future prompts three ways
+(all <span class="file-ref">pipeline.py</span>):
+</p>
+
+<ul>
+  <li><strong>Past-hedge replay</strong> — prior <code>data_starved</code> RCAs for this fingerprint are quoted verbatim so the model sees its own past hedges and avoids repeating them.</li>
+  <li><strong>Proactive high-value feedback</strong> — operator corrections on similar past alerts (14 days) are injected when present.</li>
+  <li><strong>Override gate</strong> — if the model DISMISSes but an operator has an active <em>override</em> (a "this is a real incident" flag, default 14-day window), the verdict is force-flipped to ESCALATE with the override note prepended.</li>
+</ul>
+
+<p>
+The feedback table also backs <strong>confirm</strong> (timeless ratification for
+precision/recall) and a <strong>rate-this-alert</strong> form (useful yes/no, verdict-right,
+action-right, actual-cause, tags, notes). The recurrence history is surfaced to
+operators as clickable past investigations with review badges, and the escalation
+email states how many times the alert fired in the last 7 days (reconciled from the
+incident entity's <code>fire_count</code>).
+</p>
+
+<h2 id="data-model">9. State &amp; data model</h2>
+
+<p>
+All persistent state lives in <strong>SQLite</strong> via <code>aiosqlite</code>
+(<span class="file-ref">app/rca_store.py</span>) — a single shared DB file (mounted
+to the rca-history bridge as a volume; backed by RDS MySQL only for the application
+under test, not the platform's own store). Migrations are additive: every new column
+is nullable and historical rows are never back-filled, because SQLite has no
+<code>ADD COLUMN IF NOT EXISTS</code> so the code probes <code>PRAGMA table_info</code> first.
+</p>
+
+<div class="callout why">
+  <div class="callout-label">Why this design — SQLite</div>
+  The platform's own record is low-volume (one row per surviving alert) and
+  single-writer. SQLite is a zero-ops embedded store with no server to deploy, secure,
+  or back up separately — it ships <em>inside</em> the triage container and is exposed
+  read-only through one MCP bridge. For a PoC and a portable BYO bundle, that is
+  exactly the right amount of database. The application-under-test uses real MySQL/RDS;
+  the platform's metadata does not need it.
+</div>
+
+<table>
+  <thead><tr><th>Table</th><th>Purpose</th><th>Key columns</th></tr></thead>
+  <tbody>
+    <tr><td><code>rca_history</code></td><td>one row per surviving alert decision</td><td><code>id</code>, <code>alert_fingerprint</code>, <code>affected_service</code>, <code>llm_verdict</code>, <code>llm_confidence</code>, <code>rca_report</code> (JSON envelope), <code>rca_quality</code>, <code>env</code>, <code>exemplar_id</code>/<code>exemplar_score</code>, <code>excluded_from_lookup</code>, <code>incident_id</code>, <code>observed_value</code>, <code>promql_expr</code>, suggested_actions/evidence/diagnostic_steps/correlated_alerts (JSON)</td></tr>
+    <tr><td><code>incidents</code></td><td>one row per distinct fingerprint (the durable "one ongoing thing")</td><td><code>fingerprint</code> (UNIQUE), <code>fire_count</code>, <code>first_seen</code>, <code>last_seen</code>, plus denormalized <code>current_verdict</code>/<code>current_severity</code>/<code>alert_name</code>/<code>affected_service</code> for cheap rendering</td></tr>
+    <tr><td><code>feedback</code></td><td>the closed loop (override / confirm / rate)</td><td><code>decision_id</code> (FK), <code>feedback_type</code>, <code>active_until</code>, plus rate fields: <code>rating</code>, <code>verdict_was_right</code>, <code>action_was_right</code>, <code>actual_cause</code>, <code>tags</code>, <code>notes</code>, <code>rater</code></td></tr>
+  </tbody>
+</table>
+
+<p>
+A fourth, independent store is the <strong>Drain3 state</strong> — per-service template
+trees persisted to <code>{service}.bin</code> files, separate from SQLite. The
+<code>env</code> column is a first-class, resolved environment
+(prod/stg/dev/demo/infra/unknown) computed by the precedence-ordered
+<code>env_resolver</code> (<span class="file-ref">v2_mappings.py:290-361</span>) at write
+time — <code>"unknown"</code> is an explicit gap value, never a silent prod default, so a
+typo like <code>prdo</code> falls through rather than mislabelling.
+</p>
+
+<h2 id="infra">10. Infrastructure &amp; deployment</h2>
+
+<p>
+The current topology is the three-host AWS bed described in §1.3 (monitoring
+t3.large + k3s t3.xlarge in us-east-1, GPU g5.xlarge A10G in us-west-2, RDS MySQL),
+provisioned by <strong>Terraform</strong> and configured by <strong>Ansible</strong>. Container
+images for the triage service and all six bridges are built and pushed to <strong>GHCR
+via GitHub Actions</strong> (matrix over the six bridge directories, tagged
+main/sha/latest).
+</p>
+
+<h4>The 3-command BYO deploy</h4>
+
+<p>
+The platform is designed to be <em>portable</em> — handed to the supervisor to deploy
+on her own L4 GPU and existing Kubernetes. The bundle ships:
+</p>
+
+<ul>
+  <li><strong>preflight</strong> — a fail-fast Ansible role that asserts every required var/secret is defined, non-empty, and not a <code>CHANGE_ME</code> placeholder before anything runs.</li>
+  <li><strong>vault</strong> — a committed plaintext template (<code>vault.example.yml</code>) that the operator copies, fills, and <code>ansible-vault encrypt</code>s; secrets are the Grafana admin password, SMTP password, MySQL password.</li>
+  <li><strong>gpu-host.yml</strong> — a from-bare-OS GPU bring-up playbook (<code>common → docker → gpu_driver → nvidia_docker → ollama → triage_stack</code>), with the header explicitly targeting an <strong>NVIDIA L4 (Ada Lovelace)</strong> — the supervisor's production GPU, not the AWS A10G.</li>
+  <li><strong>example.yml</strong> inventory — a genericized, BYO-portable template alongside the canonical live <code>newacct.yml</code>.</li>
+</ul>
+
+<div class="callout warn">
+  <div class="callout-label">Important — AWS is the bed, not the target</div>
+  The AWS three-host topology is a <strong>dev/test bed only</strong>. The production target
+  is the <strong>CIRES private cloud</strong> with an L4 GPU — which is why the BYO bundle,
+  the L4-targeted gpu-host playbook, and the portability-first choices (the MCP firewall
+  as a swappable seam, SQLite over a managed DB, OTel over vendor exporters) all exist.
+  For prod hardening the recommendation is portable open-source — Postfix not SES,
+  MinIO not S3 — and, longer term, a single OTel host-agent feeding the NOC's existing
+  Zabbix for metrics rather than Prometheus-forever.
+</div>
+
+<h2 id="principles">11. Design principles that recur</h2>
+
+<p>
+Step back from the components and the same handful of through-lines appear at every
+layer. If you internalise these five, the rest of the platform follows.
+</p>
+
+<table>
+  <thead><tr><th>Principle</th><th>How it shows up</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Deterministic-first, AI-last</strong></td><td>Code does dedup, suppression, arithmetic, the metric interpreter, the quality tags. The LLM sits at the narrow end of the funnel and only narrates a picture code has already assembled and verified.</td></tr>
+    <tr><td><strong>Provenance / the firewall</strong></td><td>Every datum the model sees comes through one of six read-only MCP bridges, CI-enforced. Every number in an RCA is traceable to a real query. The same seam makes backends swappable.</td></tr>
+    <tr><td><strong>Honesty as a feature</strong></td><td>Banned hedges, quality tags, confidence demotions, quarantine, "never guess past a missing pillar". A correct INCONCLUSIVE beats a confident wrong cause.</td></tr>
+    <tr><td><strong>Real-induction-only testing</strong></td><td>No synthetic webhook POSTs — faults are induced for real (flagd on otel-demo, resource stress, bad-deploy canaries) so the bridges see real data and the whole path is exercised.</td></tr>
+    <tr><td><strong>Earned influence</strong></td><td>The exemplar score-gate, the override window, the deploy-grounding requirement: a signal only steers the output if it genuinely fits the evidence. Weak fits fall back to the neutral default.</td></tr>
+    <tr><td><strong>Measured, not aspirational</strong></td><td>Decisions are scored against ground truth in real-induction batteries (detection recall, cause accuracy, false-page rate); exemplar usefulness is persisted and rolled up. The claims on this page are the ones the tests support.</td></tr>
+  </tbody>
+</table>
+
+<div class="callout tip">
+  <div class="callout-label">If you read one thing</div>
+  The platform's whole bet is that a fallible language model becomes <em>trustworthy
+  enough to page a human</em> not by being smarter, but by being wrapped in
+  deterministic scaffolding that controls what it sees (the firewall), what reaches it
+  (the cheap-path funnel), what shape it should produce (gated exemplars), and what it
+  is allowed to claim (the validator and demotions). The intelligence is in the
+  scaffolding as much as the model.
+</div>
+
+</div><!-- /.content -->
+</main>
+
+<footer style="border-top:1px solid var(--border); padding:28px 40px; text-align:center; color:var(--muted); font-size:13px;">
+  CIRES Observability Platform · Architecture Deep-Dive · grounded in the live code as of 2026-06-12
+</footer>
+
+</body>
+</html>
