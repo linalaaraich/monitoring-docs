@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fr">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CIRES AI Observability Platform — Solution Architecture &amp; Design Choices</title>
+<title>CIRES — Architecture de la solution &amp; choix de conception</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700;9..144,900&family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap');
   :root{ --ink:#1a2233; --soft:#475569; --muted:#6b7280; --line:#e2e8f0; --line2:#cbd5e1;
@@ -48,87 +48,87 @@
 <body>
 <div class="wrap">
 
-  <div class="eyebrow">CIRES Technologies · AI Observability &amp; LLM-Triage Platform</div>
-  <h1>Solution Architecture &amp; Design Choices</h1>
-  <p class="lead">What the platform is, how it is built, and why each major design decision was made — for review ahead of the production deployment.</p>
-  <p class="meta">Prepared for production-deployment review · June 2026 · figures measured from the live running system.</p>
+  <div class="eyebrow">CIRES Technologies · Plateforme d'observabilité &amp; de triage IA</div>
+  <h1>Architecture de la solution &amp; choix de conception</h1>
+  <p class="lead">Ce qu'est la plateforme, comment elle est construite, et pourquoi chaque grand choix de conception a été fait — pour revue avant le déploiement en production.</p>
+  <p class="meta">Préparé pour la revue de déploiement en production · juin 2026 · chiffres mesurés sur le système en fonctionnement.</p>
 
   <div class="callout">
-    <div class="lbl">The solution in one paragraph</div>
-    Alerts never reach a human raw. Every alert from the monitoring stack is intercepted by an AI triage service that <b>investigates first</b>: it pulls metrics, logs, traces, log-anomaly context, alert history and recent deployments through read-only bridges, has a <b>locally hosted LLM</b> write a root-cause analysis, and only then either pages the operator with a <b>named cause</b> ("the ad workload's pod cannot be scheduled") or dismisses the noise — with every dismissal recorded and auditable. No data leaves the network; no external AI API is involved.
+    <div class="lbl">La solution en un paragraphe</div>
+    Aucune alerte n'atteint un humain à l'état brut. Chaque alerte de la pile de supervision est interceptée par un service de triage IA qui <b>enquête d'abord</b> : il récupère métriques, logs, traces, contexte d'anomalies de logs, historique des alertes et déploiements récents via des ponts en lecture seule, fait <b>rédiger l'analyse de cause racine par un LLM hébergé localement</b>, puis seulement escalade vers l'opérateur avec une <b>cause nommée</b> (« le pod du service <i>ad</i> ne peut pas être planifié ») ou écarte le bruit — chaque rejet étant tracé et auditable. Aucune donnée ne quitte le réseau ; aucune API d'IA externe n'est utilisée.
   </div>
 
-  <h2>1. Architecture — three layers on three hosts</h2>
+  <h2>1. Architecture — trois couches sur trois hôtes</h2>
   <table>
-    <tr><th style="width:170px">Layer</th><th>Components</th><th>Host</th></tr>
-    <tr><td><b>Observability base</b></td><td>Prometheus (metrics), Loki (logs), Jaeger (traces), Grafana (24 alert rules + dashboards), OpenTelemetry collectors routing all three signals from every workload</td><td>monitoring VM (4 vCPU / 16 GB)</td></tr>
-    <tr><td><b>Workloads watched</b></td><td>Kubernetes cluster: business apps + a 22-service microservice bed (OpenTelemetry Demo) used for realistic fault injection</td><td>k8s node(s)</td></tr>
-    <tr><td><b>AI triage tier</b></td><td>Triage service (FastAPI + operator dashboard), 6 read-only MCP bridges, log-anomaly engine (drain3), Ollama running <code>qwen2.5:14b</code></td><td>GPU host (1× 24 GB GPU — L4 validated)</td></tr>
+    <tr><th style="width:170px">Couche</th><th>Composants</th><th>Hôte</th></tr>
+    <tr><td><b>Socle d'observabilité</b></td><td>Prometheus (métriques), Loki (logs), Jaeger (traces), Grafana (24 règles d'alerte + tableaux de bord), collecteurs OpenTelemetry acheminant les trois signaux de chaque charge de travail</td><td>VM de supervision (4 vCPU / 16 Go)</td></tr>
+    <tr><td><b>Charges supervisées</b></td><td>Cluster Kubernetes : applications métier + un banc de 22 microservices (OpenTelemetry Demo) pour l'injection de pannes réalistes</td><td>nœud(s) k8s</td></tr>
+    <tr><td><b>Couche de triage IA</b></td><td>Service de triage (FastAPI + tableau de bord opérateur), 6 ponts MCP en lecture seule, moteur d'anomalies de logs (drain3), Ollama exécutant <code>qwen2.5:14b</code></td><td>Hôte GPU (1× GPU 24 Go — L4 validé)</td></tr>
   </table>
-  <p>The tiers talk over plain TCP and are deployed by <b>three Ansible commands</b> (one per tier); container images are built by CI and pulled from a registry. The same deployment runs unchanged on CIRES infrastructure — host addresses and secrets are the only inputs.</p>
+  <p>Les couches communiquent en TCP simple et se déploient en <b>trois commandes Ansible</b> (une par couche) ; les images conteneur sont construites par CI et tirées d'un registre. Le même déploiement s'exécute tel quel sur l'infrastructure CIRES — seules les adresses des hôtes et les secrets changent.</p>
 
-  <h2>2. The path of one alert</h2>
+  <h2>2. Le parcours d'une alerte</h2>
   <ol>
-    <li>Grafana evaluates a rule (or the log-anomaly engine detects a novel error pattern) and fires a webhook to the triage service.</li>
-    <li><b>Noise gates run first, before any GPU cost</b>: duplicate-fire dedup, repeat-alert suppression, recurrence gating for known flappers (details in §3.4).</li>
-    <li>If the alert survives, the service gathers a <b>correlated evidence picture</b> — metrics, logs, traces, k8s state, alert history, recent deployments — exclusively through the 6 MCP bridges.</li>
-    <li>The local LLM writes the RCA: verdict (escalate / dismiss), confidence, a one-sentence human-readable cause, cited evidence.</li>
-    <li>Validators check the output (see §3.3); ungrounded claims are blocked or demoted.</li>
-    <li>On escalate: <b>one</b> email per incident, leading with the cause, naming all co-fired alerts. On dismiss: no email, full record kept.</li>
-    <li>Every decision lands in the dashboard with its evidence trail, incident history, and a feedback form the operator can use to correct the system.</li>
+    <li>Grafana évalue une règle (ou le moteur d'anomalies détecte un motif d'erreur inédit) et envoie un webhook au service de triage.</li>
+    <li><b>Les filtres de bruit s'exécutent d'abord, avant tout coût GPU</b> : déduplication des re-tirs, suppression des alertes répétées, gate de récurrence pour les flappers connus (détails au §3.4).</li>
+    <li>Si l'alerte passe, le service rassemble une <b>image corrélée des preuves</b> — métriques, logs, traces, état k8s, historique, déploiements récents — exclusivement via les 6 ponts MCP.</li>
+    <li>Le LLM local rédige la RCA : verdict (escalade / rejet), confiance, une cause d'une phrase en langage clair, preuves citées.</li>
+    <li>Des validateurs vérifient la sortie (voir §3.3) ; les affirmations non étayées sont bloquées ou rétrogradées.</li>
+    <li>En cas d'escalade : <b>un seul</b> email par incident, menant par la cause et nommant toutes les alertes co-déclenchées. En cas de rejet : pas d'email, dossier complet conservé.</li>
+    <li>Chaque décision arrive dans le tableau de bord avec sa piste de preuves, l'historique de l'incident, et un formulaire de retour par lequel l'opérateur peut corriger le système.</li>
   </ol>
-  <p class="meta">Median time from alert fire to emailed RCA: <b>~38 s</b>.</p>
+  <p class="meta">Temps médian de l'alerte à la RCA envoyée par email : <b>~38 s</b>.</p>
 
-  <h2>3. Design choices and why</h2>
+  <h2>3. Les choix de conception, et pourquoi</h2>
 
-  <h3>3.1 Local LLM, not a cloud API</h3>
-  <p>All telemetry (logs can contain credentials, internal hostnames, customer data) stays on-premises; there is no per-token cost, no rate-limit dependency, and no internet egress requirement. A 14-billion-parameter model (~11 GB VRAM) is sufficient because the prompt engineering does the heavy lifting: the model receives pre-gathered, pre-structured evidence and a tight output contract, not an open-ended question. Validated on an NVIDIA L4 (24 GB).</p>
+  <h3>3.1 Un LLM local, pas une API cloud</h3>
+  <p>Toute la télémétrie (les logs peuvent contenir identifiants, noms d'hôtes internes, données client) reste sur site ; aucun coût au token, aucune dépendance à une limite de débit, aucune sortie internet requise. Un modèle de 14 milliards de paramètres (~11 Go de VRAM) suffit, car c'est l'ingénierie du prompt qui fait le gros du travail : le modèle reçoit des preuves pré-collectées et pré-structurées, et un contrat de sortie strict — pas une question ouverte. Validé sur une NVIDIA L4 (24 Go).</p>
 
-  <h3>3.2 MCP-only data access — the hallucination firewall</h3>
-  <p>The LLM can <b>only</b> see data that arrives through six read-only HTTP bridges (Prometheus, Loki, Jaeger, drain3, RCA-history, deploy-events). It has no database handle, no direct Prometheus access, no shell. This makes every claim in an RCA <b>traceable to a bridge response</b> — and a CI lint fails the build if any code path bypasses a bridge. When a bridge is down the system fails open (escalates rather than silently suppressing).</p>
+  <h3>3.2 Accès aux données uniquement par MCP — le pare-feu anti-hallucination</h3>
+  <p>Le LLM ne voit <b>que</b> des données arrivant par six ponts HTTP en lecture seule (Prometheus, Loki, Jaeger, drain3, historique des RCA, événements de déploiement). Aucun accès direct à une base, à Prometheus, ni à un shell. Chaque affirmation d'une RCA est ainsi <b>traçable à une réponse de pont</b> — et un lint en CI fait échouer le build si un chemin de code contourne un pont. Si un pont est indisponible, le système échoue en mode ouvert (il escalade plutôt que de supprimer en silence).</p>
 
-  <h3>3.3 Evidence-first validation — trust is earned per decision</h3>
+  <h3>3.3 Validation par les preuves — la confiance se mérite décision par décision</h3>
   <ul>
-    <li>An "actionable" verdict with <b>zero corroborating evidence</b> is automatically demoted to needs-review with capped confidence.</li>
-    <li>"A recent deployment caused this" is <b>forbidden</b> unless the deploy bridge actually returned a rollout in the window — and an empty answer becomes a grounded negative ("no deploys in 2 h — regression ruled out").</li>
-    <li>Log-anomaly RCAs must <b>quote the actual novel log line</b> they blame.</li>
-    <li>Reusable RCA templates ("exemplars") are only injected when they genuinely fit the alert (score gate) — a weak match falls back to a neutral structure rather than dragging the diagnosis toward a wrong shape.</li>
-    <li>Banned-phrase detection catches hedging ("cannot determine the root cause") and triggers a bounded retry that digs deeper before the system is allowed to give up.</li>
+    <li>Un verdict « exploitable » sans <b>aucune preuve corroborante</b> est automatiquement rétrogradé en « à revoir », avec confiance plafonnée.</li>
+    <li>« C'est un déploiement récent qui a causé cela » est <b>interdit</b> tant que le pont de déploiement n'a pas réellement retourné un rollout dans la fenêtre — et une réponse vide devient un négatif étayé (« aucun déploiement en 2 h — régression écartée »).</li>
+    <li>Les RCA d'anomalies de logs doivent <b>citer la ligne de log inédite</b> qu'elles incriminent.</li>
+    <li>Les modèles de RCA réutilisables (« exemplars ») ne sont injectés que s'ils correspondent vraiment à l'alerte (gate de score) — une correspondance faible retombe sur une structure neutre plutôt que de tirer le diagnostic vers une mauvaise forme.</li>
+    <li>La détection de phrases interdites repère les esquives (« impossible de déterminer la cause racine ») et déclenche une relance bornée qui creuse davantage avant que le système ne s'autorise à abandonner.</li>
   </ul>
 
-  <h3>3.4 Layered noise control — one notification per incident</h3>
-  <p>Five complementary layers, each cheap-to-expensive in order, each with a documented escape hatch so a real outage always pages:</p>
+  <h3>3.4 Contrôle du bruit en couches — une notification par incident</h3>
+  <p>Cinq couches complémentaires, ordonnées du moins cher au plus cher, chacune dotée d'une soupape documentée pour qu'une vraie panne escalade toujours :</p>
   <table>
-    <tr><th style="width:210px">Layer</th><th>What it stops</th><th>Safety valve</th></tr>
-    <tr><td>Fingerprint dedup</td><td>Identical re-fires within minutes</td><td>Recorded as incident recurrences, visible on the alert's history</td></tr>
-    <tr><td>Repeat-alert suppression</td><td>Re-investigating something just dismissed</td><td>Criticals exempt unless flapping (below)</td></tr>
-    <tr><td>Recurrence gate</td><td>Known-flappy rules burning GPU on every fire</td><td>Opt-in per rule; repeated dismissals force-escalate to a human</td></tr>
-    <tr><td>Critical-flap suppression</td><td>A flapping critical (e.g. scrape blips) re-investigated 67× in 36 h</td><td>Only after 3 honest dismissals; every 4th fire still fully investigated; any escalate breaks the streak</td></tr>
-    <tr><td>Co-fire consolidation</td><td>2–3 emails when one root cause fires several alert types (workload down + replica deficit + crash-looping)</td><td>One email naming <b>all</b> contributors; every alert keeps its own investigated record; a different service never groups</td></tr>
+    <tr><th style="width:210px">Couche</th><th>Ce qu'elle arrête</th><th>Soupape de sécurité</th></tr>
+    <tr><td>Déduplication par fingerprint</td><td>Re-tirs identiques en quelques minutes</td><td>Enregistrés comme récurrences de l'incident, visibles dans son historique</td></tr>
+    <tr><td>Suppression des alertes répétées</td><td>Ré-enquêter sur ce qui vient d'être rejeté</td><td>Les critiques sont exemptés, sauf s'ils flappent (ci-dessous)</td></tr>
+    <tr><td>Gate de récurrence</td><td>Règles flappantes connues consommant du GPU à chaque tir</td><td>Opt-in par règle ; des rejets répétés forcent l'escalade vers un humain</td></tr>
+    <tr><td>Suppression des critiques qui flappent</td><td>Un critique flappant (ex. blips de scrape) ré-enquêté 67× en 36 h</td><td>Seulement après 3 rejets honnêtes ; un tir sur 4 reste pleinement enquêté ; toute escalade casse la série</td></tr>
+    <tr><td>Consolidation des co-déclenchements</td><td>2–3 emails quand une seule cause déclenche plusieurs types d'alerte (service tombé + déficit de réplicas + boucle de redémarrage)</td><td>Un email nommant <b>tous</b> les contributeurs ; chaque alerte garde son propre dossier enquêté ; un service différent n'est jamais regroupé</td></tr>
   </table>
 
-  <h3>3.5 Novelty-based log anomaly detection</h3>
-  <p>The drain3 engine learns the log-template vocabulary of every service and fires on <b>novel</b> patterns, not volume — a new stack trace fires; a noisy-but-known access log never does. Three tiers (per-component, per-application, system-wide) catch both "one service went weird" and "the whole app drifted". The platform's own infrastructure logs are excluded at ingest so the system cannot alert on itself.</p>
+  <h3>3.5 Détection d'anomalies de logs par nouveauté</h3>
+  <p>Le moteur drain3 apprend le vocabulaire des templates de logs de chaque service et se déclenche sur les motifs <b>inédits</b>, pas sur le volume — une nouvelle trace de pile déclenche ; un log d'accès bruyant mais connu ne déclenche jamais. Trois niveaux (par composant, par application, à l'échelle système) attrapent aussi bien « un service devient étrange » que « toute l'application dérive ». Les logs de la pile d'observabilité elle-même sont exclus à l'ingestion, pour que le système ne puisse pas s'alerter sur lui-même.</p>
 
-  <h3>3.6 Incident-centric data model</h3>
-  <p>Fires are grouped into <b>incidents</b> by fingerprint: the dashboard shows one row per incident with fire count and full history, not one row per fire. Operator feedback attaches to decisions and feeds back into future investigations (prior-verdict coherence), with quarantine for decisions proven wrong so they cannot poison later prompts.</p>
+  <h3>3.6 Un modèle de données centré sur l'incident</h3>
+  <p>Les tirs sont regroupés en <b>incidents</b> par fingerprint : le tableau de bord montre une ligne par incident, avec compteur de tirs et historique complet, et non une ligne par tir. Les retours opérateur s'attachent aux décisions et reviennent nourrir les enquêtes suivantes (cohérence avec le verdict antérieur), avec mise en quarantaine des décisions avérées fausses pour qu'elles n'empoisonnent pas les prompts ultérieurs.</p>
 
-  <h3>3.7 Everything as code, everything tested against reality</h3>
+  <h3>3.7 Tout en code, tout testé contre le réel</h3>
   <ul>
-    <li><b>904 automated tests</b> + CI gates: the MCP-only invariant lint, a frontend compile gate, image build blocked until green.</li>
-    <li><b>Real-induction testing only</b>: verification means breaking something real (kill a pod, flood an API, push a bad deploy) and checking the system's written diagnosis against the known ground truth — never synthetic webhook payloads. Cumulative scored battery: <b>recall 7/7 outages caught, correct cause 51/52 decisions</b>.</li>
-    <li><b>Audit cadence</b>: every feature is audited against the live system (rendered pages, not HTTP 200s; applied infrastructure, not just correct code) — drift between the declared configuration and the running system is treated as a bug class of its own.</li>
+    <li><b>904 tests automatisés</b> + gates CI : le lint d'invariant « accès aux données uniquement par MCP », un gate de compilation du frontend, build d'image bloqué tant que ce n'est pas vert.</li>
+    <li><b>Tests par induction réelle uniquement</b> : vérifier, c'est casser pour de vrai (tuer un pod, inonder une API, pousser un mauvais déploiement) et confronter le diagnostic écrit du système à la vérité terrain connue — jamais de webhooks synthétiques. Batterie cumulée notée : <b>rappel 7/7 pannes détectées, cause correcte 51/52 décisions</b>.</li>
+    <li><b>Cadence d'audit</b> : chaque fonctionnalité est auditée contre le système réel (pages rendues, pas des HTTP 200 ; infrastructure réellement appliquée, pas seulement le code correct) — l'écart entre la configuration déclarée et le système en fonctionnement est traité comme une classe de bug à part entière.</li>
   </ul>
 
-  <h2>4. Production path</h2>
-  <p>AWS is the proof-of-concept bed only. Every component is portable open-source (no AWS managed-service lock-in in the data path), so the private-cloud build is a re-run of the same Ansible against CIRES hosts. Hardening before production exposure, in order: webhook authentication, image digest pinning, MCP service tokens, secrets to Ansible Vault (scaffolding already in place), at-rest encryption provisioned natively in the private-cloud build. Long-term integration target: a single OTel host agent per machine plus the existing NOC Zabbix for metrics — no exporter sprawl.</p>
+  <h2>4. Chemin vers la production</h2>
+  <p>AWS n'est que le banc de validation (PoC). Chaque composant est open-source et portable (aucun verrou à un service managé AWS dans le chemin des données) ; la construction en cloud privé est donc un simple rejeu du même Ansible sur les hôtes CIRES. Durcissement avant exposition en production, dans l'ordre : authentification des webhooks, épinglage des images par digest, jetons de service entre le triage et les ponts MCP, secrets vers Ansible Vault (l'ossature est déjà en place), chiffrement au repos provisionné nativement dans la build cloud privé. Cible d'intégration à long terme : un agent OTel unique par machine, plus le Zabbix existant du NOC pour les métriques — pas de prolifération d'exporters.</p>
 
   <div class="callout green">
-    <div class="lbl">Bottom line</div>
-    The architecture is three replaceable layers joined by two contracts: <b>all signals flow through OpenTelemetry</b> into the base, and <b>all AI reads flow through MCP bridges</b> out of it. Everything else — model, alert rules, noise thresholds, even the LLM host — can be swapped without touching the other layers. The design bets on grounding over model size: a small local model, given verified evidence and refused permission to guess, outperforms an unconstrained large one for this job.
+    <div class="lbl">En résumé</div>
+    L'architecture, ce sont trois couches remplaçables reliées par deux contrats : <b>tous les signaux passent par OpenTelemetry</b> en entrée du socle, et <b>toutes les lectures de l'IA passent par les ponts MCP</b> en sortie. Tout le reste — modèle, règles d'alerte, seuils de bruit, jusqu'à l'hôte du LLM — peut être remplacé sans toucher aux autres couches. Le pari de conception : l'ancrage prime sur la taille du modèle — un petit modèle local, nourri de preuves vérifiées et privé du droit de deviner, surpasse un grand modèle sans garde-fous pour cette tâche.
   </div>
 
-  <footer>CIRES Technologies — AI Observability &amp; LLM-Triage Platform · Solution Architecture &amp; Design Choices · June 2026 · Lina Laaraich. All figures are measured from the live running system.</footer>
+  <footer>CIRES Technologies — Plateforme d'observabilité &amp; de triage IA · Architecture de la solution &amp; choix de conception · juin 2026 · Lina Laaraich. Tous les chiffres sont mesurés sur le système en fonctionnement.</footer>
 
 </div>
 </body>
