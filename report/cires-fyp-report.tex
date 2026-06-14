@@ -575,6 +575,18 @@ Google's \emph{SRE Book} and \emph{SRE Workbook}, with explicit
 translation of the SRE vocabulary into the project's operational
 context.
 
+The engagement was run as a sequence of two-week scrum sprints tracked
+on a Jira board (Figure~\ref{fig:agile}), with every epic and story
+followed from discovery through to delivery and audit.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{images/agile-board.png}
+\caption{The project board --- epics, stories, and sprint status
+tracked throughout the engagement (work-item summary view).}
+\label{fig:agile}
+\end{figure}
+
 \section{Findings from interviews}
 
 The single most consequential finding from the field research recurred
@@ -1988,6 +2000,69 @@ This validates the architectural choice of running the AI layer
 separately from the production infrastructure: a transient laptop
 fault does not affect the observability stack, only the AI-assisted
 RCAs.
+
+\section{The operator-facing platform}
+\label{sec:operator-ui}
+
+All of the machinery described in this dissertation surfaces to the
+on-call engineer through a single self-hosted dashboard, served by the
+triage service itself with no additional component.  This section shows
+the surfaces an operator actually uses.
+
+The triage feed (Figure~\ref{fig:ui-feed}) is the landing page: every
+decision the platform has made, newest first, with its environment,
+service, alert, and verdict.  Cheap-path rows --- deduplicated or
+absorbed by a gate before any LLM cost --- sit alongside fully
+investigated ones, so the noise the operator never had to see remains
+auditable rather than discarded.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[height=0.8\textheight]{images/dashboard-feed.png}
+\caption{The triage feed --- one row per decision, newest first, with
+environment, service, alert and verdict.  The left rail is the
+operator's navigation; the top bar carries live counters.}
+\label{fig:ui-feed}
+\end{figure}
+
+Selecting a row opens the RCA detail (Figure~\ref{fig:ui-rca}): the
+named cause in plain language, the model's calibrated confidence, the
+cited evidence and suggested \emph{read-only} actions, and the full
+fire history of the incident.  The example shown is a real co-fired
+incident --- the banner records that its notification was consolidated
+with a sibling alert, so the operator received a single page naming
+both rather than two competing ones.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[height=0.8\textheight]{images/rca-detail.png}
+\caption{Anatomy of an RCA: named cause, calibrated confidence, cited
+evidence, suggested read-only actions, and the incident's fire history.
+This incident was co-fire-consolidated into a single notification.}
+\label{fig:ui-rca}
+\end{figure}
+
+The Evaluation surface (Figure~\ref{fig:ui-eval}) carries the live
+platform-health KPIs above seven-day trends; the Incidents surface
+(Figure~\ref{fig:ui-incidents}) groups repeated alerts into one row per
+ongoing issue, with a toggle to a per-service rollup.  Both replaced a
+set of placeholder pages once the underlying data model was in place.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.95\textwidth]{images/evaluation-page.png}
+\caption{The Evaluation surface --- live health KPIs (top) over
+seven-day trends (below), merged onto one page.}
+\label{fig:ui-eval}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.95\textwidth]{images/incidents-page.png}
+\caption{The Incidents surface --- one row per ongoing issue, with an
+Incidents\,/\,Services segmented toggle.}
+\label{fig:ui-incidents}
+\end{figure}
 
 % =====================================================================
 \chapter{Design Decisions and Rationale}

@@ -652,6 +652,20 @@ guidée du \emph{SRE Book} et du \emph{SRE Workbook} de Google, avec
 une traduction explicite du vocabulaire SRE dans le contexte
 opérationnel du projet.
 
+Le projet a été conduit comme une suite de sprints scrum de deux
+semaines suivis sur un tableau Jira (Figure~\ref{fig:agile}), chaque
+épopée et chaque récit étant suivis de la découverte jusqu'à la
+livraison et l'audit.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{images/agile-board.png}
+\caption{Le tableau de projet --- épopées, récits et état des sprints
+suivis tout au long de la mission (vue de synthèse des éléments de
+travail).}
+\label{fig:agile}
+\end{figure}
+
 \section{Constats issus des entretiens}
 
 Le constat le plus marquant issu de la recherche de terrain est
@@ -2175,6 +2189,74 @@ production. Depuis la migration GPU du 2026-05-21
 (\S\ref{sec:gpu-shipped}), le conteneur tourne sur
 \texttt{observability-gpu-uswest2} avec portable en repli~; le
 même invariant tient.
+
+\section{La plateforme côté opérateur}
+\label{sec:operator-ui}
+
+Toute la mécanique décrite dans ce mémoire est exposée à l'ingénieur
+d'astreinte via un unique tableau de bord auto-hébergé, servi par le
+service de triage lui-même, sans composant supplémentaire. Cette
+section montre les surfaces qu'un opérateur utilise réellement.
+
+Le flux de triage (Figure~\ref{fig:ui-feed}) est la page d'accueil~:
+chaque décision prise par la plateforme, la plus récente en tête, avec
+son environnement, son service, son alerte et son verdict. Les lignes
+du chemin économique --- dédupliquées ou absorbées par un filtre avant
+tout coût LLM --- côtoient les investigations complètes, de sorte que
+le bruit que l'opérateur n'a jamais eu à voir reste auditable plutôt
+que jeté.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[height=0.8\textheight]{images/dashboard-feed.png}
+\caption{Le flux de triage --- une ligne par décision, la plus récente
+en tête, avec environnement, service, alerte et verdict. Le rail de
+gauche est la navigation de l'opérateur~; la barre supérieure porte les
+compteurs en direct.}
+\label{fig:ui-feed}
+\end{figure}
+
+Sélectionner une ligne ouvre le détail de la RCA
+(Figure~\ref{fig:ui-rca})~: la cause nommée en langage clair, la
+confiance calibrée du modèle, les preuves citées et les actions
+suggérées \emph{en lecture seule}, ainsi que l'historique complet des
+tirs de l'incident. L'exemple montré est un incident réel
+co-déclenché --- le bandeau indique que sa notification a été
+consolidée avec une alerte s\oe ur, de sorte que l'opérateur a reçu un
+seul message les nommant toutes deux plutôt que deux messages
+concurrents.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[height=0.8\textheight]{images/rca-detail.png}
+\caption{Anatomie d'une RCA~: cause nommée, confiance calibrée, preuves
+citées, actions suggérées en lecture seule, et historique des tirs de
+l'incident. Cet incident a été consolidé en une seule notification.}
+\label{fig:ui-rca}
+\end{figure}
+
+La surface Évaluation (Figure~\ref{fig:ui-eval}) porte les indicateurs
+de santé en direct au-dessus des tendances sur sept jours~; la surface
+Incidents (Figure~\ref{fig:ui-incidents}) regroupe les alertes répétées
+en une ligne par problème en cours, avec une bascule vers une synthèse
+par service.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.95\textwidth]{images/evaluation-page.png}
+\caption{La surface Évaluation --- indicateurs de santé en direct (en
+haut) au-dessus des tendances sur sept jours (en bas), fusionnés sur
+une seule page.}
+\label{fig:ui-eval}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.95\textwidth]{images/incidents-page.png}
+\caption{La surface Incidents --- une ligne par problème en cours, avec
+une bascule segmentée Incidents\,/\,Services.}
+\label{fig:ui-incidents}
+\end{figure}
 
 % =====================================================================
 \chapter{Décisions de conception et justifications}
