@@ -5,18 +5,20 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CIRES AI Observability Platform — Solution Architecture &amp; Design Choices</title>
 <style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700;9..144,900&family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap');
   :root{ --ink:#1a2233; --soft:#475569; --muted:#6b7280; --line:#e2e8f0; --line2:#cbd5e1;
-         --blue:#1d4ed8; --green:#15803d; --amber:#b45309; --red:#b91c1c; --bg:#ffffff; --panel:#f8fafc; --panel2:#f1f5f9; }
+         --blue:#1d4ed8; --green:#15803d; --amber:#b45309; --red:#b91c1c; --bg:#ffffff; --panel:#f8fafc; --panel2:#f1f5f9;
+         --serif-display:'Fraunces','Georgia',serif; --serif-body:'Lora','Georgia',serif; }
   *{margin:0;padding:0;box-sizing:border-box;}
-  body{font-family:'Inter','Segoe UI',system-ui,sans-serif;color:var(--ink);background:var(--bg);line-height:1.6;font-size:15px;}
+  body{font-family:var(--serif-body);color:var(--ink);background:var(--bg);line-height:1.65;font-size:15px;}
   .wrap{max-width:920px;margin:0 auto;padding:48px 32px 80px;}
-  code,pre{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:.86em;}
+  code,pre{font-family:'JetBrains Mono',ui-monospace,'DejaVu Sans Mono',monospace;font-size:.84em;}
   code{background:var(--panel2);padding:1px 5px;border-radius:4px;color:#0f172a;}
   pre{background:#0f172a;color:#e2e8f0;padding:14px 16px;border-radius:8px;overflow-x:auto;font-size:13px;line-height:1.5;margin:12px 0;}
   pre code{background:none;color:inherit;padding:0;}
-  h1{font-size:30px;font-weight:800;letter-spacing:-.4px;line-height:1.2;margin-bottom:8px;}
-  h2{font-size:21px;font-weight:750;margin:36px 0 12px;padding-bottom:8px;border-bottom:2px solid var(--line);}
-  h3{font-size:16px;font-weight:700;margin:22px 0 8px;color:#0f172a;}
+  h1{font-family:var(--serif-display);font-size:33px;font-weight:900;letter-spacing:-.2px;line-height:1.15;margin-bottom:8px;}
+  h2{font-family:var(--serif-display);font-size:23px;font-weight:700;margin:38px 0 12px;padding-bottom:8px;border-bottom:2px solid var(--line);}
+  h3{font-family:var(--serif-display);font-size:17px;font-weight:600;margin:22px 0 8px;color:#0f172a;}
   p{margin:10px 0;}
   ul,ol{margin:10px 0 10px 24px;}
   li{margin:5px 0;}
@@ -49,7 +51,7 @@
   <div class="eyebrow">CIRES Technologies · AI Observability &amp; LLM-Triage Platform</div>
   <h1>Solution Architecture &amp; Design Choices</h1>
   <p class="lead">What the platform is, how it is built, and why each major design decision was made — for review ahead of the production deployment.</p>
-  <p class="meta">Prepared for the supervisor · 2026-06-12 · companion to the <a href="deployment-resource-spec.html">Resource &amp; Dependency Specification</a> and <a href="architecture-deep-dive.html">Architecture Deep-Dive</a> (file-level detail).</p>
+  <p class="meta">Prepared for production-deployment review · June 2026 · figures measured from the live running system.</p>
 
   <div class="callout">
     <div class="lbl">The solution in one paragraph</div>
@@ -63,7 +65,7 @@
     <tr><td><b>Workloads watched</b></td><td>Kubernetes cluster: business apps + a 22-service microservice bed (OpenTelemetry Demo) used for realistic fault injection</td><td>k8s node(s)</td></tr>
     <tr><td><b>AI triage tier</b></td><td>Triage service (FastAPI + operator dashboard), 6 read-only MCP bridges, log-anomaly engine (drain3), Ollama running <code>qwen2.5:14b</code></td><td>GPU host (1× 24 GB GPU — L4 validated)</td></tr>
   </table>
-  <p>The tiers talk over plain TCP and are deployed by <b>three Ansible commands</b> (<code>monitoring.yml</code> → <code>gpu-host.yml</code> → <code>k8s-manifests.yml</code>); a bring-your-own-cluster bundle exists for deployment on CIRES infrastructure. All images are CI-built and pulled from GHCR.</p>
+  <p>The tiers talk over plain TCP and are deployed by <b>three Ansible commands</b> (one per tier); container images are built by CI and pulled from a registry. The same deployment runs unchanged on CIRES infrastructure — host addresses and secrets are the only inputs.</p>
 
   <h2>2. The path of one alert</h2>
   <ol>
@@ -115,7 +117,7 @@
   <ul>
     <li><b>904 automated tests</b> + CI gates: the MCP-only invariant lint, a frontend compile gate, image build blocked until green.</li>
     <li><b>Real-induction testing only</b>: verification means breaking something real (kill a pod, flood an API, push a bad deploy) and checking the system's written diagnosis against the known ground truth — never synthetic webhook payloads. Cumulative scored battery: <b>recall 7/7 outages caught, correct cause 51/52 decisions</b>.</li>
-    <li><b>Audit cadence</b>: every feature is audited against the live system (rendered pages, not HTTP 200s; applied infrastructure, not just correct code) — drift between repo and reality is treated as a bug class of its own.</li>
+    <li><b>Audit cadence</b>: every feature is audited against the live system (rendered pages, not HTTP 200s; applied infrastructure, not just correct code) — drift between the declared configuration and the running system is treated as a bug class of its own.</li>
   </ul>
 
   <h2>4. Production path</h2>
@@ -126,7 +128,7 @@
     The architecture is three replaceable layers joined by two contracts: <b>all signals flow through OpenTelemetry</b> into the base, and <b>all AI reads flow through MCP bridges</b> out of it. Everything else — model, alert rules, noise thresholds, even the LLM host — can be swapped without touching the other layers. The design bets on grounding over model size: a small local model, given verified evidence and refused permission to guess, outperforms an unconstrained large one for this job.
   </div>
 
-  <footer>CIRES Technologies — AI Observability Platform · Solution Architecture &amp; Design Choices · 2026-06-12. Figures are measured from the live system. Deeper material: <a href="architecture-deep-dive.html">Architecture Deep-Dive</a> (file:line grounded), <a href="hallucination-firewall.html">Hallucination Firewall</a>, <a href="epic15-hardening-design.html">EPIC15 Hardening Design</a>, <a href="prod-mimic-test-report-2026-06-11.html">Scored Test Battery</a>.</footer>
+  <footer>CIRES Technologies — AI Observability &amp; LLM-Triage Platform · Solution Architecture &amp; Design Choices · June 2026 · Lina Laaraich. All figures are measured from the live running system.</footer>
 
 </div>
 </body>
