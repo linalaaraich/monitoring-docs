@@ -539,6 +539,60 @@ The RCA is the operator's first read on what is broken. If it just paraphrases t
 
 ---
 
+## 7. Environment provenance — declare at deploy, read in triage (stop inferring) <!-- SPRINT-3-ENV-PROVENANCE -->
+
+**Priority:** Medium (production-hardening; not gating the PoC) · **Estimated effort:** 3–5 pts · **Owner:** Lina
+**Surfaced on:** 2026-06-15, during a platform deep-dive Q&A. Tracing the dashboard/email **environment pill** (prod / stg / demo / infra / unknown) showed it is currently *inferred* inside the triage service from a hand-curated namespace/service→env table, because **no workload declares its environment anywhere that reaches an alert**. The environment of a workload is a **deploy-time fact** and should flow from the deployment config, not be guessed by the consumer.
+
+### Why this matters
+
+Environment is a deploy-time property (the *same* image is promoted dev→stg→prod; 12-factor: config in the environment, not the build). The correct shape is **declare once at deploy → propagate through the telemetry/alert → read directly in triage.** Today the declaration step is missing, so the resolver falls back to a curated guess that lives in application code — wrong layer, and it silently hard-codes the PoC's simulated estate. When CIRES deploys for real (private cloud — AWS is PoC-only), the curated guesses won't match their namespaces, and the pills will read `unknown` or, worse, a confidently wrong env.
+
+### What's already implemented (don't re-do)
+
+The **consumer side is built and correct** — it just isn't being fed.
+
+- `env_resolver(...)` in `monitoring-triage-service/app/v2_mappings.py:294-361` is a 7-tier precedence chain, **declaration-first**:
+  1–3. explicit `labels.env` / `labels.environment` / `labels.deployment_environment` (also commonLabels/groupLabels/annotations); 4–5. namespace-prefix convention `<env>-<app>`; 6. **curated fallback** (`_LOGICAL_NS_TO_ENV` :171-179, `_DEMO_SERVICES` :196-202, `is_infra_service` :185-191); 7. `unknown` (deliberately not a silent prod default).
+- `KNOWN_ENVS` allowlist (`v2_mappings.py:118`) + `_normalize_env` canonicalisation (`production`→`prod`, etc.) already gate raw label values so a typo can't leak into the pill.
+- `OTEL_SERVICE_NAME` is already set per service (`charts/spring-boot/templates/deployment.yaml:67`, `charts/rental-backend/templates/deployment.yaml:81`) — proof the per-service env-injection pattern is trivial to extend.
+
+**Implication:** the moment alerts carry a real `environment` label, tiers 1–5 take over automatically and the curated tier-6 map becomes dead fallback. No resolver rewrite needed — only the upstream plumbing.
+
+### What's missing
+
+1. **No `environment` (or `env`) label on any workload** pod template — charts (`spring-boot`, `kong`, `rental-*`) and manifests (`otel-demo` via values override) all lack it. Only `app.kubernetes.io/part-of` exists, which is ownership, not environment.
+2. **No per-service `deployment.environment`.** The *only* `deployment.environment` is a blanket constant `"cires"` the collector inserts on everything (`roles/otel-collector/templates/otel-collector-config.yaml.j2:107-111`; same in `roles/triage_stack/templates/otel-config.yaml.j2:94`) — wrong granularity (one value for the whole platform), so traces/logs can't distinguish envs either.
+3. **`ENVIRONMENT: "production"`** in `charts/rental-backend/values.yaml:45` + `rental-frontend/values.yaml:43` is an *application* env var the app code reads; it is **not** a k8s label, not an OTel attribute, and never leaves the container — invisible to KSM/Prometheus/alerts/triage.
+4. **kube-state-metrics doesn't expose pod labels.** KSM v2 (`registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.13.0`, `manifests/kube-state-metrics/kube-state-metrics.yaml`) does **not** emit arbitrary pod labels as metric labels unless started with `--metric-labels-allowlist=pods=[environment]` (or `deployments=[...]`). Without that, `kube_pod_labels{label_environment=...}` does not exist to join on.
+5. **No relabel carries env onto the alerting series**, so the firing alert reaches the triage webhook with **no `environment` label** — which is exactly why `env_resolver` never satisfies tiers 1–5 and drops to the curated guess.
+
+### Acceptance criteria
+
+- [ ] Add an `environment` label to each workload's **pod template** (charts: `spring-boot`, `kong`, `rental-backend`, `rental-frontend`; manifests: `otel-demo` via `values.yaml` pod-label override). Value templatised per deployment (PoC values: app/network/observability→`prod`, rental→`stg`, otel-demo→`demo`).
+- [ ] Inject `OTEL_RESOURCE_ATTRIBUTES=deployment.environment=<env>` per service so **traces + logs** carry the real env. Change the collector's blanket `action: insert / value: "cires"` to **not clobber** an incoming per-service value (drop the constant, or only `insert` when absent).
+- [ ] Start kube-state-metrics with `--metric-labels-allowlist=pods=[environment]` so `kube_pod_labels{label_environment=...}` is scrapeable.
+- [ ] Carry `environment` onto the alert: either a Prometheus relabel/recording rule joining `kube_pod_labels` onto workload series, **or** set the label directly in the relevant rules in `roles/grafana/templates/alertrules.yml.j2` (app/demo rules). Confirm the label survives Alertmanager→Grafana→the triage `/webhook/grafana` payload.
+- [ ] Keep the curated tier-6 map as a **safety net**, but emit a metric/log when it fires (e.g. `triage_env_inferred_total{tier="logical_ns|demo|infra"}`) so a missing declaration is visible rather than silent.
+- [ ] **Real-induction test** (per the platform invariant — no synthetic POSTs): induce a real breach on an `otel-demo` service; assert the webhook payload carries `labels.environment="demo"` and the dashboard pill resolves via Tier 1, not inference.
+- [ ] Document the propagation chain (label → KSM allowlist → relabel → alert → `env_resolver` tier 1) in `monitoring-docs` so it's reproducible on the CIRES private-cloud deployment.
+
+### Non-goals for this story
+
+- A real multi-cluster dev/stg/prod split. It's still one PoC cluster; the env *values* stay curated — the win is **moving the declaration to the deploy layer** (where environment legitimately lives) so the triage service reads a declared value instead of guessing, and so the real CIRES deployment Just Works when it sets its own labels.
+- Deleting the tier-6 inference. It remains the fallback for unlabeled alerts; this story makes it *dead code in the happy path*, not removed.
+
+### Related files (for the implementer)
+
+- `monitoring-triage-service/app/v2_mappings.py` — `env_resolver` (no change needed; verify tier-1 pickup) + add the `triage_env_inferred_total` counter.
+- `monitoring-project/charts/spring-boot/templates/deployment.yaml`, `charts/kong/`, `charts/rental-backend/`, `charts/rental-frontend/` — pod `environment` label + `OTEL_RESOURCE_ATTRIBUTES`.
+- `monitoring-project/manifests/otel-demo/values.yaml` — pod-label override for the Astronomy Shop bed.
+- `monitoring-project/manifests/kube-state-metrics/kube-state-metrics.yaml` — add `--metric-labels-allowlist=pods=[environment]`.
+- `monitoring-project/roles/otel-collector/templates/otel-collector-config.yaml.j2` + `roles/triage_stack/templates/otel-config.yaml.j2` — stop the blanket `deployment.environment: "cires"` clobber.
+- `monitoring-project/roles/grafana/templates/alertrules.yml.j2` — carry the `environment` label on app/demo rules (or the Prometheus relabel that does).
+
+---
+
 ## How to add items to this backlog
 
 When a Sprint 2 conversation surfaces a "let's do that in Sprint 3" follow-up, add a new numbered section here with:
