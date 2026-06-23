@@ -186,6 +186,41 @@
     </div>
   </a>
 
+  <a href="validation-batch-100-2026-06-22.html" class="card" style="border-color:rgba(176,126,232,.5); background:linear-gradient(180deg, rgba(176,126,232,.07), var(--card));">
+    <div class="card-header">
+      <div class="card-icon" style="background:rgba(176,126,232,.14);">🧪</div>
+      <div class="card-header-text">
+        <h2>★ Overarching Validation Batch (103 tests) — 2026-06-22</h2>
+        <p>A single end-to-end campaign of <strong>103 real-induction tests</strong> across every stage of the platform, built to be run live and shown at the soutenance. Ten families: deployment/config faults (wrong DB name, bad image/probe/limits), service-down, infrastructure, client/traffic bottlenecks, data/DB, flagd app-logic faults, Drain3 novelty, noise-control &amp; resilience gates, multi-pillar cascades, and the anti-hallucination firewall. Each row carries <em>what I do</em> (ground truth) vs <em>what the platform processes</em> (alert rule / Drain3 tier / pipeline gate) vs <em>what the LLM should find</em> (verdict + named cause); two columns blank for the live run. Includes a KPI scorecard template, an MCP-bridge check, and an execution runbook. <strong>PLAN — results filled on execution.</strong></p>
+      </div>
+    </div>
+    <div class="card-footer">
+      <div class="card-tags">
+        <span class="tag tag-green">Real induction</span>
+        <span class="tag">100+ tests</span>
+        <span class="tag">All stages</span>
+        <span class="tag">Defense-ready</span>
+      </div>
+    </div>
+  </a>
+
+  <a href="validation-batch1-findings-2026-06-23.html" class="card" style="border-color:rgba(107,207,127,.5); background:linear-gradient(180deg, rgba(107,207,127,.07), var(--card));">
+    <div class="card-header">
+      <div class="card-icon" style="background:rgba(107,207,127,.14);">✅</div>
+      <div class="card-header-text">
+        <h2>★ Validation Batch 1 — Findings — 2026-06-23</h2>
+        <p>Batch 1 of the 103-test campaign, <strong>executed live</strong>: 10 real inductions across deploy/config faults (incl. the <code>app_db→app_d</code> wrong-DB-name), OOM, unschedulable, image-pull, behavioural flags. <strong>4/4 real outages escalated &amp; paged, 0 hallucinated causes, 4/4 negatives correct</strong>; co-fire consolidation (cart 3 alerts → 1 email), critical-flap suppression and no-fabrication all fired live; cause depth tracked the evidence (precise OOM/Hibernate roots, honest diagnostic-step deferral where the reason was only in pod events). Honest negatives recorded (RollingUpdate protects availability; Drain3 novelty-not-volume silence on known templates; single-GPU serial backlog). Batches 2–10 scoped for tomorrow.</p>
+      </div>
+    </div>
+    <div class="card-footer">
+      <div class="card-tags">
+        <span class="tag tag-green">Executed live</span>
+        <span class="tag">Injected-vs-detected</span>
+        <span class="tag">0 hallucinations</span>
+      </div>
+    </div>
+  </a>
+
 
   <a href="project-assessment-2026-06-11.html" class="card" style="border-color:rgba(176,126,232,.5); background:linear-gradient(180deg, rgba(176,126,232,.08), var(--card));">
     <div class="card-header">
