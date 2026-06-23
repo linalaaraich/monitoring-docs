@@ -152,6 +152,18 @@
   <code>postgresql</code>/<code>accounting</code> OOM loop in the bed was left untouched and excluded.)
 </div>
 
+<h2>Cumulative validation across all recorded campaigns</h2>
+<p>This card grouped with the earlier real-induction reports already in these docs, so the numbers read as one body of evidence.</p>
+<table>
+  <tr><th>Campaign</th><th>Detection recall</th><th>Cause accuracy</th><th>Hallucinations</th><th>False pages</th><th>Median</th></tr>
+  <tr><td><a href="stress-test-report-2026-06-09.html">2026-06-09 stress + functional</a></td><td>both alert paths fired</td><td>named cause</td><td>0</td><td>0</td><td>&mdash;</td></tr>
+  <tr><td><a href="stress-test-report-2026-06-10.html">2026-06-10 injected-vs-detected</a> (8 faults)</td><td>both paths</td><td>Drain3 named the novel template</td><td>0</td><td>0</td><td>&mdash;</td></tr>
+  <tr><td><a href="prod-mimic-test-report-2026-06-11.html">2026-06-11 prod-mimic</a> (52 decisions)</td><td><b>7/7</b></td><td><b>51/52 (98%)</b>, 0.81/1 rubric</td><td>0</td><td>0</td><td>~38 s</td></tr>
+  <tr><td><a href="validation-batch1-findings-2026-06-23.html">2026-06-23 Batch 1+2</a> (this card, 19 inductions)</td><td><b>14/14</b></td><td><b>100%</b> root-or-honest-defer</td><td><b>0</b></td><td><b>0</b></td><td>~40 s</td></tr>
+  <tr style="font-weight:700;"><td>Consolidated</td><td class="pass">100% sustained</td><td class="pass">~98% precise, 0 wrong</td><td class="pass">0</td><td class="pass">0</td><td>~38 s</td></tr>
+</table>
+<p style="font-size:12px;">Also: <b>904</b> automated tests in CI · alert noise <b>~71&rarr;~7</b> emails/day after the recurrence gate · co-fire <b>3&rarr;1</b> notification per incident.</p>
+
 <h2>The one sentence for the jury</h2>
 <p style="font-size:15px;color:var(--text);">
   Across <b>14 real induced outages</b> (plus 5 deliberate non-incidents), the platform detected <b>all 14</b>,
